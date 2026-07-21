@@ -2,14 +2,21 @@
 
 > An effect-typed programming language for agent systems.
 
+> [!WARNING]
+> **Etas is highly experimental.** It is an early-stage research prototype, not
+> a production-ready language or runtime. Syntax, semantics, package formats,
+> compiler and interpreter behavior, CLI interfaces, and public APIs may change
+> without notice. Do not use Etas for production or security-critical systems.
+
 Etas makes agents, tools, actions, approvals, persistent memory, typed
 messages, handlers, and multi-step flows explicit parts of a program. The goal
 is to make agent systems statically checkable, inspectable, resumable, and
 optimizable without hiding authority or orchestration behind framework code.
 
-Etas is under active private development. The current implementation is focused
-on **Phase 1: the language frontend and the checked-HIR interpreter**. Syntax,
-package metadata, runtime profiles, and CLI behavior may still change.
+Etas is under active development. The current implementation is focused on
+**Phase 1: the language frontend and the checked-HIR interpreter**. There are
+currently no stability, backward-compatibility, migration, or long-term support
+guarantees.
 
 ## Current Status
 
@@ -64,14 +71,12 @@ Etas is split into repositories by ownership boundary:
 
 | Repository | Responsibility | State |
 |---|---|---|
-| [`etas`](https://github.com/etas-project/etas) | CLI, driver, package manager, integration fixtures, language design | Active |
-| [`etas-core`](https://github.com/etas-project/etas-core) | Shared primitives, std metadata, host contracts, cache, package metadata | Active |
-| [`etas-frontend`](https://github.com/etas-project/etas-frontend) | Syntax, HIR, shared analyses, type/effect checking, frontend sessions | Active |
-| [`etas-interpreter`](https://github.com/etas-project/etas-interpreter) | Direct checked-HIR planning and execution | Active |
-| [`etas-edk`](https://github.com/etas-project/etas-edk) | Official Etas Development Kit packages | Active, package-specific blockers remain |
-| [`etas-ide`](https://github.com/etas-project/etas-ide) | Language intelligence, LSP, and VS Code integration | Active |
-| [`etas-runtime`](https://github.com/etas-project/etas-runtime) | Future AIR contracts and AIR-backed runtime | Phase 2 scaffold |
-| [`etas-optimizing`](https://github.com/etas-project/etas-optimizing) | Future AIR lowering and FIR optimization | Planned scaffold |
+| [`etas`](https://github.com/etas-project/etas) | CLI, driver, package manager, integration fixtures, language design | Public, experimental |
+| [`etas-core`](https://github.com/etas-project/etas-core) | Shared primitives, std metadata, host contracts, cache, package metadata | Public, experimental |
+| [`etas-frontend`](https://github.com/etas-project/etas-frontend) | Syntax, HIR, shared analyses, type/effect checking, frontend sessions | Public, experimental |
+| [`etas-interpreter`](https://github.com/etas-project/etas-interpreter) | Direct checked-HIR planning and execution | Public, experimental |
+| [`etas-edk`](https://github.com/etas-project/etas-edk) | Official Etas Development Kit packages | Public, experimental; package-specific blockers remain |
+| [`etas-ide`](https://github.com/etas-project/etas-ide) | Language intelligence, LSP, and VS Code integration | Public, experimental |
 
 The active Phase 1 dependency direction is:
 
@@ -96,8 +101,8 @@ higher-level repository to make local development easier.
 
 ## Prerequisites
 
-- Git with access to the private
-  [`etas-project`](https://github.com/etas-project) repositories.
+- Git. The active Phase 1 repositories are public and do not require GitHub
+  authentication to clone.
 - Rust `1.85` or newer with Cargo.
 - `rustfmt` and `clippy` for the full verification gates.
 - A C/C++ build toolchain supported by Rust dependencies. On macOS, install the
@@ -121,7 +126,7 @@ xcode-select --install
 
 ## Multi-Repository Checkout
 
-The current private development workflow uses sibling checkouts. Keep the
+The multi-repository development workflow uses sibling checkouts. Keep the
 directory names unchanged because Cargo patch paths and local tooling refer to
 them directly.
 
@@ -133,8 +138,6 @@ etas-workspace/
   etas-interpreter/
   etas-edk/
   etas-ide/
-  etas-runtime/
-  etas-optimizing/
 ```
 
 Create the workspace and clone the repositories:
@@ -149,8 +152,6 @@ git clone https://github.com/etas-project/etas-interpreter.git
 git clone https://github.com/etas-project/etas.git
 git clone https://github.com/etas-project/etas-edk.git
 git clone https://github.com/etas-project/etas-ide.git
-git clone https://github.com/etas-project/etas-runtime.git
-git clone https://github.com/etas-project/etas-optimizing.git
 ```
 
 Each repository is an independent Git repository and Cargo workspace. There is
@@ -434,8 +435,6 @@ Run checks in the repository that owns the change. The standard gates are:
 | `etas-interpreter` | `cargo fmt --all -- --check`; `cargo test -p etas_interpreter --offline`; `cargo clippy -p etas_interpreter --offline -- -D warnings` |
 | `etas` | `cargo fmt --all -- --check`; `cargo test -p etas_cli -p etas_tests --offline`; `cargo clippy -p etas_cli -p etas_tests --offline -- -D warnings` |
 | `etas-ide` | `cargo test --workspace --offline`; `npm run compile` and `npm run build` in `editors/vscode` |
-| `etas-runtime` | `cargo test --workspace --offline` for the current scaffold |
-| `etas-optimizing` | `cargo metadata --no-deps` until crates are introduced |
 | `etas-edk` | `etas pkg update`, `etas check --all`, and package-specific verifier scripts |
 
 `--offline` assumes dependencies were fetched previously. If Cargo reports a
@@ -482,10 +481,11 @@ stack.
 
 ## Troubleshooting
 
-**Cargo cannot fetch a private Git dependency**
+**Cargo cannot fetch an Etas Git dependency**
 
-Verify GitHub authentication independently with `git ls-remote`, then run
-`cargo fetch`. Cargo cannot repair missing repository access.
+Verify network and proxy access independently with `git ls-remote`, then run
+`cargo fetch`. The active Phase 1 dependencies are public and should not require
+GitHub authentication.
 
 **Cargo uses a Git crate when a sibling source change was expected**
 
