@@ -1,0 +1,49 @@
+HirProgram
+  Symbols
+    s0 TypeAlias Draft
+    s1 Agent Writer
+    s2 Flow main
+    s3 Param input
+    s4 StdPreludeAlias Array origin=StdPrelude target=std.collections.Array
+    s5 Param args
+    s6 Local input
+    s7 Local draft
+  Scopes
+    sc0 Module(HirModuleId(0)) symbols=[s0,s1,s2,s4]
+    sc1 Item(HirItemId(0)) parent=sc0
+    sc2 Item(HirItemId(1)) parent=sc0 symbols=[s3]
+    sc3 Block(HirBlockId(0)) parent=sc2
+    sc4 Item(HirItemId(2)) parent=sc0 symbols=[s5]
+    sc5 Block(HirBlockId(1)) parent=sc4 symbols=[s6,s7]
+  Modules
+    m0 scope=sc0 name=tests.phase0
+      Item i0
+      Item i1
+      Item i2
+  Items
+    i0 TypeAlias s0 scope=sc1
+      Target t0
+        Primitive String
+    i1 Agent s1 scope=sc2
+      Output t2
+        Path Draft(s0)
+      Body b0 scope=sc3
+    i2 Flow s2 scope=sc4 params=[s5]
+      Return t5
+        Primitive I32
+      Body b1 scope=sc5
+        st0 Let
+          Pat p0 Binding s6
+          Value e0
+            Literal String { value: "draft", span: Span { source: SourceId(1), range: TextRange { start: TextSize(141), end: TextSize(148) } } }
+        st1 Let
+          Pat p1 Binding s7
+          Value e3
+            Input e1
+              Path input(s6)
+            Stage
+              Expr e2
+                Path Writer(s1)
+        st2 Return
+          Value e4
+            Literal Int { text: "0", span: Span { source: SourceId(1), range: TextRange { start: TextSize(194), end: TextSize(195) } } }

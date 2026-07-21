@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "package": {
+    "name": "trace-contracts",
+    "version": "0.1.0",
+    "edition": "2026"
+  },
+  "dependencies": [],
+  "external_modules": [],
+  "public_metadata": {
+    "modules": [],
+    "types": [],
+    "values": [],
+    "enums": [],
+    "flows": [],
+    "agents": [],
+    "tools": [],
+    "effects": [],
+    "actions": [],
+    "trace_specs": [],
+    "spec_signatures": [],
+    "spec_impls": [],
+    "type_spec_satisfactions": [],
+    "callable_spec_satisfactions": [],
+    "trace_spec_conformances": [],
+    "protocols": [],
+    "effect_summaries": [],
+    "action_summaries": [],
+    "tool_schemas": [],
+    "trace_spec_summaries": [],
+    "re_exports": [],
+    "annotations": [],
+    "fingerprint": null
+  },
+  "effect_metadata": {
+    "tags": [],
+    "extensions": []
+  },
+  "tool_bindings": [],
+  "bins": []
+}

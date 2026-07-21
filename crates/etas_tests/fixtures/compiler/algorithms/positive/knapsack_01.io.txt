@@ -1,0 +1,10 @@
+command:
+    etas knapsack_01.es ../../support/algorithms.es
+
+stdin:
+    7 6 13 4 8 3 6 5 12
+
+stdout:
+    14
+exit:
+    0

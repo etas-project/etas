@@ -1,0 +1,10 @@
+command:
+    etas search_rotated_array.es ../../support/algorithms.es
+
+stdin:
+    0 4 5 6 7 0 1 2
+
+stdout:
+    4
+exit:
+    0

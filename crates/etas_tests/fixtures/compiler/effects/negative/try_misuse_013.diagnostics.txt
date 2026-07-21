@@ -1,0 +1,1 @@
+effect::InvalidTryCapture | try expression requires a checked captured Error[E] effect | try expression requires a checked captured Error[E] effect | 8 | 20

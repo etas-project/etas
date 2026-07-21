@@ -1,0 +1,10 @@
+command:
+    etas closure_adder.es ../../support/algorithms.es
+
+stdin:
+    7 5
+
+stdout:
+    12
+exit:
+    0

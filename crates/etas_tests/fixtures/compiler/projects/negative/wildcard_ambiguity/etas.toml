@@ -1,0 +1,18 @@
+[package]
+name = "wildcard-ambiguity"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for wildcard_ambiguity"
+repository = "https://example.invalid/etas-fixtures/wildcard-ambiguity"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "wildcard-ambiguity"
+module = "app.main"
+flow = "main"

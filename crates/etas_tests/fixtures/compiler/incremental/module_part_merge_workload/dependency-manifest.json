@@ -1,0 +1,18 @@
+{
+  "package_name": "fixture_app",
+  "dependencies": [
+    {
+      "package": 1,
+      "package_name": "math_pkg",
+      "modules": [
+        {
+          "path": ["dep", "math"],
+          "exports": [
+            { "symbol": 0, "name": "Number", "visibility": "public" },
+            { "symbol": 1, "name": "add", "visibility": "public" }
+          ]
+        }
+      ]
+    }
+  ]
+}

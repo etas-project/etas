@@ -1,0 +1,18 @@
+[package]
+name = "effect-missing-io-error-03"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Missing IOError effect for println"
+repository = "https://example.invalid/etas-fixtures/effect-missing-io-error-03"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-missing-io-error-03"
+module = "app.main"
+flow = "main"

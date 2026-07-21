@@ -1,0 +1,18 @@
+[package]
+name = "effect-agent-digest"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Agent digest declaration project"
+repository = "https://example.invalid/etas-fixtures/effect-agent-digest"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-agent-digest"
+module = "app.main"
+flow = "main"

@@ -1,0 +1,10 @@
+command:
+    etas number_of_islands.es ../../support/algorithms.es
+
+stdin:
+    ignored
+
+stdout:
+    2
+exit:
+    0

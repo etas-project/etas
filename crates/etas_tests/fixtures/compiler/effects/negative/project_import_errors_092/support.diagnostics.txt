@@ -1,0 +1,1 @@
+effect::EffectOutsideDeclaredRow | inferred effect escapes the declared effect row | inferred effect escapes the declared effect row | 6 | 8

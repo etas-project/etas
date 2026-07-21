@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "package": {
+    "name": "identity-types",
+    "version": "0.1.0",
+    "edition": "2026"
+  },
+  "dependencies": [],
+  "external_modules": [],
+  "public_metadata": {
+    "modules": [
+      {
+        "package": null,
+        "id": 1,
+        "path": [
+          "identity",
+          "types"
+        ],
+        "exports": [
+          {
+            "id": 10,
+            "name": "ExternalPath",
+            "visibility": "public"
+          },
+          {
+            "id": 12,
+            "name": "ExternalUserId",
+            "visibility": "public"
+          },
+          {
+            "id": 13,
+            "name": "ExternalProjectId",
+            "visibility": "public"
+          },
+          {
+            "id": 14,
+            "name": "ExternalReview",
+            "visibility": "public"
+          },
+          {
+            "id": 20,
+            "name": "make_user_id",
+            "visibility": "public"
+          },
+          {
+            "id": 21,
+            "name": "accept_user",
+            "visibility": "public"
+          },
+          {
+            "id": 22,
+            "name": "accept_path",
+            "visibility": "public"
+          }
+        ]
+      }
+    ],
+    "types": [
+      {
+        "path": [
+          "identity",
+          "types",
+          "ExternalPath"
+        ],
+        "visibility": "public",
+        "ty": {
+          "kind": "primitive",
+          "name": "string"
+        }
+      },
+      {
+        "path": [
+          "identity",
+          "types",
+          "ExternalUserId"
+        ],
+        "visibility": "public"
+      },
+      {
+        "path": [
+          "identity",
+          "types",
+          "ExternalProjectId"
+        ],
+        "visibility": "public"
+      },
+      {
+        "path": [
+          "identity",
+          "types",
+          "ExternalReview"
+        ],
+        "visibility": "public"
+      }
+    ],
+    "values": [],
+    "enums": [],
+    "flows": [
+      {
+        "path": [
+          "identity",
+          "types",
+          "make_user_id"
+        ],
+        "param_names": [
+          "raw"
+        ],
+        "params": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "output": {
+          "kind": "named",
+          "path": [
+            "identity",
+            "types",
+            "ExternalUserId"
+          ]
+        },
+        "effects": null,
+        "visibility": "public"
+      },
+      {
+        "path": [
+          "identity",
+          "types",
+          "accept_user"
+        ],
+        "param_names": [
+          "id"
+        ],
+        "params": [
+          {
+            "kind": "named",
+            "path": [
+              "identity",
+              "types",
+              "ExternalUserId"
+            ]
+          }
+        ],
+        "output": {
+          "kind": "named",
+          "path": [
+            "identity",
+            "types",
+            "ExternalUserId"
+          ]
+        },
+        "effects": null,
+        "visibility": "public"
+      },
+      {
+        "path": [
+          "identity",
+          "types",
+          "accept_path"
+        ],
+        "param_names": [
+          "path"
+        ],
+        "params": [
+          {
+            "kind": "primitive",
+            "name": "string"
+          }
+        ],
+        "output": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "effects": null,
+        "visibility": "public"
+      }
+    ],
+    "agents": [],
+    "tools": [],
+    "effects": [],
+    "actions": [],
+    "trace_specs": [],
+    "spec_signatures": [],
+    "spec_impls": [],
+    "type_spec_satisfactions": [],
+    "callable_spec_satisfactions": [],
+    "trace_spec_conformances": [],
+    "protocols": [],
+    "effect_summaries": [
+      {
+        "item": [
+          "identity",
+          "types",
+          "make_user_id"
+        ],
+        "public_effects": {
+          "effects": []
+        },
+        "requested_actions": {
+          "effects": []
+        }
+      },
+      {
+        "item": [
+          "identity",
+          "types",
+          "accept_user"
+        ],
+        "public_effects": {
+          "effects": []
+        },
+        "requested_actions": {
+          "effects": []
+        }
+      },
+      {
+        "item": [
+          "identity",
+          "types",
+          "accept_path"
+        ],
+        "public_effects": {
+          "effects": []
+        },
+        "requested_actions": {
+          "effects": []
+        }
+      }
+    ],
+    "action_summaries": [],
+    "tool_schemas": [],
+    "trace_spec_summaries": [],
+    "re_exports": [],
+    "annotations": [],
+    "fingerprint": "identity-types-positive-public-v1"
+  },
+  "effect_metadata": {
+    "tags": [],
+    "extensions": []
+  },
+  "tool_bindings": [],
+  "bins": []
+}

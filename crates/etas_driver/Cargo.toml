@@ -1,0 +1,21 @@
+[package]
+name = "etas_driver"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+etas_core.workspace = true
+etas_effects.workspace = true
+etas_frontend.workspace = true
+etas_hir.workspace = true
+etas_package.workspace = true
+etas_std.workspace = true
+etas_syntax.workspace = true
+etas_types.workspace = true
+etas_utils.workspace = true
+blake3.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,18 @@
+[package]
+name = "effect-agent-review"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Agent review declaration project"
+repository = "https://example.invalid/etas-fixtures/effect-agent-review"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-agent-review"
+module = "app.main"
+flow = "main"

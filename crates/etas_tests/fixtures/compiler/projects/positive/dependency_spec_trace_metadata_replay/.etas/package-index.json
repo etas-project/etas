@@ -1,0 +1,409 @@
+{
+  "version": 1,
+  "package": {
+    "name": "dependency-spec-trace-metadata-replay",
+    "version": "0.1.0",
+    "edition": "2026"
+  },
+  "dependencies": [
+    {
+      "identity": {
+        "name": "std",
+        "version": "0.1.0",
+        "edition": "2026"
+      },
+      "import_root": "std",
+      "source": {
+        "kind": "builtin",
+        "checksum": "builtin:std"
+      },
+      "dependencies": [],
+      "public_metadata": {},
+      "effect_metadata": {}
+    },
+    {
+      "identity": {
+        "name": "trace-contracts",
+        "version": "0.1.0",
+        "edition": "2026"
+      },
+      "import_root": "trace_contract",
+      "source": {
+        "kind": "path",
+        "path": ".etas/vendor/trace-contracts",
+        "checksum": "blake3:4424aea7c7b2a116227d0472f2a510dab316c268cd6cd54f8b21449c254f14aa"
+      },
+      "dependencies": [
+        {
+          "identity": {
+            "name": "std",
+            "version": "0.1.0",
+            "edition": "2026"
+          },
+          "import_root": "std",
+          "source": {
+            "kind": "builtin",
+            "checksum": "builtin:std"
+          },
+          "dependencies": [],
+          "public_metadata": {},
+          "effect_metadata": {}
+        }
+      ],
+      "public_metadata": {
+        "modules": [
+          {
+            "package": null,
+            "id": 1,
+            "path": [
+              "trace_contract",
+              "contract"
+            ],
+            "exports": [
+              {
+                "id": 10,
+                "name": "ExternalPacket",
+                "visibility": "public"
+              },
+              {
+                "id": 13,
+                "name": "ExternalBox",
+                "visibility": "public"
+              },
+              {
+                "id": 14,
+                "name": "ExternalStringBox",
+                "visibility": "public"
+              },
+              {
+                "id": 11,
+                "name": "ExternalEncoder",
+                "visibility": "public"
+              },
+              {
+                "id": 12,
+                "name": "ExternalReadOnly",
+                "visibility": "public"
+              },
+              {
+                "id": 20,
+                "name": "external_packet",
+                "visibility": "public"
+              },
+              {
+                "id": 22,
+                "name": "external_box",
+                "visibility": "public"
+              },
+              {
+                "id": 21,
+                "name": "encode",
+                "visibility": "public"
+              }
+            ]
+          }
+        ],
+        "types": [
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalPacket"
+            ],
+            "visibility": "public",
+            "ty": {
+              "kind": "nominal",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalPacket"
+              ],
+              "representation": {
+                "kind": "record",
+                "fields": [
+                  {
+                    "name": "body",
+                    "ty": {
+                      "kind": "primitive",
+                      "name": "string"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalBox"
+            ],
+            "visibility": "public",
+            "ty": {
+              "kind": "nominal",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalBox"
+              ],
+              "representation": {
+                "kind": "record",
+                "fields": [
+                  {
+                    "name": "value",
+                    "ty": {
+                      "kind": "var",
+                      "name": "T"
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalStringBox"
+            ],
+            "visibility": "public",
+            "ty": {
+              "kind": "alias",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalStringBox"
+              ],
+              "target": {
+                "kind": "applied",
+                "path": [
+                  "trace_contract",
+                  "contract",
+                  "ExternalBox"
+                ],
+                "args": [
+                  {
+                    "kind": "primitive",
+                    "name": "string"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "flows": [
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "external_packet"
+            ],
+            "param_names": [
+              "body"
+            ],
+            "params": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "output": {
+              "kind": "named",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalPacket"
+              ]
+            },
+            "visibility": "public"
+          },
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "external_box"
+            ],
+            "param_names": [
+              "value"
+            ],
+            "params": [
+              {
+                "kind": "primitive",
+                "name": "string"
+              }
+            ],
+            "output": {
+              "kind": "named",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalStringBox"
+              ]
+            },
+            "visibility": "public"
+          },
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "encode"
+            ],
+            "param_names": [
+              "packet"
+            ],
+            "params": [
+              {
+                "kind": "named",
+                "path": [
+                  "trace_contract",
+                  "contract",
+                  "ExternalPacket"
+                ]
+              }
+            ],
+            "output": {
+              "kind": "primitive",
+              "name": "string"
+            },
+            "visibility": "public"
+          }
+        ],
+        "trace_specs": [
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalReadOnly"
+            ],
+            "visibility": "public"
+          }
+        ],
+        "spec_signatures": [
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalEncoder"
+            ],
+            "visibility": "public",
+            "kind": "type",
+            "methods": [
+              {
+                "name": "encode",
+                "path": [
+                  "trace_contract",
+                  "contract",
+                  "encode"
+                ],
+                "signature": {
+                  "path": [
+                    "trace_contract",
+                    "contract",
+                    "encode"
+                  ],
+                  "param_names": [
+                    "packet"
+                  ],
+                  "params": [
+                    {
+                      "kind": "named",
+                      "path": [
+                        "trace_contract",
+                        "contract",
+                        "ExternalPacket"
+                      ]
+                    }
+                  ],
+                  "output": {
+                    "kind": "primitive",
+                    "name": "string"
+                  },
+                  "visibility": "public"
+                }
+              }
+            ]
+          },
+          {
+            "path": [
+              "trace_contract",
+              "contract",
+              "ExternalReadOnly"
+            ],
+            "visibility": "public",
+            "kind": "trace"
+          }
+        ],
+        "spec_impls": [
+          {
+            "self_type": {
+              "kind": "named",
+              "path": [
+                "trace_contract",
+                "contract",
+                "ExternalPacket"
+              ]
+            },
+            "spec": [
+              "trace_contract",
+              "contract",
+              "ExternalEncoder"
+            ],
+            "methods": [
+              "encode"
+            ]
+          }
+        ],
+        "trace_spec_conformances": [
+          {
+            "item": [
+              "trace_contract",
+              "contract",
+              "encode"
+            ],
+            "target": {
+              "kind": "named",
+              "spec": [
+                "trace_contract",
+                "contract",
+                "ExternalReadOnly"
+              ]
+            }
+          }
+        ],
+        "trace_spec_summaries": [
+          {
+            "trace_spec": [
+              "trace_contract",
+              "contract",
+              "ExternalReadOnly"
+            ],
+            "clauses": [
+              {
+                "kind": "allow",
+                "pattern": {
+                  "effects": [
+                    {
+                      "path": [
+                        "Fs",
+                        "read"
+                      ],
+                      "args": [
+                        {
+                          "kind": "wildcard"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "fingerprint": "trace-contracts-metadata-v1"
+      },
+      "effect_metadata": {}
+    }
+  ],
+  "public_metadata": {},
+  "effect_metadata": {}
+}

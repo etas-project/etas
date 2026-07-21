@@ -1,0 +1,18 @@
+[package]
+name = "effect-public-api-08"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Public API exposes effect outside declaration"
+repository = "https://example.invalid/etas-fixtures/effect-public-api-08"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-public-api-08"
+module = "app.main"
+flow = "main"

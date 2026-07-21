@@ -1,0 +1,1 @@
+effect::ResumeUsedMoreThanOnce | handler arm may resume at most once

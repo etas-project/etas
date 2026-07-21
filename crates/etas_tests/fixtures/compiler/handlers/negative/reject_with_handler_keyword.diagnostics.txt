@@ -1,0 +1,1 @@
+syntax::InvalidExpression | `with handler { ... }` is not valid handler application syntax

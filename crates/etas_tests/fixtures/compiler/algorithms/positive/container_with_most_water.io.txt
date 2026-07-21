@@ -1,0 +1,10 @@
+command:
+    etas container_with_most_water.es ../../support/algorithms.es
+
+stdin:
+    1 8 6 2 5 4 8 3 7
+
+stdout:
+    49
+exit:
+    0

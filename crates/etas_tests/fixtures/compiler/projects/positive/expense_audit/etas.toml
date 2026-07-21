@@ -1,0 +1,18 @@
+[package]
+name = "expense-audit"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Project-level expense audit application fixture"
+repository = "https://example.invalid/etas-fixtures/expense-audit"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "expense-audit"
+module = "app.main"
+flow = "main"

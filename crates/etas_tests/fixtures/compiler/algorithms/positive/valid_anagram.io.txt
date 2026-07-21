@@ -1,0 +1,11 @@
+command:
+    etas valid_anagram.es ../../support/algorithms.es
+
+stdin:
+    anagram
+    nagaram
+
+stdout:
+    true
+exit:
+    0

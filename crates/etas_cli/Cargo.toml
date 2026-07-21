@@ -1,0 +1,71 @@
+[package]
+name = "etas_cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "etas"
+path = "src/main.rs"
+
+[dependencies]
+etas_core.workspace = true
+etas_driver = { workspace = true, optional = true }
+etas_effects = { workspace = true, optional = true }
+etas_frontend = { workspace = true, optional = true }
+etas_host = { workspace = true, optional = true }
+etas_hir = { workspace = true, optional = true }
+etas_interpreter = { workspace = true, optional = true }
+etas_package.workspace = true
+etas_types = { workspace = true, optional = true }
+etas_utils.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tracing.workspace = true
+
+[features]
+default = [
+    "component-frontend",
+    "component-runtime",
+    "component-ide",
+    "cli-check",
+    "cli-dump-ast",
+    "cli-dump-hir",
+    "cli-dump-air",
+    "cli-graph",
+    "cli-effects",
+    "cli-policy",
+    "cli-pkg",
+    "cli-run",
+    "cli-replay",
+    "cli-resume",
+    "cli-watch",
+    "cli-repl",
+    "cli-lsp",
+]
+
+component-frontend = ["dep:etas_driver", "dep:etas_frontend"]
+component-runtime = ["dep:etas_effects", "dep:etas_host", "dep:etas_hir", "dep:etas_interpreter", "dep:etas_types"]
+component-ide = []
+
+cli-check = ["component-frontend"]
+cli-dump-ast = ["component-frontend"]
+cli-dump-hir = ["component-frontend"]
+cli-dump-air = ["component-runtime"]
+cli-graph = []
+cli-effects = ["component-frontend", "dep:etas_effects", "dep:etas_hir"]
+cli-policy = ["component-runtime"]
+cli-pkg = ["dep:etas_driver"]
+cli-run = ["component-frontend", "component-runtime"]
+cli-replay = ["component-frontend", "component-runtime"]
+cli-resume = ["component-frontend", "component-runtime"]
+cli-watch = []
+cli-repl = ["component-frontend"]
+cli-lsp = ["component-ide"]
+
+[dev-dependencies]
+etas_package = { workspace = true, features = ["test-support"] }

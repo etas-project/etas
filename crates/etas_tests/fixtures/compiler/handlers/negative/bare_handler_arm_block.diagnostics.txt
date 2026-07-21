@@ -1,0 +1,2 @@
+syntax::UnclosedDelimiter | expected matching `}` before this token
+syntax::MissingToken | expected `;` after let statement

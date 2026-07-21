@@ -1,0 +1,18 @@
+[package]
+name = "effect-io-summary"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "IO summary writer project"
+repository = "https://example.invalid/etas-fixtures/effect-io-summary"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-io-summary"
+module = "app.main"
+flow = "main"

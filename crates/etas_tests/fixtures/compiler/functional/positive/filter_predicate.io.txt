@@ -1,0 +1,10 @@
+command:
+    etas filter_predicate.es ../../support/algorithms.es
+
+stdin:
+    1 2 3 4 5 6
+
+stdout:
+    2 4 6
+exit:
+    0

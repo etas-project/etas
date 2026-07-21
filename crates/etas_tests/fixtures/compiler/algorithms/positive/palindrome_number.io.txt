@@ -1,0 +1,10 @@
+command:
+    etas palindrome_number.es ../../support/algorithms.es
+
+stdin:
+    121
+
+stdout:
+    true
+exit:
+    0

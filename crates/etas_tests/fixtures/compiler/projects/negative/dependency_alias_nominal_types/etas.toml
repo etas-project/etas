@@ -1,0 +1,16 @@
+[package]
+name = "dependency-alias-nominal-types-negative"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+identity_types = { package = "identity-types", version = "0.1.0", import = "identity", path = "deps/identity-types" }
+
+[[bin]]
+name = "dependency-alias-nominal-types-negative"
+module = "app.main"
+flow = "main"

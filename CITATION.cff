@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use Etas in your research, please cite the paper in preferred-citation."
+title: "Etas"
+type: software
+authors:
+  - name: "Etas Project contributors"
+repository-code: "https://github.com/etas-project/etas"
+license:
+  - Apache-2.0
+  - MIT
+preferred-citation:
+  type: article
+  title: "ETAS: An Effect-Typed Language for Agent Systems"
+  authors:
+    - family-names: Tan
+      given-names: Huiri
+    - family-names: Wang
+      given-names: Yikun
+    - family-names: Zhang
+      given-names: Puyang
+    - family-names: Li
+      given-names: Shangyu
+    - family-names: Shen
+      given-names: Jiasi
+  year: 2026
+  doi: "10.48550/arXiv.2607.17780"
+  identifiers:
+    - type: other
+      value: "arXiv:2607.17780"
+      description: "The arXiv preprint of the Etas paper."
+  url: "https://arxiv.org/abs/2607.17780"

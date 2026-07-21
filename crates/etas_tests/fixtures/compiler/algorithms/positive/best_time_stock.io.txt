@@ -1,0 +1,10 @@
+command:
+    etas best_time_stock.es ../../support/algorithms.es
+
+stdin:
+    7 1 5 3 6 4
+
+stdout:
+    5
+exit:
+    0

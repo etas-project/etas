@@ -1,0 +1,18 @@
+[package]
+name = "effect-entry-10"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Entry point drops imported IO and IndexError effects"
+repository = "https://example.invalid/etas-fixtures/effect-entry-10"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-entry-10"
+module = "app.main"
+flow = "main"

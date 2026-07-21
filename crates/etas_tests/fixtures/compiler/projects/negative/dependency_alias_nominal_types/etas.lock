@@ -1,0 +1,20 @@
+version = 1
+manifest_fingerprint = "etas-lock-input:v1|package=dependency-alias-nominal-types-negative|version=0.1.0|edition=2026|dependency:identity_types:package=identity-types,version=0.1.0,import=identity,path=deps/identity-types|dependency:std:version=0.1"
+
+[[package]]
+name = "identity-types"
+version = "0.1.0"
+source = "vendor+.etas/vendor/identity"
+checksum = "blake3:16be74c0634ef3c0eecc132f6984ba58fcf1e5677066c6a5a65e4f305d5cf7f3"
+dependencies = ["std|std|0.1.0"]
+import_root = "identity"
+metadata_fingerprint = "blake3:0894bbed33f949de8ad45bb1edef874562fa50a7fbfc941607e999d46e955123"
+
+[[package]]
+name = "std"
+version = "0.1.0"
+source = "builtin"
+checksum = "builtin:std"
+dependencies = []
+import_root = "std"
+metadata_fingerprint = "builtin:std"

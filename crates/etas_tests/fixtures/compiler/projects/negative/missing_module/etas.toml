@@ -1,0 +1,18 @@
+[package]
+name = "missing-module"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for missing_module"
+repository = "https://example.invalid/etas-fixtures/missing-module"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "missing-module"
+module = "app.main"
+flow = "main"

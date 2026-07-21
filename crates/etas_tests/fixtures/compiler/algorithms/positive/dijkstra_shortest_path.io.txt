@@ -1,0 +1,10 @@
+command:
+    etas dijkstra_shortest_path.es ../../support/algorithms.es
+
+stdin:
+    0 3
+
+stdout:
+    4
+exit:
+    0

@@ -1,0 +1,10 @@
+command:
+    etas map_lambda.es ../../support/algorithms.es
+
+stdin:
+    1 2 3 4
+
+stdout:
+    1 4 9 16
+exit:
+    0

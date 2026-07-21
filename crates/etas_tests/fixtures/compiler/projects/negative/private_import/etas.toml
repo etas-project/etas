@@ -1,0 +1,18 @@
+[package]
+name = "private-import"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for private_import"
+repository = "https://example.invalid/etas-fixtures/private-import"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "private-import"
+module = "app.main"
+flow = "main"

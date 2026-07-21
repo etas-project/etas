@@ -1,0 +1,1 @@
+type::HandlerCompletionRequired | handler arm must explicitly resume, finish, or terminate with never

@@ -1,0 +1,10 @@
+command:
+    etas course_schedule.es ../../support/algorithms.es
+
+stdin:
+    4
+
+stdout:
+    true
+exit:
+    0

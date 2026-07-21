@@ -1,0 +1,18 @@
+[package]
+name = "research-brief"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Project-level research brief application fixture"
+repository = "https://example.invalid/etas-fixtures/research-brief"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "research-brief"
+module = "app.main"
+flow = "main"

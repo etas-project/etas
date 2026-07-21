@@ -1,0 +1,18 @@
+[package]
+name = "source-root-mismatch"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject packages whose manifest source root does not contain the package sources"
+repository = "https://example.invalid/etas-fixtures/source-root-mismatch"
+
+[source]
+root = "appsrc"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "source-root-mismatch"
+module = "app.main"
+flow = "main"

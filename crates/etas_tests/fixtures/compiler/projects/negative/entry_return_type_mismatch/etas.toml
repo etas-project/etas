@@ -1,0 +1,18 @@
+[package]
+name = "entry-return-type-mismatch"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject runnable entries whose selected flow does not return i32"
+repository = "https://example.invalid/etas-fixtures/entry-return-type-mismatch"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "entry-return-type-mismatch"
+module = "app.main"
+flow = "main"

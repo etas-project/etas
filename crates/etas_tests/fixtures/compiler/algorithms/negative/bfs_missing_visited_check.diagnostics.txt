@@ -1,0 +1,2 @@
+analysis::NonProgressingLoop
+loop body does not advance head

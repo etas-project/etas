@@ -1,0 +1,11 @@
+command:
+    etas longest_common_subsequence.es ../../support/algorithms.es
+
+stdin:
+    ABCBDAB
+    BDCABA
+
+stdout:
+    4
+exit:
+    0

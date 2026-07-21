@@ -1,0 +1,11 @@
+version = 1
+manifest_fingerprint = "etas-lock-input:v1|package=missing-module|version=0.1.0|edition=2026|dependency:std:version=0.1"
+
+[[package]]
+name = "std"
+version = "0.1.0"
+source = "builtin"
+checksum = "builtin:std"
+dependencies = []
+import_root = "std"
+metadata_fingerprint = "builtin:std"

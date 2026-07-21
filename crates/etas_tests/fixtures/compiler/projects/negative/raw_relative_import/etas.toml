@@ -1,0 +1,18 @@
+[package]
+name = "raw-relative-import"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject relative filesystem imports in source"
+repository = "https://example.invalid/etas-fixtures/raw-relative-import"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "raw-relative-import"
+module = "app.main"
+flow = "main"

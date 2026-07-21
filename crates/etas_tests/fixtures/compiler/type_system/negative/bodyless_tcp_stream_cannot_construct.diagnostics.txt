@@ -1,0 +1,2 @@
+type::NonCallableCallee
+callee is not callable

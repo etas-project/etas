@@ -1,0 +1,10 @@
+command:
+    etas compose_flows.es ../../support/algorithms.es
+
+stdin:
+    4
+
+stdout:
+    10
+exit:
+    0

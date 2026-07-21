@@ -1,0 +1,17 @@
+[package]
+name = "interpreter-stress-deep-expression-load"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Interpreter stress regression fixture for deep_expression_load"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "deep-expression-load"
+module = "app.main"
+flow = "main"

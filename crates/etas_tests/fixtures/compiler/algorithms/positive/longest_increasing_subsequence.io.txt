@@ -1,0 +1,10 @@
+command:
+    etas longest_increasing_subsequence.es ../../support/algorithms.es
+
+stdin:
+    10 9 2 5 3 7 101 18
+
+stdout:
+    4
+exit:
+    0

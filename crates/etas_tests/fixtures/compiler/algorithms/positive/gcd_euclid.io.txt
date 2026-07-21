@@ -1,0 +1,10 @@
+command:
+    etas gcd_euclid.es ../../support/algorithms.es
+
+stdin:
+    270 192
+
+stdout:
+    6
+exit:
+    0

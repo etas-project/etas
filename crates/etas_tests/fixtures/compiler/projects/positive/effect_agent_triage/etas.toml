@@ -1,0 +1,18 @@
+[package]
+name = "effect-agent-triage"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Agent triage declaration project"
+repository = "https://example.invalid/etas-fixtures/effect-agent-triage"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-agent-triage"
+module = "app.main"
+flow = "main"

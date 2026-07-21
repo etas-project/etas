@@ -1,0 +1,10 @@
+command:
+    etas roman_to_integer.es ../../support/algorithms.es
+
+stdin:
+    MCMXCIV
+
+stdout:
+    1994
+exit:
+    0

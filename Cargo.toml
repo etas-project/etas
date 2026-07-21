@@ -1,0 +1,45 @@
+[workspace]
+members = [
+    "crates/etas_cli",
+    "crates/etas_driver",
+    "crates/etas_package",
+    "crates/etas_tests",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/etas-project/etas"
+
+[workspace.dependencies]
+etas_cli = { path = "crates/etas_cli" }
+etas_driver = { path = "crates/etas_driver" }
+etas_package = { path = "crates/etas_package" }
+etas_package_metadata = { git = "https://github.com/etas-project/etas-core.git", package = "etas_package_metadata" }
+etas_core = { git = "https://github.com/etas-project/etas-core.git", package = "etas_core" }
+etas_cache = { git = "https://github.com/etas-project/etas-core.git", package = "etas_cache" }
+etas_host = { git = "https://github.com/etas-project/etas-core.git", package = "etas_host" }
+etas_std = { git = "https://github.com/etas-project/etas-core.git", package = "etas_std" }
+etas_effects = { git = "https://github.com/etas-project/etas-frontend.git", package = "etas_effects" }
+etas_frontend = { git = "https://github.com/etas-project/etas-frontend.git", package = "etas_frontend" }
+etas_hir = { git = "https://github.com/etas-project/etas-frontend.git", package = "etas_hir" }
+etas_types = { git = "https://github.com/etas-project/etas-frontend.git", package = "etas_types" }
+etas_interpreter = { git = "https://github.com/etas-project/etas-interpreter.git", package = "etas_interpreter" }
+etas_syntax = { git = "https://github.com/etas-project/etas-frontend.git", package = "etas_syntax" }
+etas_utils = { git = "https://github.com/etas-project/etas-core.git", package = "etas_utils" }
+
+ariadne = "0.5"
+blake3 = "1.8.5"
+chumsky = "0.10"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+rustls = "0.23"
+rustls-pki-types = "1"
+toml = "1.1.2"
+tracing = "0.1"
+webpki-roots = "1"

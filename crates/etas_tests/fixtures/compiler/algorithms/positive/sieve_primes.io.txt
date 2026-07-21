@@ -1,0 +1,10 @@
+command:
+    etas sieve_primes.es ../../support/algorithms.es
+
+stdin:
+    30
+
+stdout:
+    2 3 5 7 11 13 17 19 23 29
+exit:
+    0

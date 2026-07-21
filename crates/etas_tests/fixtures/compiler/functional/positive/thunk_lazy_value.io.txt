@@ -1,0 +1,10 @@
+command:
+    etas thunk_lazy_value.es ../../support/algorithms.es
+
+stdin:
+    9
+
+stdout:
+    81
+exit:
+    0

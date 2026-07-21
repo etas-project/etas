@@ -1,0 +1,2 @@
+syntax::MissingToken | HandlerArmMustMatchAction: handler arm must match an effect action, not bare tag `Gate`
+name::UnresolvedEffectAction | unresolved effect action `Gate.<error>`

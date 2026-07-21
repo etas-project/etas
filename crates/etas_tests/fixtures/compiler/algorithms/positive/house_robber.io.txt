@@ -1,0 +1,10 @@
+command:
+    etas house_robber.es ../../support/algorithms.es
+
+stdin:
+    2 7 9 3 1
+
+stdout:
+    12
+exit:
+    0

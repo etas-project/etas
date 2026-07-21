@@ -1,0 +1,15 @@
+[package]
+name = "indexed-alias-record-import"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "indexed-alias-record-import"
+module = "app.main"
+flow = "main"

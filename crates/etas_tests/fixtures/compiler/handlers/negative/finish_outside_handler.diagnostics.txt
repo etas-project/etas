@@ -1,0 +1,1 @@
+type::FinishOutsideHandler | finish is only valid inside a handler arm

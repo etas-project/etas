@@ -1,0 +1,18 @@
+[package]
+name = "checkout-pipeline"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Project-level checkout pricing application fixture"
+repository = "https://example.invalid/etas-fixtures/checkout-pipeline"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "checkout-pipeline"
+module = "app.main"
+flow = "main"

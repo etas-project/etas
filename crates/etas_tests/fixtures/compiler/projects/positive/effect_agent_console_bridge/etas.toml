@@ -1,0 +1,18 @@
+[package]
+name = "effect-agent-console-bridge"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Agent and Console bridge project"
+repository = "https://example.invalid/etas-fixtures/effect-agent-console-bridge"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-agent-console-bridge"
+module = "app.main"
+flow = "main"

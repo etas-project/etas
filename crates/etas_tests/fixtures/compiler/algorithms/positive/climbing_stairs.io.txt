@@ -1,0 +1,10 @@
+command:
+    etas climbing_stairs.es ../../support/algorithms.es
+
+stdin:
+    6
+
+stdout:
+    13
+exit:
+    0

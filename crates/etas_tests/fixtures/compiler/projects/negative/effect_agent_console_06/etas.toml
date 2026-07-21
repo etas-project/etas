@@ -1,0 +1,18 @@
+[package]
+name = "effect-agent-console-06"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Agent project missing std.io IOError effect"
+repository = "https://example.invalid/etas-fixtures/effect-agent-console-06"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-agent-console-06"
+module = "app.main"
+flow = "main"

@@ -1,0 +1,2 @@
+effect::MissingEffectLoopLimit
+effectful loops and retry blocks require an explicit limit

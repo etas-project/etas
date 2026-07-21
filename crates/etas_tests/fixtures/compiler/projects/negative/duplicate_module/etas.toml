@@ -1,0 +1,18 @@
+[package]
+name = "duplicate-module"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for duplicate_module"
+repository = "https://example.invalid/etas-fixtures/duplicate-module"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "duplicate-module"
+module = "app.main"
+flow = "main"

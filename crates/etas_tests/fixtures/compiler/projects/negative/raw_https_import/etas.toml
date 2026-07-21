@@ -1,0 +1,18 @@
+[package]
+name = "raw-https-import"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject raw dependency URLs in source imports"
+repository = "https://example.invalid/etas-fixtures/raw-https-import"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "raw-https-import"
+module = "app.main"
+flow = "main"

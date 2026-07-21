@@ -1,0 +1,34 @@
+target/
+.DS_Store
+.cargo/config.toml
+.env
+.env.*
+!.env.example
+
+# Package-manager state is generated. Only compiler fixtures that exercise
+# prepared dependency metadata are committed.
+**/.etas/
+**/.etas/**
+
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/package-index.json
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/vendor/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/vendor/**
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/store/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/.etas/store/**
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/deps/identity-types/.etas/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_alias_nominal_types/deps/identity-types/.etas/package-index.json
+
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/package-index.json
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/vendor/
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/vendor/**
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/store/
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/.etas/store/**
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/deps/identity-types/.etas/
+!crates/etas_tests/fixtures/compiler/projects/negative/dependency_alias_nominal_types/deps/identity-types/.etas/package-index.json
+
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_spec_trace_metadata_replay/.etas/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_spec_trace_metadata_replay/.etas/package-index.json
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_spec_trace_metadata_replay/.etas/vendor/
+!crates/etas_tests/fixtures/compiler/projects/positive/dependency_spec_trace_metadata_replay/.etas/vendor/**

@@ -1,0 +1,10 @@
+command:
+    etas fold_sum.es ../../support/algorithms.es
+
+stdin:
+    1 2 3 4 5
+
+stdout:
+    15
+exit:
+    0

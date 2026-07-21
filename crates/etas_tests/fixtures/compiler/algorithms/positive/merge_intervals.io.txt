@@ -1,0 +1,10 @@
+command:
+    etas merge_intervals.es ../../support/algorithms.es
+
+stdin:
+    1 3 2 6 8 10 15 18
+
+stdout:
+    1 6 8 10 15 18
+exit:
+    0

@@ -1,0 +1,23 @@
+# Copy this file to `.cargo/config.toml` for local multi-repository development.
+# Do not commit `.cargo/config.toml`; committed dependencies retain their GitHub
+# identities so CI and other developers resolve the same repository graph.
+
+[patch."https://github.com/etas-project/etas-core.git"]
+etas_builtin = { path = "../etas-core/crates/etas_builtin" }
+etas_cache = { path = "../etas-core/crates/etas_cache" }
+etas_core = { path = "../etas-core/crates/etas_core" }
+etas_host = { path = "../etas-core/crates/etas_host" }
+etas_package_metadata = { path = "../etas-core/crates/etas_package_metadata" }
+etas_std = { path = "../etas-core/crates/etas_std" }
+etas_utils = { path = "../etas-core/crates/etas_utils" }
+
+[patch."https://github.com/etas-project/etas-frontend.git"]
+etas_effects = { path = "../etas-frontend/crates/etas_effects" }
+etas_frontend = { path = "../etas-frontend/crates/etas_frontend" }
+etas_hir = { path = "../etas-frontend/crates/etas_hir" }
+etas_hir_analysis = { path = "../etas-frontend/crates/etas_hir_analysis" }
+etas_syntax = { path = "../etas-frontend/crates/etas_syntax" }
+etas_types = { path = "../etas-frontend/crates/etas_types" }
+
+[patch."https://github.com/etas-project/etas-interpreter.git"]
+etas_interpreter = { path = "../etas-interpreter/crates/etas_interpreter" }

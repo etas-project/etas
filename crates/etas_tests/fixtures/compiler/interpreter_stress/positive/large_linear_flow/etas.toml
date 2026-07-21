@@ -1,0 +1,17 @@
+[package]
+name = "interpreter-stress-large-linear-flow"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Interpreter stress regression fixture for large_linear_flow"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "large-linear-flow"
+module = "app.main"
+flow = "main"

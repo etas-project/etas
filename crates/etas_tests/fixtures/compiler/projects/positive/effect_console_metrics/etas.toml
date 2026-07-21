@@ -1,0 +1,18 @@
+[package]
+name = "effect-console-metrics"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Console metrics reporting project"
+repository = "https://example.invalid/etas-fixtures/effect-console-metrics"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-console-metrics"
+module = "app.main"
+flow = "main"

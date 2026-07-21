@@ -1,0 +1,44 @@
+[package]
+name = "multi-agent-system"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Project-level multi-agent system fixture"
+repository = "https://example.invalid/etas-fixtures/multi-agent-system"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[runtime]
+default_profile = "local-omlx"
+
+[runtime.profiles.local-omlx]
+boundary_policy = "multi-agent-live-omlx"
+
+[runtime.profiles.local-omlx.model]
+adapter = "omlx-openai"
+model = "Qwen3.5-0.8B-MLX-4bit"
+base_url = "http://127.0.0.1:8848/v1"
+api_key_env = "ETAS_HOST_OMLX_API_KEY"
+
+[runtime.profiles.local-omlx.memory]
+backend = "memory"
+
+[runtime.profiles.local-omlx.policy]
+mode = "local-static"
+rules = ["model=allow", "memory=approval", "console=allow", "tool=allow"]
+
+[runtime.profiles.local-omlx.approval]
+mode = "auto"
+
+[runtime.profiles.local-omlx.network]
+allow = ["127.0.0.1:8848"]
+
+[[bin]]
+name = "multi-agent-system"
+module = "app.main"
+flow = "main"
+profile = "local-omlx"

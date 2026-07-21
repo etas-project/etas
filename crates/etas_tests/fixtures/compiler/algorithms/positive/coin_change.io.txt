@@ -1,0 +1,10 @@
+command:
+    etas coin_change.es ../../support/algorithms.es
+
+stdin:
+    11 1 2 5
+
+stdout:
+    3
+exit:
+    0

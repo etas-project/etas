@@ -1,0 +1,18 @@
+[package]
+name = "missing-exported-item"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for missing_exported_item"
+repository = "https://example.invalid/etas-fixtures/missing-exported-item"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "missing-exported-item"
+module = "app.main"
+flow = "main"

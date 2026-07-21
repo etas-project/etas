@@ -1,0 +1,18 @@
+[package]
+name = "entry-flow-missing"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject manifest entry points that name a missing flow"
+repository = "https://example.invalid/etas-fixtures/entry-flow-missing"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "entry-flow-missing"
+module = "app.main"
+flow = "serve"

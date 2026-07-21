@@ -1,0 +1,18 @@
+[package]
+name = "effect-pipeline-09"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Pipeline stage drops imported IO effect"
+repository = "https://example.invalid/etas-fixtures/effect-pipeline-09"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-pipeline-09"
+module = "app.main"
+flow = "main"

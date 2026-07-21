@@ -1,0 +1,18 @@
+[package]
+name = "etas_tests"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dev-dependencies]
+etas_cli.workspace = true
+etas_cache.workspace = true
+etas_core.workspace = true
+etas_frontend.workspace = true
+etas_hir.workspace = true
+etas_syntax.workspace = true
+etas_utils.workspace = true
+serde_json.workspace = true

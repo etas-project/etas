@@ -1,0 +1,10 @@
+command:
+    etas fibonacci_dp.es ../../support/algorithms.es
+
+stdin:
+    10
+
+stdout:
+    55
+exit:
+    0

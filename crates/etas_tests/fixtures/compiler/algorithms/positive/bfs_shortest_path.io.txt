@@ -1,0 +1,10 @@
+command:
+    etas bfs_shortest_path.es ../../support/algorithms.es
+
+stdin:
+    0 4
+
+stdout:
+    3
+exit:
+    0

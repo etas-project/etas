@@ -1,0 +1,18 @@
+[package]
+name = "effect-checked-index-05"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Missing IndexError effect across module call"
+repository = "https://example.invalid/etas-fixtures/effect-checked-index-05"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-checked-index-05"
+module = "app.main"
+flow = "main"

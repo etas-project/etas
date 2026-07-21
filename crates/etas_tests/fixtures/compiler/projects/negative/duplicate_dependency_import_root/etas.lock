@@ -1,0 +1,28 @@
+version = 1
+
+[[package]]
+name = "std"
+version = "0.1.4"
+source = "builtin"
+checksum = "sha256:etas-test-fixture-std-0.1.4"
+
+[[package]]
+name = "agent-tools-a"
+version = "0.1.0"
+source = "registry+https://packages.etas.dev"
+checksum = "sha256:etas-test-fixture-agent-tools-a"
+dependencies = ["std"]
+
+[[package]]
+name = "agent-tools-b"
+version = "0.1.0"
+source = "registry+https://packages.etas.dev"
+checksum = "sha256:etas-test-fixture-agent-tools-b"
+dependencies = ["std"]
+
+[[package]]
+name = "duplicate-dependency-import-root"
+version = "0.1.0"
+source = "path+."
+checksum = "sha256:etas-test-fixture-duplicate_dependency_import_root"
+dependencies = ["std", "agent-tools-a", "agent-tools-b"]

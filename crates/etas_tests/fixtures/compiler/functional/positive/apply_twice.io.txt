@@ -1,0 +1,10 @@
+command:
+    etas apply_twice.es ../../support/algorithms.es
+
+stdin:
+    5
+
+stdout:
+    7
+exit:
+    0

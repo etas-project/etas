@@ -1,0 +1,18 @@
+[package]
+name = "module-path-mismatch"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Negative project-level package-management fixture for module_path_mismatch"
+repository = "https://example.invalid/etas-fixtures/module-path-mismatch"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "module-path-mismatch"
+module = "app.main"
+flow = "main"

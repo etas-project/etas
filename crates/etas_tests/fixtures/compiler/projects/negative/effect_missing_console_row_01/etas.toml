@@ -1,0 +1,18 @@
+[package]
+name = "effect-missing-console-row-01"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Missing std.io IOError effect in service row"
+repository = "https://example.invalid/etas-fixtures/effect-missing-console-row-01"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "effect-missing-console-row-01"
+module = "app.main"
+flow = "main"

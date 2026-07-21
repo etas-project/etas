@@ -1,0 +1,10 @@
+command:
+    etas pipeline_composition.es ../../support/algorithms.es
+
+stdin:
+    5
+
+stdout:
+    12
+exit:
+    0

@@ -1,0 +1,20 @@
+version = 1
+manifest_fingerprint = "etas-lock-input:v1|package=dependency-spec-trace-metadata-replay|version=0.1.0|edition=2026|dependency:std:version=0.1|dependency:trace_contracts:package=trace-contracts,version=0.1.0,import=trace_contract,path=.etas/vendor/trace-contracts"
+
+[[package]]
+name = "std"
+version = "0.1.0"
+source = "builtin"
+checksum = "builtin:std"
+dependencies = []
+import_root = "std"
+metadata_fingerprint = "builtin:std"
+
+[[package]]
+name = "trace-contracts"
+version = "0.1.0"
+source = "path+.etas/vendor/trace-contracts"
+checksum = "blake3:b9442aca441b4ec1dd271dc3785c9e0d6e810f5c121f5ec67fd3c27e50c24202"
+dependencies = ["std|std|0.1.0"]
+import_root = "trace_contract"
+metadata_fingerprint = "trace-contracts-metadata-v1"

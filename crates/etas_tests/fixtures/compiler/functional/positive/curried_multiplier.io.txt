@@ -1,0 +1,10 @@
+command:
+    etas curried_multiplier.es ../../support/algorithms.es
+
+stdin:
+    6 7
+
+stdout:
+    42
+exit:
+    0

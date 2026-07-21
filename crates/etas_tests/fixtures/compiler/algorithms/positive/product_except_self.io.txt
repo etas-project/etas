@@ -1,0 +1,10 @@
+command:
+    etas product_except_self.es ../../support/algorithms.es
+
+stdin:
+    1 2 3 4
+
+stdout:
+    24 12 8 6
+exit:
+    0

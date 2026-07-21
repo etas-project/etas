@@ -1,0 +1,10 @@
+command:
+    etas predicate_combinator.es ../../support/algorithms.es
+
+stdin:
+    -3
+
+stdout:
+    true
+exit:
+    0

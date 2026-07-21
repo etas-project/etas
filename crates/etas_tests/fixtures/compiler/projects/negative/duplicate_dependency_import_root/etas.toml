@@ -1,0 +1,20 @@
+[package]
+name = "duplicate-dependency-import-root"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Reject ambiguous dependency import roots in the manifest"
+repository = "https://example.invalid/etas-fixtures/duplicate-dependency-import-root"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+tools_a = { package = "agent-tools-a", version = "0.1", import = "tools" }
+tools_b = { package = "agent-tools-b", version = "0.1", import = "tools" }
+
+[[bin]]
+name = "duplicate-dependency-import-root"
+module = "app.main"
+flow = "main"

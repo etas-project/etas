@@ -1,0 +1,18 @@
+[package]
+name = "std-substrate-source"
+version = "0.1.0"
+edition = "2026"
+license = "MIT"
+description = "Source-level std substrate API fixture"
+repository = "https://example.invalid/etas-fixtures/std-substrate-source"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+
+[[bin]]
+name = "std-substrate-source"
+module = "app.main"
+flow = "main"
