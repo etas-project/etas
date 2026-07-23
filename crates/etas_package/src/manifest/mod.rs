@@ -323,7 +323,7 @@ pub struct RuntimeCommandProfile {
 #[serde(untagged)]
 pub enum DependencySpec {
     Version(String),
-    Detailed(DependencyDetail),
+    Detailed(Box<DependencyDetail>),
 }
 
 impl DependencySpec {

@@ -22,7 +22,7 @@ pub fn resolve_dependency_source(
         Box::new(github::GitHubCloneSourceProvider::<
             git_client::CommandGitClient,
         >::default()),
-        Box::new(github_release::GitHubReleaseSourceProvider::default()),
+        Box::new(github_release::GitHubReleaseSourceProvider),
         Box::new(git::GitSourceProvider::<git_client::CommandGitClient>::default()),
     ];
     for provider in providers {
