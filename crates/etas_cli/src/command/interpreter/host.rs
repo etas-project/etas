@@ -8,12 +8,13 @@ use etas_host::{
     CommandClient, CommandRequest, CommandResponse, CostBudget, FilesystemClient,
     FilesystemRequest, FilesystemResponse, HostError, HostErrorCode, HostRequestId, HostValue,
     InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient, LocalFilesystemClient,
-    LocalTcpStreamClient, MemoryClient, MemoryRequest, MemoryResponse, ModelClient, ModelRequest,
-    ModelResponse, PolicyClient, PolicyDecision, PolicyEvaluationRequest, PolicyResponse,
-    SecretOperation, SecretPayload, SecretRef, SecretRequest, SecretResponse, SecretValue,
-    SessionClient, SessionRequest, SessionResponse, SqliteMemoryClient, SqliteSessionClient,
-    StreamRequest, StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpConnectRequest, TcpConnectResponse,
-    TimeBudget, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
+    LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryClient, MemoryRequest, MemoryResponse,
+    ModelClient, ModelRequest, ModelResponse, PolicyClient, PolicyDecision,
+    PolicyEvaluationRequest, PolicyResponse, SecretOperation, SecretPayload, SecretRef,
+    SecretRequest, SecretResponse, SecretValue, SessionClient, SessionRequest, SessionResponse,
+    SqliteMemoryClient, SqliteSessionClient, StreamClient, StreamRequest, StreamResponse,
+    TRACE_SPEC_RUNTIME_REF, TcpClient, TcpConnectRequest, TcpConnectResponse, TimeBudget,
+    TlsClient, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
     TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
@@ -43,7 +44,9 @@ struct CliHost {
     memory: Option<CliMemoryClient>,
     session: Option<CliSessionClient>,
     filesystem: Option<LocalFilesystemClient>,
-    tcp_streams: Option<LocalTcpStreamClient>,
+    tcp: Option<LocalTcpClient>,
+    stream: Option<LocalStreamClient>,
+    tls: Option<LocalTlsClient>,
     secret: Option<EnvSecretClient>,
     command: Option<LocalCommandClient>,
     approval: ApprovalMode,
@@ -80,7 +83,9 @@ impl CliHost {
             memory: None,
             session: None,
             filesystem: None,
-            tcp_streams: None,
+            tcp: None,
+            stream: None,
+            tls: None,
             secret: None,
             command: None,
             approval: ApprovalMode::Deny,
@@ -104,6 +109,8 @@ impl CliHost {
             CliToolRouter::from_bindings(&config.tool_bindings, config.tool_private_resolution)?;
         let memory = memory_client(&config.memory_mode)?;
         let session = session_client(&config.session_mode)?;
+        let byte_streams =
+            (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
         Ok(Self {
             availability: HostServiceAvailability {
                 model: config.model.is_some(),
@@ -132,8 +139,9 @@ impl CliHost {
             session,
             filesystem: (config.filesystem_mode != FilesystemMode::None)
                 .then(LocalFilesystemClient::new),
-            tcp_streams: (!config.program_network_allowlist.is_empty())
-                .then(LocalTcpStreamClient::new),
+            tcp: byte_streams.clone().map(LocalTcpClient::new),
+            stream: byte_streams.clone().map(LocalStreamClient::new),
+            tls: byte_streams.map(LocalTlsClient::new),
             secret: (config.secret_mode == SecretMode::Env).then_some(EnvSecretClient),
             command: (!config.command_allowed_programs.is_empty()).then(LocalCommandClient::new),
             approval: config.approval_mode,
@@ -456,8 +464,8 @@ impl HostServices for CliHost {
         &'a self,
         request: TcpConnectRequest,
     ) -> HostFuture<'a, Result<TcpConnectResponse, HostError>> {
-        let future = match &self.tcp_streams {
-            Some(adapter) => Box::pin(async move { adapter.execute_tcp(request).await }),
+        let future = match &self.tcp {
+            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
             None => self.unavailable.tcp(request),
         };
         self.profiled("host.tcp", future)
@@ -467,8 +475,8 @@ impl HostServices for CliHost {
         &'a self,
         request: StreamRequest,
     ) -> HostFuture<'a, Result<StreamResponse, HostError>> {
-        let future = match &self.tcp_streams {
-            Some(adapter) => Box::pin(async move { adapter.execute_stream(request).await }),
+        let future = match &self.stream {
+            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
             None => self.unavailable.stream(request),
         };
         self.profiled("host.stream", future)
@@ -478,8 +486,8 @@ impl HostServices for CliHost {
         &'a self,
         request: TlsConnectRequest,
     ) -> HostFuture<'a, Result<TlsConnectResponse, HostError>> {
-        let future = match &self.tcp_streams {
-            Some(adapter) => Box::pin(async move { adapter.execute_tls(request).await }),
+        let future = match &self.tls {
+            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
             None => self.unavailable.tls(request),
         };
         self.profiled("host.tls", future)
