@@ -29,6 +29,7 @@ pub fn frontend_environment(
     let effect_metadata = dependency_effect_metadata(&metadata, &external_packages)?;
     let dependency_modules = dependency_external_modules(&metadata.dependencies);
     let external_public_metadata = external_public_metadata(&metadata, &external_packages)?;
+    let tool_bindings = project_tool_bindings(&metadata, &external_packages)?;
     Ok(ProjectEnvironmentInput {
         external_packages: external_packages.clone(),
         external_modules: metadata
@@ -42,19 +43,57 @@ pub fn frontend_environment(
             .fold(Vec::new(), dedup_external_module),
         external_public_metadata,
         external_effect_metadata: effect_metadata,
-        tool_bindings: metadata
-            .tool_bindings
-            .into_iter()
-            .map(|binding| ProjectToolBindingInput {
-                tool: binding.tool,
-                provider: binding.provider,
-                effect_row: binding.effect_row,
-                action_row: binding.action_row,
-            })
-            .collect(),
+        tool_bindings,
         environment_fingerprint: Some(metadata.metadata_fingerprint),
         external_modules_fingerprint: None,
     })
+}
+
+fn project_tool_bindings(
+    metadata: &etas_package::PackageEnvironmentMetadata,
+    packages: &[ProjectExternalPackageInput],
+) -> Result<Vec<ProjectToolBindingInput>, DriverError> {
+    metadata
+        .tool_bindings
+        .iter()
+        .map(|binding| {
+            let owners = flatten_dependencies(&metadata.dependencies)
+                .into_iter()
+                .filter(|dependency| dependency.tool_bindings.contains(binding))
+                .filter_map(|dependency| {
+                    packages.iter().find(|package| {
+                        package.name == dependency.identity.name
+                            && package.version == dependency.identity.version
+                            && package.edition == dependency.identity.edition
+                            && package.import_root == dependency.import_root
+                    })
+                })
+                .collect::<Vec<_>>();
+            let tool = match owners.as_slice() {
+                [] => binding.tool.clone(),
+                [owner] => {
+                    dependency_path(owner, &path_segments_from_text(&binding.tool)).join(".")
+                }
+                _ => {
+                    return Err(DriverError::InvalidInput(format!(
+                        "tool binding `{}` is ambiguous across dependency packages {}",
+                        binding.tool,
+                        owners
+                            .iter()
+                            .map(|owner| owner.import_root.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )));
+                }
+            };
+            Ok(ProjectToolBindingInput {
+                tool,
+                provider: binding.provider.clone(),
+                effect_row: binding.effect_row.clone(),
+                action_row: binding.action_row.clone(),
+            })
+        })
+        .collect()
 }
 
 fn external_packages(
