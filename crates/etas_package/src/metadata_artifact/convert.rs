@@ -717,7 +717,9 @@ fn effect_arg_matches_action_arg_kind(
         PackageEffectActionArgKindMetadata::StringPattern => {
             matches!(
                 arg,
-                PackageEffectArgMetadata::String { .. } | PackageEffectArgMetadata::Path { .. }
+                PackageEffectArgMetadata::String { .. }
+                    | PackageEffectArgMetadata::Int { .. }
+                    | PackageEffectArgMetadata::Path { .. }
             )
         }
     }
@@ -969,6 +971,9 @@ fn effect_arg_from_metadata(
         }
         etas_package_metadata::EffectArgKind::String => {
             Ok(PackageEffectArgMetadata::String { value: arg.value })
+        }
+        etas_package_metadata::EffectArgKind::Int => {
+            Ok(PackageEffectArgMetadata::Int { value: arg.value })
         }
         etas_package_metadata::EffectArgKind::Wildcard => Ok(PackageEffectArgMetadata::Wildcard),
     }

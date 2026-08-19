@@ -377,6 +377,7 @@ pub enum PackageEffectArgMetadata {
     Type { ty: PackageTypeMetadata },
     Path { path: Vec<String> },
     String { value: String },
+    Int { value: String },
     Wildcard,
 }
 

@@ -702,7 +702,9 @@ fn effect_arg_matches_action_arg_kind(
         PackageEffectActionArgKindMetadata::StringPattern => {
             matches!(
                 arg,
-                PackageEffectArgMetadata::String { .. } | PackageEffectArgMetadata::Path { .. }
+                PackageEffectArgMetadata::String { .. }
+                    | PackageEffectArgMetadata::Int { .. }
+                    | PackageEffectArgMetadata::Path { .. }
             )
         }
     }
@@ -950,6 +952,12 @@ fn effect_arg_to_metadata(
         }),
         PackageEffectArgMetadata::String { value } => Ok(etas_package_metadata::EffectArg {
             kind: etas_package_metadata::EffectArgKind::String,
+            ty: None,
+            path: Vec::new(),
+            value: value.clone(),
+        }),
+        PackageEffectArgMetadata::Int { value } => Ok(etas_package_metadata::EffectArg {
+            kind: etas_package_metadata::EffectArgKind::Int,
             ty: None,
             path: Vec::new(),
             value: value.clone(),

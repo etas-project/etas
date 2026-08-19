@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use etas_std::{
-    EffectDecl, FlowDecl, StdDecl, StdPrimitiveType, StdSupportConstraint, StdSymbolKind, StdType,
-    ToolDecl, TypeDeclKind, standard_registry,
+    EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdPrimitiveType, StdStaticArg,
+    StdSupportConstraint, StdSymbolKind, StdType, ToolDecl, TypeDeclKind, standard_registry,
 };
 
 use super::{
@@ -114,7 +114,7 @@ pub fn builtin_std_public_metadata() -> PackagePublicMetadata {
             StdDecl::Tool(decl) => {
                 tools.push(tool_signature(symbol.qualified_path.clone(), decl));
             }
-            StdDecl::Flow(_) | StdDecl::Impl(_) | StdDecl::Requirement(_) => {}
+            StdDecl::Flow(_) | StdDecl::Requirement(_) => {}
         }
     }
 
@@ -210,7 +210,7 @@ fn flow_signature(path: Vec<String>, decl: &FlowDecl) -> PackageFlowSignatureMet
         param_names: Vec::new(),
         params: decl.params.iter().map(package_type_from_std_type).collect(),
         output: package_type_from_std_type(&decl.output),
-        effects: Some(effect_row_from_texts(&decl.public_effects)),
+        effects: Some(effect_row_from_std(&decl.public_effects)),
         visibility: public_visibility(),
     }
 }
@@ -221,7 +221,7 @@ fn tool_signature(path: Vec<String>, decl: &ToolDecl) -> PackageToolSignatureMet
         param_names: Vec::new(),
         input: decl.params.iter().map(package_type_from_std_type).collect(),
         output: package_type_from_std_type(&decl.output),
-        effects: Some(effect_row_from_texts(&decl.effects)),
+        effects: Some(effect_row_from_std(&decl.effects)),
         visibility: public_visibility(),
     }
 }
@@ -270,60 +270,39 @@ fn package_action_arg_kind_from_std(
 fn flow_effect_summary(path: Vec<String>, decl: &FlowDecl) -> PackageEffectSummaryMetadata {
     PackageEffectSummaryMetadata {
         item: path,
-        public_effects: effect_row_from_texts(&decl.public_effects),
-        requested_actions: effect_row_from_texts(&decl.requested_actions),
-        handled_requested_actions: effect_row_from_texts(&decl.requested_actions),
+        public_effects: effect_row_from_std(&decl.public_effects),
+        requested_actions: effect_row_from_std(&decl.requested_actions),
+        handled_requested_actions: effect_row_from_std(&decl.requested_actions),
         latent_flows: Vec::new(),
     }
 }
 
-fn effect_row_from_texts(effects: &[String]) -> PackageEffectRowMetadata {
+fn effect_row_from_std(effects: &[StdEffectRef]) -> PackageEffectRowMetadata {
     PackageEffectRowMetadata {
-        effects: effects
-            .iter()
-            .map(|effect| effect_ref_from_text(effect))
-            .collect(),
+        effects: effects.iter().map(effect_ref_from_std).collect(),
     }
 }
 
-fn effect_ref_from_text(text: &str) -> PackageEffectRefMetadata {
-    let text = text.trim();
-    let (path, args) = match text.split_once('[') {
-        Some((head, rest)) => {
-            let args = rest
-                .strip_suffix(']')
-                .map(split_top_level_commas)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|arg| effect_arg_from_text(head, arg))
-                .collect();
-            (path_from_text(head), args)
-        }
-        None => (path_from_text(text), Vec::new()),
-    };
-    PackageEffectRefMetadata { path, args }
+fn effect_ref_from_std(effect: &StdEffectRef) -> PackageEffectRefMetadata {
+    PackageEffectRefMetadata {
+        path: effect.path.clone(),
+        args: effect.args.iter().map(effect_arg_from_std).collect(),
+    }
 }
 
-fn effect_arg_from_text(owner: &str, text: &str) -> PackageEffectArgMetadata {
-    let text = text.trim();
-    if text == "_" {
-        return PackageEffectArgMetadata::Wildcard;
-    }
-    if let Some(value) = text
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-    {
-        return PackageEffectArgMetadata::String {
-            value: value.to_owned(),
-        };
-    }
-    if owner.trim() == "Error" {
-        return PackageEffectArgMetadata::Type {
-            ty: package_type_from_std_type(&StdType::parse(text)),
-        };
-    }
-    PackageEffectArgMetadata::Path {
-        path: path_from_text(text),
+fn effect_arg_from_std(arg: &StdStaticArg) -> PackageEffectArgMetadata {
+    match arg {
+        StdStaticArg::Type(ty) => PackageEffectArgMetadata::Type {
+            ty: package_type_from_std_type(ty),
+        },
+        StdStaticArg::Path(path) => PackageEffectArgMetadata::Path { path: path.clone() },
+        StdStaticArg::String(value) => PackageEffectArgMetadata::String {
+            value: value.clone(),
+        },
+        StdStaticArg::Int(value) => PackageEffectArgMetadata::Int {
+            value: value.clone(),
+        },
+        StdStaticArg::Wildcard => PackageEffectArgMetadata::Wildcard,
     }
 }
 
@@ -333,25 +312,6 @@ fn path_from_text(text: &str) -> Vec<String> {
         .filter(|segment| !segment.is_empty())
         .map(ToOwned::to_owned)
         .collect()
-}
-
-fn split_top_level_commas(text: &str) -> Vec<&str> {
-    let mut depth = 0usize;
-    let mut start = 0usize;
-    let mut parts = Vec::new();
-    for (index, ch) in text.char_indices() {
-        match ch {
-            '[' => depth += 1,
-            ']' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(text[start..index].trim());
-                start = index + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(text[start..].trim());
-    parts
 }
 
 fn package_type_from_std_type(ty: &StdType) -> PackageTypeMetadata {
