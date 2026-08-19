@@ -8,7 +8,7 @@ String escapes and numeric literal suffixes are omitted here.
 
 Source examples use **four spaces per indentation level**. Tabs are not used for indentation.
 
-Comments are lexical trivia. They are ignored by parsing, do not enter the typed AST or AIR, and do not affect effects, policies, limits, traces, or runtime behavior.
+Comments are lexical trivia. They are ignored by parsing, do not enter the typed AST or AIR, and do not affect effects, trace specs, runtime policy, limits, traces, or runtime behavior.
 
 Etas supports line comments and block comments:
 
@@ -885,7 +885,7 @@ Limit dimensions are typed support constructors rather than keywords. For exampl
 
 MVP error handling uses the `Error<E>.raise` effect action, runtime-scoped `handle`, the postfix `?` effect-to-`Result` lowering operator, the value type `Result<T, E>`, and the ordinary support flow `abort(...) -> never`. `try`, `catch`, and `throw` are not source keywords.
 
-There is no source-level `parallel` statement in the MVP. Concurrent composition is expressed through library calls such as `join([() => { ... }, () => { ... }])`. Tenant context is also not a keyword; it is an ordinary user-defined struct passed through flows, tools, typed memory APIs, and policies.
+There is no source-level `parallel` statement in the MVP. Concurrent composition is expressed through library calls such as `join([() => { ... }, () => { ... }])`. Tenant context is also not a keyword; it is an ordinary user-defined struct passed through flows, tools, typed memory APIs, trace specs, and runtime policy.
 
 There is also no source-level `prompt` declaration in the MVP. Prompt construction is expressed through deterministic flows returning the Agent/runtime support type `Prompt`, for example `flow ReviewPrompt(...) -> Prompt { ... }`.
 
@@ -1274,7 +1274,7 @@ Agents are non-deterministic, effectful, trace-producing computations.
 
 ### 2.2 Tools Are Not Ordinary Flows
 
-Tools cross trust boundaries and must be governed by effects, action boundaries, and policies.
+Tools cross trust boundaries and must be governed by effects, action boundaries, trace specs, and runtime policy.
 
 ### 2.3 Prompts Are Not Messages
 

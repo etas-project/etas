@@ -152,7 +152,7 @@ flow Implement(task: Task) -> CodeResult {
 
 ## 3. Email Assistant
 
-This case covers a high-impact effect action, policy-level approval, and effect handlers as recovery, not authority.
+This case covers a high-impact effect action, trace-spec/runtime-policy approval, and effect handlers as recovery, not authority.
 
 ```etas
 effect CompanyEmail extends Network {
@@ -523,7 +523,7 @@ flow WriteSurvey(req: SurveyRequest) -> Message<Survey> {
 
 ## 10. Safety Examples
 
-These examples show safety properties that Etas can make visible before or during execution. The important point is not that other frameworks cannot add runtime hooks; it is that Etas exposes effects and actions, policies, prompt channels, and tool boundaries as language/runtime semantics.
+These examples show safety properties that Etas can make visible before or during execution. The important point is not that other frameworks cannot add runtime hooks; it is that Etas exposes effects and actions, trace specs, runtime policy, prompt channels, and tool boundaries as language/runtime semantics.
 
 ### 10.1 Approval Dominance Before External Email
 
@@ -718,7 +718,7 @@ flow AnswerAccountQuestion(question: AccountQuestion) -> AccountAnswer {
 }
 ```
 
-Tenant context is ordinary data, but tools, memory keys, policy checks, and traces all see it. Etas can make tenant scoping part of the checked flow instead of relying on ad-hoc context propagation in callbacks.
+Tenant context is ordinary data, but tools, memory keys, trace-spec/runtime-policy checks, and traces all see it. Etas can make tenant scoping part of the checked flow instead of relying on ad-hoc context propagation in callbacks.
 
 ## 11. Reliability Examples
 
@@ -1026,19 +1026,19 @@ The budget covers the whole fan-out region, not each branch independently. If on
 
 Optimization in Etas should not pretend that external effects are pure. For
 example, `Network` does not imply that two identical searches return the same
-value. The optimizer needs explicit action summaries, memory versions, policy
-constraints, trace constraints, or agent metadata before it can rewrite an
-agent system.
+value. The optimizer needs explicit action summaries, memory versions, trace-spec
+constraints, runtime-policy constraints, trace constraints, or agent metadata
+before it can rewrite an agent system.
 
 The more distinctive optimization target is the first-class agent boundary:
 agent calls, subagent structure, context harnesses, prompt segments, tool
-surfaces, policy, limits, and trace are all visible to the language. An
+surfaces, trace specs, runtime policy, limits, and trace are all visible to the language. An
 optimization is valid only if it preserves:
 
 - ordinary values and output types;
 - escaping effect rows;
 - requested-action metadata such as `Agentic.infer<C, O>`;
-- policy monitor behavior;
+- trace-spec monitor behavior and runtime-policy behavior;
 - limit accounting;
 - replay and trace semantics.
 
@@ -1055,10 +1055,10 @@ The examples use annotations such as `@optimization`, `@trace`, and
 
 | Framework surface | What it can do well | Gap relative to Etas |
 |---|---|---|
-| LangChain agents, tools, middleware, context engineering, and human-in-the-loop ([tools](https://docs.langchain.com/oss/python/langchain/tools), [middleware](https://docs.langchain.com/oss/python/langchain/middleware), [context engineering](https://docs.langchain.com/oss/python/langchain/context-engineering), [human-in-the-loop](https://docs.langchain.com/oss/python/langchain/human-in-the-loop)) | Wrap callables as tools, customize runtime middleware, trim or modify context, interrupt selected tool calls. | Optimizations are usually user-authored middleware or graph code. The framework does not type agent boundaries, prompt segments, policy, limits, and trace as one source-level rewrite contract. |
+| LangChain agents, tools, middleware, context engineering, and human-in-the-loop ([tools](https://docs.langchain.com/oss/python/langchain/tools), [middleware](https://docs.langchain.com/oss/python/langchain/middleware), [context engineering](https://docs.langchain.com/oss/python/langchain/context-engineering), [human-in-the-loop](https://docs.langchain.com/oss/python/langchain/human-in-the-loop)) | Wrap callables as tools, customize runtime middleware, trim or modify context, interrupt selected tool calls. | Optimizations are usually user-authored middleware or graph code. The framework does not type agent boundaries, prompt segments, trace specs, runtime policy, limits, and trace as one source-level rewrite contract. |
 | AutoGen agents, teams, agent-as-tool, and intervention handlers ([agents](https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/agents.html), [tools](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/components/tools.html), [tool intervention](https://microsoft.github.io/autogen/stable/user-guide/core-user-guide/cookbook/tool-use-with-intervention.html)) | Compose agents and tools, wrap agents as tools, intercept tool requests, use teams for collaboration. | Subagent composition is powerful but remains framework-level runtime structure. Whether two agent boundaries are semantically fusable or must remain audited is not a language-level check. |
-| CrewAI agents, memory, tools, cache functions, and human input ([agents](https://docs.crewai.com/en/concepts/agents), [tools](https://docs.crewai.com/en/concepts/tools), [tool hooks](https://docs.crewai.com/en/learn/tool-hooks), [human input](https://docs.crewai.com/en/learn/human-input-on-execution)) | Declare role/goal/backstory agents, attach tools and memory, cache tool results, use hooks and human review. | Cache and context behavior are attached operationally. They do not provide a typed compiler target for preserving trust labels, memory versions, policy order, and logical trace events during rewrite. |
-| Etas source programs | Represent agent calls, subagent calls, tool surfaces, prompt construction, effect actions, policies, limits, trust labels, and trace summaries in the language. | The implementation must maintain summaries and reject rewrites when fusable boundaries, context stability, policy order, or trace preservation cannot be proven. |
+| CrewAI agents, memory, tools, cache functions, and human input ([agents](https://docs.crewai.com/en/concepts/agents), [tools](https://docs.crewai.com/en/concepts/tools), [tool hooks](https://docs.crewai.com/en/learn/tool-hooks), [human input](https://docs.crewai.com/en/learn/human-input-on-execution)) | Declare role/goal/backstory agents, attach tools and memory, cache tool results, use hooks and human review. | Cache and context behavior are attached operationally. They do not provide a typed compiler target for preserving trust labels, memory versions, trace-spec order, runtime-policy behavior, and logical trace events during rewrite. |
+| Etas source programs | Represent agent calls, subagent calls, tool surfaces, prompt construction, effect actions, trace specs, runtime policy, limits, trust labels, and trace summaries in the language. | The implementation must maintain summaries and reject rewrites when fusable boundaries, context stability, trace-spec order, runtime-policy behavior, or trace preservation cannot be proven. |
 
 ### 12.2 Agent Fusion
 
@@ -1514,7 +1514,7 @@ flow AnalyzeMarket(req: MarketRequest) -> MarketReport {
 If two branches independently requested `market.search_company(req.company)`,
 Etas can deduplicate them only when the action summary permits a single traced
 result to represent both uses. This is stricter than a generic cache: the
-rewrite must preserve action trace identity, policy, freshness, and replay
+rewrite must preserve action trace identity, trace specs, runtime policy, freshness, and replay
 semantics.
 
 #### Loop Unrolling With Deterministic Guard Inversion
@@ -1725,11 +1725,11 @@ Etas can make both visible in one program:
 
 ```text
 Agentic.infer / Tool action / Context selection / Human approval
-  become typed actions with effect rows, policy, limits, trust labels, and trace.
+  become typed actions with effect rows, trace specs, runtime policy, limits, trust labels, and trace.
 ```
 
 The optimizer can then rewrite an agent execution plan while preserving the
-effect and policy contract. It should never optimize merely because an effect
+effect, trace-spec, and runtime-policy contract. It should never optimize merely because an effect
 root is broad or familiar. It needs action summaries, handler types, regions,
 trace dependencies, or explicit agent metadata.
 
@@ -2039,7 +2039,7 @@ Agentic.infer<C, O> ; Memory.write<R>
   barrier unless the write is preserved as an explicit stage
 
 Approval.request ; CompanyEmail.send<WorkAccount>
-  policy barrier
+  trace-spec/runtime-policy barrier
 
 Command.run<S> ; Agentic.infer<C2, O2>
   barrier unless sandbox summary proves the command cannot change B's inputs
@@ -2052,6 +2052,6 @@ sandbox effects, or audit meaning, it remains in the execution plan.
 
 | Combined idea | Source of inspiration | Etas-specific optimization |
 |---|---|---|
-| Effect-barrier-aware Agent Fusion | Effect handlers plus multi-agent pipelines | Fuse only across boundaries that do not carry policy, authority, or audit meaning. |
+| Effect-barrier-aware Agent Fusion | Effect handlers plus multi-agent pipelines | Fuse only across boundaries that do not carry trace-spec, runtime-policy, authority, or audit meaning. |
 | Typed Context Harness Optimization | Context engineering plus trust/secret types | Slice, share, and cache context without crossing trust or memory-version boundaries. |
 | Effect-polymorphic Agent Scheduling | Row-polymorphic effects plus agent DAGs | Specialize a generic agent combinator into parallel, speculative, serial, replay, or deduplicated plans. |

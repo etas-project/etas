@@ -96,7 +96,7 @@ type TcpStream;
 ```
 
 `WorkspaceRoot` and `ReportsRoot` are marker types: if they only appear in type
-arguments, spec implementations, effect indices, and policy predicates, the
+arguments, spec implementations, effect indices, and trace-spec predicates, the
 compiler does not allocate runtime values for them. `TcpStream` is also
 bodyless, but it represents an opaque runtime handle because values of that type
 are returned and passed at runtime.
@@ -244,9 +244,9 @@ flow read_until_limit<S ~ ByteStream>(
 ```
 
 Parameterized marker specs can express relationships between types. This is
-the preferred way to model resource inclusion, stream capabilities, prompt
-encoding support, path regions, and other compile-time facts without adding
-general subtyping:
+the preferred way to model resource inclusion, stream evidence, prompt encoding
+support, path regions, and other compile-time facts without adding general
+subtyping:
 
 ```etas
 public type WorkspaceRoot;
@@ -544,9 +544,9 @@ agent Coder(input: Issue) -> Patch {
 Deployment/runtime configuration grants or denies concrete effect/action
 instances such as `ProjectWorkspace.read<"src/**">`,
 `ProjectWorkspace.write<"src/**">`, or `Command.run<DefaultCommandSandbox>`.
-Source code should refer to typed effect actions and policy rules, not raw
-permission strings. `ProjectWorkspace` is a host/project package effect, not a
-core standard-library effect.
+Source code should refer to typed effect actions, trace specs, and runtime
+policy rules, not raw permission strings. `ProjectWorkspace` is a host/project
+package effect, not a core standard-library effect.
 
 ### 1.7 Bottom Type
 
@@ -587,11 +587,17 @@ type Claim = {
 }
 ```
 
-A policy may require:
+Evidence requirements should be expressed with ordinary types, specs, and
+validators rather than the old `policy { ... }` source block. For example, a
+publishing flow can require an evidence-bearing value:
 
 ```etas
-policy CitationPolicy {
-    require evidence for Claim;
+spec EvidenceBacked;
+
+impl Claim ~ EvidenceBacked;
+
+flow publish_claim<C ~ EvidenceBacked>(claim: C) -> PublishedClaim {
+    ...
 }
 ```
 

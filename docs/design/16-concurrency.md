@@ -53,7 +53,7 @@ Etas concurrency is structured:
 
 - a concurrent scope owns all child tasks it starts;
 - child tasks cannot outlive the scope;
-- cancellation, failure, limits, handlers, policies, and trace events are scoped;
+- cancellation, failure, limits, handlers, trace specs, runtime policies, and trace events are scoped;
 - a concurrent expression returns only after its children complete, fail, or are
   cancelled;
 - no background task is silently detached by default.

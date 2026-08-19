@@ -170,10 +170,10 @@ Harness engineering should not become a pile of new keywords. The core source la
 | Tool boundary | Yes | `tool`, `effect`, `require` |
 | Agent boundary | Yes | `agent` |
 | Flow orchestration | Yes | `flow`, `|`, `~>`, `if`, `match`, loops, `limit` |
-| Human gate | No special expression | `approve(...)` support flow, `Approval.request` action, policy |
+| Human gate | No special expression | `approve(...)` support flow, `Approval.request` action, trace specs/runtime policy |
 | Checkpoint | No keyword | `runtime.checkpoint(...)` stdlib/runtime support |
 | Parallelism | No keyword | `join([...])` stdlib combinator |
-| Guardrails | Mostly no keyword | validators, policies, handlers, tool schemas |
+| Guardrails | Mostly no keyword | validators, trace specs, runtime policies, handlers, tool schemas |
 | Harness profile | No source keyword | manifest generated from source plus deployment config |
 | Evaluation harness | No source keyword | test runner, mock tools/models, golden traces |
 | Hosted deployment | No source keyword | runtime/platform |

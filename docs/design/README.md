@@ -1,6 +1,6 @@
 # Etas Design
 
-Etas is an agent-native general-purpose programming language design for multi-agent systems. It treats flows, agents, tools, prompt values, typed persistent memory APIs, policies, approvals, and traces as explicit program elements that can be checked, compiled, executed, audited, and optimized.
+Etas is an agent-native general-purpose programming language design for multi-agent systems. It treats flows, agents, tools, prompt values, typed persistent memory APIs, trace specs, approvals, and traces as explicit program elements that can be checked, compiled, executed, audited, and optimized.
 
 ## Documents
 

@@ -22,7 +22,7 @@ e ::= x
     | memwrite r k v
 ```
 
-The user-facing source syntax is defined in [General Programming Constructs](02-general-programming-constructs.md), [Flows, Human Gates, and Protocols](04-flows-human-gates-and-protocols.md), and summarized in [Syntax Principles](09-syntax-principles.md). Forms such as `agentcall`, `flowcall`, `toolcall`, `memread`, and `memwrite` are internal core forms, not surface keywords. Prompt construction is an ordinary library call that returns a typed `Prompt` value. Human approval is also an ordinary Agent/runtime support flow call whose type carries `![Approval]`.
+The user-facing source syntax is defined in [General Programming Constructs](02-general-programming-constructs.md), [Flows, Human Gates, and Protocols](04-flows-human-gates-and-protocols.md), and summarized in [Syntax Principles](09-syntax-principles.md). Forms such as `agentcall`, `flowcall`, `toolcall`, `memread`, and `memwrite` are internal core forms, not surface keywords. `memread` and `memwrite` are the lowered form of typed `std.memory` APIs and `Memory.read<R>` / `Memory.write<R>` actions; they are not source-level `memory` syntax. Prompt construction is an ordinary library call that returns a typed `Prompt` value. Human approval is represented by the standard `Approval.request` action and ergonomic library wrappers such as `approve(...)`.
 
 Checkpointing is intentionally not a core expression form. Explicit checkpoints are ordinary standard-library calls such as `runtime.checkpoint(state)` that lower to runtime checkpoint metadata. The runtime may also insert automatic checkpoint boundaries.
 
@@ -104,7 +104,7 @@ Informally:
 ⟨v', σ, μ', κ, β', τ · AgentCall(A, v, v')⟩
 ```
 
-where `v'` is one possible output satisfying the declared schema and policy, and `β'` is the remaining budget after token, context, cost, and time accounting.
+where `v'` is one possible output satisfying the declared schema, active trace specs, and runtime policy, and `β'` is the remaining budget after token, context, cost, and time accounting.
 
 Because the model is non-deterministic, the transition relation is non-deterministic.
 
@@ -125,7 +125,7 @@ only if:
 Otherwise:
 
 ```text
-PolicyViolation
+ActionDenied
 ```
 
 or, if the relevant budget is exhausted:
@@ -134,18 +134,18 @@ or, if the relevant budget is exhausted:
 BudgetExceeded
 ```
 
-### 1.7 Approval Support Flow Rule
+### 1.7 Approval Action Rule
 
 ```text
-approve : ApprovalRequest -> bool ![Approval]
+approve : ApprovalRequest -> ApprovalDecision ![Approval.request]
 ```
 
-After type checking, a call to the support flow lowers to an internal approval transition:
+After type checking, the ergonomic support flow lowers to the standard approval action:
 
 ```text
 ⟨call approve a, σ, μ, κ, β, τ⟩
   ↦
-⟨true, σ, μ, κ, β, τ · Approval(a, accepted)⟩
+⟨accepted, σ, μ, κ, β, τ · Action(Approval.request, a, accepted)⟩
 ```
 
 or:
@@ -153,7 +153,7 @@ or:
 ```text
 ⟨call approve a, σ, μ, κ, β, τ⟩
   ↦
-⟨false, σ, μ, κ, β, τ · Approval(a, rejected)⟩
+⟨rejected, σ, μ, κ, β, τ · Action(Approval.request, a, rejected)⟩
 ```
 
 ---
@@ -238,7 +238,9 @@ Read(A)  ⊆ AllowedRead(A)
 Write(A) ⊆ AllowedWrite(A)
 ```
 
-Containment uses memory-place hierarchy. A policy over `ProjectMemory` covers `ProjectMemory.Papers`, but a policy over `ProjectMemory.Papers` does not cover `ProjectMemory.Drafts`.
+Containment uses memory-place hierarchy. A trace spec or runtime policy over
+`ProjectMemory` covers `ProjectMemory.Papers`, but one over
+`ProjectMemory.Papers` does not cover `ProjectMemory.Drafts`.
 
 ### 2.5 Protocol Analysis
 
@@ -248,7 +250,7 @@ Checks that communication traces conform to declared protocols.
 TraceMessages(W) ∈ Language(Protocol)
 ```
 
-### 2.6 Temporal Policy Analysis
+### 2.6 Temporal Trace-Spec Analysis
 
 Checks temporal properties over traces.
 
@@ -285,7 +287,7 @@ LoopEffects(body) contains AgentCall
   requires Iterations(...) or another enforceable token/context/cost/time budget
 
 LoopEffects(body) contains ToolCall
-  checked through the same loop budget plus tool policy
+  checked through the same loop budget plus trace-spec/runtime-policy constraints
 ```
 
 The analyzer rejects non-deterministic `while` forms with neither a proven termination argument nor an enforceable `limit`.
@@ -308,7 +310,7 @@ Etas connects naturally to many PL concepts:
 | Program slicing | Context minimization for agent calls |
 | Partial evaluation | Prompt specialization |
 | Compiler IR | Agent Intermediate Representation |
-| Runtime monitoring | Dynamic policy enforcement |
+| Runtime monitoring | Dynamic trace-spec/runtime-policy enforcement |
 | Type-directed compilation | Backend-independent agent flow generation |
 
 ---

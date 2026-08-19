@@ -53,7 +53,7 @@ FIR is the LLVM-like middle IR for Etas flow analysis: explicit values, data dep
 
 AIR is not intended to be a low-level CPU IR. It is closer to an executable typed flow/control-flow graph for deterministic helpers, effectful host interactions, and non-deterministic agent computation.
 
-AIR is also not the source AST. The AST preserves source syntax, while AIR preserves checked execution semantics. A prototype may interpret typed AST directly, but the long-term runtime should interpret AIR so policy checks, effect/action checks, budget checks, runtime checkpoint boundaries, trace node ids, and data dependencies are explicit.
+AIR is also not the source AST. The AST preserves source syntax, while AIR preserves checked execution semantics. A prototype may interpret typed AST directly, but the long-term runtime should interpret AIR so trace-spec checks, runtime-policy checks, effect/action checks, budget checks, runtime checkpoint boundaries, trace node ids, and data dependencies are explicit.
 
 ### 1.1 Representation Choice
 
@@ -118,14 +118,14 @@ This table records where current Etas features belong. The rule of thumb is:
 | `~>` pipeline | Preserve source operator and stage list | Desugar to explicit stage graph with data edges and per-stage metadata | Execute lowered stage calls; emit normal call/message/trace events |
 | Stage composition operator | Preserve source composition expression | Type as a composed flow and lower to sequence/graph of stage calls with unioned effects and determinism | Execute the generated composed flow; no special runtime operator required |
 | `join([...])` stdlib combinator | Resolve as library flow call | Recognize join shape when signature and arguments allow parallel scheduling analysis | Execute as structured concurrent branches or sequential fallback, preserving trace and failure policy |
-| Agent declarations | Preserve `agent` item, nominal identity, optional default `run` body, static annotations, and `impl agent` methods | Model as a nominal component with callable method summaries, input/output schemas, method body effects, latent tool/effect boundary, effect/action requirements, and session/message dependencies | Execute generated or explicit methods, prompt/message encoding, policy checks, provider calls, structured output validation, trace, replay, and usage accounting |
+| Agent declarations | Preserve `agent` item, nominal identity, optional default `run` body, static annotations, and `impl agent` methods | Model as a nominal component with callable method summaries, input/output schemas, method body effects, latent tool/effect boundary, effect/action requirements, and session/message dependencies | Execute generated or explicit methods, prompt/message encoding, trace-spec/runtime-policy checks, provider calls, structured output validation, trace, replay, and usage accounting |
 | Agent inference / `perform infer` | Preserve source `perform infer<T>(prompt)` and current agent method identity | Lower to an `AgentCall` / `Agentic.infer<C, O>` runtime action boundary and schema requirements; keep `Agentic.infer<C, O>` in requested-action metadata, not the public escaping effect row | Execute provider call through the runtime agent provider or an explicit test/runtime override; record model response, usage, trace, retry/replay metadata |
 | Typed `Message<T>`, conversation, session | Preserve ordinary type/value usage and resolved runtime support APIs | Track message payload type, sender/receiver/session/provenance dependencies, handoff points, and context-window constraints | Append/read conversation state, emit message/handoff trace events, enforce retention and context policy |
 | Prompt runtime support values | Preserve normal value construction and resolved APIs | Track prompt parts, trust/provenance labels, channel placement, and prompt taint facts | Encode provider request payloads and record prompt hashes/metadata for replay and audit |
-| Etas tool declarations | Preserve `tool` item, signature, optional effect contract, requirements, body, and source spans | Model as a model-callable boundary whose body lowers to a checked subgraph with argument validation, schema output validation, effects and actions, policy checks, and trace metadata | Execute the lowered body under tool-call mediation; record model-callable invocation, validation, effects, and result |
-| Runtime-provided tool symbols | Preserve imported tool metadata, signature, explicit effects and actions, and host binding metadata | Model as effectful host operation with idempotency/cache/sandbox metadata and effect/action requirements | Execute via runtime tool registry, sandbox, effect/action checks, policy checks, idempotency keys, and trace |
+| Etas tool declarations | Preserve `tool` item, signature, optional effect contract, requirements, body, and source spans | Model as a model-callable boundary whose body lowers to a checked subgraph with argument validation, schema output validation, effects and actions, trace-spec/runtime-policy checks, and trace metadata | Execute the lowered body under tool-call mediation; record model-callable invocation, validation, effects, and result |
+| Runtime-provided tool symbols | Preserve imported tool metadata, signature, explicit effects and actions, and host binding metadata | Model as effectful host operation with idempotency/cache/sandbox metadata and effect/action requirements | Execute via runtime tool registry, sandbox, effect/action checks, trace-spec/runtime-policy checks, idempotency keys, and trace |
 | Tool calls | Preserve call syntax and resolved callee | Lower Etas tool calls to boundary-enter/body graph/boundary-exit; lower runtime-provided tool calls to checked host operation with explicit data dependencies, effect/action boundary, cacheability, and side-effect classification | Execute checked tool boundary and record result, error, idempotency, and replay metadata |
-| Effect tags | Preserve effect declarations and references in requirements/handlers | Propagate effect sets through nodes/regions; distinguish tag-only effects from action signatures | Store final effects on runtime nodes for policy, audit, trace, and handler dispatch |
+| Effect tags | Preserve effect declarations and references in handlers | Propagate effect sets through nodes/regions; distinguish tag-only effects from action signatures | Store final effects on runtime nodes for trace-spec/runtime-policy checks, audit, trace, and handler dispatch |
 | Effect actions | Preserve `action` signatures and `perform` expressions | Lower `perform` to typed effect operation with result type, resume behavior, and handler requirements | Dispatch to nearest runtime-scoped handler or default runtime implementation; manage resume/abort semantics |
 | `handle` / `resume` | Preserve handler arms, patterns, and lexical scope; `resume` only inside handler arm | Build handler regions, operation-to-arm edges, result types, and legal resume points | Execute runtime-scoped handler dispatch; store resume state in checkpoints and traces |
 | Errors / `never` | Preserve `Error<E>` uses, `return`, `abort`, and non-returning operations | Represent exceptional control edges and non-resumable operation exits | Execute abort/error propagation, trace failure, and recovery behavior |
@@ -152,7 +152,8 @@ AirProgram {
   agents: AgentTable,
   tools: ToolTable,
   memories: MemoryRegionTable,
-  policies: PolicyTable,
+  trace_specs: TraceSpecTable,
+  runtime_policy: RuntimePolicyRef?,
   flows: List<AirFlow>,
   entry: FlowId,
 }
@@ -304,7 +305,8 @@ AirNode {
   next: Next,
   effects: EffectSet,
   effect_boundary: EffectSet,
-  policies: List<PolicyRef>,
+  trace_specs: List<TraceSpecRef>,
+  runtime_policy: RuntimePolicyRef?,
   limits: LimitSet,
   checkpoint: CheckpointKind,
   trace: TraceKind,
@@ -358,7 +360,8 @@ AirOp =
 | Memory.read(region, consistency)
 | Memory.write(region, write_policy)
 | Approval(approval_policy)
-| PolicyCheck(policy_id)
+| TraceSpecCheck(trace_spec_id)
+| RuntimePolicyCheck(policy_ref)
 | EffectBoundaryCheck(effect_ref)
 | BudgetCheck(limit_scope)
 | Branch
@@ -384,7 +387,7 @@ AirOp =
 
 The source stage composition operator `|` is eliminated before AIR. A composition such as `Researcher | Writer | Publisher` is typed as a flow and lowered as the corresponding sequence of `AgentCall`, `FlowCall`/`PureCall`, and `ToolCall` nodes. The composed flow's effects are the union of stage effects, and its determinism is the maximum of the stage determinism classes.
 
-The source pipeline operator `~>` is also eliminated before AIR. Each pipeline stage lowers to the ordinary node for that stage: `AgentCall` for an agent, `FlowCall` or `PureCall` for a flow depending on its inferred runtime class, or `ToolCall` for a tool. If the stage is a composed flow created by `|`, the pipeline lowers to that composed sequence. A stage-local `limit ...` clause lowers to explicit budget checks around that stage. Extra prompt context should appear as explicit input values or be selected inside the agent context harness; model/tool configuration belongs in agent declarations, wrapper flows/tools, package metadata, or runtime configuration. These operators do not hide effects and actions, policy checks, approval requirements, or trace nodes.
+The source pipeline operator `~>` is also eliminated before AIR. Each pipeline stage lowers to the ordinary node for that stage: `AgentCall` for an agent, `FlowCall` or `PureCall` for a flow depending on its inferred runtime class, or `ToolCall` for a tool. If the stage is a composed flow created by `|`, the pipeline lowers to that composed sequence. A stage-local `limit ...` clause lowers to explicit budget checks around that stage. Extra prompt context should appear as explicit input values or be selected inside the agent context harness; model/tool configuration belongs in agent declarations, wrapper flows/tools, package metadata, or runtime configuration. These operators do not hide effects and actions, trace-spec/runtime-policy checks, approval requirements, or trace nodes.
 
 When a pipeline value is `Message<T>`, lowering preserves message metadata. Passing a message into an agent can produce a `MessageAppend` for the active session and may produce a `Handoff` event if ownership/control moves from one agent stage to another. This keeps MAS communication visible in AIR without adding a source-level `msg`, `message`, or `handoff` keyword.
 
@@ -564,7 +567,7 @@ The caller's effect set must include the callee's effects.
 
 Agent methods lower like flow bodies, but each `perform infer<T>(prompt)` becomes
 an `AgentCall` node whose semantic action is `Agentic.infer<C, O>`, with schema
-validation, policy checks, and trace-producing runtime steps. The generated
+validation, trace-spec/runtime-policy checks, and trace-producing runtime steps. The generated
 `run` entrypoint remains typed as `I -> O`, but AIR preserves the prompt,
 provider-response, handler, and replay boundary for each inference operation.
 
@@ -574,7 +577,7 @@ let review = Reviewer.run(draft);
 
 ```text
 n1 = PromptBuild(Reviewer.run, [draft]) -> prompt
-n2 = PolicyCheck(Reviewer.policy)
+n2 = TraceSpecCheck(Reviewer.run)
 n3 = AgentCall(Reviewer.run, prompt, Schema<Review>) -> review  // Agentic.infer<Reviewer.run, Review>
 n4 = PostProcess(Reviewer.run, draft, review) -> review
 ```
@@ -604,7 +607,7 @@ may lower to:
 n1 = MessageAppend(session, msg)
 n2 = Handoff(from = TriageAgent, to = RefundAgent, message = msg, reason = route.reason)
 n3 = PromptBuild(RefundAgent.run, [msg, session.context]) -> prompt
-n4 = PolicyCheck(RefundAgent.policy)
+n4 = TraceSpecCheck(RefundAgent.run)
 n5 = AgentCall(RefundAgent.run, prompt, Schema<Message<RefundReply>>) -> reply  // Agentic.infer<RefundAgent.run, Message<RefundReply>>
 n6 = MessageValidate(reply, Message<RefundReply>) -> reply
 n7 = MessageAppend(session, reply)
@@ -614,14 +617,15 @@ The exact node split can vary by backend, but the trace must preserve message id
 
 ### 9.4 Tool Calls
 
-Runtime-provided tool calls lower to effect-boundary and policy checks followed by `ToolCall`.
+Runtime-provided tool calls lower to effect-boundary and trace-spec/runtime-policy checks followed by `ToolCall`.
 Etas-implemented tool calls lower to a tool boundary node, argument/schema
 validation, the lowered body graph, output validation, and a boundary exit node.
 
 ```text
 n1 = EffectBoundaryCheck(ProjectWorkspace.write<"reports/**">)
-n2 = PolicyCheck(ToolPolicy)
-n3 = ToolCall(fs.write, [path, content]) -> unit
+n2 = TraceSpecCheck(ToolTraceSpec)
+n3 = RuntimePolicyCheck(ToolRuntimePolicy)
+n4 = ToolCall(fs.write, [path, content]) -> unit
 ```
 
 ### 9.5 Approval
@@ -724,12 +728,12 @@ regions:
 
 nodes:
   n1  PromptBuild(Researcher.run) in [s0]       out [s1]   next n2
-  n2  PolicyCheck(Researcher)     in []         out []     next n3
+  n2  TraceSpecCheck(Researcher)  in []         out []     next n3
   n3  AgentCall(Researcher.run)   in [s1]       out [s2]   next n4   checkpoint agent_call
   n4  ValidateSchema(Array<Citation>) in [s2]    out [s3]   next n5
 
   n5  PromptBuild(Writer.run)     in [s0, s3]   out [s4]   next n6
-  n6  PolicyCheck(Writer)         in []         out []     next n7
+  n6  TraceSpecCheck(Writer)      in []         out []     next n7
   n7  AgentCall(Writer.run)       in [s4]       out [s5]   next n8   checkpoint agent_call
   n8  ValidateSchema(Draft)       in [s5]       out [s6]   next n9
 
@@ -829,7 +833,7 @@ CheckpointState {
 }
 ```
 
-Resume loads the checkpoint state and continues from `cursor`. If `pending_external_op` is present, the runtime must first resolve it through replay, provider/tool idempotency, or handler policy before advancing the cursor.
+Resume loads the checkpoint state and continues from `cursor`. If `pending_external_op` is present, the runtime must first resolve it through replay, provider/tool idempotency, trace specs, runtime policy, or handler semantics before advancing the cursor.
 
 AIR nodes that may cross a process boundary or wait on external input should normally checkpoint before and after execution:
 
@@ -854,7 +858,7 @@ Before runtime execution, the AIR verifier checks that the executable plan is we
 | Frame layout | Flow params, locals, temporaries, captures, and result slots are disjoint unless explicitly aliased |
 | Effects | Node effects are included in the enclosing flow effect summary |
 | Effect/action metadata | Every `ToolCall`, `AgentCall`, memory operation, and command-like operation has required effect/action metadata |
-| Policies | Required `PolicyCheck` nodes are present before guarded runtime operations |
+| Trace specs and runtime policy | Required `TraceSpecCheck` and `RuntimePolicyCheck` nodes are present before guarded runtime operations |
 | Limits | Loops and runtime-scoped agentic regions have active limit metadata when required by language policy |
 | Handlers | Every `Perform` either has a matching handler arm, a registered runtime default, or is statically rejected; forwarding to a default implementation must remain explicit |
 | Resume | Resumable actions have a resume slot and saved continuation; non-resumable actions cannot resume |

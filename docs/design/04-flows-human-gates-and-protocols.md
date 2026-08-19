@@ -102,7 +102,7 @@ B ~ Stage<M, O, E2>
 A | B : I -> O ![E1 + E2]
 ```
 
-The result is always a flow value, not an `agent`. A composition such as `Researcher | Writer | Publisher` represents multiple runtime steps with separate prompts, model calls, schema validation, trace events, effect/action checks, and policy checks.
+The result is always a flow value, not an `agent`. A composition such as `Researcher | Writer | Publisher` represents multiple runtime steps with separate prompts, model calls, schema validation, trace events, effect/action checks, trace-spec checks, and runtime-policy checks.
 
 Examples:
 
@@ -148,7 +148,7 @@ let (a, b, c) = join((
 
 `join` is a library flow with runtime support. The compiler may still lower independent branches into AIR regions that can be scheduled concurrently.
 
-The full concurrency model, including effect/resource conflicts, policy
+The full concurrency model, including effect/resource conflicts, trace-spec/runtime-policy
 ordering, limits, cancellation, and trace semantics, is specified in
 [Concurrency](16-concurrency.md).
 
@@ -220,7 +220,7 @@ while review.score < 8
 }
 ```
 
-`for` loops can also declare limits. This is useful when the collection comes from retrieval, model output, a stream, or any source whose size should be capped by policy:
+`for` loops can also declare limits. This is useful when the collection comes from retrieval, model output, a stream, or any source whose size should be capped by runtime policy:
 
 ```etas
 for paper in papers
@@ -294,8 +294,8 @@ Typical frameworks expose similar knobs as runtime configuration, for example ma
 - effect analysis can check that model calls, tool calls, approvals, and memory API operations are covered by active limits;
 - exported flows and deployment manifests can report token, cost, wall-time, attempt, and iteration budgets before execution;
 - checkpoint/resume stores remaining budget, not just local variables, so retries do not silently reset the resource contract;
-- `join([...])` and other combinators can use budgets to cancel losing branches, cap fan-out, or choose sequential fallback when a parallel plan would exceed policy;
-- traces can explain why execution stopped: success, ordinary control flow, policy denial, or `BudgetExceeded`.
+- `join([...])` and other combinators can use budgets to cancel losing branches, cap fan-out, or choose sequential fallback when a parallel plan would exceed trace specs or runtime policy;
+- traces can explain why execution stopped: success, ordinary control flow, runtime-policy denial, or `BudgetExceeded`.
 
 In short, `limit` is not just a loop guard. It is the language-visible resource contract for agentic computation.
 

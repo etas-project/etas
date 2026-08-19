@@ -64,7 +64,7 @@ Etas's primary complexity is not CPU-bound computation. Its core responsibilitie
 - tool dispatch;
 - effect checking;
 - effect/action enforcement;
-- policy enforcement;
+- trace-spec and runtime-policy enforcement;
 - approval gates;
 - runtime-scoped effect handlers;
 - checkpoint and resume;
@@ -97,7 +97,7 @@ execution needs explicit representation for:
 
 - effect checks;
 - effect/action checks;
-- policy checks;
+- trace-spec and runtime-policy checks;
 - budget checks;
 - approval dominance;
 - prompt taint checks;
@@ -124,13 +124,13 @@ can lower to:
 
 ```text
 n1 = PromptBuild(Reviewer.run, [draft]) -> prompt
-n2 = PolicyCheck(Reviewer.policy)
+n2 = TraceSpecCheck(Reviewer.run)
 n3 = AgentCall(Reviewer.run, prompt, Schema<Review>) -> review
 n4 = ValidateSchema(review, Review) -> review
 n5 = PostProcess(Reviewer.run, draft, review) -> review
 ```
 
-The runtime can then execute explicit checked nodes instead of rediscovering policy, schema, prompt, and trace behavior from source syntax.
+The runtime can then execute explicit checked nodes instead of rediscovering trace-spec, runtime-policy, schema, prompt, and trace behavior from source syntax.
 
 Project staging:
 
@@ -156,7 +156,7 @@ Before a flow runs, Etas should check:
 - effect/action grants are available;
 - trust labels do not flow into unsafe prompt channels;
 - loops have required limits;
-- high-impact effects are guarded by policy;
+- high-impact effects are guarded by trace specs or runtime policy;
 - the `main` entry flow is executable by the interpreter or runtime.
 
 Phase 1 executes checked typed HIR, not unchecked source code. Phase 2 and later
@@ -178,13 +178,13 @@ The runtime sequence is:
 
 1. parse and type-check the program;
 2. find `main(args: Array<string>) -> i32`;
-3. infer and verify `main`'s effects, handlers, action grants, limits, and policies against host policy;
+3. infer and verify `main`'s effects, handlers, action grants, limits, and trace specs against host runtime policy;
 4. in Phase 1, execute `main` through the typed HIR interpreter;
 5. in Phase 2+, lower `main` to AIR v0, or through FIR to AIR in Phase 3;
 6. execute AIR through the runtime;
 7. emit trace, metrics, checkpoints, final result, and process status code.
 
-`main` may call other flows, agents, and tools like any other flow, subject to ordinary type, effect, action boundary, policy, and limit checks. Static analysis starts from `main` and conservatively summarizes all reachable execution paths.
+`main` may call other flows, agents, and tools like any other flow, subject to ordinary type, effect, action boundary, trace-spec, runtime-policy, and limit checks. Static analysis starts from `main` and conservatively summarizes all reachable execution paths.
 
 ## 6. Compiler Responsibilities
 
@@ -197,7 +197,7 @@ The compiler frontend and staged lowering pipeline should own:
 - effect checking;
 - effect/action checking;
 - trust and prompt taint analysis;
-- policy validation;
+- trace-spec validation;
 - loop limit validation;
 - typed HIR interpretation for Phase 1;
 - lowering checked HIR to AIR v0 for Phase 2;
@@ -225,7 +225,7 @@ The AIR interpreter/runtime should own:
 - model provider calls;
 - tool execution;
 - memory reads and writes;
-- policy enforcement;
+- trace-spec and runtime-policy enforcement;
 - effect/action enforcement;
 - approval handling;
 - budget accounting;
@@ -304,7 +304,7 @@ Useful commands:
 :type expr
 :check file.es
 :effects FlowName
-:policy FlowName
+:trace-specs FlowName
 :graph FlowName
 :run FlowName
 :run FlowName --dry-run
@@ -344,7 +344,7 @@ Later commands can include:
 
 ```bash
 etas effects app.es
-etas policy app.es
+etas trace-specs app.es
 etas trace app.es
 etas resume CHECKPOINT_ID
 etas export-air app.es
@@ -395,7 +395,7 @@ Scope:
 - structured output validation;
 - trace logging;
 - limit enforcement;
-- effect/action, policy, approval, prompt taint, and memory hooks as explicit runtime checks.
+- effect/action, trace-spec, runtime-policy, approval, prompt taint, and memory hooks as explicit runtime checks.
 
 Goal: execute real or dry-run agent/tool flows through AIR v0 with trace output
 and explicit runtime mediation.
@@ -435,7 +435,7 @@ Exit criteria:
 
 - FIR dumps and golden tests are deterministic.
 - optimized FIR lowers to equivalent AIR.
-- workflow optimizations preserve policy, trace, replay, and checkpoint semantics.
+- workflow optimizations preserve trace-spec, runtime-policy, trace, replay, and checkpoint semantics.
 - optimizer effects are visible in diagnostics or trace metadata where they affect runtime behavior.
 
 ### 11.4 Later Backends And Developer Tools

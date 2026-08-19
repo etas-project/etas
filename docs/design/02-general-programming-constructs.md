@@ -4,7 +4,7 @@ Etas is a general-purpose programming language first, with agentic constructs ad
 
 ## 1. Lexical Style
 
-Etas source uses four spaces per indentation level. It supports `//` line comments and `/* ... */` block comments. Comments are ignored by the parser and cannot express policies, effect boundaries, limits, or other semantic constraints.
+Etas source uses four spaces per indentation level. It supports `//` line comments and `/* ... */` block comments. Comments are ignored by the parser and cannot express trace specs, runtime policy, effect boundaries, limits, or other semantic constraints.
 
 ```etas
 // Good: semantic constraints are written as source constructs.
@@ -646,7 +646,7 @@ read_config           => NonDeterministic, effects = [FileRead]
 Draft                 => NonDeterministic, requested actions include [Agentic.infer<Writer.run, Draft>]
 ```
 
-Determinism affects optimization, caching, replay, test behavior, and whether the runtime needs durable orchestration. It does not replace the effect system. A deterministic flow can still be rejected by type checking, and a non-deterministic flow can still require effect/action or policy checks.
+Determinism affects optimization, caching, replay, test behavior, and whether the runtime needs durable orchestration. It does not replace the effect system. A deterministic flow can still be rejected by type checking, and a non-deterministic flow can still require effect/action, trace-spec, or runtime-policy checks.
 
 ## 6. Program Entry Point
 
@@ -676,7 +676,7 @@ flow main(args: Array<string>) -> i32 {
 }
 ```
 
-The runtime checks `main`'s inferred effects and actions, policies, limits, and handlers, then executes `main`.
+The runtime checks `main`'s inferred effects and actions, trace specs, runtime policy, limits, and handlers, then executes `main`.
 
 `main` may call other flows normally:
 

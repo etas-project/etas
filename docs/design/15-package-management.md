@@ -217,9 +217,9 @@ The authoritative metadata artifact is a sectioned binary file:
 The artifact header records the package identity, compiler schema version,
 source payload hash, manifest hash, dependency lock hash, and target that
 created it. Section payloads carry exports, type contracts, effect contracts,
-action contracts, tool contracts, policy contracts, std contracts, package graph,
-and public symbols. JSON output is only a debug dump format; it is not a build
-input.
+action contracts, tool contracts, trace-spec contracts, runtime-policy
+requirements, std contracts, package graph, and public symbols. JSON output is
+only a debug dump format; it is not a build input.
 
 ```text
 EtasMetadataArtifact
@@ -530,8 +530,8 @@ requirements:
 - runtime-provided bindings declare effect/action rows compatible with source
   signatures;
 - entry effects can be matched against available deployment grants;
-- policies reachable from the entry are syntactically valid and can be checked
-  against inferred actions;
+- trace specs reachable from the entry are syntactically valid and can be
+  checked against inferred actions;
 - non-deterministic loops and retries have required `limit` clauses;
 - handler scopes eliminate only the effects they claim to handle;
 - generated runtime metadata includes source spans, stable item ids, entry

@@ -9,7 +9,7 @@ An agent is a first-class nominal component. It has:
 - a stable identity;
 - model/runtime annotations;
 - exposed model tools;
-- attached policies;
+- attached trace specs and runtime-policy metadata;
 - retry, limit, trace, and replay behavior;
 - optional methods implemented with `impl agent`;
 - an optional default `run` method generated from the ergonomic agent-body form.
@@ -44,13 +44,13 @@ boundary that the compiler and runtime can analyze:
 
 | Surface fact | Semantic use |
 |---|---|
-| nominal agent identity | stable trace identity, runtime profile, policy target, and replay key |
+| nominal agent identity | stable trace identity, runtime-profile target, runtime-policy target, and replay key |
 | default `run` method | stable public callable entrypoint, requested-action recording, replay, and stage composition |
 | `perform infer(prompt)` | language-visible model inference boundary, schema derivation, typed decoding, trace, replay, mock/resample, and optimization |
 | ordinary agent method body | context slicing, memory selection, prompt-channel trust checks, post-inference checks, and local normalization |
 | `impl agent` methods/specs | reusable agent behaviors, explicit method surface, and spec evidence |
 | `@tools(...)` surface | model-callable tool set, least-privilege checking, and runtime tool denial |
-| inferred effects | policy, approval, deployment manifest, and replay planning |
+| inferred effects | trace-spec checks, runtime-policy checks, approval, deployment manifest, and replay planning |
 | `Agentic.infer<A.method, O>` requested action | agent-call trace, mock/replay/resample, provider routing, and agent fusion |
 | limits and trace metadata | bounded non-deterministic execution and audit |
 
@@ -211,7 +211,7 @@ effects(agent run body)
 ```
 
 At each `perform infer` inside `Reviewer.run`, the compiler records
-`Agentic.infer<Reviewer.run, Review>` as requested-action metadata for policy, limit,
+`Agentic.infer<Reviewer.run, Review>` as requested-action metadata for trace-spec, runtime-policy, limit,
 trace, replay, and host-support checks. The agent declaration itself does not
 record that action, and the metadata does not escape as a user-visible effect
 obligation of ordinary `Reviewer.run(input)`.
@@ -233,7 +233,7 @@ Tool implementations and tool interfaces use the same `tool` name:
 
 | Form | Body | Implementation | Purpose |
 |---|---:|---|---|
-| `tool ... { ... }` | Yes | Etas source | A safe model-callable wrapper around ordinary Etas logic, policy checks, validation, context narrowing, and calls to other tools |
+| `tool ... { ... }` | Yes | Etas source | A safe model-callable wrapper around ordinary Etas logic, trace-spec/runtime-policy checks, validation, context narrowing, and calls to other tools |
 | `tool ...;` | No | Package interface or compiler/runtime metadata | A typed imported tool signature for a standard-library primitive, host-provided binding, generated API, or precompiled package item |
 
 Host bindings are not declared with a source-level keyword in the MVP.
@@ -245,7 +245,7 @@ information. Ordinary implementation source should prefer `tool ... { ... }`
 or `import` an existing bodyless signature from a package interface.
 
 This gives `tool` a clear boundary: it is not just a renamed `flow`; it is an
-LLM action boundary with schema generation, effect/action/policy checks,
+LLM action boundary with schema generation, effect/action/trace-spec/runtime-policy checks,
 trace visibility, argument validation, and output-leakage restrictions.
 
 Effect actions are the primitive runtime authority boundary. Minimal standard
@@ -267,9 +267,10 @@ flow academic.search(q: string) -> Array<Untrusted<WebPage>> ![AcademicSearch.se
 
 Etas-implemented tools use ordinary Etas bodies. Their effects are inferred
 from the body. Because tools are callable by models, they fail closed: if a tool
-omits both `![...]` and an allowing policy, the inferred body effects must be
-empty. An explicit `![...]` row is the tool's public effect boundary and an
-upper-bound contract for the inferred body effects.
+omits `![...]` and has no trace spec or runtime-policy context that allows the
+body effects, the inferred body effects must be empty. An explicit `![...]` row
+is the tool's public effect boundary and an upper-bound contract for the
+inferred body effects.
 
 ```etas
 tool safe_web_lookup(query: string) -> Array<Trusted<Snippet>> ![AcademicSearch.search]
@@ -292,16 +293,16 @@ directly callable by the model.
 Operations implemented outside Etas should be exposed through package metadata,
 host-binding metadata, or compiler-known minimal standard-library metadata, then
 wrapped by Etas `flow` or `tool` declarations when model-callable validation,
-policy narrowing, or output safety is needed. The runtime implementation
+trace-spec/runtime-policy narrowing, or output safety is needed. The runtime implementation
 receives typed arguments and returns the declared result. Its effect row is
 mandatory in metadata because the compiler cannot inspect the implementation.
 
 The compiler enforces additional rules for model-callable tools:
 
 1. tool input and output types must be schema-encodable for model tool calling;
-2. body effects are inferred and must fit the explicit or policy-derived effect boundary;
+2. body effects are inferred and must fit the explicit or trace-spec/runtime-policy-derived effect boundary;
 3. omitted tool boundaries default to no effects;
-4. high-impact effects may require approval, policy, sandbox, or limit guards;
+4. high-impact effects may require approval, trace-spec, runtime-policy, sandbox, or limit guards;
 5. outputs must not leak forbidden trust, secret, or internal authority values;
 6. only Etas `tool` declarations and imported tool symbols with tool metadata may appear in `@tools(...)`.
 
@@ -348,7 +349,7 @@ effect Memory {
 }
 ```
 
-Rows and policies can name roots or specific actions:
+Rows, trace specs, and runtime policies can name roots or specific actions:
 
 ```etas
 ![Network]
@@ -356,8 +357,8 @@ Rows and policies can name roots or specific actions:
 ```
 
 Root effects are coarse summaries; action references are deployable authority
-facts. `Network` covers `AcademicSearch.search`, but production policies should
-prefer fine-grained actions when possible.
+facts. `Network` covers `AcademicSearch.search`, but production runtime policies
+and trace specs should prefer fine-grained actions when possible.
 
 `Command` is always sandboxed in source Etas. If no sandbox profile is supplied
 to a command wrapper, the standard library uses the support value
@@ -378,13 +379,13 @@ A tool becomes executable only when all of these checks pass:
 ```text
 the tool is listed for the calling agent or directly visible to the calling flow
 and the inferred body effects are covered by the tool boundary
-and active policies, approval requirements, sandbox rules, and limits pass
+and active trace specs, runtime policies, approval requirements, sandbox rules, and limits pass
 and deployment grants allow the concrete effect/action instances
 ```
 
 An agent does not receive ambient authority just because a tool is in its
 `tools` list. The listed tool controls what the model may request. The tool's
-body, effect row, followed policy, and runtime deployment grants control what is
+body, effect row, active trace specs, and runtime deployment grants control what is
 actually executable.
 
 The MVP also keeps the recursion boundary simple: a `flow` may call tools, and a
@@ -468,7 +469,7 @@ flow read_line() -> string ![Error<IOError>]
 
 The public stdlib flows expose only residual effects such as possible host
 failure. The performed console action remains visible as requested/default
-action metadata for policy, trace, replay, and runtime mediation.
+action metadata for trace-spec checking, runtime-policy checking, trace, replay, and runtime mediation.
 For example:
 
 ```text
@@ -522,15 +523,15 @@ needed by the official EDK packages. The implemented surface is closer to:
 | `std.memory` | Typed memory support and compiler-known resource constructors |
 | `std.host.command`, `std.host.path`, `std.host.url`, `std.host.sandbox` | Command, path, URL, and sandbox support types and wrappers |
 | `std.bytes`, `std.text` | Small pure helpers such as length, split, join, and integer parsing |
-| `std.security.*` | Trust, declassification, and policy support helpers |
+| `std.security.*` | Trust, declassification, and runtime-policy support helpers |
 | Effect/action registry | Broad roots such as `Network`, `FileIO`, and `Secret`, with many low-level wrappers still missing |
 
 The SPEC should distinguish these layers:
 
 ```text
-std substrate = low-level, orthogonal, policy-visible runtime primitives
+std substrate = low-level, orthogonal, trace/runtime-policy-visible runtime primitives
 EDK           = high-level production integrations written in Etas
-runtime       = executes substrate actions and enforces sandbox, policy, trace,
+runtime       = executes substrate actions and enforces sandbox, trace specs, runtime policy, trace,
                 replay, secret redaction, timeout, and cancellation
 ```
 
@@ -587,7 +588,7 @@ than general subtyping.
 
 Filesystem paths use the same pattern. `WorkspacePath<R>` is indexed by a
 region marker type, and specs such as `Within<Parent>` express region
-relationships. This lets policy match constrained action patterns such as
+relationships. This lets trace specs and runtime policy match constrained action patterns such as
 `Fs.read<R ~ Within<ReportsRoot>>` by typed resource region instead of by ad-hoc
 path strings.
 
@@ -856,7 +857,7 @@ Message<T>
 Trusted<T>, Untrusted<T>, Sanitized<T>, Public<T>
 ```
 
-`Secret<T>` should not be prompt-encodable by default. It must be redacted, declassified, or explicitly revealed through a policy-checked support API.
+`Secret<T>` should not be prompt-encodable by default. It must be redacted, declassified, or explicitly revealed through a trace/runtime-policy-checked support API.
 
 Trust and channel rules are part of prompt encoding:
 
@@ -927,7 +928,7 @@ let summary = Summarizer.run(safe_text);
 For secret data:
 
 ```etas
-let redacted = declassify(secret_doc, policy = RedactPII);
+let redacted = declassify(secret_doc, strategy = RedactPII);
 
 let result = Agent.run(redacted);
 ```

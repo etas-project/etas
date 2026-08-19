@@ -350,7 +350,7 @@ Before executing an action request `r` through its default implementation, the r
 A; Π; L; H; τ ⊢ r allowed
 ```
 
-This is the exact counterpart of the static monitor analysis. The static analysis proves what it can over all abstract paths; the runtime enforces the concrete action against the exact trace prefix, exact arguments, active handlers, active policies, and remaining limits.
+This is the exact counterpart of the static monitor analysis. The static analysis proves what it can over all abstract paths; the runtime enforces the concrete action against the exact trace prefix, exact arguments, active handlers, active trace specs, runtime policies, and remaining limits.
 
 ### 5.6 Reject vs Residual Runtime Checks
 
@@ -598,6 +598,6 @@ This document defines the safety and analysis boundary. Detailed mechanics live 
 | User-facing syntax | [Syntax Principles](09-syntax-principles.md) |
 | Type system and `Error<E>` | [Type System and Errors](05-type-system-and-errors.md) |
 | Effect actions, handlers, and inference | [Effect System and Inference](06-effect-system-and-inference.md) |
-| Flows, limits, policies, and protocols | [Flows, Human Gates, and Protocols](04-flows-human-gates-and-protocols.md) |
+| Flows, limits, trace specs, runtime policy, and protocols | [Flows, Human Gates, and Protocols](04-flows-human-gates-and-protocols.md) |
 | Formal core and abstract interpretation | [Formal Core, Static Analyses, and PL Context](08-formal-core-static-analyses-and-pl-context.md) |
 | IR, trace, replay, and runtime execution | [IR Stack, FIR, and AIR](11-agent-intermediate-representation.md) |

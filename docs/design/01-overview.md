@@ -27,7 +27,7 @@ Modern multi-agent systems are often built as ad-hoc compositions of LLM calls, 
 
 Therefore, Etas is designed as:
 
-> **A general-purpose, effect-typed, trace-aware programming language where deterministic code, flows, agents, prompt values, tools, typed persistent memory APIs, policies, approvals, and traces are explicit, statically analyzable program elements.**
+> **A general-purpose, effect-typed, trace-aware programming language where deterministic code, flows, agents, prompt values, tools, typed persistent memory APIs, trace specs, approvals, and traces are explicit, statically analyzable program elements.**
 
 ---
 

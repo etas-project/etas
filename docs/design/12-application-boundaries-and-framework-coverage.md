@@ -12,7 +12,7 @@ The practical boundary is:
 
 ```text
 Etas source language:
-  typed flows, agents, tools, typed memory APIs, policies, effects, handlers, limits, composition
+  typed flows, agents, tools, typed memory APIs, trace specs, effects, handlers, limits, composition
 
 Etas runtime and standard library:
   checkpointing, group chat combinators, scheduling adapters, session support,
@@ -167,7 +167,7 @@ class ArithmeticAgent(BaseChatAgent):
 
 That body is fully expressive Python. This is powerful, but it also means the
 framework normally cannot statically summarize arbitrary imports, globals,
-effectful SDK clients, prompt trust, policy dominance, or resource behavior.
+effectful SDK clients, prompt trust, approval dominance, or resource behavior.
 
 The equivalent Etas shape should make the same product-level ideas explicit as
 source semantics:
@@ -217,7 +217,7 @@ Researcher.run:
 ```
 
 The difference is not shorter syntax. It is that the agent boundary becomes a
-typed, policy-aware, optimizable inference boundary.
+typed, trace-aware, optimizable inference boundary.
 
 The agent-definition comparison is:
 
@@ -225,8 +225,8 @@ The agent-definition comparison is:
 |---|---|---|---|
 | LangChain | No explicit body; `create_agent(...)` configures model, tools, prompt, response format, and middleware | Middleware/context engineering callbacks | Good runtime harness, but behavior is spread across host callbacks and ordinary Python |
 | Google ADK | No explicit body; `Agent(...)` / `LlmAgent` configures model, instruction, tools, schema, callbacks, planner, and context | Callbacks, tools, workflow agents, custom components | Strong SDK/runtime structure, but not a language-level typed body |
-| AutoGen | No explicit body for `AssistantAgent(...)`; it configures model client, tools, system message, and tool loop settings | Custom `BaseChatAgent.on_messages(...)` body in Python | Expressive, but arbitrary host-language behavior is opaque to static effect/policy analysis |
-| Etas | `agent { ... perform infer<T>(prompt) ... }` is a source-level agent method body | `impl agent` methods and specs are checked by the compiler; `run` is generated for the ergonomic form | Restricted enough to summarize context, inference, tool surface, effects, policy, limits, and trace |
+| AutoGen | No explicit body for `AssistantAgent(...)`; it configures model client, tools, system message, and tool loop settings | Custom `BaseChatAgent.on_messages(...)` body in Python | Expressive, but arbitrary host-language behavior is opaque to static effect/trace analysis |
+| Etas | `agent { ... perform infer<T>(prompt) ... }` is a source-level agent method body | `impl agent` methods and specs are checked by the compiler; `run` is generated for the ergonomic form | Restricted enough to summarize context, inference, tool surface, effects, trace specs, runtime policy, limits, and trace |
 
 Therefore Etas should not define `agent` as "a block that only builds a
 `Prompt`". That would make it look like a static prompt-template wrapper. The
@@ -250,16 +250,16 @@ explicitly widens the agent boundary.
 |---|---|---|
 | Agent representation | Host-language object, class, or SDK configuration | Source-language `agent` construct |
 | Model call | Runtime loop step | `Agentic.infer<Agent.method, O>` requested action with typed payload |
-| Tool exposure | Python/TypeScript/Go callable schema or workbench | `tool` boundary with type, schema, effect/action row, and policy surface |
-| Tool authority | Runtime list, guardrail, callback, middleware, or deployment convention | Static effect inference plus runtime policy enforcement |
+| Tool exposure | Python/TypeScript/Go callable schema or workbench | `tool` boundary with type, schema, effect/action row, and trace-spec surface |
+| Tool authority | Runtime list, guardrail, callback, middleware, or deployment convention | Static effect inference plus trace-spec/runtime-policy enforcement |
 | Context harness | Middleware, callback, memory adapter, or ordinary host code | Code before `perform infer` is analyzable context selection, sanitization, and prompt assembly |
 | Structured output | Pydantic/schema/runtime validation | Declared output type plus schema/decoder support |
 | Conversation state | Thread id, checkpointer, message history, agent state | `Message<T>`, `SessionConfig`, typed memory APIs, and trace semantics |
-| Human approval | Middleware/callback/interruption | `policy`, `Approval.request`, handlers, and traceable action evidence |
+| Human approval | Middleware/callback/interruption | `spec ...: trace`, `Approval.request`, handlers, and traceable action evidence |
 | Limits | Runtime options such as iteration count, timeout, token budget | Source-level `limit` contracts and runtime accounting |
-| Parallelism | Runtime option; user must avoid conflicting state | Effect summaries, policy, and trace can constrain safe scheduling |
-| Optimization | Mostly manual middleware/graph rewrite | Agent fusion, context harness optimization, cache planning, and prompt partial evaluation under effect/policy checks |
-| Deployment manifest | Platform config or observed runtime metadata | Derived from typed source, effect summaries, tool surface, policy, and limits |
+| Parallelism | Runtime option; user must avoid conflicting state | Effect summaries, trace specs, and trace can constrain safe scheduling |
+| Optimization | Mostly manual middleware/graph rewrite | Agent fusion, context harness optimization, cache planning, and prompt partial evaluation under effect/trace-spec checks |
+| Deployment manifest | Platform config or observed runtime metadata | Derived from typed source, effect summaries, tool surface, trace specs, runtime policy, and limits |
 
 The common framework gap is opacity. A callable tool may reach out to network,
 write files, read secrets, or call another SDK client outside the framework's
@@ -274,7 +274,7 @@ Therefore Etas should make three agent properties language-visible:
 2. tool surface and effect contract: what model-callable actions may be requested
    and what ordinary effects may escape from generated `Agent.run`;
 3. `Agentic.infer<C, O>` as a semantic boundary: every agent call is traceable,
-   mockable, replayable, resample-aware, policy-checkable, and optimizable.
+   mockable, replayable, resample-aware, trace-checkable, and optimizable.
 
 ## 3. Framework Feature Comparison
 
@@ -310,7 +310,7 @@ Legend:
 | Composition | Handoff trace event | ✓ | △ | △ | △ | △ | ✓ | △ | Etas models `Handoff` as AIR/trace semantics, not as a source keyword. Existing frameworks may trace handoff operationally. |
 | Composition | Round-robin group chat | △ | △ | ✓ | △ | △ | △ | ✓ | Etas can express it with loops and limits; stdlib `group.round_robin` is recommended. |
 | Composition | Selector group chat | △ | △ | ✓ | △ | △ | △ | ✓ | Etas can model selector logic as an agent or flow choosing the next speaker. |
-| Composition | Swarm/open-ended team | △ | △ | ✓ | △ | △ | △ | △ | Etas should keep this bounded by policy, protocol, and limits rather than make it unconstrained. |
+| Composition | Swarm/open-ended team | △ | △ | ✓ | △ | △ | △ | △ | Etas should keep this bounded by trace specs, runtime policy, protocol, and limits rather than make it unconstrained. |
 | Composition | Subgraphs/subflows | ✓ | ✓ | ✓ | ✓ | ✓ | △ | ✓ | Etas composition lowers into AIR; subflows remain analyzable. |
 | Composition | Parallel fan-out/fan-in | △ | ✓ | △ | ✓ | ✓ | △ | ✓ | Etas currently uses `join([...])` as a stdlib combinator, not a keyword. |
 | Composition | Declarative workflow file format | ✗ | △ | △ | ✓ | ✗ | △ | ✓ | Microsoft and CrewAI support declarative/YAML-style workflow definitions. Eino is primarily Go API based. |
@@ -324,24 +324,24 @@ Legend:
 | Tools | Tool declaration | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Etas tools are external authority boundaries with explicit effects. |
 | Tools | Tool schema/typed parameters | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Etas makes this part of source-level type checking. |
 | Tools | Tool effect declaration | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | Existing frameworks may use permissions/guardrails, but not an explicit PL effect row. |
-| Tools | Effect/action authority | ✓ | △ | △ | △ | △ | △ | △ | Etas authority is expressed through typed effect/action rows checked with policies. |
-| Tools | Tool sandboxing | ✓ | △ | △ | △ | △ | ✓ | △ | Etas defaults `Command` to sandbox policy; OpenAI documents sandbox agents/tools. |
-| Tools | Tool guardrails | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas expresses guardrails through policies, requirements, handlers, and typed validators. |
+| Tools | Effect/action authority | ✓ | △ | △ | △ | △ | △ | △ | Etas authority is expressed through typed effect/action rows checked with trace specs and runtime policy. |
+| Tools | Tool sandboxing | ✓ | △ | △ | △ | △ | ✓ | △ | Etas defaults `Command` to a sandboxed runtime policy; OpenAI documents sandbox agents/tools. |
+| Tools | Tool guardrails | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas expresses guardrails through trace specs, handlers, and typed validators. |
 | Tools | Hosted tools | △ | △ | △ | △ | △ | ✓ | △ | OpenAI has hosted tools such as web/file search and code execution. Etas should model these as hosted tool bindings with declared effect/action rows. |
 | Tools | MCP tool/server integration | △ | ✓ | ✓ | ✓ | △ | ✓ | ✓ | Etas should support MCP through tool registry/import metadata, not a source keyword. |
 | Tools | Deferred tool loading / tool discovery | △ | △ | △ | △ | △ | ✓ | △ | Etas manifests can support discovery, but lazy tool exposure semantics need runtime design. |
-| Tools | Tool result behavior control | △ | △ | ✓ | ✓ | △ | ✓ | △ | OpenAI exposes stop-on-tool and tool-use behavior; Etas can model this as stage options or policy. |
+| Tools | Tool result behavior control | △ | △ | ✓ | ✓ | △ | ✓ | △ | OpenAI exposes stop-on-tool and tool-use behavior; Etas can model this as stage options or runtime policy. |
 | Tools | Built-in browser/computer/code tools | △ | △ | △ | △ | △ | ✓ | △ | Etas can bind these as sandboxed tools with `Command`, `Network`, `FileIO`, or UI effects, but built-ins are platform-specific. |
 | Effects and safety | Static effect inference | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | This is a primary PL differentiator. |
 | Effects and safety | Effect boundary enforcement | ✓ | ✗ | ✗ | ✗ | ✗ | △ | △ | Etas can reject or deny operations before side effects based on inferred/declared effects. |
 | Effects and safety | Runtime-scoped handlers | ✓ | ✗ | △ | △ | △ | △ | △ | Other tools provide callbacks or middleware; Etas models selected operations with `handle`. |
-| Effects and safety | Approval before selected effect | ✓ | △ | ✓ | ✓ | △ | △ | ✓ | Etas can make approval dominance a static/runtime policy property. |
+| Effects and safety | Approval before selected effect | ✓ | △ | ✓ | ✓ | △ | △ | ✓ | Etas can make approval dominance a trace-spec/runtime-policy property. |
 | Effects and safety | Prompt injection / trust typing | ✓ | △ | △ | △ | △ | △ | △ | Etas has trust/provenance wrappers; frameworks usually rely on guardrails, prompt discipline, or runtime checks. |
-| Effects and safety | Policy as analyzable construct | ✓ | △ | △ | △ | △ | △ | △ | Existing frameworks support policies/guardrails operationally, not as a small source-level policy language. |
-| Effects and safety | Input/output guardrails | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas policies and validators can express this; runtime ergonomics should match existing frameworks. |
-| Effects and safety | Tripwire / halt-on-violation | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas can model this with `Error<E>`, `abort`, and policy denial. |
+| Effects and safety | Trace spec as analyzable construct | ✓ | △ | △ | △ | △ | △ | △ | Existing frameworks support policies/guardrails operationally, not as a small source-level trace-spec language. |
+| Effects and safety | Input/output guardrails | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas trace specs, validators, and runtime policy can express this; runtime ergonomics should match existing frameworks. |
+| Effects and safety | Tripwire / halt-on-violation | ✓ | △ | △ | ✓ | △ | ✓ | ✓ | Etas can model this with `Error<E>`, `abort`, and runtime-policy denial. |
 | Effects and safety | Secrets management | △ | △ | △ | ✓ | △ | △ | ✓ | Etas has `Secret<T>` and `Secret` effect, but host secret-store integration is runtime/platform work. |
-| Effects and safety | Rate limits / quotas | △ | ✓ | △ | ✓ | △ | △ | ✓ | Etas has `limit` and policy hooks; cross-run quota enforcement needs runtime support. |
+| Effects and safety | Rate limits / quotas | △ | ✓ | △ | ✓ | △ | △ | ✓ | Etas has `limit` and runtime-policy hooks; cross-run quota enforcement needs runtime support. |
 | Memory | Short-term conversation state | △ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Etas design now identifies `Message<T>`, `SessionConfig`, and `Conversation`, but runtime behavior still needs implementation detail. |
 | Memory | Long-term memory | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Etas uses compiler-known `MemoryRegion<S>` / `Store<K, V>` support types and typed APIs rather than ambient memory. |
 | Memory | Typed memory schema | ✓ | △ | △ | △ | △ | △ | △ | Etas makes memory schema part of the program through standard support types and manifest bindings. |
@@ -398,8 +398,8 @@ This table intentionally gives Etas `△` for several runtime/platform areas. A 
 | Supervisor/router pattern | `flow`, `match`, first-class flow values | Strong | A supervisor is an ordinary flow that chooses another flow or agent. |
 | Handoff to specialist | typed `Message<T>`, flow routing, stage composition, session support, optional `protocol` | Mostly strong | Source syntax can express handoff; AIR/trace should preserve explicit `Handoff` events. |
 | Typed agent messages | `Message<T>`, session metadata, provenance, AIR message events | Strong | This is now a core runtime semantic direction, not a `msg` or `message` keyword. |
-| Human-in-the-loop | `Approval.request`, `approve(...)`, `policy`, `handle` | Strong | Etas can place gates before specific effects/actions, not only at the end of a run. |
-| Tool guardrails | `tool` effects, `require`, policy checks, handlers | Strong | Guardrails become typed pre-execution requirements and post-execution validation flows. |
+| Human-in-the-loop | `Approval.request`, `approve(...)`, `spec ...: trace`, `handle` | Strong | Etas can place gates before specific effects/actions, not only at the end of a run. |
+| Tool guardrails | `tool` effects, trace specs, runtime-policy checks, handlers | Strong | Guardrails become typed pre-execution constraints and post-execution validation flows. |
 | Structured output | typed `agent` and `tool` return types | Strong | Validation should be part of the runtime and trace. |
 | RAG and knowledge tools | typed tools, typed memory APIs, provenance/trust types | Strong | Retrieval is an ordinary tool or flow with `Network`, `FileIO`, or `Memory.read<R>` effects. |
 | Memory and state | `MemoryRegion<S>`, `Store<K, V>`, explicit typed memory APIs | Strong | Etas avoids magic ambient memory by using typed support APIs instead of dedicated persistent-state syntax. |
@@ -407,15 +407,15 @@ This table intentionally gives Etas `△` for several runtime/platform areas. A 
 | Graph/DAG workflow | `let`, <code>&#124;</code>, `~>`, `join([...])` | Mostly strong | Efficient enough for code, but no dedicated visual graph syntax in MVP. |
 | Group chat/debate | `while`/`for` + `limit` + memory/trace + agents | Partial | Expressible, but common patterns need standard-library combinators. |
 | Round-robin / selector team | loops, flow selection, stdlib group combinators | Partial | Should not require users to hand-write boilerplate conversation loops. |
-| Swarm/open-ended coordination | optional `protocol`, runtime policies, loops with limits | Partial | Etas should keep this advanced because open-ended coordination weakens static guarantees. |
+| Swarm/open-ended coordination | optional `protocol`, runtime policy, loops with limits | Partial | Etas should keep this advanced because open-ended coordination weakens static guarantees. |
 | Termination conditions | `limit`, `break`, `return`, boolean conditions | Strong | AutoGen-style max messages, text mention, and function-call termination maps to ordinary conditions plus typed limits. |
-| Sandboxed code execution | `Command` effect + `Sandbox(...)` support values | Strong | Default command sandbox should remain runtime policy, not syntax. |
+| Sandboxed code execution | `Command.run<DefaultCommandSandbox>` and sandbox support values | Strong | Default command sandbox should remain runtime policy, not syntax. |
 | Observability/tracing | trace semantics, AIR nodes, runtime trace export | Strong | Needs standard trace schema for interoperability. |
 | Scheduling and triggers | runtime manifest, stdlib adapters | Partial | Should not be a source keyword in MVP. |
 | Deployment packaging | compiler-generated manifest | Partial | Needs concrete manifest format. |
 | Visual workflow editor | AIR/manifest metadata | Out of core | Platform feature, not language syntax. |
 | Connector marketplace | tool registry and effect/action metadata | Out of core | Platform/runtime concern. |
-| Team/RBAC administration | effect actions, policies, host identity | Out of core | Etas can consume identity context; platform manages users and roles. |
+| Team/RBAC administration | effect actions, runtime policy, host identity | Out of core | Etas can consume identity context; platform manages users and roles. |
 
 ## 5. Application Boundary
 
@@ -442,13 +442,13 @@ Production agent systems repeatedly expose the same gaps:
 | Need / Pain Point | Etas coverage | Layer |
 |---|---|---|
 | ReAct-style loops | `flow`, `while`, `for`, `limit`, `agent.run`, `tool` | Core language |
-| Human approval | `approve(...)`, `Approval.request`, policy dominance checks | Runtime support + effect system |
+| Human approval | `approve(...)`, `Approval.request`, trace-spec dominance checks | Runtime support + effect system |
 | Token/cost/time guardrails | `limit Tokens(...)`, `Cost(...)`, `WallTime(...)` | Core language + runtime support |
 | Structured audit chain | AIR node ids and trace events | AIR/runtime |
 | Checkpoint and resume | `runtime.checkpoint(...)`, trace, memory versions | Runtime |
 | Retry and fallback | `Result<T, E>`, `retry`, branching, handlers | Core language/runtime |
 | Multi-provider routing | agent `model` declarations and backend metadata | Runtime/tooling |
-| Tenant isolation | ordinary `TenantContext`, memory scoping, effect/action policy | Library/policy |
+| Tenant isolation | ordinary `TenantContext`, memory scoping, effect/action trace specs and runtime policy | Library/runtime policy |
 | Session state machine | `enum`, private fields, `impl` methods | General language |
 | Domain events and outbox | records, memory writes, event bus tools | Library pattern |
 | Metrics and observability | trace events, cost accounting, metrics export | Runtime/platform |
@@ -502,7 +502,7 @@ This is a language pattern built from records, enums, private fields, methods, a
 
 ### 6.2 Tenant, Domain Event, And Outbox Patterns
 
-Tenant context should remain an ordinary value carried through flows, tools, typed memory APIs, policies, and traces:
+Tenant context should remain an ordinary value carried through flows, tools, typed memory APIs, trace specs, runtime policies, and traces:
 
 ```etas
 type TenantContext = {
@@ -546,7 +546,7 @@ Do not add source keywords for every framework feature. The current core should 
 - `agent` for non-deterministic model-backed reasoning;
 - `tool` for external authority boundaries;
 - compiler-known memory support types such as `MemoryRegion<S>` and `Store<K, V>` for explicit durable state;
-- `policy`, `require`, `effect`, `handle`, and `limit` for governance and recovery;
+- `spec ...: trace`, `effect`, `handle`, and `limit` for governance and recovery;
 - <code>&#124;</code> and `~>` for ergonomic composition.
 
 Features such as checkpoints, group chat teams, triggers, domain events, outboxes, tenant context, provider routing, and connector registries should be standard-library/runtime patterns first.
@@ -638,11 +638,11 @@ The MVP can keep `runtime.checkpoint(...)` as a library call, but the trace and 
 
 Production agent observability should answer more than "which callback logged a line?" It should explain the semantic execution of a run:
 
-- which flow, agent, tool, handler, approval, checkpoint, and policy nodes executed;
+- which flow, agent, tool, handler, approval, checkpoint, and trace-spec/runtime-policy nodes executed;
 - which prompt and context slices were assembled for each model call;
 - which model/tool inputs and outputs were validated, redacted, replayed, or rejected;
 - which typed memory regions and message/session values were read or written;
-- which effects and actions, policies, and limits governed each step;
+- which effects, actions, trace specs, runtime policies, and limits governed each step;
 - which resources were consumed: tokens, context tokens, cost, wall time, retries, and tool calls;
 - why recovery chose recompute, replay, deduplicate, or resample.
 
@@ -654,11 +654,11 @@ Etas should make observability compiler-assisted. Since `agent`, `tool`, `effect
 |---|---|---|
 | Trace structure | Callback or SDK event stream | AIR/source-derived semantic trace with stable node ids |
 | Model call visibility | Provider wrapper instrumentation | `PromptBuild`, `AgentCall`, schema validation, context slice, model profile, usage, and replay metadata |
-| Tool call visibility | Tool wrapper instrumentation | Typed `ToolCall` with effects and actions, policy evidence, idempotency, and sandbox metadata |
+| Tool call visibility | Tool wrapper instrumentation | Typed `ToolCall` with effects and actions, trace-spec evidence, runtime-policy evidence, idempotency, and sandbox metadata |
 | Message/handoff visibility | Chat history or framework event | `Message<T>`, session metadata, provenance, and inferred `Handoff` trace events |
 | Memory visibility | Framework memory adapter logs | Region-sensitive `Memory.read<R>` / `Memory.write<R>` trace facts and memory versions |
 | Resource visibility | Post-hoc token/cost metrics | Runtime metering checked against source-level `limit` contracts and remaining budget |
-| Policy visibility | Guardrail pass/fail logs | Traceable `PolicyCheck`, `Approval`, `require before/after`, handler, and denial evidence |
+| Trace-spec visibility | Guardrail pass/fail logs | Traceable `TraceSpecCheck`, `Approval`, `>>`/`<<` temporal evidence, handler, and denial evidence |
 | Recovery visibility | Checkpoint status | Per-node recompute/replay/deduplicate/resample decision linked to determinism, effects, and trace values |
 | Redaction | Dashboard/export configuration | `Secret<T>`, trust/provenance labels, and trace export policy visible to compiler/runtime |
 
@@ -686,8 +686,8 @@ flow PublishWeeklyReport:
       - ReportMemory.Sources
     write:
       - ReportMemory.Runs
-  policies:
-    - Approval.request before CompanyEmail.send<WorkAccount>
+  trace_specs:
+    - Approval.request >> CompanyEmail.send<WorkAccount>
   limits:
     - Tokens(80_000)
     - WallTime(minutes(15))
@@ -702,7 +702,7 @@ Multi-agent systems need tests that go beyond ordinary unit tests. Etas should d
 - mock model responses for deterministic tests;
 - mock tool implementations and failure injection;
 - golden trace comparison;
-- policy simulation without executing side effects;
+- trace-spec/runtime-policy simulation without executing side effects;
 - budget regression tests;
 - structured output conformance tests;
 - replay tests for checkpointed flows.
@@ -713,7 +713,7 @@ These are runtime/tooling features, not source-language keywords.
 
 | Gap | Layer | Suggested direction |
 |---|---|---|
-| Conversation/session semantics are specified but not implemented | Runtime support | Implement `Message<T>`, `SessionConfig`, `Conversation`, context policies, retry-safe append, and trace events |
+| Conversation/session semantics are specified but not implemented | Runtime support | Implement `Message<T>`, `SessionConfig`, `Conversation`, context-selection policies, retry-safe append, and trace events |
 | Group chat boilerplate | Standard library | Add `group.round_robin`, `group.selector`, `group.swarm` with limits |
 | Handoff visibility | AIR/trace | Implement explicit `Handoff` trace events inferred from typed message routing |
 | Durable resume rules | Runtime semantics | Formalize recompute/replay/dedup/idempotency |
@@ -721,17 +721,17 @@ These are runtime/tooling features, not source-language keywords.
 | Deployment manifest | Compiler/runtime | Emit manifest from typed AST/AIR |
 | Tool discovery and MCP | Runtime/tooling | Import MCP/OpenAPI tools into typed `tool` declarations and effect/action metadata |
 | Tool-choice behavior | Runtime support | Specify stage options for forced tool use, allowed tool subsets, and stop-on-tool behavior |
-| Context window policy | Runtime support | Add policies for last-N turns, summarization, retrieval, compression, and session retention |
+| Context window policy | Runtime support | Add runtime policies for last-N turns, summarization, retrieval, compression, and session retention |
 | Lifecycle hooks | Runtime support | Expose hooks as effect-governed runtime extension points |
-| Trace redaction | Runtime/security | Define `Secret<T>` redaction and export policies in trace schema |
+| Trace redaction | Runtime/security | Define `Secret<T>` redaction and export runtime policies in trace schema |
 | Trigger/schedule integration | Runtime/platform | Use manifest plus adapters, not keywords |
 | Visual graph editing | Platform | Generate from AIR and source locations |
 | Connector discovery | Platform/runtime | Tool registry plus effect/action metadata |
-| Evaluation workflow | Tooling | Add mock, replay, policy simulation, and golden trace modes |
+| Evaluation workflow | Tooling | Add mock, replay, trace-spec/runtime-policy simulation, and golden trace modes |
 | Prompt/version regression | Tooling | Add prompt versioning, eval fixtures, and structured output regression tests |
 | Multimodal artifacts | Standard library/runtime | Define media/file/artifact support types and platform storage conventions |
 | A2A/protocol interoperability | Runtime/tooling | Add adapters rather than a broad source-level protocol mandate |
-| Open-ended dynamic teams | Advanced runtime | Keep bounded by policies, limits, and optional protocols |
+| Open-ended dynamic teams | Advanced runtime | Keep bounded by trace specs, runtime policy, limits, and optional protocols |
 
 ## 9. Coverage Judgment
 

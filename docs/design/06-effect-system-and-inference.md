@@ -20,7 +20,7 @@ Here `Input` and `Output` are type-system facts, while `Effects` is an effect-sy
 The effect system has three jobs:
 
 1. infer possible effects from source code;
-2. check inferred effects against signatures, policies, limits, and approval requirements;
+2. check inferred effects against signatures, trace specs, runtime policy, limits, and approval requirements;
 3. give the runtime an enforceable authority boundary.
 
 ## 1. Core Model
@@ -33,8 +33,8 @@ EffectSet      = Set<EffectRef>
 ```
 
 The core root set should stay small. Roots are broad categories used for
-effect-root extension, policy coverage, and high-level summaries. This is not
-value subtyping.
+effect-root extension, trace-spec/runtime-policy coverage, and high-level
+summaries. This is not value subtyping.
 
 | Root | Meaning |
 |---|---|
@@ -50,8 +50,8 @@ value subtyping.
 
 Fine-grained authority is represented by effect actions. Some actions are
 defined by the core prelude, while most external authorities are defined by
-packages, host bindings, or user code. In an effect row or policy, action
-references are effect facts:
+packages, host bindings, or user code. In an effect row, trace spec, or runtime
+policy, action references are effect facts:
 
 ```text
 EffectRef =
@@ -71,9 +71,9 @@ StaticEffectArg =
 Action references are static effect facts. Their `<...>` arguments are static
 selectors, not runtime argument captures. A runtime local such as `path`,
 `stream`, `topic`, `account`, or `req.host` must not appear inside an effect
-row or policy action pattern unless it resolves to a compile-time constant.
-Concrete runtime values are ordinary action payload fields and are recorded in
-trace events for exact runtime policy checks.
+row, trace spec, or runtime-policy action pattern unless it resolves to a
+compile-time constant. Concrete runtime values are ordinary action payload
+fields and are recorded in trace events for exact runtime checks.
 
 For example:
 
@@ -96,8 +96,9 @@ A tag name is the only source-level shorthand for "all actions under this tag".
 For example, `![Http]` allows every current and future action under the imported
 `Http` effect tag, while `![Http.request<_>]` allows only the `request` action
 for any argument. Etas does not support `Http.*` or other action namespace
-wildcard syntax in effect rows or policies; write the tag for the whole effect,
-or write an action/action-instance pattern for a narrower boundary.
+wildcard syntax in effect rows, trace specs, or runtime policies; write the tag
+for the whole effect, or write an action/action-instance pattern for a narrower
+boundary.
 
 Effect rows are positive summaries and upper bounds only. They do not contain
 denial entries:
@@ -157,15 +158,16 @@ exist in the implementation:
 Typed stream handles carry provenance from the action that created them. A
 `Stream.read<S>` or `Stream.write<S>` over a TLS/TCP stream is still covered by
 the active `Network` authority, while a stream over a workspace file is covered
-by `FileIO`. Policies may also target `Stream.read<_>` or `Stream.write<_>`
-directly when they need to constrain byte movement independent of origin.
+by `FileIO`. Trace specs and runtime policies may also target `Stream.read<_>`
+or `Stream.write<_>` directly when they need to constrain byte movement
+independent of origin.
 
 `Browser` is a standard substrate effect that extends `Network`; it is not a new
-core broad root. `Network` policies cover browser protocol transport by default,
-while `Browser.attach<_>`, `Browser.send<_>`, `Browser.recv<_>`, and
-`Browser.screenshot<_>` give policies a narrower action-family surface for
-browser sessions. Concrete profile and session handles are runtime action
-payloads, not values captured inside `<...>`. High-level actions such as
+core broad root. `Network` trace specs and runtime policies cover browser
+protocol transport by default, while `Browser.attach<_>`, `Browser.send<_>`,
+`Browser.recv<_>`, and `Browser.screenshot<_>` give trace specs a narrower
+action-family surface for browser sessions. Concrete profile and session
+handles are runtime action payloads, not values captured inside `<...>`. High-level actions such as
 `EdkBrowser.navigate`, `EdkBrowser.click`, and `EdkBrowser.read_dom` belong in
 EDK.
 
@@ -259,7 +261,7 @@ spec ReportsOnly: trace =
 
 The runtime still records concrete paths in traces and enforces canonical
 project-root path checks. The static effect row exposes the region boundary so
-policies do not depend only on string patterns.
+trace specs and runtime policies do not depend only on string patterns.
 
 Pure substrate helpers should not introduce effects:
 
@@ -327,24 +329,26 @@ effect ProjectWorkspace extends FileIO {
 ```
 
 The language treats package-defined actions exactly like minimal standard
-actions for inference, policy, trace, replay, and handler dispatch. The
-difference is ownership: domain and platform actions are package-defined
-authority boundaries, not core standard-library commitments.
+actions for inference, trace-spec checking, runtime-policy checking, trace,
+replay, and handler dispatch. The difference is ownership: domain and platform
+actions are package-defined authority boundaries, not core standard-library
+commitments.
 
 ### 1.2 Agentic Runtime Actions
 
 Agent calls are represented internally by the `Agentic` effect root and concrete
 runtime actions under it. `Agentic` is not a generic "some LLM happened" tag.
 It is the agent-runtime boundary where prompt/context construction, model
-provider dispatch, schema validation, trace, replay, resampling, policy, and
-limits meet.
+provider dispatch, schema validation, trace, replay, resampling, runtime policy,
+and limits meet.
 
 `Agentic.infer<C, O>` is the elaborated action behind source-level
 `perform infer<O>(prompt)` inside an agent body or `impl agent` method. It is not
 a source-level escaping effect of ordinary generated `Agent.run` calls. The
-action must remain visible to analysis, policy, limits, observability, replay,
-and AIR lowering, but the agent runtime installs a default handler that consumes
-it through the runtime agent provider. Users should not have to write
+action must remain visible to analysis, trace-spec checking, runtime-policy
+checking, limits, observability, replay, and AIR lowering, but the agent runtime
+installs a default handler that consumes it through the runtime agent provider.
+Users should not have to write
 `![Agentic.infer<C, O>]` on normal flow signatures just because a flow runs an
 agent.
 
@@ -360,7 +364,8 @@ effect Agentic {
 `Reviewer.explain`. `O` is the expected decoded output type. The agent runtime
 constructs the full provider request from the prompt plus the current agent
 method's model profile, tool surface, context and session metadata, limits,
-policy context, trace parent id, and stable hashes needed for replay and caching.
+runtime policy context, trace parent id, and stable hashes needed for replay and
+caching.
 
 Users normally write:
 
@@ -407,8 +412,9 @@ escaping effects exclude [Agentic.infer<Reviewer.run, Review>]
 ```
 
 The broad `Agentic` root can be used as a runtime support summary when the exact
-agent action is intentionally abstracted, but analysis, policy, trace, and
-optimization should prefer the concrete requested action `Agentic.infer<C, O>`.
+agent action is intentionally abstracted, but analysis, trace-spec checking,
+runtime-policy checking, trace, and optimization should prefer the concrete
+requested action `Agentic.infer<C, O>`.
 
 #### Runtime Agent Provider
 
@@ -418,7 +424,7 @@ methods. The provider interprets the internal action:
 ```text
 Agentic.infer<C, O>
   -> resolve agent method C
-  -> check effect boundary, policy, limits, secret flow, and prompt trust
+  -> check effect boundary, trace specs, runtime policy, limits, secret flow, and prompt trust
   -> check replay/resample mode
   -> build provider payload
   -> call provider or local model runtime
@@ -428,9 +434,9 @@ Agentic.infer<C, O>
 ```
 
 The runtime provider is not a grant of authority. It runs only after active
-effect boundaries, policies, deployment grants, limits, sandbox constraints,
-secret-flow checks, and prompt-trust checks allow the call. Tool calls exposed
-to the model remain ordinary requested actions and effect obligations; hiding
+effect boundaries, trace specs, runtime policies, deployment grants, limits,
+sandbox constraints, secret-flow checks, and prompt-trust checks allow the call.
+Tool calls exposed to the model remain ordinary requested actions and effect obligations; hiding
 `Agentic.infer<C, O>` does not hide package-defined actions such as
 `AcademicSearch.search`, `ProjectWorkspace.write<P>`, `CompanyEmail.send<A>`, or
 any other authority action the agent may request.
@@ -464,12 +470,13 @@ flow TestReview() -> Review {
 Such handlers make the same source code usable for deterministic CI mocks, trace
 replay, cheap-model routing, local-only execution, dry runs, and red-team
 resampling. A handler may interpret or route `Agentic.infer<C, O>`, but it must
-not bypass policy, limits, secret checks, or trace recording.
+not bypass trace specs, runtime policy, limits, secret checks, or trace
+recording.
 
 Some minimal standard actions have default action implementations supplied by
 the runtime or standard library. A default implementation is still subject to
-the active effect boundary, policy, approval, sandbox, and limit checks. It is
-not a grant of authority by itself.
+the active effect boundary, trace specs, runtime policy, approval, sandbox, and
+limit checks. It is not a grant of authority by itself.
 
 Standard library APIs are thin flow wrappers over minimal standard actions:
 
@@ -499,7 +506,7 @@ row unless they explicitly handle it. A lossy or value-level wrapper can be
 provided separately, but `std.io.println` and similar core I/O flows do not
 swallow errors by default.
 
-The wrapper is the ergonomic API; the action is the semantic authority boundary visible to policy, trace, replay, and handlers.
+The wrapper is the ergonomic API; the action is the semantic authority boundary visible to trace specs, runtime policy, trace, replay, and handlers.
 
 ### 1.2 Parameterized Effects
 
@@ -592,9 +599,9 @@ effect GitHub extends Network {
 ```
 
 Effect checking uses the extension relation. If a package defines
-`StripePayment extends Network`, then a policy over `Network` also covers
-`StripePayment.charge<A>`, while a policy over `StripePayment.charge<A>`
-remains specific to that payment action instance.
+`StripePayment extends Network`, then a trace spec or runtime policy over
+`Network` also covers `StripePayment.charge<A>`, while one over
+`StripePayment.charge<A>` remains specific to that payment action instance.
 
 Human approval is a standard runtime action under the human-interaction root:
 
@@ -718,7 +725,7 @@ The rules are:
 9. Action boundaries appear in AIR, trace, replay, resample, and handler dispatch.
 10. Minimal runtime boundaries such as memory, sandboxed command execution, model use, approval, console I/O, and time are standard effect actions with default action implementations where appropriate.
 11. Web search, HTTP, workspace I/O, email, payment, databases, browsers, object stores, deployment, identity, and other domain/platform adapters are package-defined or host-defined effect actions. Their declared effects use the same fine-grained effect/action vocabulary.
-12. A handler may recover from a denied operation, but it cannot bypass the active effect boundary, policy, sandbox, approval, or limit checks.
+12. A handler may recover from a denied operation, but it cannot bypass the active effect boundary, trace specs, runtime policy, sandbox, approval, or limit checks.
 
 ### 2.1 Effect Actions Versus Tools
 
@@ -813,7 +820,7 @@ Use package metadata or runtime bindings for non-standard host adapters:
   third-party APIs, generated OpenAPI/MCP bindings, company-internal services.
 ```
 
-If a handler for an action needs to touch the outside world, it must perform allowed actions or call declared tools. Those operations still go through normal effect, policy, sandbox, approval, limit, and trace checks.
+If a handler for an action needs to touch the outside world, it must perform allowed actions or call declared tools. Those operations still go through normal effect, trace-spec, runtime-policy, sandbox, approval, limit, and trace checks.
 
 Tag granularity and action granularity are intentionally different. A tag describes a class of authority or observable behavior, such as `Approval` or `Error<E>`. An action describes a specific runtime interaction inside that class, such as `Approval.request` or `Error.raise`.
 
@@ -867,7 +874,7 @@ Etas borrows the surface shape of algebraic effect handlers, but it does not aim
 | Handler role | Interprets effects and can encode many control patterns | Handles approval, fallback, recovery, pause/resume, and runtime mediation |
 | Continuation model | Can support richer delimited continuation behavior | Single-resume, scoped continuation only |
 | Multi-shot behavior | May be supported by language design | Not supported in the MVP |
-| External authority | Usually outside the core effect-handler model | Central: effect actions, sandbox, policy, approval, and limits are checked before execution |
+| External authority | Usually outside the core effect-handler model | Central: effect actions, sandbox, trace specs, runtime policy, approval, and limits are checked before execution |
 | Durability | Not the primary semantic target | Core target: checkpoint, replay, deduplication, and audit |
 | Trace | Optional implementation concern | Semantic runtime artifact |
 
@@ -883,14 +890,14 @@ Relative to general-purpose effect-handler languages:
 | Continuation model | Scoped `resume`, single-use, not a value | General delimited-continuation model | Structured continuation model | Explicit captured continuations | Request handling with continuation semantics |
 | Multi-shot continuation | Not supported in the MVP | Supported or expressible in richer designs | Supported or controlled by the design | Usually one-shot | More general than Etas, depending on ability use |
 | Host-provided actions | Standard authority is modeled as effect actions; non-standard host adapters use package metadata with action-based effect rows | Usually modeled as language effects or library effects | Usually modeled as effects/abilities | Usually library/runtime concern | Can be modeled as abilities |
-| Agentic inference action | `Agentic.infer<C, O>(Prompt, Schema<O>)` carries agent method identity, model profile, prompt/messages, tool surface, schema, limits, trace, replay, and policy context | Can encode an operation, but the language does not know agent-runtime semantics | Can encode an operation, but agent semantics are library-level | Can encode via effects/callbacks, but agent semantics are library-level | Can encode via abilities, but agent semantics are library-level |
-| Authority model | Effect actions plus sandbox, policy, approval, limits, and deployment grants over effect instances | Usually orthogonal to handlers | Ability-oriented, but not agent-runtime specific | Mostly outside the core effect mechanism | Abilities constrain programs, but are not an agent sandbox model |
+| Agentic inference action | `Agentic.infer<C, O>(Prompt, Schema<O>)` carries agent method identity, model profile, prompt/messages, tool surface, schema, limits, trace, replay, and runtime policy context | Can encode an operation, but the language does not know agent-runtime semantics | Can encode an operation, but agent semantics are library-level | Can encode via effects/callbacks, but agent semantics are library-level | Can encode via abilities, but agent semantics are library-level |
+| Authority model | Effect actions plus sandbox, trace specs, runtime policy, approval, limits, and deployment grants over effect instances | Usually orthogonal to handlers | Ability-oriented, but not agent-runtime specific | Mostly outside the core effect mechanism | Abilities constrain programs, but are not an agent sandbox model |
 | Error handling | `Error<E>` is an effect action; `?` lowers effectful errors to `Result<T, E>` at value boundaries | Exceptions/effects can both be modeled | Effect handlers can model errors | Exceptions and effects are separate mechanisms | Abilities can model errors |
 | Effect inference | Default inference; explicit rows are optional public contracts | Strong inference | Static effect information | No complete static effect-row inference | Static ability information |
 | Parameterized effects | Yes, for example `Memory.read<R>` and `Error<E>` | Yes, through parametric effect rows | Yes, through parametric abstractions | Can be simulated with ordinary types | Yes, through parametric abilities |
 | Replay, trace, audit | First-class runtime design goal | Not a core language goal | Not a core language goal | Not a core language goal | Not a core language goal |
 | Agent nondeterminism | First-class semantic property of agent/flow execution | Not a core concept | Not a core concept | Not a core concept | Not a core concept |
-| Runtime enforcement | Handlers plus effect boundaries, policy, limits, sandbox, approval, and trace | Primarily language semantics | Primarily language semantics and ability discipline | Primarily runtime control flow | Primarily ability semantics |
+| Runtime enforcement | Handlers plus effect boundaries, trace specs, runtime policy, limits, sandbox, approval, and trace | Primarily language semantics | Primarily language semantics and ability discipline | Primarily runtime control flow | Primarily ability semantics |
 | Expressiveness | Deliberately weaker than unrestricted algebraic effects | High | High | Strong control-flow support, weaker static effect typing | High |
 | Implementation complexity | Moderate; suitable for an interpreter and agent runtime | High | High | Runtime-level complexity | Medium to high |
 | Agent-system fit | High: designed around agents, tools, approval, limits, trace, and replay | Generic; not agent-specific | Generic; not agent-specific | Generic; not agent-specific | Generic; not agent-specific |
@@ -900,9 +907,9 @@ and other languages cannot encode them. A generic language can define an
 operation similar to `infer(prompt)`. Etas makes `Agentic.infer<C, O>` a
 compiler/runtime-recognized boundary with structured agent payload: prompt trust,
 context fingerprints, output schema, tool surface, token and cost accounting,
-provider routing, policy context, trace ids, replay/resample metadata, and
+provider routing, runtime policy context, trace ids, replay/resample metadata, and
 deployment grants. This is what lets Etas statically summarize agent calls,
-mock or replay them using handlers, check policy and secret flow, plan caches,
+mock or replay them using handlers, check trace specs, runtime policy, and secret flow, plan caches,
 coordinate limits, and preserve audit semantics without treating model calls as
 opaque library callbacks.
 
@@ -922,7 +929,7 @@ Not MVP goals:
   - store continuations
   - resume a continuation multiple times
   - use handlers to grant denied effect actions
-  - use handlers to bypass sandbox, policy, approval, or limit checks
+  - use handlers to bypass sandbox, trace specs, runtime policy, approval, or limit checks
 ```
 
 This makes Etas less expressive than Koka-style handlers, but more aligned with static effect inference, runtime authorization, checkpointing, replay, and auditability.
@@ -987,7 +994,7 @@ BuildReport(id) with {
 }
 ```
 
-Authority is not handled away. Handling `Approval.request` or `Error.raise` does not grant permission to send email, write files, execute commands, or access the network. A performed action or tool call must still be covered by the active effect boundary, policy, sandbox, approval, and limit checks.
+Authority is not handled away. Handling `Approval.request` or `Error.raise` does not grant permission to send email, write files, execute commands, or access the network. A performed action or tool call must still be covered by the active effect boundary, trace specs, runtime policy, sandbox, approval, and limit checks.
 
 ### 2.3 Handling Actions And Default Implementations
 
@@ -1053,7 +1060,7 @@ let AuditedWorkspace: ![ProjectWorkspace.write<_> => Log.write, ProjectWorkspace
 for this action, skipping the current handler arm." It is not a bypass: executing
 the default workspace write still requires the matching action, such as
 `ProjectWorkspace.write<_>` or `ProjectWorkspace.write<"reports/**">`, to be
-allowed by the active effect boundary, policy, approval, sandbox, and limits.
+allowed by the active effect boundary, trace specs, runtime policy, approval, sandbox, and limits.
 
 The effect analysis therefore tracks two related facts:
 
@@ -1765,7 +1772,7 @@ requested actions = [Agentic.infer<Writer.run, Draft>, AcademicSearch.search, Ap
 
 ## 9. Checking Rules
 
-After inference, the compiler checks the inferred effect set against declarations and policies.
+After inference, the compiler checks the inferred effect set against declarations, trace specs, and runtime-policy inputs.
 
 If a declaration provides an explicit effect set, the inferred set must be a
 subset. Explicit effect rows are checked upper bounds for the implementation:
@@ -1796,20 +1803,22 @@ spec Production: trace =
     & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
-Effect declarations and policies are the authority model. A flow may declare
-`FileIO`, but a production policy can still deny `ProjectWorkspace.write<"src/**">`
-or require approval before `ProjectWorkspace.write<"reports/**">`.
+Effect declarations, trace specs, and runtime policy together form the authority
+model. A flow may declare `FileIO`, but a production runtime policy can still
+deny `ProjectWorkspace.write<"src/**">` or require approval before
+`ProjectWorkspace.write<"reports/**">`.
 
 ## 10. Runtime Enforcement
 
 Static effect checking is not a substitute for runtime mediation.
 
 The runtime receives the active entry flow, usually `main`, its normalized
-escaping effect set, and the active policy. Every effectful operation, whether it
-originates from a flow, tool, or agent, goes through runtime mediation:
+escaping effect set, active trace specs, and active runtime policy. Every
+effectful operation, whether it originates from a flow, tool, or agent, goes
+through runtime mediation:
 
 1. actions that escape to runtime execution must be in the active entry flow's effect set;
-2. the action must satisfy active policy;
+2. the action must satisfy active trace specs and active runtime policy;
 3. high-impact effects may require a dominating approval event;
 4. model-callable tools must be in the agent's declared tool set;
 5. loops and retries must stay within declared limits;
@@ -1820,7 +1829,7 @@ This gives Etas a three-layer discipline:
 
 ```text
 Infer   = compute possible effects
-Check   = compare effects against declarations and policy
+Check   = compare effects against declarations, trace specs, and runtime policy
 Enforce = mediate actual runtime operations
 ```
 
@@ -1907,7 +1916,7 @@ Existing agent frameworks generally treat unsafe or unauthorized tool use as a r
 Etas should make this policy explicit in the language/runtime contract. The default rule is:
 
 ```text
-No effectful operation executes until its effect boundary, policy, approval, sandbox, and limit checks pass.
+No effectful operation executes until its effect boundary, trace-spec, runtime-policy, approval, sandbox, and limit checks pass.
 ```
 
 This is a fail-closed boundary and a runtime conformance requirement, not a style guideline. The runtime may give the agent feedback, pause for approval, invoke a handler, or retry a transient failure, but it must not execute a denied operation.
@@ -1916,10 +1925,10 @@ This is a fail-closed boundary and a runtime conformance requirement, not a styl
 
 | Runtime event | Default behavior | Recoverability |
 |---|---|---|
-| Agent requests a tool outside its declared tool set | Do not execute. Return structured `ToolDenied` feedback to the agent. | May allow bounded repair if policy permits. |
+| Agent requests a tool outside its declared tool set | Do not execute. Return structured `ToolDenied` feedback to the agent. | May allow bounded repair if runtime policy permits. |
 | Agent requests a declared tool whose effect is outside the active run's effect boundary | Do not execute. Raise `EffectBoundaryViolation`. | Fatal for the run or deployment boundary; not a model retry. |
 | Tool or action effect is not covered by the active boundary | Do not execute. Raise `EffectBoundaryViolation`. | Handler may fall back, but cannot grant authority. |
-| Policy denies the operation | Do not execute. Raise or return `PolicyDenied`. | If policy declares an override path, request approval; otherwise fail. |
+| Runtime policy denies the operation | Do not execute. Raise or return `PolicyDenied`. | If runtime policy declares an override path, request approval; otherwise fail. |
 | Approval is required but missing | Pause and perform/request `Approval.request`. | Approved resumes; rejected returns structured denial or raises `HumanRejected`. |
 | Command or tool attempts sandbox escape | Sandbox denies before side effect. Raise `SandboxViolation`. | Usually fatal; retry only if the next attempt changes arguments within the sandbox. |
 | Tool timeout or transient host failure | Raise tool error. | `retry` may apply because this is failure, not authority escalation. |
@@ -1938,11 +1947,11 @@ ToolDenied:
   valid_alternatives = [email.draft, support.note]
 ```
 
-The runtime may send this denial back to the agent for a bounded repair attempt. The agent may choose `email.draft` or `support.note`, but the runtime still denies `email.send` until the active effect boundary and policy allow `CompanyEmail.send<WorkAccount>`.
+The runtime may send this denial back to the agent for a bounded repair attempt. The agent may choose `email.draft` or `support.note`, but the runtime still denies `email.send` until the active effect boundary, trace specs, and runtime policy allow `CompanyEmail.send<WorkAccount>`.
 
 ### 11.3 Handlers Can Recover, Not Grant Authority
 
-Handlers can recover from denied operations by returning a fallback value, escalating to a human, or recording a pending task. They cannot bypass runtime authority checks. This is a language/runtime rule, not a recommendation: a handler cannot mutate the active effect boundary, sandbox profile, policy environment, approval state, tool allowlist, or limit budget.
+Handlers can recover from denied operations by returning a fallback value, escalating to a human, or recording a pending task. They cannot bypass runtime authority checks. This is a language/runtime rule, not a recommendation: a handler cannot mutate the active effect boundary, sandbox profile, runtime-policy environment, approval state, tool allowlist, or limit budget.
 
 ```etas
 flow NotifyCustomer(req: Request) -> NotifyResult {
@@ -1976,7 +1985,7 @@ flow SafeNotify(req: Request) -> NotifyResult {
 }
 ```
 
-If the active boundary or policy does not allow `CompanyEmail.send<WorkAccount>`, the runtime denies `CompanyEmail.send(...)` before the external side effect happens. The handler above can turn that denial into a typed fallback result and write a pending support note if `ProjectWorkspace.write<"support/**">` is allowed. It cannot make `CompanyEmail.send` execute without `CompanyEmail.send<WorkAccount>`, active policy approval, and any other runtime checks.
+If the active boundary, trace specs, or runtime policy do not allow `CompanyEmail.send<WorkAccount>`, the runtime denies `CompanyEmail.send(...)` before the external side effect happens. The handler above can turn that denial into a typed fallback result and write a pending support note if `ProjectWorkspace.write<"support/**">` is allowed. It cannot make `CompanyEmail.send` execute without `CompanyEmail.send<WorkAccount>`, accepted approval evidence, and any other runtime checks.
 
 Human approval is similar. A trace spec may require approval before email is
 sent:
@@ -1997,7 +2006,7 @@ Approval.request(req) => {
 }
 ```
 
-That handler supplies an `ApprovalDecision`; it does not grant email authority. After approval, the runtime still checks the effect boundary, policy, sandbox, and limits before executing `CompanyEmail.send`.
+That handler supplies an `ApprovalDecision`; it does not grant email authority. After approval, the runtime still checks the effect boundary, trace specs, runtime policy, sandbox, and limits before executing `CompanyEmail.send`.
 
 The rule is:
 
@@ -2006,7 +2015,7 @@ Handler answers: what value or fallback should this action produce?
 Runtime answers: is the effect action authorized to execute?
 ```
 
-A conforming runtime must reject or ignore any handler path that attempts to grant authority directly. Authority can only come from the active effect boundary, selected policy, sandbox profile, approval records accepted by policy, declared tool set, and active limit budget.
+A conforming runtime must reject or ignore any handler path that attempts to grant authority directly. Authority can only come from the active effect boundary, selected runtime policy, sandbox profile, approval records accepted by trace specs/runtime policy, declared tool set, and active limit budget.
 
 ### 11.4 Static Upper Bound, Runtime Trace Fact
 

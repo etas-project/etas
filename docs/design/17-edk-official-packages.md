@@ -30,7 +30,7 @@ The design rule is:
 ```text
 std = minimal, stable language/runtime foundation
 EDK = official reusable integration packages written in Etas
-app/package code = domain-specific policy, orchestration, and business logic
+app/package code = domain-specific trace specs, runtime policy, orchestration, and business logic
 ```
 
 This keeps the core language small while preserving a good user experience.
@@ -44,7 +44,7 @@ binding, that is evidence of a language or `std` substrate gap.
 
 ## 2. Relationship To Effects And Actions
 
-EDK packages define ordinary effects, actions, tools, flows, policies, and
+EDK packages define ordinary effects, actions, tools, flows, trace specs, and
 support types. Their effects are package-defined authority boundaries, not core
 standard-library effects.
 
@@ -74,7 +74,7 @@ public flow send(account: EmailAccount, to: EmailAddress, draft: EmailDraft)
 ```
 
 The compiler treats `EdkEmail.send<_>` exactly like any other effect
-action for inference, policy checks, handler dispatch, trace, replay, and
+action for inference, trace-spec checks, runtime-policy checks, handler dispatch, trace, replay, and
 deployment manifests. The only difference from an application-defined action is
 ownership and distribution: EDK owns the public API, schemas, Etas
 implementation, mock implementation, tests, and compatibility contract.
@@ -82,8 +82,8 @@ The internal substrate actions used by the package handler are checked when
 compiling EDK itself. Downstream code sees the EDK requested-action/trace
 contract, while escaping actions remain caller/application responsibility.
 
-EDK should not reintroduce raw capability strings. Authority remains expressed
-through effect actions and trace specs:
+EDK should not reintroduce raw authority strings. Authority remains expressed
+through typed effect actions and trace specs:
 
 ```etas
 spec SafeMail: trace =
@@ -211,7 +211,7 @@ becoming a business application framework.
 |---|---|---|---|
 | `edk.http` | `edk.http.client`, `edk.http.json` | `EdkHttp.request<M, H>` | Typed HTTP requests, JSON helpers, auth-neutral client wrappers |
 | `edk.web` | `edk.web.search`, `edk.web.fetch`, `edk.web.crawl` | `EdkWeb.search`, `EdkWeb.fetch<domain>` | Search, fetch, crawl, and return `Untrusted<...>` content by default |
-| `edk.workspace` | `edk.workspace.files`, `edk.workspace.path` | `EdkWorkspace.read<P>`, `EdkWorkspace.write<P>`, `EdkWorkspace.list<P>` | Project-local file access with path scopes and policy-visible writes |
+| `edk.workspace` | `edk.workspace.files`, `edk.workspace.path` | `EdkWorkspace.read<P>`, `EdkWorkspace.write<P>`, `EdkWorkspace.list<P>` | Project-local file access with path scopes and trace/runtime-policy-visible writes |
 | `edk.email` | `edk.email.smtp`, `edk.email.provider` | `EdkEmail.send<A>`, `EdkEmail.read<A>` | Email sending and reading behind account-scoped authority |
 | `edk.db` | `edk.db.sql`, `edk.db.pool` | `EdkDb.query<D>`, `EdkDb.exec<D>` | SQL/database access with datasource-scoped effects |
 | `edk.vector` | `edk.vector.store`, `edk.vector.embed` | `EdkVector.search<S>`, `EdkVector.write<S>` | Vector search, retrieval, and embedding-store integration |
@@ -240,7 +240,7 @@ Each EDK integration should expose three layers when useful:
 
 | Layer | Example | Audience |
 |---|---|---|
-| Effect/action declaration | `EdkWorkspace.write<P>` | Compiler, policy, handler, trace, runtime |
+| Effect/action declaration | `EdkWorkspace.write<P>` | Compiler, trace-spec checker, runtime-policy checker, handler, trace, runtime |
 | Default action handler | `let EdkWorkspaceDefault = handler { ... }` | Reference semantics written in Etas |
 | Flow wrapper | `edk.workspace.write(path, body)` | Normal Etas code |
 | Tool wrapper | `tool repo.write(...) -> ... ![EdkWorkspace.write<P>]` | Model-callable surfaces |
@@ -325,12 +325,12 @@ Preferred EDK shape:
 ```
 
 The unavoidable host boundary belongs below EDK, in a minimal `std` substrate.
-Examples of substrate capabilities that EDK may need are:
+Examples of substrate primitives that EDK may need are:
 
 | Substrate area | Purpose |
 |---|---|
 | Byte streams | Read/write byte-oriented streams used by files, sockets, TLS, pipes, and protocol parsers |
-| Filesystem primitives | Open, read, write, list, stat, and atomic replace with policy-visible path scopes |
+| Filesystem primitives | Open, read, write, list, stat, and atomic replace with trace/runtime-policy-visible path scopes |
 | Network sockets | TCP/UDP connection, read, write, close, and timeout primitives |
 | TLS / crypto primitives | TLS transport, hashes, HMAC/signatures, secure randomness, and certificate validation |
 | Encoding and compression | UTF-8, base64, URL encoding, JSON bytes, gzip/deflate, and similar reusable codecs |
@@ -338,10 +338,10 @@ Examples of substrate capabilities that EDK may need are:
 | Secrets | Host-mediated secret reads without exposing raw environment variables |
 | Command sandbox | Explicit sandboxed command execution for cases that are intentionally process-based |
 
-These substrate operations are still ordinary effect actions with policy,
-limits, trace, replay, and handler behavior. The difference is that they are
-low-level, orthogonal runtime primitives. EDK builds higher-level packages from
-them.
+These substrate operations are still ordinary effect actions with trace-spec,
+runtime-policy, limits, trace, replay, and handler behavior. The difference is
+that they are low-level, orthogonal runtime primitives. EDK builds higher-level
+packages from them.
 
 If implementing a EDK package reveals that the substrate is missing a necessary
 primitive, the correct response is to improve the `std` substrate design, not to
@@ -355,7 +355,7 @@ A substrate gap entry should record:
 | Attempted implementation | What Etas code or design was attempted |
 | Missing primitive | The smallest low-level `std` operation that appears necessary |
 | Desired signature | Proposed type, effect/action row, and error behavior |
-| Safety impact | Policy, trace, sandbox, secret, or trust implications |
+| Safety impact | Trace-spec, runtime-policy, trace, sandbox, secret, or provenance implications |
 | Alternative considered | Why existing `std` or EDK APIs were insufficient |
 
 Example:
@@ -368,7 +368,7 @@ Desired signature:
   std.tls.connect(stream: TcpStream, server_name: Host, config: TlsConfig)
       -> TlsStream ![Tls.handshake<_>, Error<TlsError>]
 Safety impact:
-  host name and certificate validation must be policy-visible and traceable
+  host name and certificate validation must be trace/runtime-policy-visible and traceable
 Alternative considered:
   implementing TLS fully in EDK is possible long-term, but first EDK needs a
   minimal cryptographic substrate and secure randomness
@@ -592,8 +592,8 @@ The first reference implementation should not include every HTTP client feature.
 Redirects, connection pooling, cookies, proxy support, compression, streaming
 bodies, auth schemes, cache policy, and retry/backoff should be layered as EDK
 modules over this minimal substrate-backed client. Each such layer should expose
-its own policy-visible behavior when it changes authority, replay, idempotency,
-or trust semantics.
+its own trace/runtime-policy-visible behavior when it changes authority, replay,
+idempotency, or provenance semantics.
 
 The exact low-level APIs are part of the standard-library substrate design, not
 EDK-private host calls. Effect/action owners use uppercase names without a `Std`
@@ -711,7 +711,7 @@ packages, with stricter stability expectations:
   behavior;
 - widening an effect row is a breaking change unless the added action is behind
   a new opt-in API;
-- changing an action parameter that policy can match is a breaking change;
+- changing an action parameter that trace specs or runtime policy can match is a breaking change;
 - mock binding behavior should be stable enough for golden tests.
 
 EDK can evolve faster than `std`, but slower than arbitrary third-party
@@ -787,7 +787,7 @@ EDK is also a practical check on the language design and interpreter:
 - every EDK package should include small executable examples;
 - core integrations should include golden effect summaries and golden traces;
 - tests should exercise ordinary imports, package metadata, Etas tool bodies,
-  substrate use, mock bindings, handlers, policies, limits, and errors;
+  substrate use, mock bindings, handlers, trace specs, runtime policies, limits, and errors;
 - if a common EDK wrapper is awkward to express, that is evidence that the
   language surface or standard runtime APIs need review.
 
