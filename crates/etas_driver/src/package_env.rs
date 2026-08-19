@@ -789,43 +789,10 @@ fn dependency_effect_arg_input(
         etas_package::PackageEffectArgMetadata::String { value } => {
             ProjectExternalEffectArgInput::String(value.clone())
         }
+        etas_package::PackageEffectArgMetadata::Int { value } => {
+            ProjectExternalEffectArgInput::Int(value.clone())
+        }
         etas_package::PackageEffectArgMetadata::Wildcard => ProjectExternalEffectArgInput::Wildcard,
-    }
-}
-
-fn dependency_effect_arg_ref(
-    package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
-    arg: &etas_package::PackageEffectArgMetadata,
-) -> etas_types::EffectArgRef {
-    match arg {
-        etas_package::PackageEffectArgMetadata::Type { ty } => {
-            dependency_type_selector_path(package, packages, ty)
-                .map(etas_types::EffectArgRef::Path)
-                .unwrap_or(etas_types::EffectArgRef::Wildcard)
-        }
-        etas_package::PackageEffectArgMetadata::Path { path } => {
-            etas_types::EffectArgRef::Path(dependency_path_with_graph(package, packages, path))
-        }
-        etas_package::PackageEffectArgMetadata::String { value } => {
-            etas_types::EffectArgRef::String(value.clone())
-        }
-        etas_package::PackageEffectArgMetadata::Wildcard => etas_types::EffectArgRef::Wildcard,
-    }
-}
-
-fn dependency_type_selector_path(
-    package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
-    ty: &etas_package::PackageTypeMetadata,
-) -> Option<Vec<String>> {
-    match ty {
-        etas_package::PackageTypeMetadata::Named { path }
-        | etas_package::PackageTypeMetadata::Alias { path, .. }
-        | etas_package::PackageTypeMetadata::Nominal { path, .. } => {
-            Some(dependency_type_path(package, packages, path))
-        }
-        _ => None,
     }
 }
 
@@ -854,6 +821,9 @@ fn effect_arg_input(arg: &etas_package::PackageEffectArgMetadata) -> ProjectExte
         }
         etas_package::PackageEffectArgMetadata::String { value } => {
             ProjectExternalEffectArgInput::String(value.clone())
+        }
+        etas_package::PackageEffectArgMetadata::Int { value } => {
+            ProjectExternalEffectArgInput::Int(value.clone())
         }
         etas_package::PackageEffectArgMetadata::Wildcard => ProjectExternalEffectArgInput::Wildcard,
     }
@@ -1252,8 +1222,6 @@ fn dependency_effect_metadata(
         });
     }
     collect_dependency_effect_tags(&metadata.dependencies, packages, &mut tags)?;
-    let mut actions = Vec::new();
-    collect_dependency_effect_actions(&metadata.dependencies, packages, &mut actions);
     let mut extensions = metadata
         .effect_metadata
         .extensions
@@ -1267,7 +1235,7 @@ fn dependency_effect_metadata(
     collect_dependency_effect_extensions(&metadata.dependencies, packages, &mut extensions);
     Ok(etas_effects::DependencyEffectMetadata {
         tags,
-        actions,
+        actions: Vec::new(),
         extensions,
     })
 }
@@ -1302,42 +1270,6 @@ fn collect_dependency_effect_tags(
         collect_dependency_effect_tags(&dependency.dependencies, packages, output)?;
     }
     Ok(())
-}
-
-fn collect_dependency_effect_actions(
-    dependencies: &[etas_package::ResolvedDependency],
-    packages: &[ProjectExternalPackageInput],
-    output: &mut Vec<etas_effects::DependencyEffectAction>,
-) {
-    for dependency in dependencies {
-        if is_builtin_dependency(dependency) {
-            continue;
-        }
-        let package = external_package_input_for_dependency(dependency);
-        output.extend(dependency.public_metadata.actions.iter().map(|action| {
-            etas_effects::DependencyEffectAction {
-                path: dependency_path_with_graph(&package, packages, &action.path),
-                effect_args: action
-                    .effect_args
-                    .iter()
-                    .map(dependency_action_arg_kind)
-                    .collect(),
-                selector_param_names: action.selector_param_names.clone(),
-                selector_defaults: action
-                    .selector_defaults
-                    .iter()
-                    .map(|default| {
-                        default
-                            .as_ref()
-                            .map(|arg| dependency_effect_arg_ref(&package, packages, arg))
-                    })
-                    .collect(),
-                returns_never: action.returns_never,
-                runtime_requirement: None,
-            }
-        }));
-        collect_dependency_effect_actions(&dependency.dependencies, packages, output);
-    }
 }
 
 fn collect_dependency_effect_extensions(
@@ -1384,25 +1316,6 @@ fn external_package_input_for_dependency(
 
 fn is_standard_effect_path(path: &[String]) -> bool {
     is_standard_effect_base(&path.join("."))
-}
-
-fn dependency_action_arg_kind(
-    kind: &etas_package::PackageEffectActionArgKindMetadata,
-) -> etas_effects::EffectActionArgKind {
-    match kind {
-        etas_package::PackageEffectActionArgKindMetadata::Type => {
-            etas_effects::EffectActionArgKind::Type
-        }
-        etas_package::PackageEffectActionArgKindMetadata::MemoryPlace => {
-            etas_effects::EffectActionArgKind::MemoryPlace
-        }
-        etas_package::PackageEffectActionArgKindMetadata::StaticResourcePath { ty } => {
-            etas_effects::EffectActionArgKind::StaticResourcePath { ty: ty.clone() }
-        }
-        etas_package::PackageEffectActionArgKindMetadata::StringPattern => {
-            etas_effects::EffectActionArgKind::StringPattern
-        }
-    }
 }
 
 fn runtime_requirement(value: &str) -> Result<etas_effects::RuntimeRequirementReason, DriverError> {
@@ -1468,7 +1381,7 @@ mod tests {
     }
 
     #[test]
-    fn frontend_environment_projects_dependency_public_effect_actions() {
+    fn frontend_environment_preserves_typed_action_selectors_for_checked_lowering() {
         let metadata = etas_package::PackageEnvironmentMetadata {
             dependencies: vec![etas_package::ResolvedDependency {
                 identity: etas_package::PackageIdentity {
@@ -1492,11 +1405,19 @@ mod tests {
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
                         path: vec!["errors".to_owned(), "Net".to_owned(), "request".to_owned()],
                         params: Vec::new(),
-                        effect_args: vec![
-                            etas_package::PackageEffectActionArgKindMetadata::StringPattern,
-                        ],
-                        selector_param_names: vec![String::new()],
-                        selector_defaults: vec![None],
+                        effect_args: vec![etas_package::PackageEffectActionArgKindMetadata::Type],
+                        selector_param_names: vec!["resource".to_owned()],
+                        selector_defaults: vec![Some(
+                            etas_package::PackageEffectArgMetadata::Type {
+                                ty: etas_package::PackageTypeMetadata::Array {
+                                    element: Box::new(
+                                        etas_package::PackageTypeMetadata::Primitive {
+                                            name: "i32".to_owned(),
+                                        },
+                                    ),
+                                },
+                            },
+                        )],
                         output: etas_package::PackageTypeMetadata::Primitive {
                             name: "unit".to_owned(),
                         },
@@ -1520,13 +1441,18 @@ mod tests {
                 .iter()
                 .any(|tag| tag.path == ["errors", "Net"])
         );
-        assert!(
-            environment
-                .external_effect_metadata
-                .actions
-                .iter()
-                .any(|action| action.path == ["errors", "Net", "request"])
-        );
+        assert!(environment.external_effect_metadata.actions.is_empty());
+        let action = environment
+            .external_public_metadata
+            .first()
+            .and_then(|metadata| metadata.actions.first())
+            .expect("typed external action metadata");
+        assert!(matches!(
+            action.selector_defaults.as_slice(),
+            [Some(ProjectExternalEffectArgInput::Type(
+                ProjectExternalTypeInput::Array(item)
+            ))] if matches!(item.as_ref(), ProjectExternalTypeInput::Primitive(name) if name == "i32")
+        ));
     }
 
     #[test]
@@ -1755,9 +1681,9 @@ mod tests {
         );
         assert!(
             environment
-                .external_effect_metadata
-                .actions
+                .external_public_metadata
                 .iter()
+                .flat_map(|metadata| &metadata.actions)
                 .any(|action| action.path == ["edk", "http", "effects", "EdkHttp", "request"])
         );
         assert!(
