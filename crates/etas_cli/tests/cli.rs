@@ -182,7 +182,7 @@ import std.codec.text.utf8_encode;
 import std.http.codec.decode_response;
 
 flow main(args: Array<string>) -> i32 ![] {
-  let decoded_len = match decode_response(utf8_encode("HTTP/1.1 200 OK\nTransfer-Encoding: chunked\n\n5\nhello\n6;ext=value\n world\n0\n\n")) {
+  let decoded_len = match decode_response(utf8_encode("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n6;ext=value\r\n world\r\n0\r\n\r\n")) {
     Ok(response) => len(response.body),
     Err(_) => len(utf8_encode(""))
   };

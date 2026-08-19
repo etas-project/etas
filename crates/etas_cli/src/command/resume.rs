@@ -98,7 +98,8 @@ pub fn run(
 
     let result = super::interpreter::resume_checked(checked, &checkpoint, host_config)?;
     super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
-    let report = codec::run_report_json("resume", &source_paths, &flow, &result);
+    let report = codec::run_report_json("resume", &source_paths, &flow, &result)
+        .map_err(|error| CliError::RuntimeState(error.to_string()))?;
 
     match global.format {
         crate::args::global::OutputFormat::Json => {

@@ -1072,8 +1072,9 @@ pub struct RunBudgetOverrides {
 }
 
 fn apply_budget_overrides(options: &mut RunOptions, overrides: RunBudgetOverrides) {
+    let mut host_limits = options.host_context.budget.limits().clone();
     if let Some(tokens) = overrides.tokens {
-        options.host_context.budget.tokens = Some(TokenBudget { max_tokens: tokens });
+        host_limits.tokens = Some(TokenBudget { max_tokens: tokens });
         options.model_policy.options.max_output_tokens = Some(tokens);
         let budget = options
             .model_policy
@@ -1086,7 +1087,7 @@ fn apply_budget_overrides(options: &mut RunOptions, overrides: RunBudgetOverride
             max_micros: amount,
             currency,
         };
-        options.host_context.budget.cost = Some(cost.clone());
+        host_limits.cost = Some(cost.clone());
         let budget = options
             .model_policy
             .budget
@@ -1095,11 +1096,12 @@ fn apply_budget_overrides(options: &mut RunOptions, overrides: RunBudgetOverride
     }
     if let Some(max_millis) = overrides.time {
         let time = TimeBudget { max_millis };
-        options.host_context.budget.time = Some(time);
+        host_limits.time = Some(time);
         let budget = options
             .model_policy
             .budget
             .get_or_insert_with(Budget::default);
         budget.time = Some(time);
     }
+    options.host_context.budget.replace_limits(host_limits);
 }

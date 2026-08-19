@@ -14,6 +14,7 @@ pub enum CliError {
     },
     InvalidUsage(String),
     FrontendSession(String),
+    RuntimeState(String),
     Unsupported {
         command: &'static str,
         reason: &'static str,
@@ -25,6 +26,7 @@ impl CliError {
         match self {
             Self::Io { .. } | Self::Config { .. } | Self::InvalidUsage(_) => CliExit::Usage,
             Self::FrontendSession(_) => CliExit::InternalCompilerError,
+            Self::RuntimeState(_) => CliExit::RuntimeFailure,
             Self::Unsupported { .. } => CliExit::InternalCompilerError,
         }
     }
@@ -43,6 +45,7 @@ impl fmt::Display for CliError {
             Self::FrontendSession(message) => {
                 write!(f, "frontend session failed: {message}")
             }
+            Self::RuntimeState(message) => write!(f, "runtime state failed: {message}"),
             Self::Unsupported { command, reason } => {
                 write!(f, "`etas {command}` is not available yet: {reason}")
             }

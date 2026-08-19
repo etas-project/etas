@@ -753,7 +753,7 @@ impl CliHostConfig {
                     },
                 },
                 trace: etas_host::TraceContext::root(etas_host::TraceId(1)),
-                budget: etas_host::Budget::default(),
+                budget: etas_host::ExecutionBudget::default(),
             },
             model_policy,
             current_session: self.session_id.clone(),

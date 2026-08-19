@@ -16,7 +16,8 @@ pub fn write_checkpoint_files(
         source,
     })?;
     for checkpoint in &result.checkpoints {
-        let mut payload = codec::checkpoint_artifact_json(sources, flow, checkpoint);
+        let mut payload = codec::checkpoint_artifact_json(sources, flow, checkpoint)
+            .map_err(|error| CliError::RuntimeState(error.to_string()))?;
         if let serde_json::Value::Object(object) = &mut payload {
             object.insert("runtime_profile".to_owned(), runtime_profile.clone());
         }

@@ -94,7 +94,8 @@ pub fn run(
         )?;
     }
 
-    let report = codec::run_report_json("run", &source_paths, &flow, &result);
+    let report = codec::run_report_json("run", &source_paths, &flow, &result)
+        .map_err(|error| CliError::RuntimeState(error.to_string()))?;
     if let Some(path) = &args.trace_out {
         std::fs::write(
             path,
