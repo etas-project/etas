@@ -4,18 +4,18 @@ use etas_effects::{RequirementFact, TraceSpecClauseFact};
 use etas_frontend::CheckedProject;
 use etas_host::console::{ConsoleClient, ConsoleRequest, ConsoleResponse, LocalStdioClient};
 use etas_host::{
-    ApprovalDecision, ApprovalRequest, BrowserProtocolRequest, BrowserProtocolResponse, Budget,
-    CommandClient, CommandRequest, CommandResponse, CostBudget, FilesystemClient,
-    FilesystemRequest, FilesystemResponse, HostError, HostErrorCode, HostRequestId, HostValue,
-    InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient, LocalFilesystemClient,
-    LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryClient, MemoryRequest, MemoryResponse,
-    ModelClient, ModelRequest, ModelResponse, PolicyClient, PolicyDecision,
-    PolicyEvaluationRequest, PolicyResponse, SecretOperation, SecretPayload, SecretRef,
-    SecretRequest, SecretResponse, SecretValue, SessionClient, SessionRequest, SessionResponse,
-    SqliteMemoryClient, SqliteSessionClient, StreamClient, StreamRequest, StreamResponse,
-    TRACE_SPEC_RUNTIME_REF, TcpClient, TcpConnectRequest, TcpConnectResponse, TimeBudget,
-    TlsClient, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
-    TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
+    ApprovalDecision, ApprovalRequest, ApprovalResponse, BrowserProtocolRequest,
+    BrowserProtocolResponse, Budget, CommandClient, CommandRequest, CommandResponse, CostBudget,
+    FilesystemClient, FilesystemRequest, FilesystemResponse, HostError, HostErrorCode,
+    HostRequestId, HostValue, InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient,
+    LocalFilesystemClient, LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryClient,
+    MemoryRequest, MemoryResponse, ModelClient, ModelRequest, ModelResponse, PolicyClient,
+    PolicyDecision, PolicyEvaluationRequest, PolicyResponse, SecretOperation, SecretPayload,
+    SecretRef, SecretRequest, SecretResponse, SecretValue, SessionClient, SessionRequest,
+    SessionResponse, SqliteMemoryClient, SqliteSessionClient, StreamClient, StreamRequest,
+    StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpClient, TcpConnectRequest, TcpConnectResponse,
+    TimeBudget, TlsClient, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest,
+    ToolResponse, TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
     api::{
@@ -515,7 +515,7 @@ impl HostServices for CliHost {
     fn approval<'a>(
         &'a self,
         request: ApprovalRequest,
-    ) -> HostFuture<'a, Result<ApprovalDecision, HostError>> {
+    ) -> HostFuture<'a, Result<ApprovalResponse, HostError>> {
         let future = async move { approval_decision(self.approval, request) };
         self.profiled("host.approval", future)
     }
@@ -622,8 +622,9 @@ fn policy_label_terms(label: &str) -> Vec<String> {
 fn approval_decision(
     mode: ApprovalMode,
     request: ApprovalRequest,
-) -> Result<ApprovalDecision, HostError> {
-    match mode {
+) -> Result<ApprovalResponse, HostError> {
+    let id = request.id;
+    let decision = match mode {
         ApprovalMode::Deny => Ok(ApprovalDecision::Denied {
             reason: "CLI approval mode denies host approval requests".to_owned(),
         }),
@@ -631,42 +632,42 @@ fn approval_decision(
             grant: etas_host::ApprovalGrant {
                 id: request.id,
                 grants: request.requested_grants,
-                reason: "CLI approval mode auto-approved request".to_owned(),
             },
         }),
         ApprovalMode::Prompt => {
             if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-                return Ok(ApprovalDecision::Denied {
+                Ok(ApprovalDecision::Denied {
                     reason: "CLI approval prompt requires an interactive TTY".to_owned(),
-                });
-            }
-            eprintln!(
-                "Etas approval requested: {}\nType `yes` to approve:",
-                request.reason
-            );
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input).map_err(|error| {
-                HostError::new(
-                    HostErrorCode::ProviderUnavailable,
-                    "failed to read approval input",
-                )
-                .with_detail("error", error.to_string())
-            })?;
-            if input.trim() == "yes" {
-                Ok(ApprovalDecision::Approved {
-                    grant: etas_host::ApprovalGrant {
-                        id: request.id,
-                        grants: request.requested_grants,
-                        reason: "CLI approval prompt accepted request".to_owned(),
-                    },
                 })
             } else {
-                Ok(ApprovalDecision::Denied {
-                    reason: "CLI approval prompt denied request".to_owned(),
-                })
+                eprintln!(
+                    "Etas approval requested: {}\nType `yes` to approve:",
+                    request.reason
+                );
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).map_err(|error| {
+                    HostError::new(
+                        HostErrorCode::ProviderUnavailable,
+                        "failed to read approval input",
+                    )
+                    .with_detail("error", error.to_string())
+                })?;
+                if input.trim() == "yes" {
+                    Ok(ApprovalDecision::Approved {
+                        grant: etas_host::ApprovalGrant {
+                            id: request.id,
+                            grants: request.requested_grants,
+                        },
+                    })
+                } else {
+                    Ok(ApprovalDecision::Denied {
+                        reason: "CLI approval prompt denied request".to_owned(),
+                    })
+                }
             }
         }
-    }
+    }?;
+    Ok(ApprovalResponse { id, decision })
 }
 
 impl UnavailableHostServices {
