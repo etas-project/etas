@@ -279,6 +279,11 @@ fn external_public_metadata_input(
             .iter()
             .map(|signature| ProjectExternalFlowSignatureInput {
                 path: dependency_path_with_graph(package, packages, &signature.path),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &signature.generic_params,
+                ),
                 param_names: signature.param_names.clone(),
                 params: signature
                     .params
@@ -298,6 +303,11 @@ fn external_public_metadata_input(
             .iter()
             .map(|signature| ProjectExternalAgentSignatureInput {
                 path: dependency_path_with_graph(package, packages, &signature.path),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &signature.generic_params,
+                ),
                 param_names: signature.param_names.clone(),
                 input: signature
                     .input
@@ -317,6 +327,11 @@ fn external_public_metadata_input(
             .iter()
             .map(|signature| ProjectExternalToolSignatureInput {
                 path: dependency_path_with_graph(package, packages, &signature.path),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &signature.generic_params,
+                ),
                 param_names: signature.param_names.clone(),
                 input: signature
                     .input
@@ -425,6 +440,11 @@ fn external_public_metadata_input(
             .iter()
             .map(|signature| ProjectExternalActionSignatureInput {
                 path: dependency_path_with_graph(package, packages, &signature.path),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &signature.generic_params,
+                ),
                 params: signature
                     .params
                     .iter()
@@ -554,6 +574,11 @@ fn spec_signature_input(
             .as_ref()
             .map(|callable| ProjectExternalFlowSignatureInput {
                 path: dependency_path_with_graph(package, packages, &callable.path),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &callable.generic_params,
+                ),
                 param_names: callable.param_names.clone(),
                 params: callable
                     .params
@@ -576,6 +601,11 @@ fn spec_signature_input(
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
                         path: dependency_path_with_graph(package, packages, &callable.path),
+                        generic_params: callable_generic_params_input(
+                            package,
+                            packages,
+                            &callable.generic_params,
+                        ),
                         param_names: callable.param_names.clone(),
                         params: callable
                             .params
@@ -609,6 +639,33 @@ fn spec_signature_input(
             })
             .collect(),
     }
+}
+
+fn callable_generic_params_input(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    params: &[etas_package::metadata::PackageCallableGenericParamMetadata],
+) -> Vec<etas_frontend::ProjectExternalCallableGenericParamInput> {
+    params
+        .iter()
+        .map(
+            |param| etas_frontend::ProjectExternalCallableGenericParamInput {
+                name: param.name.clone(),
+                bounds: param
+                    .bounds
+                    .iter()
+                    .map(|bound| etas_frontend::ProjectExternalSpecBoundInput {
+                        spec: dependency_path_with_graph(package, packages, &bound.spec),
+                        args: bound
+                            .args
+                            .iter()
+                            .map(|arg| dependency_type_input_with_graph(package, packages, arg))
+                            .collect(),
+                    })
+                    .collect(),
+            },
+        )
+        .collect()
 }
 
 fn dependency_path(package: &ProjectExternalPackageInput, path: &[String]) -> Vec<String> {
@@ -1404,6 +1461,12 @@ mod tests {
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
                         path: vec!["errors".to_owned(), "Net".to_owned(), "request".to_owned()],
+                        generic_params: vec![
+                            etas_package::metadata::PackageActionGenericParamMetadata {
+                                name: "resource".to_owned(),
+                                bounds: Vec::new(),
+                            },
+                        ],
                         params: Vec::new(),
                         effect_args: vec![etas_package::PackageEffectActionArgKindMetadata::Type],
                         selector_param_names: vec!["resource".to_owned()],
@@ -1452,6 +1515,84 @@ mod tests {
             [Some(ProjectExternalEffectArgInput::Type(
                 ProjectExternalTypeInput::Array(item)
             ))] if matches!(item.as_ref(), ProjectExternalTypeInput::Primitive(name) if name == "i32")
+        ));
+    }
+
+    #[test]
+    fn frontend_environment_preserves_generic_callable_effect_identity() {
+        let generic = etas_package::metadata::PackageCallableGenericParamMetadata {
+            name: "R".to_owned(),
+            bounds: Vec::new(),
+        };
+        let generic_effect = etas_package::PackageEffectRowMetadata {
+            effects: vec![etas_package::PackageEffectRefMetadata {
+                path: vec!["Fs".to_owned(), "read".to_owned()],
+                args: vec![etas_package::PackageEffectArgMetadata::Type {
+                    ty: etas_package::PackageTypeMetadata::Var {
+                        name: "R".to_owned(),
+                    },
+                }],
+            }],
+        };
+        let metadata = etas_package::PackageEnvironmentMetadata {
+            dependencies: vec![etas_package::ResolvedDependency {
+                identity: etas_package::PackageIdentity {
+                    name: "generic-fs".to_owned(),
+                    version: "0.1.0".to_owned(),
+                    edition: "2026".to_owned(),
+                },
+                import_root: "dep".to_owned(),
+                source: etas_package::ResolvedDependencySource::Vendor {
+                    path: ".etas/vendor/generic-fs".to_owned(),
+                    checksum: "blake3:00".to_owned(),
+                    store: None,
+                },
+                dependencies: Vec::new(),
+                public_metadata: etas_package::PackagePublicMetadata {
+                    flows: vec![etas_package::PackageFlowSignatureMetadata {
+                        path: vec!["api".to_owned(), "read".to_owned()],
+                        generic_params: vec![generic],
+                        param_names: Vec::new(),
+                        params: Vec::new(),
+                        output: etas_package::PackageTypeMetadata::Primitive {
+                            name: "unit".to_owned(),
+                        },
+                        effects: Some(generic_effect.clone()),
+                        visibility: "public".to_owned(),
+                    }],
+                    effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        item: vec!["api".to_owned(), "read".to_owned()],
+                        public_effects: generic_effect.clone(),
+                        requested_actions: generic_effect,
+                        handled_requested_actions: Default::default(),
+                        latent_flows: Vec::new(),
+                    }],
+                    ..Default::default()
+                },
+                effect_metadata: Default::default(),
+                tool_bindings: Vec::new(),
+            }],
+            metadata_fingerprint: "test".to_owned(),
+            ..Default::default()
+        };
+
+        let environment = frontend_environment(metadata).expect("environment converts");
+        let metadata = environment
+            .external_public_metadata
+            .first()
+            .expect("external metadata should exist");
+        let flow = metadata.flows.first().expect("external flow should exist");
+        assert_eq!(flow.path, ["dep", "api", "read"]);
+        assert_eq!(flow.generic_params.len(), 1);
+        assert_eq!(flow.generic_params[0].name, "R");
+        let summary = metadata
+            .effect_summaries
+            .first()
+            .expect("external effect summary should exist");
+        assert!(matches!(
+            summary.requested_actions.effects[0].args.as_slice(),
+            [ProjectExternalEffectArgInput::Type(ProjectExternalTypeInput::Var(name))]
+                if name == "R"
         ));
     }
 
@@ -1537,6 +1678,7 @@ mod tests {
                             "EdkHttp".to_owned(),
                             "request".to_owned(),
                         ],
+                        generic_params: Vec::new(),
                         params: Vec::new(),
                         effect_args: vec![
                             etas_package::PackageEffectActionArgKindMetadata::StringPattern,
