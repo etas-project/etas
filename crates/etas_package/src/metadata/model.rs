@@ -287,6 +287,8 @@ pub struct PackageNamedSignatureMetadata {
 pub struct PackageFlowSignatureMetadata {
     pub path: Vec<String>,
     #[serde(default)]
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
+    #[serde(default)]
     pub param_names: Vec<String>,
     #[serde(default)]
     pub params: Vec<PackageTypeMetadata>,
@@ -300,6 +302,8 @@ pub struct PackageFlowSignatureMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageAgentSignatureMetadata {
     pub path: Vec<String>,
+    #[serde(default)]
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
     #[serde(default)]
     pub param_names: Vec<String>,
     #[serde(default)]
@@ -315,6 +319,8 @@ pub struct PackageAgentSignatureMetadata {
 pub struct PackageToolSignatureMetadata {
     pub path: Vec<String>,
     #[serde(default)]
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
+    #[serde(default)]
     pub param_names: Vec<String>,
     #[serde(default)]
     pub input: Vec<PackageTypeMetadata>,
@@ -329,6 +335,8 @@ pub struct PackageToolSignatureMetadata {
 pub struct PackageEffectActionSignatureMetadata {
     pub path: Vec<String>,
     #[serde(default)]
+    pub generic_params: Vec<PackageActionGenericParamMetadata>,
+    #[serde(default)]
     pub params: Vec<PackageTypeMetadata>,
     #[serde(default)]
     pub effect_args: Vec<PackageEffectActionArgKindMetadata>,
@@ -342,6 +350,15 @@ pub struct PackageEffectActionSignatureMetadata {
     #[serde(default)]
     pub visibility: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageCallableGenericParamMetadata {
+    pub name: String,
+    #[serde(default)]
+    pub bounds: Vec<PackageSpecBoundMetadata>,
+}
+
+pub type PackageActionGenericParamMetadata = PackageCallableGenericParamMetadata;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]

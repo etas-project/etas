@@ -1,18 +1,19 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use etas_std::{
-    EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdPrimitiveType, StdStaticArg,
+    EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdGenericParam, StdPrimitiveType, StdStaticArg,
     StdSupportConstraint, StdSymbolKind, StdType, ToolDecl, TypeDeclKind, standard_registry,
 };
 
 use super::{
-    PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
-    PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
-    PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
-    PackageEffectTagMetadata, PackageExternalExportMetadata, PackageExternalModuleMetadata,
-    PackageFlowSignatureMetadata, PackageIdentity, PackageNamedSignatureMetadata,
-    PackagePublicMetadata, PackageRecordFieldMetadata, PackageToolSignatureMetadata,
-    PackageTypeMetadata, ResolvedDependency, ResolvedDependencySource,
+    PackageCallableGenericParamMetadata, PackageEffectActionArgKindMetadata,
+    PackageEffectActionSignatureMetadata, PackageEffectArgMetadata, PackageEffectExtensionMetadata,
+    PackageEffectMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
+    PackageEffectSummaryMetadata, PackageEffectTagMetadata, PackageExternalExportMetadata,
+    PackageExternalModuleMetadata, PackageFlowSignatureMetadata, PackageIdentity,
+    PackageNamedSignatureMetadata, PackagePublicMetadata, PackageRecordFieldMetadata,
+    PackageSpecBoundMetadata, PackageToolSignatureMetadata, PackageTypeMetadata,
+    ResolvedDependency, ResolvedDependencySource,
 };
 
 pub const BUILTIN_STD_VERSION: &str = "0.1.0";
@@ -207,6 +208,7 @@ fn sort_named_signatures(signatures: &mut [PackageNamedSignatureMetadata]) {
 fn flow_signature(path: Vec<String>, decl: &FlowDecl) -> PackageFlowSignatureMetadata {
     PackageFlowSignatureMetadata {
         path,
+        generic_params: callable_generic_params(&decl.type_params),
         param_names: Vec::new(),
         params: decl.params.iter().map(package_type_from_std_type).collect(),
         output: package_type_from_std_type(&decl.output),
@@ -218,12 +220,30 @@ fn flow_signature(path: Vec<String>, decl: &FlowDecl) -> PackageFlowSignatureMet
 fn tool_signature(path: Vec<String>, decl: &ToolDecl) -> PackageToolSignatureMetadata {
     PackageToolSignatureMetadata {
         path,
+        generic_params: Vec::new(),
         param_names: Vec::new(),
         input: decl.params.iter().map(package_type_from_std_type).collect(),
         output: package_type_from_std_type(&decl.output),
         effects: Some(effect_row_from_std(&decl.effects)),
         visibility: public_visibility(),
     }
+}
+
+fn callable_generic_params(params: &[StdGenericParam]) -> Vec<PackageCallableGenericParamMetadata> {
+    params
+        .iter()
+        .map(|param| PackageCallableGenericParamMetadata {
+            name: param.name.clone(),
+            bounds: param
+                .bounds
+                .iter()
+                .map(|bound| PackageSpecBoundMetadata {
+                    spec: bound.path.clone(),
+                    args: bound.args.iter().map(package_type_from_std_type).collect(),
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 fn action_signature(
@@ -238,9 +258,10 @@ fn action_signature(
     let selector_len = effect_args.len();
     PackageEffectActionSignatureMetadata {
         path,
+        generic_params: callable_generic_params(&decl.type_params),
         params: decl.params.iter().map(package_type_from_std_type).collect(),
         effect_args,
-        selector_param_names: vec![String::new(); selector_len],
+        selector_param_names: decl.selector_param_names.clone(),
         selector_defaults: vec![None; selector_len],
         output: package_type_from_std_type(&decl.output),
         returns_never: matches!(&decl.output, StdType::Primitive(StdPrimitiveType::Never)),

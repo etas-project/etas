@@ -58,6 +58,7 @@ edition = "2026"
             external_modules: Vec::new(),
             public_metadata: PackagePublicMetadata {
                 flows: vec![PackageFlowSignatureMetadata {
+                    generic_params: Vec::new(),
                     path: vec!["artifact".to_owned(), "decode".to_owned()],
                     param_names: vec!["value".to_owned()],
                     params: vec![PackageTypeMetadata::Trust {

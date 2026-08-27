@@ -422,6 +422,7 @@ fn flow_signature_to_metadata(
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
         path: signature.path.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
         input: signature
             .params
@@ -443,6 +444,7 @@ fn agent_signature_to_metadata(
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
         path: signature.path.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
         input: signature
             .input
@@ -464,6 +466,7 @@ fn tool_signature_to_metadata(
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
         path: signature.path.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
         input: signature
             .input
@@ -612,6 +615,7 @@ fn action_signature_to_metadata(
     validate_action_selector_metadata(signature)?;
     Ok(etas_package_metadata::ActionSignature {
         path: signature.path.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         params: signature
             .params
             .iter()
@@ -632,6 +636,24 @@ fn action_signature_to_metadata(
         returns_never: signature.returns_never,
         visibility: visibility_to_metadata(&signature.visibility)?,
     })
+}
+
+fn callable_generic_params_to_metadata(
+    params: &[crate::metadata::PackageCallableGenericParamMetadata],
+) -> Result<Vec<etas_package_metadata::GenericParam>, PackageError> {
+    params
+        .iter()
+        .map(|param| {
+            Ok(etas_package_metadata::GenericParam {
+                name: param.name.clone(),
+                bounds: param
+                    .bounds
+                    .iter()
+                    .map(spec_bound_to_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        })
+        .collect()
 }
 
 fn validate_action_selector_metadata(

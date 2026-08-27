@@ -5,11 +5,12 @@ use crate::{
     metadata::{
         PackageActionSummaryMetadata, PackageAnnotationArgMetadata, PackageAnnotationFieldMetadata,
         PackageAnnotationMetadata, PackageAnnotationValueKindMetadata,
-        PackageAnnotationValueMetadata, PackageCallableSpecSatisfactionMetadata,
-        PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
-        PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
-        PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
-        PackageEffectTagMetadata, PackageExternalExportMetadata, PackageExternalModuleMetadata,
+        PackageAnnotationValueMetadata, PackageCallableGenericParamMetadata,
+        PackageCallableSpecSatisfactionMetadata, PackageEffectActionArgKindMetadata,
+        PackageEffectActionSignatureMetadata, PackageEffectArgMetadata,
+        PackageEffectExtensionMetadata, PackageEffectMetadata, PackageEffectRefMetadata,
+        PackageEffectRowMetadata, PackageEffectSummaryMetadata, PackageEffectTagMetadata,
+        PackageExternalExportMetadata, PackageExternalModuleMetadata,
         PackageExternalModuleOwnerMetadata, PackageIdentity, PackageIndex,
         PackageLatentFlowSummaryMetadata, PackageNamedSignatureMetadata, PackagePublicMetadata,
         PackageReExportMetadata, PackageRecordFieldMetadata, PackageSpecBoundMetadata,
@@ -420,6 +421,7 @@ fn flow_signature_from_metadata(
 ) -> Result<crate::metadata::PackageFlowSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageFlowSignatureMetadata {
         path: signature.path,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
         params: signature
             .input
@@ -445,6 +447,7 @@ fn agent_signature_from_metadata(
 ) -> Result<crate::metadata::PackageAgentSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageAgentSignatureMetadata {
         path: signature.path,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
         input: signature
             .input
@@ -470,6 +473,7 @@ fn tool_signature_from_metadata(
 ) -> Result<crate::metadata::PackageToolSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageToolSignatureMetadata {
         path: signature.path,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
         input: signature
             .input
@@ -621,6 +625,7 @@ fn action_signature_from_metadata(
 ) -> Result<PackageEffectActionSignatureMetadata, PackageError> {
     let signature = PackageEffectActionSignatureMetadata {
         path: signature.path,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         params: signature
             .params
             .into_iter()
@@ -647,6 +652,24 @@ fn action_signature_from_metadata(
     };
     validate_action_selector_metadata(&signature, path)?;
     Ok(signature)
+}
+
+fn callable_generic_params_from_metadata(
+    params: Vec<etas_package_metadata::GenericParam>,
+) -> Result<Vec<PackageCallableGenericParamMetadata>, PackageError> {
+    params
+        .into_iter()
+        .map(|param| {
+            Ok(PackageCallableGenericParamMetadata {
+                name: param.name,
+                bounds: param
+                    .bounds
+                    .into_iter()
+                    .map(spec_bound_from_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            })
+        })
+        .collect()
 }
 
 fn validate_action_selector_metadata(
