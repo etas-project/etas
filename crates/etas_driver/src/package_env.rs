@@ -651,6 +651,14 @@ fn callable_generic_params_input(
         .map(
             |param| etas_frontend::ProjectExternalCallableGenericParamInput {
                 name: param.name.clone(),
+                kind: match param.kind {
+                    etas_package::metadata::PackageCallableGenericParamKindMetadata::Type => {
+                        etas_frontend::ProjectExternalCallableGenericParamKindInput::Type
+                    }
+                    etas_package::metadata::PackageCallableGenericParamKindMetadata::Effect => {
+                        etas_frontend::ProjectExternalCallableGenericParamKindInput::Effect
+                    }
+                },
                 bounds: param
                     .bounds
                     .iter()
@@ -763,6 +771,7 @@ fn dependency_effect_row_input(
             .iter()
             .map(|effect| dependency_effect_ref_input(package, packages, effect))
             .collect(),
+        tail: row.tail.clone(),
     }
 }
 
@@ -856,6 +865,7 @@ fn dependency_effect_arg_input(
 fn effect_row_input(row: &etas_package::PackageEffectRowMetadata) -> ProjectExternalEffectRowInput {
     ProjectExternalEffectRowInput {
         effects: row.effects.iter().map(effect_ref_input).collect(),
+        tail: row.tail.clone(),
     }
 }
 
@@ -1464,6 +1474,7 @@ mod tests {
                         generic_params: vec![
                             etas_package::metadata::PackageActionGenericParamMetadata {
                                 name: "resource".to_owned(),
+                                kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type,
                                 bounds: Vec::new(),
                             },
                         ],
@@ -1520,10 +1531,18 @@ mod tests {
 
     #[test]
     fn frontend_environment_preserves_generic_callable_effect_identity() {
-        let generic = etas_package::metadata::PackageCallableGenericParamMetadata {
-            name: "R".to_owned(),
-            bounds: Vec::new(),
-        };
+        let generics = vec![
+            etas_package::metadata::PackageCallableGenericParamMetadata {
+                name: "R".to_owned(),
+                kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type,
+                bounds: Vec::new(),
+            },
+            etas_package::metadata::PackageCallableGenericParamMetadata {
+                name: "E".to_owned(),
+                kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Effect,
+                bounds: Vec::new(),
+            },
+        ];
         let generic_effect = etas_package::PackageEffectRowMetadata {
             effects: vec![etas_package::PackageEffectRefMetadata {
                 path: vec!["Fs".to_owned(), "read".to_owned()],
@@ -1533,6 +1552,7 @@ mod tests {
                     },
                 }],
             }],
+            tail: Some("E".to_owned()),
         };
         let metadata = etas_package::PackageEnvironmentMetadata {
             dependencies: vec![etas_package::ResolvedDependency {
@@ -1551,7 +1571,7 @@ mod tests {
                 public_metadata: etas_package::PackagePublicMetadata {
                     flows: vec![etas_package::PackageFlowSignatureMetadata {
                         path: vec!["api".to_owned(), "read".to_owned()],
-                        generic_params: vec![generic],
+                        generic_params: generics,
                         param_names: Vec::new(),
                         params: Vec::new(),
                         output: etas_package::PackageTypeMetadata::Primitive {
@@ -1583,8 +1603,12 @@ mod tests {
             .expect("external metadata should exist");
         let flow = metadata.flows.first().expect("external flow should exist");
         assert_eq!(flow.path, ["dep", "api", "read"]);
-        assert_eq!(flow.generic_params.len(), 1);
+        assert_eq!(flow.generic_params.len(), 2);
         assert_eq!(flow.generic_params[0].name, "R");
+        assert!(matches!(
+            flow.generic_params[1].kind,
+            etas_frontend::ProjectExternalCallableGenericParamKindInput::Effect
+        ));
         let summary = metadata
             .effect_summaries
             .first()
@@ -1594,6 +1618,7 @@ mod tests {
             [ProjectExternalEffectArgInput::Type(ProjectExternalTypeInput::Var(name))]
                 if name == "R"
         ));
+        assert_eq!(summary.requested_actions.tail.as_deref(), Some("E"));
     }
 
     #[test]
@@ -1649,7 +1674,10 @@ mod tests {
         fn row(
             effects: Vec<etas_package::PackageEffectRefMetadata>,
         ) -> etas_package::PackageEffectRowMetadata {
-            etas_package::PackageEffectRowMetadata { effects }
+            etas_package::PackageEffectRowMetadata {
+                effects,
+                tail: None,
+            }
         }
 
         let metadata = etas_package::PackageEnvironmentMetadata {
