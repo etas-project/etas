@@ -3054,6 +3054,98 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>] {
 }
 
 #[test]
+fn package_metadata_replays_implicitly_inferred_effect_row_across_dependency_boundary() {
+    let dependency = package_fixture(
+        "pkg-effect-row-polymorphism-dep",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "effect-row-library"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+"#,
+            ),
+            (
+                "src/lib/callbacks.es",
+                r#"module lib.callbacks;
+
+public flow accepts_row<effect E>(callback: () -> unit ![E]) -> unit ![E] {
+    callback();
+    return;
+}
+"#,
+            ),
+        ],
+    );
+    let root = package_fixture(
+        "pkg-effect-row-polymorphism-root",
+        &[
+            (
+                "etas.toml",
+                &format!(
+                    r#"[package]
+name = "effect-row-consumer"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[[bin]]
+name = "main"
+module = "app.main"
+flow = "main"
+
+[dependencies]
+callbacks = {{ package = "effect-row-library", version = "0.1", import = "lib", path = "{}" }}
+"#,
+                    dependency.display()
+                ),
+            ),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+
+import lib.callbacks.accepts_row;
+
+flow main() -> unit ![Console.stdout_write] {
+    accepts_row(() => {
+        perform Console.stdout_write("test");
+        return;
+    });
+    return;
+}
+"#,
+            ),
+        ],
+    );
+
+    let (code, stdout, stderr) = run(["etas", "pkg", "update", path(&root)]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("updated"), "{stdout}");
+
+    std::fs::write(
+        dependency.join("src/lib/callbacks.es"),
+        "this source must not be re-read by metadata-only consumer checking",
+    )
+    .expect("invalidate dependency source after metadata materialization");
+
+    let (code, stdout, stderr) = run(["etas", "check", path(&root)]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("checked 1 file"), "{stdout}");
+
+    let (code, stdout, stderr) = run(["etas", "effects", path(&root)]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("Console.stdout_write"), "{stdout}");
+    assert!(!stdout.contains("open:"), "{stdout}");
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
 fn pkg_pack_writes_etaspkg_from_existing_metadata() {
     let root = package_fixture(
         "pkg-pack",
@@ -4535,28 +4627,19 @@ fn full_phase1_agent_runtime_uses_trace_spec_with_http_provider() {
         serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-1.json")).unwrap())
             .unwrap();
     assert!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["policy"]["active_trace_specs"]
-            .as_array()
-            .is_some_and(|policies| policies.iter().any(|policy| policy == "RuntimeGate")),
-        "checkpoint should persist source active trace specs: {checkpoint_json}"
-    );
-    assert_eq!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["policy"]["boundary_policy_ref"]
-            ["value"],
-        "full-phase1-runtime-http",
-        "checkpoint should persist boundary policy ref: {checkpoint_json}"
+        checkpoint_json["checkpoint"].get("host_context").is_none(),
+        "checkpoint must not persist invocation host authority: {checkpoint_json}"
     );
     assert!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["grants"]
-            .as_array()
-            .is_some_and(|grants| grants.iter().any(|grant| {
-                grant["pattern"]["effect"] == "Memory"
-                    && grant["pattern"]["action"] == "write"
-                    && grant["pattern"]["args"]
-                        .as_array()
-                        .is_some_and(|args| args.iter().any(|arg| arg["kind"] == "any"))
-            })),
-        "checkpoint should persist approval grants with argument precision: {checkpoint_json}"
+        checkpoint_json["checkpoint"]["host_state"]
+            .get("authority")
+            .is_none(),
+        "durable host state must not persist policy, sandbox, or grants: {checkpoint_json}"
+    );
+    assert!(
+        checkpoint_json["checkpoint"]["host_state"]["trace"].is_object()
+            && checkpoint_json["checkpoint"]["host_state"]["budget"].is_object(),
+        "checkpoint should persist only durable trace and consumed budget host state: {checkpoint_json}"
     );
 }
 
@@ -5433,30 +5516,19 @@ fn multi_agent_system_runtime_variants_http_policy_approval_preserves_grants() {
         serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-4.json")).unwrap())
             .unwrap();
     assert!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["policy"]["active_trace_specs"]
-            .as_array()
-            .is_some_and(|policies| policies
-                .iter()
-                .any(|policy| policy == "MultiAgentRuntimeGate")),
-        "multi-agent checkpoint should persist source active trace specs: {checkpoint_json}"
-    );
-    assert_eq!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["policy"]["boundary_policy_ref"]
-            ["value"],
-        "multi-agent-runtime-http-policy",
-        "multi-agent checkpoint should persist boundary policy ref: {checkpoint_json}"
+        checkpoint_json["checkpoint"].get("host_context").is_none(),
+        "multi-agent checkpoint must not persist invocation host authority: {checkpoint_json}"
     );
     assert!(
-        checkpoint_json["checkpoint"]["host_context"]["authority"]["grants"]
-            .as_array()
-            .is_some_and(|grants| grants.iter().any(|grant| {
-                grant["pattern"]["effect"] == "Memory"
-                    && grant["pattern"]["action"] == "write"
-                    && grant["pattern"]["args"]
-                        .as_array()
-                        .is_some_and(|args| args.iter().any(|arg| arg["kind"] == "any"))
-            })),
-        "multi-agent checkpoint should persist approval grants with argument precision: {checkpoint_json}"
+        checkpoint_json["checkpoint"]["host_state"]
+            .get("authority")
+            .is_none(),
+        "multi-agent durable host state must not persist policy, sandbox, or grants: {checkpoint_json}"
+    );
+    assert!(
+        checkpoint_json["checkpoint"]["host_state"]["trace"].is_object()
+            && checkpoint_json["checkpoint"]["host_state"]["budget"].is_object(),
+        "multi-agent checkpoint should persist only durable trace and consumed budget host state: {checkpoint_json}"
     );
 }
 
