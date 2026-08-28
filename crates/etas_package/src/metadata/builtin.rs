@@ -6,14 +6,15 @@ use etas_std::{
 };
 
 use super::{
-    PackageCallableGenericParamMetadata, PackageEffectActionArgKindMetadata,
-    PackageEffectActionSignatureMetadata, PackageEffectArgMetadata, PackageEffectExtensionMetadata,
-    PackageEffectMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
-    PackageEffectSummaryMetadata, PackageEffectTagMetadata, PackageExternalExportMetadata,
-    PackageExternalModuleMetadata, PackageFlowSignatureMetadata, PackageIdentity,
-    PackageNamedSignatureMetadata, PackagePublicMetadata, PackageRecordFieldMetadata,
-    PackageSpecBoundMetadata, PackageToolSignatureMetadata, PackageTypeMetadata,
-    ResolvedDependency, ResolvedDependencySource,
+    PackageCallableGenericParamKindMetadata, PackageCallableGenericParamMetadata,
+    PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
+    PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
+    PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
+    PackageEffectTagMetadata, PackageExternalExportMetadata, PackageExternalModuleMetadata,
+    PackageFlowSignatureMetadata, PackageIdentity, PackageNamedSignatureMetadata,
+    PackagePublicMetadata, PackageRecordFieldMetadata, PackageSpecBoundMetadata,
+    PackageToolSignatureMetadata, PackageTypeMetadata, ResolvedDependency,
+    ResolvedDependencySource,
 };
 
 pub const BUILTIN_STD_VERSION: &str = "0.1.0";
@@ -234,6 +235,7 @@ fn callable_generic_params(params: &[StdGenericParam]) -> Vec<PackageCallableGen
         .iter()
         .map(|param| PackageCallableGenericParamMetadata {
             name: param.name.clone(),
+            kind: PackageCallableGenericParamKindMetadata::Type,
             bounds: param
                 .bounds
                 .iter()
@@ -301,6 +303,7 @@ fn flow_effect_summary(path: Vec<String>, decl: &FlowDecl) -> PackageEffectSumma
 fn effect_row_from_std(effects: &[StdEffectRef]) -> PackageEffectRowMetadata {
     PackageEffectRowMetadata {
         effects: effects.iter().map(effect_ref_from_std).collect(),
+        tail: None,
     }
 }
 

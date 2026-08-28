@@ -80,6 +80,7 @@ edition = "2026"
                             path: vec!["Network".to_owned()],
                             args: Vec::new(),
                         }],
+                        tail: None,
                     },
                     requested_actions: PackageEffectRowMetadata::default(),
                     handled_requested_actions: PackageEffectRowMetadata::default(),
@@ -89,12 +90,14 @@ edition = "2026"
                                 path: vec!["Network".to_owned()],
                                 args: Vec::new(),
                             }],
+                            tail: None,
                         },
                         inferred_effects: PackageEffectRowMetadata {
                             effects: vec![PackageEffectRefMetadata {
                                 path: vec!["Network".to_owned()],
                                 args: Vec::new(),
                             }],
+                            tail: None,
                         },
                     }],
                 }],

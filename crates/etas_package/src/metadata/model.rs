@@ -354,8 +354,16 @@ pub struct PackageEffectActionSignatureMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageCallableGenericParamMetadata {
     pub name: String,
+    pub kind: PackageCallableGenericParamKindMetadata,
     #[serde(default)]
     pub bounds: Vec<PackageSpecBoundMetadata>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PackageCallableGenericParamKindMetadata {
+    Type,
+    Effect,
 }
 
 pub type PackageActionGenericParamMetadata = PackageCallableGenericParamMetadata;
@@ -373,6 +381,8 @@ pub enum PackageEffectActionArgKindMetadata {
 pub struct PackageEffectRowMetadata {
     #[serde(default)]
     pub effects: Vec<PackageEffectRefMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tail: Option<String>,
 }
 
 impl PackageEffectRowMetadata {

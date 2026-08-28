@@ -5,12 +5,12 @@ use crate::{
     metadata::{
         PackageActionSummaryMetadata, PackageAnnotationArgMetadata, PackageAnnotationFieldMetadata,
         PackageAnnotationMetadata, PackageAnnotationValueKindMetadata,
-        PackageAnnotationValueMetadata, PackageCallableGenericParamMetadata,
-        PackageCallableSpecSatisfactionMetadata, PackageEffectActionArgKindMetadata,
-        PackageEffectActionSignatureMetadata, PackageEffectArgMetadata,
-        PackageEffectExtensionMetadata, PackageEffectMetadata, PackageEffectRefMetadata,
-        PackageEffectRowMetadata, PackageEffectSummaryMetadata, PackageEffectTagMetadata,
-        PackageExternalExportMetadata, PackageExternalModuleMetadata,
+        PackageAnnotationValueMetadata, PackageCallableGenericParamKindMetadata,
+        PackageCallableGenericParamMetadata, PackageCallableSpecSatisfactionMetadata,
+        PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
+        PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
+        PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
+        PackageEffectTagMetadata, PackageExternalExportMetadata, PackageExternalModuleMetadata,
         PackageExternalModuleOwnerMetadata, PackageIdentity, PackageIndex,
         PackageLatentFlowSummaryMetadata, PackageNamedSignatureMetadata, PackagePublicMetadata,
         PackageReExportMetadata, PackageRecordFieldMetadata, PackageSpecBoundMetadata,
@@ -662,6 +662,14 @@ fn callable_generic_params_from_metadata(
         .map(|param| {
             Ok(PackageCallableGenericParamMetadata {
                 name: param.name,
+                kind: match param.kind {
+                    etas_package_metadata::GenericParamKind::Type => {
+                        PackageCallableGenericParamKindMetadata::Type
+                    }
+                    etas_package_metadata::GenericParamKind::Effect => {
+                        PackageCallableGenericParamKindMetadata::Effect
+                    }
+                },
                 bounds: param
                     .bounds
                     .into_iter()
@@ -961,6 +969,7 @@ fn effect_row_from_metadata(
             .into_iter()
             .map(effect_ref_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+        tail: row.tail,
     })
 }
 

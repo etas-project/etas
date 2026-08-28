@@ -3,11 +3,12 @@ use crate::{
     metadata::{
         PackageActionSummaryMetadata, PackageAnnotationArgMetadata, PackageAnnotationFieldMetadata,
         PackageAnnotationMetadata, PackageAnnotationValueKindMetadata,
-        PackageAnnotationValueMetadata, PackageCallableSpecSatisfactionMetadata,
-        PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
-        PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
-        PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
-        PackageEffectTagMetadata, PackageExternalExportMetadata, PackageExternalModuleMetadata,
+        PackageAnnotationValueMetadata, PackageCallableGenericParamKindMetadata,
+        PackageCallableSpecSatisfactionMetadata, PackageEffectActionArgKindMetadata,
+        PackageEffectActionSignatureMetadata, PackageEffectArgMetadata,
+        PackageEffectExtensionMetadata, PackageEffectMetadata, PackageEffectRefMetadata,
+        PackageEffectRowMetadata, PackageEffectSummaryMetadata, PackageEffectTagMetadata,
+        PackageExternalExportMetadata, PackageExternalModuleMetadata,
         PackageExternalModuleOwnerMetadata, PackageIdentity, PackageLatentFlowSummaryMetadata,
         PackageNamedSignatureMetadata, PackagePublicMetadata, PackageReExportMetadata,
         PackageSpecBoundMetadata, PackageSpecImplMetadata, PackageSpecKindMetadata,
@@ -646,6 +647,14 @@ fn callable_generic_params_to_metadata(
         .map(|param| {
             Ok(etas_package_metadata::GenericParam {
                 name: param.name.clone(),
+                kind: match param.kind {
+                    PackageCallableGenericParamKindMetadata::Type => {
+                        etas_package_metadata::GenericParamKind::Type
+                    }
+                    PackageCallableGenericParamKindMetadata::Effect => {
+                        etas_package_metadata::GenericParamKind::Effect
+                    }
+                },
                 bounds: param
                     .bounds
                     .iter()
@@ -940,6 +949,7 @@ fn effect_row_to_metadata(
             .iter()
             .map(effect_ref_to_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+        tail: row.tail.clone(),
     })
 }
 
