@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use etas_frontend::{
     ExternalModuleId, ExternalPackageId, ExternalSymbolId, ModulePath, ProjectEnvironmentInput,
     ProjectExternalActionArgKindInput, ProjectExternalActionSignatureInput,
-    ProjectExternalActionSummaryInput, ProjectExternalAgentSignatureInput,
+    ProjectExternalActionSummaryInput, ProjectExternalActionTraceEventSourceInput,
+    ProjectExternalActionTraceInput, ProjectExternalAgentSignatureInput,
     ProjectExternalCallableSpecSatisfactionInput, ProjectExternalEffectArgInput,
     ProjectExternalEffectRefInput, ProjectExternalEffectRowInput,
     ProjectExternalEffectSummaryInput, ProjectExternalExportInput,
@@ -505,6 +506,11 @@ fn external_public_metadata_input(
                         ),
                     })
                     .collect(),
+                action_trace: dependency_action_trace_input(
+                    package,
+                    packages,
+                    &summary.action_trace,
+                ),
             })
             .collect(),
         action_summaries: metadata
@@ -772,6 +778,75 @@ fn dependency_effect_row_input(
             .map(|effect| dependency_effect_ref_input(package, packages, effect))
             .collect(),
         tail: row.tail.clone(),
+    }
+}
+
+fn dependency_action_trace_input(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    trace: &etas_package::PackageActionTraceMetadata,
+) -> ProjectExternalActionTraceInput {
+    match trace {
+        etas_package::PackageActionTraceMetadata::Empty => ProjectExternalActionTraceInput::Empty,
+        etas_package::PackageActionTraceMetadata::Event { action, source } => {
+            ProjectExternalActionTraceInput::Event {
+                action: dependency_effect_ref_input(package, packages, action),
+                source: match source {
+                    etas_package::PackageActionTraceEventSourceMetadata::Perform => {
+                        ProjectExternalActionTraceEventSourceInput::Perform
+                    }
+                    etas_package::PackageActionTraceEventSourceMetadata::StdIntrinsic => {
+                        ProjectExternalActionTraceEventSourceInput::StdIntrinsic
+                    }
+                    etas_package::PackageActionTraceEventSourceMetadata::AgentCall => {
+                        ProjectExternalActionTraceEventSourceInput::AgentCall
+                    }
+                    etas_package::PackageActionTraceEventSourceMetadata::ExternalMetadata => {
+                        ProjectExternalActionTraceEventSourceInput::ExternalMetadata
+                    }
+                    etas_package::PackageActionTraceEventSourceMetadata::Transfer => {
+                        ProjectExternalActionTraceEventSourceInput::Transfer
+                    }
+                    etas_package::PackageActionTraceEventSourceMetadata::Unknown => {
+                        ProjectExternalActionTraceEventSourceInput::Unknown
+                    }
+                },
+            }
+        }
+        etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
+            ProjectExternalActionTraceInput::ParameterCall {
+                parameter: parameter.clone(),
+            }
+        }
+        etas_package::PackageActionTraceMetadata::Seq { children } => {
+            ProjectExternalActionTraceInput::Seq(
+                children
+                    .iter()
+                    .map(|child| dependency_action_trace_input(package, packages, child))
+                    .collect(),
+            )
+        }
+        etas_package::PackageActionTraceMetadata::Choice { children } => {
+            ProjectExternalActionTraceInput::Choice(
+                children
+                    .iter()
+                    .map(|child| dependency_action_trace_input(package, packages, child))
+                    .collect(),
+            )
+        }
+        etas_package::PackageActionTraceMetadata::Repeat { child } => {
+            ProjectExternalActionTraceInput::Repeat(Box::new(dependency_action_trace_input(
+                package, packages, child,
+            )))
+        }
+        etas_package::PackageActionTraceMetadata::UnknownOrder { actions } => {
+            ProjectExternalActionTraceInput::UnknownOrder(
+                actions
+                    .iter()
+                    .map(|action| dependency_effect_ref_input(package, packages, action))
+                    .collect(),
+            )
+        }
     }
 }
 
@@ -1586,6 +1661,7 @@ mod tests {
                         requested_actions: generic_effect,
                         handled_requested_actions: Default::default(),
                         latent_flows: Vec::new(),
+                        action_trace: Default::default(),
                     }],
                     ..Default::default()
                 },
@@ -1773,6 +1849,7 @@ mod tests {
                                 }],
                             )]),
                         }],
+                        action_trace: Default::default(),
                     }],
                     ..Default::default()
                 },
