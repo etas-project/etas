@@ -3,7 +3,8 @@ use std::{path::Path, path::PathBuf};
 use crate::{
     BinTarget, PackageError,
     metadata::{
-        PackageActionSummaryMetadata, PackageAnnotationArgMetadata, PackageAnnotationFieldMetadata,
+        PackageActionSummaryMetadata, PackageActionTraceEventSourceMetadata,
+        PackageActionTraceMetadata, PackageAnnotationArgMetadata, PackageAnnotationFieldMetadata,
         PackageAnnotationMetadata, PackageAnnotationValueKindMetadata,
         PackageAnnotationValueMetadata, PackageCallableGenericParamKindMetadata,
         PackageCallableGenericParamMetadata, PackageCallableSpecSatisfactionMetadata,
@@ -1019,11 +1020,71 @@ fn effect_summary_from_metadata(
         public_effects: effect_row_from_metadata(summary.public_effects)?,
         requested_actions: effect_row_from_metadata(summary.requested_actions)?,
         handled_requested_actions: effect_row_from_metadata(summary.handled_requested_actions)?,
+        action_trace: action_trace_from_metadata(summary.action_trace)?,
         latent_flows: summary
             .latent_flows
             .into_iter()
             .map(latent_flow_summary_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+    })
+}
+
+fn action_trace_from_metadata(
+    trace: etas_package_metadata::ActionTrace,
+) -> Result<PackageActionTraceMetadata, PackageError> {
+    Ok(match trace {
+        etas_package_metadata::ActionTrace::Empty => PackageActionTraceMetadata::Empty,
+        etas_package_metadata::ActionTrace::Event(event) => PackageActionTraceMetadata::Event {
+            action: effect_ref_from_metadata(event.action)?,
+            source: match event.source {
+                etas_package_metadata::ActionTraceEventSource::Perform => {
+                    PackageActionTraceEventSourceMetadata::Perform
+                }
+                etas_package_metadata::ActionTraceEventSource::StdIntrinsic => {
+                    PackageActionTraceEventSourceMetadata::StdIntrinsic
+                }
+                etas_package_metadata::ActionTraceEventSource::AgentCall => {
+                    PackageActionTraceEventSourceMetadata::AgentCall
+                }
+                etas_package_metadata::ActionTraceEventSource::ExternalMetadata => {
+                    PackageActionTraceEventSourceMetadata::ExternalMetadata
+                }
+                etas_package_metadata::ActionTraceEventSource::Transfer => {
+                    PackageActionTraceEventSourceMetadata::Transfer
+                }
+                etas_package_metadata::ActionTraceEventSource::Unknown => {
+                    PackageActionTraceEventSourceMetadata::Unknown
+                }
+            },
+        },
+        etas_package_metadata::ActionTrace::ParameterCall { parameter } => {
+            PackageActionTraceMetadata::ParameterCall { parameter }
+        }
+        etas_package_metadata::ActionTrace::Seq(children) => PackageActionTraceMetadata::Seq {
+            children: children
+                .into_iter()
+                .map(action_trace_from_metadata)
+                .collect::<Result<Vec<_>, _>>()?,
+        },
+        etas_package_metadata::ActionTrace::Choice(children) => {
+            PackageActionTraceMetadata::Choice {
+                children: children
+                    .into_iter()
+                    .map(action_trace_from_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            }
+        }
+        etas_package_metadata::ActionTrace::Repeat(child) => PackageActionTraceMetadata::Repeat {
+            child: Box::new(action_trace_from_metadata(*child)?),
+        },
+        etas_package_metadata::ActionTrace::UnknownOrder(actions) => {
+            PackageActionTraceMetadata::UnknownOrder {
+                actions: actions
+                    .into_iter()
+                    .map(effect_ref_from_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            }
+        }
     })
 }
 

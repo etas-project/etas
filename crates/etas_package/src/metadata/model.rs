@@ -521,6 +521,45 @@ pub struct PackageEffectSummaryMetadata {
     pub handled_requested_actions: PackageEffectRowMetadata,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub latent_flows: Vec<PackageLatentFlowSummaryMetadata>,
+    pub action_trace: PackageActionTraceMetadata,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PackageActionTraceMetadata {
+    #[default]
+    Empty,
+    Event {
+        action: PackageEffectRefMetadata,
+        source: PackageActionTraceEventSourceMetadata,
+    },
+    ParameterCall {
+        parameter: String,
+    },
+    Seq {
+        children: Vec<PackageActionTraceMetadata>,
+    },
+    Choice {
+        children: Vec<PackageActionTraceMetadata>,
+    },
+    Repeat {
+        child: Box<PackageActionTraceMetadata>,
+    },
+    UnknownOrder {
+        actions: Vec<PackageEffectRefMetadata>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PackageActionTraceEventSourceMetadata {
+    Perform,
+    StdIntrinsic,
+    AgentCall,
+    ExternalMetadata,
+    Transfer,
+    #[default]
+    Unknown,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

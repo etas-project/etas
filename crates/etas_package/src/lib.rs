@@ -19,7 +19,8 @@ pub use manifest::{
     discover_manifest, read_manifest,
 };
 pub use metadata::{
-    PackageActionSummaryMetadata, PackageAgentSignatureMetadata,
+    PackageActionSummaryMetadata, PackageActionTraceEventSourceMetadata,
+    PackageActionTraceMetadata, PackageAgentSignatureMetadata,
     PackageCallableSpecSatisfactionMetadata, PackageEffectActionArgKindMetadata,
     PackageEffectActionSignatureMetadata, PackageEffectArgMetadata, PackageEffectExtensionMetadata,
     PackageEffectMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
@@ -50,3 +51,5 @@ pub use resolver::{
     PreparePackageOptions, PreparedPackage, lock_package, materialize_package, prepare_package,
 };
 pub use source::{GitHubSourceConfig, PackageSourceConfig, RegistrySourceConfig};
+#[cfg(feature = "test-support")]
+pub use vendor::dependency_lock_checksum as dependency_lock_checksum_for_test;

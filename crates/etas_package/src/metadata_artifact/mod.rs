@@ -25,8 +25,8 @@ mod tests {
     };
 
     use crate::metadata::{
-        PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
-        PackageFlowSignatureMetadata, PackageIdentity, PackageIndex,
+        PackageActionTraceMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
+        PackageEffectSummaryMetadata, PackageFlowSignatureMetadata, PackageIdentity, PackageIndex,
         PackageLatentFlowSummaryMetadata, PackagePublicMetadata, PackageTypeMetadata,
     };
 
@@ -100,6 +100,7 @@ edition = "2026"
                             tail: None,
                         },
                     }],
+                    action_trace: PackageActionTraceMetadata::Empty,
                 }],
                 ..Default::default()
             },

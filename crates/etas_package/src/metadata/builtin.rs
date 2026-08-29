@@ -6,6 +6,7 @@ use etas_std::{
 };
 
 use super::{
+    PackageActionTraceEventSourceMetadata, PackageActionTraceMetadata,
     PackageCallableGenericParamKindMetadata, PackageCallableGenericParamMetadata,
     PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
     PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
@@ -297,6 +298,16 @@ fn flow_effect_summary(path: Vec<String>, decl: &FlowDecl) -> PackageEffectSumma
         requested_actions: effect_row_from_std(&decl.requested_actions),
         handled_requested_actions: effect_row_from_std(&decl.requested_actions),
         latent_flows: Vec::new(),
+        action_trace: PackageActionTraceMetadata::Seq {
+            children: decl
+                .requested_actions
+                .iter()
+                .map(|action| PackageActionTraceMetadata::Event {
+                    action: effect_ref_from_std(action),
+                    source: PackageActionTraceEventSourceMetadata::StdIntrinsic,
+                })
+                .collect(),
+        },
     }
 }
 
