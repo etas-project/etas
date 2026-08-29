@@ -1476,6 +1476,139 @@ public flow main(args: Array<string>) -> i32 {
 }
 
 #[test]
+fn check_rejects_malformed_binary_dependency_metadata_at_import_span() {
+    let dependency = package_fixture(
+        "malformed-metadata-dep",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "malformed-metadata-dep"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+"#,
+            ),
+            (
+                "src/dep/api.es",
+                r#"module dep.api;
+
+public flow bad(value: i32) -> unit {
+    return;
+}
+"#,
+            ),
+            (
+                ".etas/package-index.json",
+                r#"{
+  "version": 1,
+  "package": {
+    "name": "malformed-metadata-dep",
+    "version": "0.1.0",
+    "edition": "2026"
+  },
+  "public_metadata": {
+    "modules": [
+      {
+        "id": 1,
+        "path": ["dep", "api"],
+        "exports": [
+          { "id": 1, "name": "bad", "visibility": "public" }
+        ]
+      }
+    ],
+    "flows": [
+      {
+        "path": ["dep", "api", "bad"],
+        "generic_params": [],
+        "param_names": ["value"],
+        "params": [{ "kind": "var", "name": "T" }],
+        "output": { "kind": "primitive", "name": "unit" },
+        "visibility": "public"
+      }
+    ]
+  }
+}"#,
+            ),
+        ],
+    );
+    seal_package_metadata(&dependency);
+    let root = package_fixture(
+        "malformed-metadata-root",
+        &[
+            (
+                "etas.toml",
+                &format!(
+                    r#"[package]
+name = "malformed-metadata-root"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[[bin]]
+name = "main"
+module = "app.main"
+flow = "main"
+
+[dependencies]
+dep = {{ package = "malformed-metadata-dep", version = "0.1", import = "dep", path = "{}" }}
+"#,
+                    dependency.display()
+                ),
+            ),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+
+import dep.api.{bad};
+
+flow main() -> unit {
+    bad(1);
+    return;
+}
+"#,
+            ),
+        ],
+    );
+
+    let (code, _stdout, stderr) = run(["etas", "pkg", "update", path(&root)]);
+    assert_eq!(code, 0, "{stderr}");
+    let index_path = root.join(".etas/package-index.json");
+    let mut index = serde_json::from_str::<etas_package::PackageIndex>(
+        &fs::read_to_string(&index_path).unwrap(),
+    )
+    .unwrap();
+    index.dependencies[0].public_metadata.flows[0]
+        .generic_params
+        .clear();
+    index.dependencies[0].public_metadata.flows[0].params =
+        vec![etas_package::PackageTypeMetadata::Var {
+            name: "T".to_owned(),
+        }];
+    let dependency_checksum =
+        etas_package::dependency_lock_checksum_for_test(&index.dependencies[0]);
+    fs::write(&index_path, serde_json::to_vec_pretty(&index).unwrap()).unwrap();
+    seal_package_metadata(&root);
+    let mut lockfile = etas_package::lockfile::read_lockfile(&root)
+        .unwrap()
+        .expect("lockfile should exist after package update");
+    lockfile.packages[0].checksum = dependency_checksum;
+    etas_package::lockfile::write_lockfile(&root, &lockfile).unwrap();
+    let (code, _stdout, stderr) = run(["etas", "check", path(&root)]);
+    assert_eq!(code, 1, "{stderr}");
+    assert!(stderr.contains("type::IncompleteTypeFacts"), "{stderr}");
+    assert!(
+        stderr.contains("type variable `T` is not declared by the callable"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("src/app/main.es:3"), "{stderr}");
+}
+
+#[test]
 fn run_loads_only_entry_reachable_dependency_runtime_source() {
     let dependency = package_fixture(
         "runtime-reachable-dep",
@@ -1558,7 +1691,8 @@ public flow code() -> i32 {
         "public_effects": [],
         "requested_actions": [],
         "handled_requested_actions": [],
-        "latent_flows": []
+        "latent_flows": [],
+        "action_trace": { "kind": "empty" }
       }
     ]
   }
@@ -3073,7 +3207,8 @@ root = "src"
                 "src/lib/callbacks.es",
                 r#"module lib.callbacks;
 
-public flow accepts_row<effect E>(callback: () -> unit ![E]) -> unit ![E] {
+public flow twice<effect E>(callback: () -> unit ![E]) -> unit ![E] {
+    callback();
     callback();
     return;
 }
@@ -3110,10 +3245,10 @@ callbacks = {{ package = "effect-row-library", version = "0.1", import = "lib", 
                 "src/app/main.es",
                 r#"module app.main;
 
-import lib.callbacks.accepts_row;
+import lib.callbacks.twice;
 
 flow main() -> unit ![Console.stdout_write] {
-    accepts_row(() => {
+    twice(() => {
         perform Console.stdout_write("test");
         return;
     });
@@ -3127,6 +3262,21 @@ flow main() -> unit ![Console.stdout_write] {
     let (code, stdout, stderr) = run(["etas", "pkg", "update", path(&root)]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("updated"), "{stdout}");
+
+    let dependency_metadata = etas_package::read_package_metadata_artifact(&dependency)
+        .unwrap()
+        .expect("dependency metadata artifact should decode");
+    let twice_summary = dependency_metadata
+        .public_metadata
+        .effect_summaries
+        .iter()
+        .find(|summary| summary.item == ["lib", "callbacks", "twice"])
+        .expect("twice effect summary should be published");
+    assert_eq!(
+        package_action_trace_parameter_calls(&twice_summary.action_trace, "callback"),
+        2,
+        "published generic trace must preserve both callback call sites"
+    );
 
     std::fs::write(
         dependency.join("src/lib/callbacks.es"),
@@ -7258,6 +7408,28 @@ fn max_profile_counter(report: &serde_json::Value, name: &str) -> Option<u64> {
 
 fn profile_contains(path: &Path, needle: &str) -> bool {
     fs::read_to_string(path).unwrap().contains(needle)
+}
+
+fn package_action_trace_parameter_calls(
+    trace: &etas_package::PackageActionTraceMetadata,
+    expected: &str,
+) -> usize {
+    match trace {
+        etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
+            usize::from(parameter == expected)
+        }
+        etas_package::PackageActionTraceMetadata::Seq { children }
+        | etas_package::PackageActionTraceMetadata::Choice { children } => children
+            .iter()
+            .map(|child| package_action_trace_parameter_calls(child, expected))
+            .sum(),
+        etas_package::PackageActionTraceMetadata::Repeat { child } => {
+            package_action_trace_parameter_calls(child, expected)
+        }
+        etas_package::PackageActionTraceMetadata::Empty
+        | etas_package::PackageActionTraceMetadata::Event { .. }
+        | etas_package::PackageActionTraceMetadata::UnknownOrder { .. } => 0,
+    }
 }
 
 fn package_fixture(name: &str, files: &[(&str, &str)]) -> PathBuf {
