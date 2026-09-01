@@ -3212,6 +3212,25 @@ public flow twice<effect E>(callback: () -> unit ![E]) -> unit ![E] {
     callback();
     return;
 }
+
+public flow both<effect E>(
+    first: () -> unit ![E],
+    second: () -> unit ![E],
+) -> unit ![E] {
+    first();
+    second();
+    return;
+}
+
+public flow repeat_once<effect E>(
+    ready: bool,
+    callback: () -> unit ![E],
+) -> unit ![E] {
+    while ready limit Iterations(1) {
+        callback();
+    }
+    return;
+}
 "#,
             ),
         ],
@@ -3245,11 +3264,19 @@ callbacks = {{ package = "effect-row-library", version = "0.1", import = "lib", 
                 "src/app/main.es",
                 r#"module app.main;
 
-import lib.callbacks.twice;
+import std.io.println;
+import lib.callbacks.{both, repeat_once, twice};
 
-flow main() -> unit ![Console.stdout_write] {
+flow main() -> unit ![Console.stdout_write, Console.stderr_write] {
     twice(() => {
-        perform Console.stdout_write("test");
+        perform Console.stderr_write("twice");
+        return;
+    });
+    both(
+        () => { println("handled")?; return; },
+        () => { return; },
+    );
+    repeat_once(false, () => {
         return;
     });
     return;
@@ -3277,6 +3304,17 @@ flow main() -> unit ![Console.stdout_write] {
         2,
         "published generic trace must preserve both callback call sites"
     );
+    let repeat_summary = dependency_metadata
+        .public_metadata
+        .effect_summaries
+        .iter()
+        .find(|summary| summary.item == ["lib", "callbacks", "repeat_once"])
+        .expect("repeat_once effect summary should be published");
+    assert_eq!(
+        package_action_trace_parameter_calls(&repeat_summary.action_trace, "callback"),
+        1,
+        "widened generic trace must preserve its callback placeholder"
+    );
 
     std::fs::write(
         dependency.join("src/lib/callbacks.es"),
@@ -3290,7 +3328,14 @@ flow main() -> unit ![Console.stdout_write] {
 
     let (code, stdout, stderr) = run(["etas", "effects", path(&root)]);
     assert_eq!(code, 0, "{stderr}");
-    assert!(stdout.contains("Console.stdout_write"), "{stdout}");
+    assert!(
+        stdout.contains("Console.stdout_write"),
+        "the metadata-replayed `both` call must merge the handled callback's requested action: {stdout}"
+    );
+    assert!(
+        stdout.contains("Console.stderr_write"),
+        "the metadata-replayed `twice` call must merge its callback's requested action: {stdout}"
+    );
     assert!(!stdout.contains("open:"), "{stdout}");
     assert!(stderr.is_empty(), "{stderr}");
 }
@@ -7426,6 +7471,12 @@ fn package_action_trace_parameter_calls(
         etas_package::PackageActionTraceMetadata::Repeat { child } => {
             package_action_trace_parameter_calls(child, expected)
         }
+        etas_package::PackageActionTraceMetadata::Widened {
+            parameter_calls, ..
+        } => parameter_calls
+            .iter()
+            .filter(|parameter| parameter.as_str() == expected)
+            .count(),
         etas_package::PackageActionTraceMetadata::Empty
         | etas_package::PackageActionTraceMetadata::Event { .. }
         | etas_package::PackageActionTraceMetadata::UnknownOrder { .. } => 0,
