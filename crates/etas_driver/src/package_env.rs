@@ -847,6 +847,16 @@ fn dependency_action_trace_input(
                     .collect(),
             )
         }
+        etas_package::PackageActionTraceMetadata::Widened {
+            actions,
+            parameter_calls,
+        } => ProjectExternalActionTraceInput::Widened {
+            actions: actions
+                .iter()
+                .map(|action| dependency_effect_ref_input(package, packages, action))
+                .collect(),
+            parameter_calls: parameter_calls.clone(),
+        },
     }
 }
 
