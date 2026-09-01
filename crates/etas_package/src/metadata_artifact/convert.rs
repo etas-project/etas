@@ -1085,6 +1085,16 @@ fn action_trace_from_metadata(
                     .collect::<Result<Vec<_>, _>>()?,
             }
         }
+        etas_package_metadata::ActionTrace::Widened {
+            actions,
+            parameter_calls,
+        } => PackageActionTraceMetadata::Widened {
+            actions: actions
+                .into_iter()
+                .map(effect_ref_from_metadata)
+                .collect::<Result<Vec<_>, _>>()?,
+            parameter_calls,
+        },
     })
 }
 

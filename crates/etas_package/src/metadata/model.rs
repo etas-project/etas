@@ -548,6 +548,10 @@ pub enum PackageActionTraceMetadata {
     UnknownOrder {
         actions: Vec<PackageEffectRefMetadata>,
     },
+    Widened {
+        actions: Vec<PackageEffectRefMetadata>,
+        parameter_calls: Vec<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
