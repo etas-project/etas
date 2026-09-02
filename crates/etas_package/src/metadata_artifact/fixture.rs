@@ -60,9 +60,7 @@ fn encode_artifact(
 
 fn build_sections(index: &PackageIndex) -> Result<Vec<EncodedMetadataSection>, PackageError> {
     let metadata = package_index_to_metadata(index)?;
-    Ok(etas_package_metadata::package_metadata_to_sections(
-        &metadata,
-    ))
+    etas_package_metadata::package_metadata_to_sections(&metadata).map_err(package_error)
 }
 
 #[cfg(any(test, feature = "test-support"))]
