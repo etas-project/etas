@@ -234,6 +234,8 @@ pub struct RuntimeModelProfile {
     #[serde(default)]
     pub allow_private: Option<bool>,
     #[serde(default)]
+    pub enable_thinking: Option<bool>,
+    #[serde(default)]
     pub retry: Option<RuntimeRetryProfile>,
 }
 
@@ -736,6 +738,7 @@ model = "Qwen3.5-0.8B-MLX-4bit"
 base_url = "http://127.0.0.1:8848/v1"
 api_key_env = "ETAS_HOST_OMLX_API_KEY"
 allow_private = true
+enable_thinking = false
 
 [runtime.profiles.local-omlx.memory]
 backend = "memory"
@@ -786,6 +789,13 @@ profile = "local-omlx"
         assert_eq!(
             profile.model.as_ref().and_then(|model| model.allow_private),
             Some(true)
+        );
+        assert_eq!(
+            profile
+                .model
+                .as_ref()
+                .and_then(|model| model.enable_thinking),
+            Some(false)
         );
         assert_eq!(
             profile

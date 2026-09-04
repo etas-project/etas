@@ -1,7 +1,7 @@
 use etas_host::{
     AnthropicProtocolAdapter, AuthConfig, CommandPolicy, DestructiveOpPolicy, FilesystemPolicy,
     HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule, LocalStaticPolicyClient, ModelName,
-    ModelProviderCapabilities, ModelProviderId, NetworkEndpoint, NetworkPolicy,
+    ModelProviderCapabilities, ModelProviderId, NetworkEndpoint, NetworkPolicy, OmlxRequestOptions,
     OpenAiProtocolAdapter, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy, WorkspaceRoot,
 };
 use etas_interpreter::api::{
@@ -59,6 +59,7 @@ pub(super) struct CliModelConfig {
     endpoint: NetworkEndpoint,
     private_resolution: PrivateResolutionPolicy,
     retry: RetryPolicy,
+    enable_thinking: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -594,6 +595,7 @@ impl CliHostConfig {
                 "provider": model.provider.0,
                 "model": model.model.0,
                 "private_resolution": private_resolution_name(model.private_resolution),
+                "enable_thinking": model.enable_thinking,
                 "retry": retry_policy_json(model.retry),
                 "capabilities": {
                     "forced_tool_output": model.capabilities.supports_forced_tool_output,
@@ -936,6 +938,9 @@ fn model_from_runtime_profile(
             .or_else(|| current.map(|model| model.private_resolution))
             .unwrap_or(PrivateResolutionPolicy::PublicOnly),
     )?;
+    let enable_thinking = profile
+        .enable_thinking
+        .or_else(|| current.and_then(|model| model.enable_thinking));
     model_from_parts(
         adapter_name,
         model,
@@ -943,6 +948,7 @@ fn model_from_runtime_profile(
         api_key,
         retry,
         private_resolution,
+        enable_thinking,
     )
 }
 
@@ -994,6 +1000,7 @@ fn model_from_env_overrides(
         api_key,
         retry,
         private_resolution,
+        current.and_then(|model| model.enable_thinking),
     )
 }
 
@@ -1004,7 +1011,13 @@ fn model_from_parts(
     api_key: Option<String>,
     retry: RetryPolicy,
     private_resolution: PrivateResolutionPolicy,
+    enable_thinking: Option<bool>,
 ) -> Result<CliModelConfig, CliError> {
+    if enable_thinking.is_some() && adapter_name != "omlx-openai" {
+        return Err(CliError::InvalidUsage(format!(
+            "runtime model `enable_thinking` is only supported by the `omlx-openai` adapter, not `{adapter_name}`"
+        )));
+    }
     let auth = api_key.map_or(AuthConfig::None, AuthConfig::BearerToken);
     let (adapter, base_url, capabilities, private_resolution) = match adapter_name.as_str() {
         "openai" => {
@@ -1047,6 +1060,8 @@ fn model_from_parts(
             (
                 CliModelAdapter::OpenAi(
                     OpenAiProtocolAdapter::omlx_compatible(base_url.clone())
+                        .map_err(host_transport_error)?
+                        .with_omlx_options(OmlxRequestOptions { enable_thinking })
                         .map_err(host_transport_error)?,
                 ),
                 base_url,
@@ -1090,6 +1105,7 @@ fn model_from_parts(
         endpoint: network_endpoint_from_base_url(&base_url)?,
         private_resolution,
         retry,
+        enable_thinking,
     })
 }
 
@@ -1460,6 +1476,7 @@ fn model_from_environment() -> Result<Option<CliModelConfig>, CliError> {
         api_key,
         retry,
         private_resolution,
+        None,
     )
     .map(Some)
 }
@@ -2059,6 +2076,7 @@ mod tests {
                 base_url: Some("http://127.0.0.1:8848/v1".to_owned()),
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
+                enable_thinking: Some(true),
                 retry: Some(RuntimeRetryProfile {
                     attempts: Some(5),
                     delay_ms: Some(50),
@@ -2078,6 +2096,7 @@ mod tests {
                 base_url: Some("http://127.0.0.1:9999/v1".to_owned()),
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
+                enable_thinking: Some(false),
                 retry: None,
             }),
             network: Some(RuntimeNetworkProfile {
@@ -2101,6 +2120,7 @@ mod tests {
 
         assert_eq!(json["profile"], "local-omlx");
         assert_eq!(json["model"]["model"], "local-model");
+        assert_eq!(json["model"]["enable_thinking"], false);
         assert_eq!(json["model"]["retry"]["attempts"], 5);
         assert_eq!(json["model"]["retry"]["delay_ms"], 50);
         assert!(
@@ -2121,6 +2141,26 @@ mod tests {
                 .iter()
                 .any(|endpoint| { endpoint.host == "127.0.0.1" && endpoint.port == 9999 }),
             "model endpoint should be materialized only as adapter transport authority"
+        );
+
+        let mut thinking_enabled_profile = local_profile.clone();
+        thinking_enabled_profile
+            .model
+            .as_mut()
+            .expect("local model profile")
+            .enable_thinking = Some(true);
+        let thinking_enabled = CliHostConfig::from_runtime_profile(
+            "local-omlx".to_owned(),
+            Some(&manifest_profile),
+            Some(&thinking_enabled_profile),
+            &env,
+            &[],
+        )
+        .expect("thinking-enabled runtime profile should build")
+        .runtime_profile_json();
+        assert_ne!(
+            json["profile_fingerprint"], thinking_enabled["profile_fingerprint"],
+            "thinking control must participate in the runtime profile fingerprint"
         );
     }
 
@@ -2150,6 +2190,29 @@ mod tests {
         assert_eq!(
             private.private_resolution,
             PrivateResolutionPolicy::AllowPrivate
+        );
+    }
+
+    #[test]
+    fn non_omlx_model_adapter_rejects_thinking_control() {
+        let profile = RuntimeModelProfile {
+            adapter: Some("openai".to_owned()),
+            model: Some("mock-model".to_owned()),
+            base_url: Some("https://api.example.com/v1".to_owned()),
+            enable_thinking: Some(false),
+            ..RuntimeModelProfile::default()
+        };
+
+        let error =
+            match model_from_runtime_profile(&profile, &RuntimeEnvOverrides::default(), None) {
+                Ok(_) => panic!("OpenAI profiles must not silently accept oMLX options"),
+                Err(error) => error,
+            };
+        assert!(
+            error
+                .to_string()
+                .contains("only supported by the `omlx-openai` adapter"),
+            "{error}"
         );
     }
 
@@ -2189,6 +2252,7 @@ mod tests {
                 base_url: Some("http://127.0.0.1:8848/v1".to_owned()),
                 api_key_env: None,
                 allow_private: Some(true),
+                enable_thinking: Some(false),
                 retry: Some(RuntimeRetryProfile {
                     attempts: Some(4),
                     delay_ms: Some(40),
@@ -2210,6 +2274,7 @@ mod tests {
                 base_url: None,
                 api_key_env: None,
                 allow_private: None,
+                enable_thinking: None,
                 retry: None,
             }),
             ..RuntimeProfile::default()
