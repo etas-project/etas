@@ -234,7 +234,18 @@ pub struct RuntimeModelProfile {
     #[serde(default)]
     pub allow_private: Option<bool>,
     #[serde(default)]
+    pub timeout: Option<RuntimeModelTimeoutProfile>,
+    #[serde(default)]
     pub retry: Option<RuntimeRetryProfile>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeModelTimeoutProfile {
+    #[serde(default)]
+    pub request_deadline_ms: Option<u64>,
+    #[serde(default)]
+    pub connect_timeout_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -737,6 +748,10 @@ base_url = "http://127.0.0.1:8848/v1"
 api_key_env = "ETAS_HOST_OMLX_API_KEY"
 allow_private = true
 
+[runtime.profiles.local-omlx.model.timeout]
+request_deadline_ms = 300000
+connect_timeout_ms = 2000
+
 [runtime.profiles.local-omlx.memory]
 backend = "memory"
 
@@ -786,6 +801,22 @@ profile = "local-omlx"
         assert_eq!(
             profile.model.as_ref().and_then(|model| model.allow_private),
             Some(true)
+        );
+        assert_eq!(
+            profile
+                .model
+                .as_ref()
+                .and_then(|model| model.timeout.as_ref())
+                .and_then(|timeout| timeout.request_deadline_ms),
+            Some(300_000)
+        );
+        assert_eq!(
+            profile
+                .model
+                .as_ref()
+                .and_then(|model| model.timeout.as_ref())
+                .and_then(|timeout| timeout.connect_timeout_ms),
+            Some(2_000)
         );
         assert_eq!(
             profile
