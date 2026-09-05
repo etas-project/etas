@@ -111,6 +111,19 @@ impl CliHost {
         let session = session_client(&config.session_mode)?;
         let byte_streams =
             (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
+        let filesystem = if config.filesystem_mode != FilesystemMode::None
+            || !config.filesystem_regions.is_empty()
+        {
+            let mut regions = etas_host::WorkspaceRegionRegistry::default();
+            for (identity, region) in &config.filesystem_regions {
+                regions
+                    .insert(identity.clone(), region.root.clone())
+                    .map_err(|error| CliError::InvalidUsage(error.message))?;
+            }
+            Some(LocalFilesystemClient::new(regions))
+        } else {
+            None
+        };
         Ok(Self {
             availability: HostServiceAvailability {
                 model: config.model.is_some(),
@@ -118,7 +131,7 @@ impl CliHost {
                 tool: !tool.is_empty(),
                 memory: config.memory_mode != MemoryMode::None,
                 session: config.session_mode != SessionMode::None,
-                filesystem: config.filesystem_mode != FilesystemMode::None,
+                filesystem: filesystem.is_some(),
                 command: !config.command_allowed_programs.is_empty(),
                 network: !config.program_network_allowlist.is_empty(),
                 tcp: !config.program_network_allowlist.is_empty(),
@@ -137,8 +150,7 @@ impl CliHost {
             tool,
             memory,
             session,
-            filesystem: (config.filesystem_mode != FilesystemMode::None)
-                .then(LocalFilesystemClient::new),
+            filesystem,
             tcp: byte_streams.clone().map(LocalTcpClient::new),
             stream: byte_streams.clone().map(LocalStreamClient::new),
             tls: byte_streams.map(LocalTlsClient::new),

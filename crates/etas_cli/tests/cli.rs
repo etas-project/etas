@@ -5239,6 +5239,100 @@ allow = ["{tool_network_authority}"]
 }
 
 #[test]
+fn runtime_profile_executes_region_indexed_filesystem_access() {
+    let project = package_fixture(
+        "region-indexed-filesystem",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "region-indexed-filesystem"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[[bin]]
+name = "region-indexed-filesystem"
+module = "app.workspace"
+flow = "main"
+profile = "local"
+
+[runtime.profiles.local.filesystem.regions."app.workspace.ProjectRoot"]
+root = "."
+read = true
+"#,
+            ),
+            (
+                "src/app/workspace.es",
+                r#"module app.workspace;
+import std.fs.{IOError, Region, WorkspacePath, list, path, read_bytes};
+import std.effects.Fs;
+
+type ProjectRoot;
+impl ProjectRoot ~ Region;
+
+flow load<R ~ Region>(name: string) -> bytes ![Fs.read<R>, Error<IOError>] {
+    let candidate: Result<WorkspacePath<R>, IOError> = path<R>(name);
+    return match candidate {
+        Ok(target) => read_bytes(target),
+        Err(_) => abort("invalid workspace path"),
+    };
+}
+
+flow load_inferred() -> bytes ![Fs.read<ProjectRoot>, Error<IOError>] {
+    let candidate: Result<WorkspacePath<ProjectRoot>, IOError> = path("input.txt");
+    return match candidate {
+        Ok(target) => read_bytes(target),
+        Err(_) => abort("invalid inferred workspace path"),
+    };
+}
+
+flow read_directory() -> unit ![Fs.list<ProjectRoot>, Fs.read<ProjectRoot>, Error<IOError>] {
+    let directory: Result<WorkspacePath<ProjectRoot>, IOError> = path("data");
+    let entries = match directory {
+        Ok(target) => list(target),
+        Err(_) => abort("invalid workspace directory"),
+    };
+    for entry in entries limit Iterations(16) {
+        let _contents = read_bytes(entry);
+    }
+    return;
+}
+
+public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Fs.list<ProjectRoot>, Error<IOError>] {
+    let _contents = load<ProjectRoot>("input.txt");
+    let _inferred = load_inferred();
+    read_directory();
+    return 0;
+}
+"#,
+            ),
+            ("input.txt", "region-scoped"),
+            ("data/listed.txt", "region-preserved"),
+        ],
+    );
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&project),
+            "--profile",
+            "local",
+            "--allow-effects",
+        ],
+        "",
+    );
+
+    assert_eq!(code, 0, "stderr={stderr:?}\nstdout={stdout:?}");
+    assert!(stdout.contains(r#""value":"0""#), "{stdout}");
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
 fn edk_backed_external_tool_multi_agent_runtime_uses_package_metadata() {
     let _guard = lock_model_cli_e2e();
     let dependency = package_fixture(

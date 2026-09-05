@@ -121,6 +121,51 @@ impl Manifest {
                 ));
             }
         }
+        for (profile_name, profile) in &self.runtime.profiles {
+            let Some(filesystem) = &profile.filesystem else {
+                continue;
+            };
+            if !filesystem.regions.is_empty()
+                && (filesystem.mode.is_some() || filesystem.workspace_root.is_some())
+            {
+                diagnostics.push(PackageDiagnostic::new(
+                    "package.manifest.mixed_filesystem_authority",
+                    format!(
+                        "runtime profile `{profile_name}` cannot mix `filesystem.regions` with legacy `mode`/`workspace_root`"
+                    ),
+                    Some(manifest_path.to_path_buf()),
+                ));
+            }
+            for (region, config) in &filesystem.regions {
+                if !is_valid_import_root(region) {
+                    diagnostics.push(PackageDiagnostic::new(
+                        "package.manifest.invalid_filesystem_region",
+                        format!(
+                            "runtime profile `{profile_name}` filesystem region `{region}` must be a canonical dot-separated type path"
+                        ),
+                        Some(manifest_path.to_path_buf()),
+                    ));
+                }
+                if config.root.as_os_str().is_empty() {
+                    diagnostics.push(PackageDiagnostic::new(
+                        "package.manifest.invalid_filesystem_region_root",
+                        format!(
+                            "runtime profile `{profile_name}` filesystem region `{region}` requires a non-empty root"
+                        ),
+                        Some(manifest_path.to_path_buf()),
+                    ));
+                }
+                if !config.read && !config.write && !config.delete {
+                    diagnostics.push(PackageDiagnostic::new(
+                        "package.manifest.empty_filesystem_region_authority",
+                        format!(
+                            "runtime profile `{profile_name}` filesystem region `{region}` must enable read, write, or delete"
+                        ),
+                        Some(manifest_path.to_path_buf()),
+                    ));
+                }
+            }
+        }
         if diagnostics.is_empty() {
             Ok(())
         } else {
@@ -310,6 +355,20 @@ pub struct RuntimeFilesystemProfile {
     pub mode: Option<String>,
     #[serde(default)]
     pub workspace_root: Option<PathBuf>,
+    #[serde(default)]
+    pub regions: BTreeMap<String, RuntimeFilesystemRegionProfile>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeFilesystemRegionProfile {
+    pub root: PathBuf,
+    #[serde(default)]
+    pub read: bool,
+    #[serde(default)]
+    pub write: bool,
+    #[serde(default)]
+    pub delete: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -768,6 +827,11 @@ mode = "auto"
 [runtime.profiles.local-omlx.network]
 allow = ["127.0.0.1:8848"]
 
+[runtime.profiles.local-omlx.filesystem.regions."app.workspace.ProjectRoot"]
+root = "."
+read = true
+write = false
+
 [runtime.profiles.local-omlx.tools]
 allow_private = true
 
@@ -840,7 +904,49 @@ profile = "local-omlx"
             profile.tools.as_ref().and_then(|tools| tools.allow_private),
             Some(true)
         );
+        let project_root = profile
+            .filesystem
+            .as_ref()
+            .and_then(|filesystem| filesystem.regions.get("app.workspace.ProjectRoot"))
+            .expect("filesystem region exists");
+        assert_eq!(project_root.root, PathBuf::from("."));
+        assert!(project_root.read);
+        assert!(!project_root.write);
+        assert!(!project_root.delete);
         assert_eq!(manifest.bins[0].profile.as_deref(), Some("local-omlx"));
+    }
+
+    #[test]
+    fn manifest_rejects_invalid_filesystem_region_configuration() {
+        let manifest = toml::from_str::<Manifest>(
+            r#"
+[package]
+name = "invalid-region-profile"
+version = "0.1.0"
+
+[runtime.profiles.local.filesystem]
+mode = "readonly"
+
+[runtime.profiles.local.filesystem.regions."not a type"]
+root = "."
+"#,
+        )
+        .expect("schema should parse before semantic validation");
+
+        let error = manifest
+            .validate(Path::new("/tmp/etas.toml"))
+            .expect_err("mixed and invalid region configuration must be rejected");
+        let PackageError::Diagnostics(diagnostics) = error else {
+            panic!("expected manifest diagnostics, got {error:?}");
+        };
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == "package.manifest.mixed_filesystem_authority"
+        }));
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic.code == "package.manifest.invalid_filesystem_region"
+            })
+        );
     }
 
     #[test]

@@ -1,9 +1,10 @@
 use etas_host::{
-    AnthropicProtocolAdapter, AuthConfig, CommandPolicy, DestructiveOpPolicy, FilesystemPolicy,
-    HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule, LocalStaticPolicyClient, ModelName,
-    ModelProviderCapabilities, ModelProviderId, NetworkEndpoint, NetworkPolicy, OmlxRequestOptions,
-    OpenAiProtocolAdapter, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy,
-    TransportTimeoutPolicy, WorkspaceRoot,
+    ActionArgPattern, AnthropicProtocolAdapter, AuthConfig, CommandPolicy, DestructiveOpPolicy,
+    FilesystemPolicy, HostValue, HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule,
+    LocalStaticPolicyClient, ModelName, ModelProviderCapabilities, ModelProviderId,
+    NetworkEndpoint, NetworkPolicy, OmlxRequestOptions, OpenAiProtocolAdapter,
+    PrivateResolutionPolicy, RetryPolicy, SandboxPolicy, TransportTimeoutPolicy, WorkspaceRegionId,
+    WorkspaceRoot,
 };
 use etas_interpreter::api::{
     ExecutionLimits, HostExecutionContext, ModelExecutionPolicy, RunOptions,
@@ -33,6 +34,7 @@ pub(crate) struct CliHostConfig {
     pub(super) command_allowed_programs: Vec<String>,
     pub(super) workspace_root: Option<WorkspaceRoot>,
     pub(super) filesystem_mode: FilesystemMode,
+    pub(super) filesystem_regions: BTreeMap<WorkspaceRegionId, CliFilesystemRegion>,
     pub(super) program_network_allowlist: Vec<NetworkEndpoint>,
     pub(super) adapter_transport_allowlist: Vec<NetworkEndpoint>,
     pub(super) memory_mode: MemoryMode,
@@ -95,6 +97,14 @@ pub(super) enum FilesystemMode {
     ReadOnly,
     ReadWrite,
     Destructive,
+}
+
+#[derive(Clone)]
+pub(super) struct CliFilesystemRegion {
+    pub(super) root: WorkspaceRoot,
+    pub(super) read: bool,
+    pub(super) write: bool,
+    pub(super) delete: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -189,6 +199,7 @@ impl CliHostConfig {
             command_allowed_programs: Vec::new(),
             workspace_root: None,
             filesystem_mode: FilesystemMode::None,
+            filesystem_regions: BTreeMap::new(),
             program_network_allowlist: Vec::new(),
             adapter_transport_allowlist: Vec::new(),
             memory_mode: MemoryMode::None,
@@ -291,6 +302,7 @@ impl CliHostConfig {
             command_allowed_programs,
             workspace_root,
             filesystem_mode,
+            filesystem_regions: BTreeMap::new(),
             program_network_allowlist,
             adapter_transport_allowlist,
             memory_mode,
@@ -317,6 +329,7 @@ impl CliHostConfig {
         Ok(config)
     }
 
+    #[cfg(test)]
     pub(super) fn from_runtime_profile(
         profile_name: String,
         manifest_profile: Option<&RuntimeProfile>,
@@ -324,13 +337,37 @@ impl CliHostConfig {
         env: &RuntimeEnvOverrides,
         allow_net: &[String],
     ) -> Result<Self, CliError> {
+        let current_dir = std::env::current_dir().map_err(|source| CliError::Config {
+            path: PathBuf::from("."),
+            source,
+        })?;
+        Self::from_runtime_profile_at(
+            profile_name,
+            manifest_profile,
+            &current_dir,
+            local_profile,
+            &current_dir,
+            env,
+            allow_net,
+        )
+    }
+
+    pub(super) fn from_runtime_profile_at(
+        profile_name: String,
+        manifest_profile: Option<&RuntimeProfile>,
+        manifest_base: &Path,
+        local_profile: Option<&RuntimeProfile>,
+        local_base: &Path,
+        env: &RuntimeEnvOverrides,
+        allow_net: &[String],
+    ) -> Result<Self, CliError> {
         let mut config = Self::none();
         config.profile_name = Some(profile_name);
         if let Some(profile) = manifest_profile {
-            config.apply_runtime_profile(profile, env)?;
+            config.apply_runtime_profile(profile, manifest_base, env)?;
         }
         if let Some(profile) = local_profile {
-            config.apply_runtime_profile(profile, env)?;
+            config.apply_runtime_profile(profile, local_base, env)?;
         }
         config.apply_env_overrides(env)?;
         let explicit_endpoints = parse_cli_network_allowlist(allow_net)?;
@@ -346,6 +383,7 @@ impl CliHostConfig {
     fn apply_runtime_profile(
         &mut self,
         profile: &RuntimeProfile,
+        base_dir: &Path,
         env: &RuntimeEnvOverrides,
     ) -> Result<(), CliError> {
         if let Some(model) = &profile.model {
@@ -369,15 +407,49 @@ impl CliHostConfig {
             self.program_network_allowlist.extend(explicit_endpoints);
         }
         if let Some(filesystem) = &profile.filesystem {
-            self.filesystem_mode = parse_filesystem_mode(filesystem.mode.clone())?;
-            if let Some(root) = &filesystem.workspace_root {
-                self.workspace_root = Some(workspace_root_from_path(root)?);
-            }
-            if self.filesystem_mode != FilesystemMode::None && self.workspace_root.is_none() {
-                return Err(CliError::InvalidUsage(
-                    "`runtime.filesystem` requires `workspace_root` when filesystem access is enabled"
-                        .to_owned(),
-                ));
+            if !filesystem.regions.is_empty() {
+                if filesystem.mode.is_some() || filesystem.workspace_root.is_some() {
+                    return Err(CliError::InvalidUsage(
+                        "`runtime.filesystem.regions` cannot be mixed with legacy `mode`/`workspace_root`"
+                            .to_owned(),
+                    ));
+                }
+                self.filesystem_mode = FilesystemMode::None;
+                self.workspace_root = None;
+                for (identity, region) in &filesystem.regions {
+                    let identity = WorkspaceRegionId::new(identity.clone()).map_err(|error| {
+                        CliError::InvalidUsage(format!(
+                            "invalid runtime filesystem region `{identity}`: {}",
+                            error.message
+                        ))
+                    })?;
+                    self.filesystem_regions.insert(
+                        identity,
+                        CliFilesystemRegion {
+                            root: workspace_root_from_path(&resolve_profile_path(
+                                base_dir,
+                                &region.root,
+                            ))?,
+                            read: region.read,
+                            write: region.write,
+                            delete: region.delete,
+                        },
+                    );
+                }
+            } else {
+                self.filesystem_regions.clear();
+                self.filesystem_mode = parse_filesystem_mode(filesystem.mode.clone())?;
+                if let Some(root) = &filesystem.workspace_root {
+                    self.workspace_root = Some(workspace_root_from_path(&resolve_profile_path(
+                        base_dir, root,
+                    ))?);
+                }
+                if self.filesystem_mode != FilesystemMode::None && self.workspace_root.is_none() {
+                    return Err(CliError::InvalidUsage(
+                        "`runtime.filesystem` requires `workspace_root` when filesystem access is enabled"
+                            .to_owned(),
+                    ));
+                }
             }
         }
         if let Some(secret) = &profile.secret {
@@ -469,9 +541,11 @@ impl CliHostConfig {
             self.model = Some(model_from_env_overrides(env, self.model.as_ref())?);
         }
         if let Some(workspace_root) = env.optional("ETAS_HOST_WORKSPACE_ROOT") {
+            self.filesystem_regions.clear();
             self.workspace_root = Some(workspace_root_from_path(Path::new(&workspace_root))?);
         }
         if let Some(filesystem) = env.optional("ETAS_HOST_FILESYSTEM") {
+            self.filesystem_regions.clear();
             self.filesystem_mode = parse_filesystem_mode(Some(filesystem))?;
             if self.filesystem_mode != FilesystemMode::None && self.workspace_root.is_none() {
                 return Err(CliError::InvalidUsage(
@@ -592,6 +666,7 @@ impl CliHostConfig {
             || !self.tool_bindings.is_empty()
             || self.memory_mode != MemoryMode::None
             || self.filesystem_mode != FilesystemMode::None
+            || !self.filesystem_regions.is_empty()
             || !self.program_network_allowlist.is_empty()
             || self.approval_mode != ApprovalMode::Deny
             || self.policy_mode != PolicyMode::DenyUnknown
@@ -642,6 +717,15 @@ impl CliHostConfig {
             "tools": tools,
             "tool_private_resolution": private_resolution_name(self.tool_private_resolution),
             "filesystem": format!("{:?}", self.filesystem_mode),
+            "filesystem_regions": self.filesystem_regions.iter().map(|(identity, region)| {
+                serde_json::json!({
+                    "identity": identity.as_str(),
+                    "root": region.root.canonical_root,
+                    "read": region.read,
+                    "write": region.write,
+                    "delete": region.delete,
+                })
+            }).collect::<Vec<_>>(),
             "memory": memory_profile_json(&self.memory_mode),
             "approval": format!("{:?}", self.approval_mode),
             "policy": format!("{:?}", self.policy_mode),
@@ -707,6 +791,38 @@ impl CliHostConfig {
                 grants.push(etas_host::HostActionGrant::allow("Fs", "atomic_replace"));
             }
         }
+        for (region, config) in &self.filesystem_regions {
+            let exact_region = || {
+                vec![ActionArgPattern::Exact(HostValue::String(
+                    region.as_str().to_owned(),
+                ))]
+            };
+            if config.read {
+                for action in ["read", "list", "stat"] {
+                    grants.push(etas_host::HostActionGrant::allow_with_args(
+                        "Fs",
+                        action,
+                        exact_region(),
+                    ));
+                }
+            }
+            if config.write {
+                for action in ["write", "atomic_replace"] {
+                    grants.push(etas_host::HostActionGrant::allow_with_args(
+                        "Fs",
+                        action,
+                        exact_region(),
+                    ));
+                }
+            }
+            if config.delete {
+                grants.push(etas_host::HostActionGrant::allow_with_args(
+                    "Fs",
+                    "delete",
+                    exact_region(),
+                ));
+            }
+        }
         if self.memory_mode != MemoryMode::None {
             grants.push(etas_host::HostActionGrant::allow("Memory", "read"));
             grants.push(etas_host::HostActionGrant::allow("Memory", "write"));
@@ -732,10 +848,14 @@ impl CliHostConfig {
         }
         let sandbox = if self.has_effect_adapters() {
             SandboxPolicy::allow_listed(
-                filesystem_policy(self.workspace_root.clone(), self.filesystem_mode),
+                filesystem_policy(
+                    self.workspace_root.clone(),
+                    self.filesystem_mode,
+                    &self.filesystem_regions,
+                ),
                 NetworkPolicy::allow_endpoints(self.program_network_allowlist.clone()),
                 CommandPolicy::allow_programs(self.command_allowed_programs.clone()),
-                destructive_policy(self.filesystem_mode),
+                destructive_policy(self.filesystem_mode, &self.filesystem_regions),
             )
         } else {
             SandboxPolicy::deny_all()
@@ -785,6 +905,11 @@ struct RuntimeConfigFile {
     runtime: RuntimeSection,
 }
 
+struct LoadedRuntimeConfig {
+    runtime: RuntimeSection,
+    base_dir: PathBuf,
+}
+
 pub(crate) fn runtime_config_for_run(
     inputs: &[PathBuf],
     flow: Option<&str>,
@@ -818,20 +943,22 @@ pub(crate) fn runtime_config_for_run(
     let profile_name = requested_profile
         .map(ToOwned::to_owned)
         .or_else(|| bin_profile_for_flow(&manifest, flow))
-        .or_else(|| local_runtime.default_profile.clone())
+        .or_else(|| local_runtime.runtime.default_profile.clone())
         .or_else(|| manifest.runtime.default_profile.clone());
     let mut config = if let Some(profile_name) = profile_name {
         let manifest_profile = manifest.runtime.profiles.get(&profile_name);
-        let local_profile = local_runtime.profiles.get(&profile_name);
+        let local_profile = local_runtime.runtime.profiles.get(&profile_name);
         if manifest_profile.is_none() && local_profile.is_none() {
             return Err(CliError::InvalidUsage(format!(
                 "runtime profile `{profile_name}` is not defined in `etas.toml` or `etas.local.toml`"
             )));
         }
-        CliHostConfig::from_runtime_profile(
+        CliHostConfig::from_runtime_profile_at(
             profile_name,
             manifest_profile,
+            &package_root,
             local_profile,
+            &local_runtime.base_dir,
             &env,
             allow_net,
         )?
@@ -840,7 +967,7 @@ pub(crate) fn runtime_config_for_run(
     };
     config.apply_execution_config(
         &manifest.runtime.execution,
-        &local_runtime.execution,
+        &local_runtime.runtime.execution,
         max_call_depth,
     )?;
     Ok(config)
@@ -857,12 +984,19 @@ fn package_root_for_inputs(inputs: &[PathBuf]) -> Option<PathBuf> {
 fn read_runtime_config_file(
     runtime_config: Option<&Path>,
     package_root: &Path,
-) -> Result<RuntimeSection, CliError> {
+) -> Result<LoadedRuntimeConfig, CliError> {
     let path = runtime_config
         .map(Path::to_path_buf)
         .unwrap_or_else(|| package_root.join("etas.local.toml"));
+    let base_dir = path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| package_root.to_path_buf());
     if !path.exists() {
-        return Ok(RuntimeSection::default());
+        return Ok(LoadedRuntimeConfig {
+            runtime: RuntimeSection::default(),
+            base_dir,
+        });
     }
     let text = std::fs::read_to_string(&path).map_err(|source| CliError::Config {
         path: path.clone(),
@@ -874,7 +1008,10 @@ fn read_runtime_config_file(
             path.display()
         ))
     })?;
-    Ok(config.runtime)
+    Ok(LoadedRuntimeConfig {
+        runtime: config.runtime,
+        base_dir,
+    })
 }
 
 fn bin_profile_for_flow(manifest: &etas_package::Manifest, flow: Option<&str>) -> Option<String> {
@@ -1407,6 +1544,14 @@ fn workspace_root_from_path(path: &Path) -> Result<WorkspaceRoot, CliError> {
     })
 }
 
+fn resolve_profile_path(base_dir: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base_dir.join(path)
+    }
+}
+
 fn default_transport_retry() -> RetryPolicy {
     RetryPolicy {
         attempts: 3,
@@ -1928,28 +2073,43 @@ fn sort_dedup_network_allowlist(endpoints: &mut Vec<NetworkEndpoint>) {
 fn filesystem_policy(
     workspace_root: Option<WorkspaceRoot>,
     mode: FilesystemMode,
+    regions: &BTreeMap<WorkspaceRegionId, CliFilesystemRegion>,
 ) -> FilesystemPolicy {
-    let Some(root) = workspace_root else {
-        return FilesystemPolicy::deny_all();
-    };
-    match mode {
-        FilesystemMode::None => FilesystemPolicy::deny_all(),
-        FilesystemMode::ReadOnly => FilesystemPolicy {
+    let mut policy = match (workspace_root, mode) {
+        (_, FilesystemMode::None) => FilesystemPolicy::deny_all(),
+        (None, _) => FilesystemPolicy::deny_all(),
+        (Some(root), FilesystemMode::ReadOnly) => FilesystemPolicy {
             read_roots: vec![root],
             write_roots: Vec::new(),
             delete_roots: Vec::new(),
         },
-        FilesystemMode::ReadWrite => FilesystemPolicy::allow_workspace(root),
-        FilesystemMode::Destructive => FilesystemPolicy::allow_destructive_workspace(root),
+        (Some(root), FilesystemMode::ReadWrite) => FilesystemPolicy::allow_workspace(root),
+        (Some(root), FilesystemMode::Destructive) => {
+            FilesystemPolicy::allow_destructive_workspace(root)
+        }
+    };
+    for region in regions.values() {
+        if region.read {
+            policy.read_roots.push(region.root.clone());
+        }
+        if region.write {
+            policy.write_roots.push(region.root.clone());
+        }
+        if region.delete {
+            policy.delete_roots.push(region.root.clone());
+        }
     }
+    policy
 }
 
-fn destructive_policy(mode: FilesystemMode) -> DestructiveOpPolicy {
-    match mode {
-        FilesystemMode::Destructive => DestructiveOpPolicy { allow_delete: true },
-        FilesystemMode::None | FilesystemMode::ReadOnly | FilesystemMode::ReadWrite => {
-            DestructiveOpPolicy::deny_all()
-        }
+fn destructive_policy(
+    mode: FilesystemMode,
+    regions: &BTreeMap<WorkspaceRegionId, CliFilesystemRegion>,
+) -> DestructiveOpPolicy {
+    if mode == FilesystemMode::Destructive || regions.values().any(|region| region.delete) {
+        DestructiveOpPolicy { allow_delete: true }
+    } else {
+        DestructiveOpPolicy::deny_all()
     }
 }
 
@@ -2141,6 +2301,45 @@ mod tests {
                 "kind": "memory",
             })
         );
+    }
+
+    #[test]
+    fn region_filesystem_profile_grants_only_configured_region_operations() {
+        let root = std::env::current_dir().expect("current directory");
+        let profile = RuntimeProfile {
+            filesystem: Some(etas_package::RuntimeFilesystemProfile {
+                mode: None,
+                workspace_root: None,
+                regions: BTreeMap::from([(
+                    "app.workspace.ProjectRoot".to_owned(),
+                    etas_package::RuntimeFilesystemRegionProfile {
+                        root,
+                        read: true,
+                        write: false,
+                        delete: false,
+                    },
+                )]),
+            }),
+            ..RuntimeProfile::default()
+        };
+        let config = CliHostConfig::from_runtime_profile(
+            "local".to_owned(),
+            Some(&profile),
+            None,
+            &RuntimeEnvOverrides::default(),
+            &[],
+        )
+        .expect("region filesystem profile should build");
+        let authority = config.run_options().host_context.authority;
+        let action = |name: &str, region: &str| {
+            etas_host::ActionInstance::new("Fs", name, vec![HostValue::String(region.to_owned())])
+        };
+
+        assert!(authority.allows(&action("read", "app.workspace.ProjectRoot")));
+        assert!(authority.allows(&action("list", "app.workspace.ProjectRoot")));
+        assert!(authority.allows(&action("stat", "app.workspace.ProjectRoot")));
+        assert!(!authority.allows(&action("write", "app.workspace.ProjectRoot")));
+        assert!(!authority.allows(&action("read", "app.workspace.ArbitraryRoot")));
     }
 
     #[test]

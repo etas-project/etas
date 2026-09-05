@@ -13,10 +13,11 @@ mod vendor;
 pub use diagnostics::{PackageDiagnostic, PackageError};
 pub use manifest::{
     BinTarget, BindingsSection, DependencySpec, Manifest, PackageSection, RuntimeBackendProfile,
-    RuntimeCommandProfile, RuntimeExecutionProfile, RuntimeFilesystemProfile, RuntimeModeProfile,
-    RuntimeModelProfile, RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile,
-    RuntimeProfile, RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, SourceSection,
-    ToolBinding, discover_manifest, read_manifest,
+    RuntimeCommandProfile, RuntimeExecutionProfile, RuntimeFilesystemProfile,
+    RuntimeFilesystemRegionProfile, RuntimeModeProfile, RuntimeModelProfile,
+    RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile, RuntimeProfile,
+    RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, SourceSection, ToolBinding,
+    discover_manifest, read_manifest,
 };
 pub use metadata::{
     PackageActionSummaryMetadata, PackageActionTraceEventSourceMetadata,
