@@ -111,16 +111,16 @@ impl CliHost {
         let session = session_client(&config.session_mode)?;
         let byte_streams =
             (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
+        let mut workspace_regions = etas_host::WorkspaceRegionRegistry::default();
+        for (identity, region) in &config.filesystem_regions {
+            workspace_regions
+                .insert(identity.clone(), region.root.clone())
+                .map_err(|error| CliError::InvalidUsage(error.message))?;
+        }
         let filesystem = if config.filesystem_mode != FilesystemMode::None
             || !config.filesystem_regions.is_empty()
         {
-            let mut regions = etas_host::WorkspaceRegionRegistry::default();
-            for (identity, region) in &config.filesystem_regions {
-                regions
-                    .insert(identity.clone(), region.root.clone())
-                    .map_err(|error| CliError::InvalidUsage(error.message))?;
-            }
-            Some(LocalFilesystemClient::new(regions))
+            Some(LocalFilesystemClient::new(workspace_regions.clone()))
         } else {
             None
         };
@@ -155,7 +155,8 @@ impl CliHost {
             stream: byte_streams.clone().map(LocalStreamClient::new),
             tls: byte_streams.map(LocalTlsClient::new),
             secret: (config.secret_mode == SecretMode::Env).then_some(EnvSecretClient),
-            command: (!config.command_allowed_programs.is_empty()).then(LocalCommandClient::new),
+            command: (!config.command_allowed_programs.is_empty())
+                .then(|| LocalCommandClient::with_regions(workspace_regions)),
             approval: config.approval_mode,
             policy: config.policy_mode,
             policy_local: config.policy_local,
