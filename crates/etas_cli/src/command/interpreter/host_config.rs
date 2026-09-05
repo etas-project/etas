@@ -2,15 +2,16 @@ use etas_host::{
     AnthropicProtocolAdapter, AuthConfig, CommandPolicy, DestructiveOpPolicy, FilesystemPolicy,
     HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule, LocalStaticPolicyClient, ModelName,
     ModelProviderCapabilities, ModelProviderId, NetworkEndpoint, NetworkPolicy, OmlxRequestOptions,
-    OpenAiProtocolAdapter, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy, WorkspaceRoot,
+    OpenAiProtocolAdapter, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy,
+    TransportTimeoutPolicy, WorkspaceRoot,
 };
 use etas_interpreter::api::{
     ExecutionLimits, HostExecutionContext, ModelExecutionPolicy, RunOptions,
 };
 use etas_package::{
     RuntimeBackendProfile, RuntimeCommandProfile, RuntimeExecutionProfile, RuntimeModelProfile,
-    RuntimeNetworkProfile, RuntimePolicyProfile, RuntimeProfile, RuntimeRetryProfile,
-    RuntimeSection, RuntimeToolsProfile, discover_manifest, read_manifest,
+    RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile, RuntimeProfile,
+    RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, discover_manifest, read_manifest,
 };
 use std::{
     collections::BTreeMap,
@@ -59,6 +60,16 @@ pub(super) struct CliModelConfig {
     endpoint: NetworkEndpoint,
     private_resolution: PrivateResolutionPolicy,
     retry: RetryPolicy,
+    enable_thinking: Option<bool>,
+    timeout: TransportTimeoutPolicy,
+}
+
+struct ModelAdapterConfig {
+    base_url_override: Option<String>,
+    api_key: Option<String>,
+    retry: RetryPolicy,
+    timeout: TransportTimeoutPolicy,
+    private_resolution: PrivateResolutionPolicy,
     enable_thinking: Option<bool>,
 }
 
@@ -450,6 +461,8 @@ impl CliHostConfig {
             "ETAS_HOST_MODEL_NAME",
             "ETAS_HOST_MODEL_BASE_URL",
             "ETAS_HOST_MODEL_ALLOW_PRIVATE",
+            "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
+            "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
             "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
             "ETAS_HOST_MODEL_RETRY_DELAY_MS",
         ]) {
@@ -596,6 +609,7 @@ impl CliHostConfig {
                 "model": model.model.0,
                 "private_resolution": private_resolution_name(model.private_resolution),
                 "enable_thinking": model.enable_thinking,
+                "timeout": timeout_policy_json(model.timeout),
                 "retry": retry_policy_json(model.retry),
                 "capabilities": {
                     "forced_tool_output": model.capabilities.supports_forced_tool_output,
@@ -929,6 +943,15 @@ fn model_from_runtime_profile(
                 .unwrap_or_else(default_transport_retry),
         )?,
     )?;
+    let timeout = timeout_policy_from_env(
+        env,
+        "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
+        "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
+        timeout_policy_from_profile(
+            profile.timeout.as_ref(),
+            current.map_or_else(TransportTimeoutPolicy::default, |model| model.timeout),
+        )?,
+    )?;
     let private_resolution = private_resolution_from_env_override(
         env,
         "ETAS_HOST_MODEL_ALLOW_PRIVATE",
@@ -944,11 +967,14 @@ fn model_from_runtime_profile(
     model_from_parts(
         adapter_name,
         model,
-        base_url,
-        api_key,
-        retry,
-        private_resolution,
-        enable_thinking,
+        ModelAdapterConfig {
+            base_url_override: base_url,
+            api_key,
+            retry,
+            timeout,
+            private_resolution,
+            enable_thinking,
+        },
     )
 }
 
@@ -986,6 +1012,12 @@ fn model_from_env_overrides(
             .map(|model| model.retry)
             .unwrap_or_else(default_transport_retry),
     )?;
+    let timeout = timeout_policy_from_env(
+        env,
+        "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
+        "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
+        current.map_or_else(TransportTimeoutPolicy::default, |model| model.timeout),
+    )?;
     let private_resolution = private_resolution_from_env_override(
         env,
         "ETAS_HOST_MODEL_ALLOW_PRIVATE",
@@ -996,23 +1028,30 @@ fn model_from_env_overrides(
     model_from_parts(
         adapter_name,
         model,
-        base_url,
-        api_key,
-        retry,
-        private_resolution,
-        current.and_then(|model| model.enable_thinking),
+        ModelAdapterConfig {
+            base_url_override: base_url,
+            api_key,
+            retry,
+            timeout,
+            private_resolution,
+            enable_thinking: current.and_then(|model| model.enable_thinking),
+        },
     )
 }
 
 fn model_from_parts(
     adapter_name: String,
     model: String,
-    base_url_override: Option<String>,
-    api_key: Option<String>,
-    retry: RetryPolicy,
-    private_resolution: PrivateResolutionPolicy,
-    enable_thinking: Option<bool>,
+    config: ModelAdapterConfig,
 ) -> Result<CliModelConfig, CliError> {
+    let ModelAdapterConfig {
+        base_url_override,
+        api_key,
+        retry,
+        timeout,
+        private_resolution,
+        enable_thinking,
+    } = config;
     if enable_thinking.is_some() && adapter_name != "omlx-openai" {
         return Err(CliError::InvalidUsage(format!(
             "runtime model `enable_thinking` is only supported by the `omlx-openai` adapter, not `{adapter_name}`"
@@ -1089,12 +1128,18 @@ fn model_from_parts(
         }
     };
     let adapter = match adapter {
-        CliModelAdapter::OpenAi(adapter) => {
-            CliModelAdapter::OpenAi(adapter.with_auth(auth).with_retry(retry))
-        }
-        CliModelAdapter::Anthropic(adapter) => {
-            CliModelAdapter::Anthropic(adapter.with_auth(auth).with_retry(retry))
-        }
+        CliModelAdapter::OpenAi(adapter) => CliModelAdapter::OpenAi(
+            adapter
+                .with_auth(auth)
+                .with_retry(retry)
+                .with_timeout(timeout),
+        ),
+        CliModelAdapter::Anthropic(adapter) => CliModelAdapter::Anthropic(
+            adapter
+                .with_auth(auth)
+                .with_retry(retry)
+                .with_timeout(timeout),
+        ),
     };
     Ok(CliModelConfig {
         adapter,
@@ -1106,6 +1151,7 @@ fn model_from_parts(
         private_resolution,
         retry,
         enable_thinking,
+        timeout,
     })
 }
 
@@ -1368,6 +1414,76 @@ fn default_transport_retry() -> RetryPolicy {
     }
 }
 
+fn timeout_policy_from_profile(
+    profile: Option<&RuntimeModelTimeoutProfile>,
+    base: TransportTimeoutPolicy,
+) -> Result<TransportTimeoutPolicy, CliError> {
+    let connect_timeout_ms = profile
+        .and_then(|profile| profile.connect_timeout_ms)
+        .unwrap_or(duration_millis(base.connect_timeout())?);
+    let request_deadline_ms = profile
+        .and_then(|profile| profile.request_deadline_ms)
+        .unwrap_or(duration_millis(base.request_deadline())?);
+    timeout_policy_from_parts(connect_timeout_ms, request_deadline_ms)
+}
+
+fn timeout_policy_from_env(
+    env: &RuntimeEnvOverrides,
+    connect_name: &'static str,
+    request_name: &'static str,
+    base: TransportTimeoutPolicy,
+) -> Result<TransportTimeoutPolicy, CliError> {
+    let connect_timeout_ms = env
+        .optional(connect_name)
+        .map(|value| parse_timeout_millis(connect_name, &value))
+        .transpose()?
+        .unwrap_or(duration_millis(base.connect_timeout())?);
+    let request_deadline_ms = env
+        .optional(request_name)
+        .map(|value| parse_timeout_millis(request_name, &value))
+        .transpose()?
+        .unwrap_or(duration_millis(base.request_deadline())?);
+    timeout_policy_from_parts(connect_timeout_ms, request_deadline_ms)
+}
+
+fn timeout_policy_from_env_vars(
+    connect_name: &'static str,
+    request_name: &'static str,
+    base: TransportTimeoutPolicy,
+) -> Result<TransportTimeoutPolicy, CliError> {
+    let connect_timeout_ms = optional_env(connect_name)?
+        .map(|value| parse_timeout_millis(connect_name, &value))
+        .transpose()?
+        .unwrap_or(duration_millis(base.connect_timeout())?);
+    let request_deadline_ms = optional_env(request_name)?
+        .map(|value| parse_timeout_millis(request_name, &value))
+        .transpose()?
+        .unwrap_or(duration_millis(base.request_deadline())?);
+    timeout_policy_from_parts(connect_timeout_ms, request_deadline_ms)
+}
+
+fn timeout_policy_from_parts(
+    connect_timeout_ms: u64,
+    request_deadline_ms: u64,
+) -> Result<TransportTimeoutPolicy, CliError> {
+    TransportTimeoutPolicy::try_from_millis(connect_timeout_ms, request_deadline_ms)
+        .map_err(|error| CliError::InvalidUsage(format!("invalid runtime model timeout: {error}")))
+}
+
+fn parse_timeout_millis(name: &'static str, value: &str) -> Result<u64, CliError> {
+    value.parse::<u64>().map_err(|source| {
+        CliError::InvalidUsage(format!(
+            "`{name}` must be an integer number of milliseconds: {source}"
+        ))
+    })
+}
+
+fn duration_millis(duration: Duration) -> Result<u64, CliError> {
+    duration.as_millis().try_into().map_err(|_| {
+        CliError::InvalidUsage("runtime model timeout exceeds the supported range".to_owned())
+    })
+}
+
 fn retry_policy_from_profile(
     profile: Option<&RuntimeRetryProfile>,
     base: RetryPolicy,
@@ -1465,6 +1581,11 @@ fn model_from_environment() -> Result<Option<CliModelConfig>, CliError> {
         "ETAS_HOST_MODEL_RETRY_DELAY_MS",
         default_transport_retry(),
     )?;
+    let timeout = timeout_policy_from_env_vars(
+        "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
+        "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
+        TransportTimeoutPolicy::default(),
+    )?;
     let private_resolution = private_resolution_from_env_var(
         "ETAS_HOST_MODEL_ALLOW_PRIVATE",
         PrivateResolutionPolicy::PublicOnly,
@@ -1472,11 +1593,14 @@ fn model_from_environment() -> Result<Option<CliModelConfig>, CliError> {
     model_from_parts(
         adapter_name,
         model,
-        base_url,
-        api_key,
-        retry,
-        private_resolution,
-        None,
+        ModelAdapterConfig {
+            base_url_override: base_url,
+            api_key,
+            retry,
+            timeout,
+            private_resolution,
+            enable_thinking: None,
+        },
     )
     .map(Some)
 }
@@ -1616,6 +1740,13 @@ fn retry_policy_json(policy: RetryPolicy) -> serde_json::Value {
     serde_json::json!({
         "attempts": policy.attempts,
         "delay_ms": policy.delay.as_millis(),
+    })
+}
+
+fn timeout_policy_json(policy: TransportTimeoutPolicy) -> serde_json::Value {
+    serde_json::json!({
+        "connect_timeout_ms": policy.connect_timeout().as_millis(),
+        "request_deadline_ms": policy.request_deadline().as_millis(),
     })
 }
 
@@ -2077,6 +2208,10 @@ mod tests {
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
                 enable_thinking: Some(true),
+                timeout: Some(RuntimeModelTimeoutProfile {
+                    request_deadline_ms: Some(30_000),
+                    connect_timeout_ms: Some(2_000),
+                }),
                 retry: Some(RuntimeRetryProfile {
                     attempts: Some(5),
                     delay_ms: Some(50),
@@ -2097,6 +2232,10 @@ mod tests {
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
                 enable_thinking: Some(false),
+                timeout: Some(RuntimeModelTimeoutProfile {
+                    request_deadline_ms: Some(300_000),
+                    connect_timeout_ms: None,
+                }),
                 retry: None,
             }),
             network: Some(RuntimeNetworkProfile {
@@ -2121,8 +2260,33 @@ mod tests {
         assert_eq!(json["profile"], "local-omlx");
         assert_eq!(json["model"]["model"], "local-model");
         assert_eq!(json["model"]["enable_thinking"], false);
+        assert_eq!(json["model"]["timeout"]["connect_timeout_ms"], 2_000);
+        assert_eq!(json["model"]["timeout"]["request_deadline_ms"], 300_000);
         assert_eq!(json["model"]["retry"]["attempts"], 5);
         assert_eq!(json["model"]["retry"]["delay_ms"], 50);
+        let original_fingerprint = json["profile_fingerprint"].clone();
+        let mut changed_local_profile = local_profile.clone();
+        changed_local_profile
+            .model
+            .as_mut()
+            .expect("local model profile")
+            .timeout
+            .as_mut()
+            .expect("local timeout profile")
+            .request_deadline_ms = Some(300_001);
+        let changed = CliHostConfig::from_runtime_profile(
+            "local-omlx".to_owned(),
+            Some(&manifest_profile),
+            Some(&changed_local_profile),
+            &env,
+            &[],
+        )
+        .expect("changed runtime profile should build");
+        assert_ne!(
+            original_fingerprint,
+            changed.runtime_profile_json()["profile_fingerprint"],
+            "model timeout changes must participate in the runtime profile fingerprint"
+        );
         assert!(
             !serde_json::to_string(&json)
                 .expect("json serializes")
@@ -2231,6 +2395,42 @@ mod tests {
     }
 
     #[test]
+    fn runtime_model_timeout_is_bounded_and_environment_can_tighten_it() {
+        let profile = RuntimeModelProfile {
+            adapter: Some("omlx-openai".to_owned()),
+            model: Some("slow-model".to_owned()),
+            timeout: Some(RuntimeModelTimeoutProfile {
+                request_deadline_ms: Some(TransportTimeoutPolicy::MAX_REQUEST_DEADLINE_MILLIS),
+                connect_timeout_ms: Some(2_000),
+            }),
+            ..RuntimeModelProfile::default()
+        };
+        let mut env = RuntimeEnvOverrides::default();
+        env.values.insert(
+            "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS".to_owned(),
+            "8000".to_owned(),
+        );
+        let model = model_from_runtime_profile(&profile, &env, None)
+            .expect("bounded runtime model timeout should build");
+        assert_eq!(model.timeout.request_deadline(), Duration::from_secs(8));
+        assert_eq!(model.timeout.connect_timeout(), Duration::from_secs(2));
+
+        let invalid = RuntimeModelProfile {
+            timeout: Some(RuntimeModelTimeoutProfile {
+                request_deadline_ms: Some(TransportTimeoutPolicy::MAX_REQUEST_DEADLINE_MILLIS + 1),
+                connect_timeout_ms: Some(2_000),
+            }),
+            ..profile
+        };
+        let error =
+            match model_from_runtime_profile(&invalid, &RuntimeEnvOverrides::default(), None) {
+                Ok(_) => panic!("deadline above the hard cap must be rejected"),
+                Err(error) => error,
+            };
+        assert!(error.to_string().contains("3600000"), "{error}");
+    }
+
+    #[test]
     fn runtime_profile_merges_tool_bindings_by_name_and_env_overrides_retry() {
         let manifest_profile = RuntimeProfile {
             tools: Some(RuntimeToolsProfile {
@@ -2253,6 +2453,7 @@ mod tests {
                 api_key_env: None,
                 allow_private: Some(true),
                 enable_thinking: Some(false),
+                timeout: None,
                 retry: Some(RuntimeRetryProfile {
                     attempts: Some(4),
                     delay_ms: Some(40),
@@ -2275,6 +2476,7 @@ mod tests {
                 api_key_env: None,
                 allow_private: None,
                 enable_thinking: None,
+                timeout: None,
                 retry: None,
             }),
             ..RuntimeProfile::default()

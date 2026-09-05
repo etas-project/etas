@@ -4470,6 +4470,10 @@ base_url = "http://127.0.0.1:8848/v1"
 api_key_env = "ETAS_TEST_OMLX_API_KEY"
 enable_thinking = true
 
+[runtime.profiles.local-omlx.model.timeout]
+request_deadline_ms = 30000
+connect_timeout_ms = 2000
+
 [runtime.profiles.local-omlx.memory]
 backend = "memory"
 "#,
@@ -4483,6 +4487,9 @@ max_call_depth = 96
 [runtime.profiles.local-omlx.model]
 base_url = "http://127.0.0.1:9999/v1"
 enable_thinking = false
+
+[runtime.profiles.local-omlx.model.timeout]
+request_deadline_ms = 300000
 "#,
             ),
         ],
@@ -4503,6 +4510,8 @@ enable_thinking = false
     assert_eq!(profile["profile"], "local-omlx");
     assert_eq!(profile["model"]["model"], "manifest-model");
     assert_eq!(profile["model"]["enable_thinking"], false);
+    assert_eq!(profile["model"]["timeout"]["connect_timeout_ms"], 2_000);
+    assert_eq!(profile["model"]["timeout"]["request_deadline_ms"], 300_000);
     assert_eq!(profile["execution"]["max_call_depth"], 96);
     assert_eq!(profile["execution"]["max_steps"], 1_000_000);
     assert!(
@@ -4519,6 +4528,61 @@ enable_thinking = false
         "model transport must not grant source-visible network authority"
     );
     assert!(!stdout.contains("ETAS_TEST_OMLX_API_KEY"), "{stdout}");
+}
+
+#[test]
+fn runtime_profile_model_deadline_controls_slow_request() {
+    let _guard = lock_model_cli_e2e();
+    let project = copy_project_fixture("model-request-deadline", &agent_system_smoke_project());
+
+    let (base_url, server) =
+        spawn_delayed_openai_completion_server("within deadline", Duration::from_millis(150));
+    write_model_deadline_runtime_profile(&project, &base_url, 500);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&project),
+            "--profile",
+            "model-deadline",
+            "--allow-effects",
+            "--budget-tokens",
+            "128",
+        ],
+        "",
+    );
+    shutdown_mock_server(&base_url);
+    server.join().expect("slow mock server should finish");
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("within deadline"), "{stdout}");
+
+    let (base_url, server) =
+        spawn_delayed_openai_completion_server("too late", Duration::from_millis(250));
+    write_model_deadline_runtime_profile(&project, &base_url, 100);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, _stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&project),
+            "--profile",
+            "model-deadline",
+            "--allow-effects",
+            "--budget-tokens",
+            "128",
+        ],
+        "",
+    );
+    shutdown_mock_server(&base_url);
+    server.join().expect("timed-out mock server should finish");
+    assert_ne!(code, 0);
+    assert!(
+        stderr.contains("HTTP transport request deadline exceeded"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -6444,6 +6508,8 @@ fn remove_legacy_runtime_host_env(command: &mut Command) {
         "ETAS_HOST_MODEL_NAME",
         "ETAS_HOST_MODEL_API_KEY",
         "ETAS_HOST_MODEL_ALLOW_PRIVATE",
+        "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
+        "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
         "ETAS_HOST_OMLX_API_KEY",
         "ETAS_HOST_MEMORY",
         "ETAS_HOST_APPROVAL",
@@ -6498,6 +6564,46 @@ mode = "auto"
         ),
     )
     .expect("write full Phase1 mock runtime profile");
+}
+
+fn write_model_deadline_runtime_profile(project: &Path, base_url: &str, deadline_ms: u64) {
+    std::fs::write(
+        project.join("etas.local.toml"),
+        format!(
+            r#"
+[runtime]
+default_profile = "model-deadline"
+
+[runtime.profiles.model-deadline]
+boundary_policy = "model-deadline"
+
+[runtime.profiles.model-deadline.model]
+adapter = "openai"
+model = "slow-model"
+base_url = "{base_url}"
+allow_private = true
+
+[runtime.profiles.model-deadline.model.timeout]
+request_deadline_ms = {deadline_ms}
+connect_timeout_ms = 100
+
+[runtime.profiles.model-deadline.model.retry]
+attempts = 1
+delay_ms = 0
+
+[runtime.profiles.model-deadline.memory]
+backend = "memory"
+
+[runtime.profiles.model-deadline.policy]
+mode = "local-static"
+rules = ["model=allow", "memory=approval", "console=allow"]
+
+[runtime.profiles.model-deadline.approval]
+mode = "auto"
+"#
+        ),
+    )
+    .expect("write model deadline runtime profile");
 }
 
 fn write_http_policy_mock_runtime_profile(
@@ -7197,6 +7303,13 @@ fn multi_agent_runtime_review(topic: &str) -> (&'static str, i32) {
 fn spawn_openai_completion_server(
     response_text: &'static str,
 ) -> (String, thread::JoinHandle<String>) {
+    spawn_delayed_openai_completion_server(response_text, Duration::ZERO)
+}
+
+fn spawn_delayed_openai_completion_server(
+    response_text: &'static str,
+    response_delay: Duration,
+) -> (String, thread::JoinHandle<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mock OpenAI server");
     let addr = listener.local_addr().expect("mock server address");
     let base_url = mock_server_base_url(addr, "/v1");
@@ -7223,6 +7336,7 @@ fn spawn_openai_completion_server(
                     if request.is_empty() {
                         continue;
                     }
+                    thread::sleep(response_delay);
                     let body = serde_json::json!({
                         "choices": [{
                             "message": {
@@ -7236,7 +7350,13 @@ fn spawn_openai_completion_server(
                         }
                     })
                     .to_string();
-                    write_http_json_response(&mut stream, &body);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    let _ = stream.write_all(response.as_bytes());
+                    let _ = stream.flush();
                     return request;
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
