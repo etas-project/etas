@@ -4383,6 +4383,68 @@ fn project_agent_system_smoke_checks_effects_and_runs_with_openai_mock() {
 }
 
 #[test]
+fn runtime_profile_omlx_thinking_control_reaches_request_body() {
+    let _guard = lock_model_cli_e2e();
+    let project = copy_project_fixture("omlx-thinking-control", &agent_system_smoke_project());
+    let (base_url, server) = spawn_openai_completion_server("thinking disabled");
+    std::fs::write(
+        project.join("etas.local.toml"),
+        format!(
+            r#"
+[runtime]
+default_profile = "local-omlx"
+
+[runtime.profiles.local-omlx]
+boundary_policy = "omlx-thinking-control"
+
+[runtime.profiles.local-omlx.model]
+adapter = "omlx-openai"
+model = "qwen-thinking-model"
+base_url = "{base_url}"
+enable_thinking = false
+
+[runtime.profiles.local-omlx.memory]
+backend = "memory"
+
+[runtime.profiles.local-omlx.policy]
+mode = "local-static"
+rules = ["model=allow", "memory=approval", "console=allow"]
+
+[runtime.profiles.local-omlx.approval]
+mode = "auto"
+"#
+        ),
+    )
+    .expect("write oMLX thinking-control profile");
+
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&project),
+            "--profile",
+            "local-omlx",
+            "--allow-effects",
+            "--budget-tokens",
+            "128",
+        ],
+        "",
+    );
+    shutdown_mock_server(&base_url);
+    let request = server.join().expect("mock server thread should finish");
+
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stdout.contains("thinking disabled"), "{stdout}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(
+        request.contains(r#""chat_template_kwargs":{"enable_thinking":false}"#),
+        "oMLX request should carry the typed thinking option:\n{request}"
+    );
+}
+
+#[test]
 fn run_print_runtime_profile_uses_manifest_and_local_override() {
     let project = package_fixture(
         "runtime-profile-print",
@@ -4406,6 +4468,7 @@ adapter = "omlx-openai"
 model = "manifest-model"
 base_url = "http://127.0.0.1:8848/v1"
 api_key_env = "ETAS_TEST_OMLX_API_KEY"
+enable_thinking = true
 
 [runtime.profiles.local-omlx.memory]
 backend = "memory"
@@ -4419,6 +4482,7 @@ max_call_depth = 96
 
 [runtime.profiles.local-omlx.model]
 base_url = "http://127.0.0.1:9999/v1"
+enable_thinking = false
 "#,
             ),
         ],
@@ -4438,6 +4502,7 @@ base_url = "http://127.0.0.1:9999/v1"
     let profile: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(profile["profile"], "local-omlx");
     assert_eq!(profile["model"]["model"], "manifest-model");
+    assert_eq!(profile["model"]["enable_thinking"], false);
     assert_eq!(profile["execution"]["max_call_depth"], 96);
     assert_eq!(profile["execution"]["max_steps"], 1_000_000);
     assert!(
