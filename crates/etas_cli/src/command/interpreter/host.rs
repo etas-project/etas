@@ -111,16 +111,16 @@ impl CliHost {
         let session = session_client(&config.session_mode)?;
         let byte_streams =
             (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
+        let mut workspace_regions = etas_host::WorkspaceRegionRegistry::default();
+        for (identity, region) in &config.filesystem_regions {
+            workspace_regions
+                .insert(identity.clone(), region.root.clone())
+                .map_err(|error| CliError::InvalidUsage(error.message))?;
+        }
         let filesystem = if config.filesystem_mode != FilesystemMode::None
             || !config.filesystem_regions.is_empty()
         {
-            let mut regions = etas_host::WorkspaceRegionRegistry::default();
-            for (identity, region) in &config.filesystem_regions {
-                regions
-                    .insert(identity.clone(), region.root.clone())
-                    .map_err(|error| CliError::InvalidUsage(error.message))?;
-            }
-            Some(LocalFilesystemClient::new(regions))
+            Some(LocalFilesystemClient::new(workspace_regions.clone()))
         } else {
             None
         };
@@ -155,7 +155,8 @@ impl CliHost {
             stream: byte_streams.clone().map(LocalStreamClient::new),
             tls: byte_streams.map(LocalTlsClient::new),
             secret: (config.secret_mode == SecretMode::Env).then_some(EnvSecretClient),
-            command: (!config.command_allowed_programs.is_empty()).then(LocalCommandClient::new),
+            command: (!config.command_allowed_programs.is_empty())
+                .then(|| LocalCommandClient::with_regions(workspace_regions)),
             approval: config.approval_mode,
             policy: config.policy_mode,
             policy_local: config.policy_local,
@@ -528,7 +529,7 @@ impl HostServices for CliHost {
         &'a self,
         request: ApprovalRequest,
     ) -> HostFuture<'a, Result<ApprovalResponse, HostError>> {
-        let future = async move { approval_decision(self.approval, request) };
+        let future = async move { approval_decision(self.approval, request).await };
         self.profiled("host.approval", future)
     }
 
@@ -631,7 +632,7 @@ fn policy_label_terms(label: &str) -> Vec<String> {
         .collect()
 }
 
-fn approval_decision(
+async fn approval_decision(
     mode: ApprovalMode,
     request: ApprovalRequest,
 ) -> Result<ApprovalResponse, HostError> {
@@ -656,14 +657,7 @@ fn approval_decision(
                     "Etas approval requested: {}\nType `yes` to approve:",
                     request.reason
                 );
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input).map_err(|error| {
-                    HostError::new(
-                        HostErrorCode::ProviderUnavailable,
-                        "failed to read approval input",
-                    )
-                    .with_detail("error", error.to_string())
-                })?;
+                let input = LocalStdioClient::new().read_prompt_line().await?;
                 if input.trim() == "yes" {
                     Ok(ApprovalDecision::Approved {
                         grant: etas_host::ApprovalGrant {

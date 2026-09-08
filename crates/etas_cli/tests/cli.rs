@@ -3917,6 +3917,133 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>, Error<IndexError>]
 }
 
 #[test]
+fn run_repeated_console_reads_preserves_both_lines_and_identical_writes() {
+    let project = package_fixture(
+        "repeated-console-input",
+        &[
+            (
+                "etas.toml",
+                r#"
+[package]
+name = "repeated-console-input"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[runtime]
+default_profile = "line"
+[runtime.profiles.line]
+boundary_policy = "line-repro"
+[runtime.profiles.line.policy]
+mode = "local-static"
+rules = ["console=allow"]
+[runtime.profiles.line.approval]
+mode = "deny"
+[[bin]]
+name = "repeated-console-input"
+module = "tests.cli.repeated_console_input"
+flow = "main"
+profile = "line"
+"#,
+            ),
+            (
+                "src/tests/cli/repeated_console_input.es",
+                r#"
+module tests.cli.repeated_console_input;
+import std.io.{eprintln, print, println, read_line};
+spec Terminal: trace = +Console;
+flow main(args: Array<string>) -> i32 ![Error<IOError>] ~ Terminal {
+    println("READY");
+    let first = read_line();
+    print("FIRST<"); print(first); println(">");
+    let second = read_line();
+    print("SECOND<"); print(second); println(">");
+    eprintln("ERR_DONE");
+    return 0;
+}
+"#,
+            ),
+        ],
+    );
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&project),
+            "--profile",
+            "line",
+            "--allow-effects",
+            "--color",
+            "never",
+        ],
+        "alpha\nbeta",
+    );
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(stdout, "READY\nFIRST<alpha\n>\nSECOND<beta>\n");
+    assert_eq!(stderr, "ERR_DONE\n");
+}
+
+#[test]
+fn run_console_deadline_exits_with_stdin_still_open() {
+    let _guard = lock_cli_process();
+    let file = fixture(
+        "console-input-deadline",
+        r#"
+module tests.cli.console_input_deadline;
+import std.io.{println, read_line};
+flow main(args: Array<string>) -> i32 ![Error<IOError>] {
+    println("READY");
+    let line = read_line();
+    println(line);
+    return 0;
+}
+"#,
+    );
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let mut child = command
+        .args([
+            "run",
+            path(&file),
+            "--budget-time",
+            "100ms",
+            "--color",
+            "never",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdin = child.stdin.take().unwrap();
+    let timeout = Instant::now() + Duration::from_secs(5);
+    let expired = loop {
+        if child.try_wait().unwrap().is_some() {
+            break false;
+        }
+        if Instant::now() >= timeout {
+            break true;
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    if expired {
+        child.kill().unwrap();
+    }
+    let output = child.wait_with_output().unwrap();
+    drop(stdin);
+    assert!(
+        !expired,
+        "CLI waited for input after its execution deadline"
+    );
+    assert_eq!(output.status.code(), Some(3));
+    assert_eq!(String::from_utf8(output.stdout).unwrap(), "READY\n");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("budget"), "{stderr}");
+}
+
+#[test]
 fn run_suppresses_value_report_when_console_is_inferred_from_called_flow() {
     let file = fixture(
         "run-inferred-console",
