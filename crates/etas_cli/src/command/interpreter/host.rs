@@ -529,7 +529,7 @@ impl HostServices for CliHost {
         &'a self,
         request: ApprovalRequest,
     ) -> HostFuture<'a, Result<ApprovalResponse, HostError>> {
-        let future = async move { approval_decision(self.approval, request) };
+        let future = async move { approval_decision(self.approval, request).await };
         self.profiled("host.approval", future)
     }
 
@@ -632,7 +632,7 @@ fn policy_label_terms(label: &str) -> Vec<String> {
         .collect()
 }
 
-fn approval_decision(
+async fn approval_decision(
     mode: ApprovalMode,
     request: ApprovalRequest,
 ) -> Result<ApprovalResponse, HostError> {
@@ -657,14 +657,7 @@ fn approval_decision(
                     "Etas approval requested: {}\nType `yes` to approve:",
                     request.reason
                 );
-                let mut input = String::new();
-                std::io::stdin().read_line(&mut input).map_err(|error| {
-                    HostError::new(
-                        HostErrorCode::ProviderUnavailable,
-                        "failed to read approval input",
-                    )
-                    .with_detail("error", error.to_string())
-                })?;
+                let input = LocalStdioClient::new().read_prompt_line().await?;
                 if input.trim() == "yes" {
                     Ok(ApprovalDecision::Approved {
                         grant: etas_host::ApprovalGrant {
