@@ -236,6 +236,8 @@ pub struct RuntimeExecutionProfile {
     pub max_call_depth: Option<u32>,
     #[serde(default)]
     pub max_steps: Option<u64>,
+    #[serde(default)]
+    pub shutdown_grace_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -389,6 +391,8 @@ pub struct RuntimeToolsProfile {
 pub struct RuntimeCommandProfile {
     #[serde(default)]
     pub allow: Vec<String>,
+    #[serde(default)]
+    pub isolation: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -801,6 +805,7 @@ default_profile = "local-omlx"
 [runtime.execution]
 max_call_depth = 96
 max_steps = 1000000
+shutdown_grace_ms = 2000
 
 [runtime.profiles.local-omlx.model]
 adapter = "omlx-openai"
@@ -853,6 +858,7 @@ profile = "local-omlx"
         );
         assert_eq!(manifest.runtime.execution.max_call_depth, Some(96));
         assert_eq!(manifest.runtime.execution.max_steps, Some(1_000_000));
+        assert_eq!(manifest.runtime.execution.shutdown_grace_ms, Some(2_000));
         let profile = manifest
             .runtime
             .profiles

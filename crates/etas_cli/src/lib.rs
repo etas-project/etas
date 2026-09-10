@@ -30,12 +30,60 @@ use args::CliArgs;
 use clap::Parser;
 
 pub fn run() -> i32 {
-    let mut stdout = std::io::stdout();
-    let mut stderr = std::io::stderr();
-    run_with(std::env::args_os(), &mut stdout, &mut stderr)
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+    {
+        use command::interpreter::lifecycle::{CommandLifecycle, ProcessOutput};
+        let lifecycle = match CommandLifecycle::new() {
+            Ok(lifecycle) => lifecycle,
+            Err(error) => {
+                eprintln!("{error}");
+                return error.exit().code();
+            }
+        };
+        let mut stdout = ProcessOutput::new(lifecycle.clone(), false);
+        let mut stderr = ProcessOutput::new(lifecycle.clone(), true);
+        let code = run_with_context(
+            std::env::args_os(),
+            &mut stdout,
+            &mut stderr,
+            Some(&lifecycle),
+        );
+        let code = lifecycle.exit_override().map_or(code, |exit| exit.code());
+        if lifecycle.forced() {
+            command::interpreter::lifecycle::force_process_exit(code);
+        }
+        code
+    }
+    #[cfg(not(any(feature = "cli-run", feature = "cli-resume")))]
+    {
+        let mut stdout = std::io::stdout();
+        let mut stderr = std::io::stderr();
+        run_with(std::env::args_os(), &mut stdout, &mut stderr)
+    }
 }
 
 pub fn run_with<I, T>(args: I, stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    run_with_context(
+        args,
+        stdout,
+        stderr,
+        #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+        None,
+    )
+}
+
+fn run_with_context<I, T>(
+    args: I,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))] lifecycle: Option<
+        &command::interpreter::lifecycle::CommandLifecycle,
+    >,
+) -> i32
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -58,13 +106,38 @@ where
         }
     };
 
-    match command::dispatch(args, stdout, stderr) {
-        Ok(exit) => exit.code(),
+    let result = command::dispatch_with_lifecycle(
+        args,
+        stdout,
+        stderr,
+        #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+        lifecycle,
+    );
+    let exit = match result {
+        Ok(exit) => exit,
         Err(error) => {
             let _ = writeln!(stderr, "{error}");
-            error.exit().code()
+            error.exit()
         }
-    }
+    };
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+    let exit = if let Some(owner) = lifecycle {
+        let mut exit = exit;
+        // Flush while the process signal owner is still polling, not at exit.
+        let stdout_result = stdout.flush();
+        let stderr_result = stderr.flush();
+        if stdout_result.and(stderr_result).is_err() {
+            exit = exit::CliExit::RuntimeFailure;
+        }
+        if let Err(error) = owner.finalize(exit) {
+            let _ = writeln!(stderr, "{error}");
+            exit = error.exit();
+        }
+        owner.exit_override().unwrap_or(exit)
+    } else {
+        exit
+    };
+    exit.code()
 }
 
 fn normalize_default_run_args<I, T>(args: I) -> Vec<OsString>

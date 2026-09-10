@@ -26,6 +26,7 @@ serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 tracing.workspace = true
+tokio = { version = "1", features = ["rt", "time", "signal", "macros"], optional = true }
 
 [features]
 default = [
@@ -49,7 +50,7 @@ default = [
 ]
 
 component-frontend = ["dep:etas_driver", "dep:etas_frontend"]
-component-runtime = ["dep:etas_effects", "dep:etas_host", "dep:etas_hir", "dep:etas_interpreter", "dep:etas_types"]
+component-runtime = ["dep:etas_effects", "dep:etas_host", "dep:etas_hir", "dep:etas_interpreter", "dep:etas_types", "dep:tokio"]
 component-ide = []
 
 cli-check = ["component-frontend"]

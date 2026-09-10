@@ -2,26 +2,22 @@ use std::future::Future;
 
 use etas_effects::{RequirementFact, TraceSpecClauseFact};
 use etas_frontend::CheckedProject;
-use etas_host::console::{ConsoleClient, ConsoleRequest, ConsoleResponse, LocalStdioClient};
+use etas_host::console::{ConsoleRequest, ConsoleResponse, LocalStdioClient};
 use etas_host::{
     ApprovalDecision, ApprovalRequest, ApprovalResponse, BrowserProtocolRequest,
-    BrowserProtocolResponse, Budget, CommandClient, CommandRequest, CommandResponse, CostBudget,
-    FilesystemClient, FilesystemRequest, FilesystemResponse, HostError, HostErrorCode,
-    HostRequestId, HostValue, InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient,
-    LocalFilesystemClient, LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryClient,
-    MemoryRequest, MemoryResponse, ModelClient, ModelRequest, ModelResponse, PolicyClient,
-    PolicyDecision, PolicyEvaluationRequest, PolicyResponse, SecretOperation, SecretPayload,
-    SecretRef, SecretRequest, SecretResponse, SecretValue, SessionClient, SessionRequest,
-    SessionResponse, SqliteMemoryClient, SqliteSessionClient, StreamClient, StreamRequest,
-    StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpClient, TcpConnectRequest, TcpConnectResponse,
-    TimeBudget, TlsClient, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest,
-    ToolResponse, TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
+    BrowserProtocolResponse, Budget, CommandRequest, CommandResponse, CostBudget,
+    FilesystemRequest, FilesystemResponse, HostError, HostErrorCode, HostRequestId, HostValue,
+    InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient, LocalFilesystemClient,
+    LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryRequest, MemoryResponse, ModelRequest,
+    ModelResponse, PolicyClient, PolicyDecision, PolicyEvaluationRequest, PolicyResponse,
+    SecretOperation, SecretPayload, SecretRef, SecretRequest, SecretResponse, SecretValue,
+    SessionRequest, SessionResponse, SqliteMemoryClient, SqliteSessionClient, StreamRequest,
+    StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpConnectRequest, TcpConnectResponse, TimeBudget,
+    TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
+    TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
-    api::{
-        EntryPoint, InterpreterCheckpoint, RunOptions, RunResult, entry_args_from_strings,
-        resume_checkpoint_blocking, run_checked_blocking,
-    },
+    api::{EntryPoint, InterpreterCheckpoint, RunOptions, entry_args_from_strings},
     host::{HostFuture, HostServiceAvailability, HostServices},
 };
 use etas_utils::{ProfileHandle, ProfileSpanStatus};
@@ -37,7 +33,7 @@ use super::{
 };
 
 #[derive(Clone)]
-struct CliHost {
+pub(super) struct CliHost {
     availability: HostServiceAvailability,
     model: Option<CliModelAdapter>,
     tool: CliToolRouter,
@@ -75,7 +71,7 @@ enum CliSessionClient {
 }
 
 impl CliHost {
-    fn dry_run(profile: ProfileHandle) -> Self {
+    pub(super) fn dry_run(profile: ProfileHandle) -> Self {
         Self {
             availability: HostServiceAvailability::default(),
             model: None,
@@ -179,13 +175,17 @@ impl CliHost {
     {
         let profile = self.profile.clone();
         Box::pin(async move {
-            let mut span = profile.span(name, "host");
+            let mut span = profile
+                .span(name, "host")
+                .unfinished_status(ProfileSpanStatus::Abandoned);
             let result = future.await;
-            if result.is_ok() {
-                span.finish(ProfileSpanStatus::Ok);
-            } else {
-                span.finish(ProfileSpanStatus::Error);
-            }
+            span.finish(match &result {
+                Ok(_) => ProfileSpanStatus::Ok,
+                Err(error) if error.code == HostErrorCode::Cancelled => {
+                    ProfileSpanStatus::Cancelled
+                }
+                Err(_) => ProfileSpanStatus::Error,
+            });
             result
         })
     }
@@ -231,7 +231,12 @@ fn session_client(mode: &SessionMode) -> Result<Option<CliSessionClient>, CliErr
 struct EnvSecretClient;
 
 impl EnvSecretClient {
-    async fn execute(&self, request: SecretRequest) -> Result<SecretResponse, HostError> {
+    async fn execute_scoped(
+        &self,
+        request: SecretRequest,
+        operation: &etas_host::execution::OperationContext,
+    ) -> Result<SecretResponse, HostError> {
+        operation.signal().check()?;
         let result = match &request.operation {
             SecretOperation::Read { key } => match std::env::var(key) {
                 Ok(_) => Ok(SecretPayload::Value(SecretValue::new(
@@ -397,22 +402,27 @@ impl HostServices for CliHost {
 
     fn model<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: ModelRequest,
     ) -> HostFuture<'a, Result<ModelResponse, HostError>> {
         let future: HostFuture<'a, Result<ModelResponse, HostError>> = match &self.model {
             Some(CliModelAdapter::OpenAi(adapter)) => {
-                Box::pin(async move { adapter.complete(request).await })
+                Box::pin(async move { adapter.complete_scoped(request, &operation).await })
             }
             Some(CliModelAdapter::Anthropic(adapter)) => {
-                Box::pin(async move { adapter.complete(request).await })
+                Box::pin(async move { adapter.complete_scoped(request, &operation).await })
             }
             None => self.unavailable.model(request),
         };
         self.profiled("host.model", future)
     }
 
-    fn tool<'a>(&'a self, request: ToolRequest) -> HostFuture<'a, Result<ToolResponse, HostError>> {
-        let future = match self.tool.invoke(request.clone()) {
+    fn tool<'a>(
+        &'a self,
+        operation: etas_host::execution::OperationContext,
+        request: ToolRequest,
+    ) -> HostFuture<'a, Result<ToolResponse, HostError>> {
+        let future = match self.tool.invoke(operation.clone(), request.clone()) {
             Some(future) => future,
             None => Box::pin(async move { Err(unknown_tool_error(&request)) }),
         };
@@ -421,42 +431,93 @@ impl HostServices for CliHost {
 
     fn memory<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: MemoryRequest,
     ) -> HostFuture<'a, Result<MemoryResponse, HostError>> {
         let future: HostFuture<'a, Result<MemoryResponse, HostError>> = match &self.memory {
             Some(CliMemoryClient::InMemory(adapter)) => {
-                Box::pin(async move { adapter.execute(request).await })
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
             }
             Some(CliMemoryClient::Sqlite(adapter)) => {
-                Box::pin(async move { adapter.execute(request).await })
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
             }
             None => self.unavailable.memory(request),
         };
         self.profiled("host.memory", future)
     }
 
+    fn memory_write<'a>(
+        &'a self,
+        operation: etas_host::execution::OperationContext,
+        request: etas_host::memory::MemoryWriteRequest,
+    ) -> HostFuture<'a, Result<etas_host::memory::MemoryWriteResponse, HostError>> {
+        let future: HostFuture<'a, Result<etas_host::memory::MemoryWriteResponse, HostError>> =
+            match &self.memory {
+                Some(CliMemoryClient::InMemory(adapter)) => {
+                    Box::pin(async move { adapter.write_scoped(request, &operation).await })
+                }
+                Some(CliMemoryClient::Sqlite(adapter)) => {
+                    Box::pin(async move { adapter.write_scoped(request, &operation).await })
+                }
+                None => Box::pin(async move {
+                    Err(unavailable(
+                        request.id,
+                        "memory host adapter is not configured",
+                    ))
+                }),
+            };
+        self.profiled("host.memory.write", future)
+    }
+
     fn session<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: SessionRequest,
     ) -> HostFuture<'a, Result<SessionResponse, HostError>> {
         let future: HostFuture<'a, Result<SessionResponse, HostError>> = match &self.session {
             Some(CliSessionClient::InMemory(adapter)) => {
-                Box::pin(async move { adapter.execute(request).await })
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
             }
             Some(CliSessionClient::Sqlite(adapter)) => {
-                Box::pin(async move { adapter.execute(request).await })
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
             }
             None => self.unavailable.session(request),
         };
         self.profiled("host.session", future)
     }
 
+    fn session_write<'a>(
+        &'a self,
+        operation: etas_host::execution::OperationContext,
+        request: etas_host::session::SessionWriteRequest,
+    ) -> HostFuture<'a, Result<etas_host::session::SessionWriteResponse, HostError>> {
+        let future: HostFuture<'a, Result<etas_host::session::SessionWriteResponse, HostError>> =
+            match &self.session {
+                Some(CliSessionClient::InMemory(adapter)) => {
+                    Box::pin(async move { adapter.write_scoped(request, &operation).await })
+                }
+                Some(CliSessionClient::Sqlite(adapter)) => {
+                    Box::pin(async move { adapter.write_scoped(request, &operation).await })
+                }
+                None => Box::pin(async move {
+                    Err(unavailable(
+                        request.id,
+                        "session host adapter is not configured",
+                    ))
+                }),
+            };
+        self.profiled("host.session.write", future)
+    }
+
     fn filesystem<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: FilesystemRequest,
     ) -> HostFuture<'a, Result<FilesystemResponse, HostError>> {
         let future = match &self.filesystem {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.filesystem(request),
         };
         self.profiled("host.filesystem", future)
@@ -464,10 +525,13 @@ impl HostServices for CliHost {
 
     fn command<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: CommandRequest,
     ) -> HostFuture<'a, Result<CommandResponse, HostError>> {
         let future = match &self.command {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.command(request),
         };
         self.profiled("host.command", future)
@@ -475,10 +539,13 @@ impl HostServices for CliHost {
 
     fn tcp<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: TcpConnectRequest,
     ) -> HostFuture<'a, Result<TcpConnectResponse, HostError>> {
         let future = match &self.tcp {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.tcp(request),
         };
         self.profiled("host.tcp", future)
@@ -486,10 +553,13 @@ impl HostServices for CliHost {
 
     fn stream<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: StreamRequest,
     ) -> HostFuture<'a, Result<StreamResponse, HostError>> {
         let future = match &self.stream {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.stream(request),
         };
         self.profiled("host.stream", future)
@@ -497,10 +567,13 @@ impl HostServices for CliHost {
 
     fn tls<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: TlsConnectRequest,
     ) -> HostFuture<'a, Result<TlsConnectResponse, HostError>> {
         let future = match &self.tls {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.tls(request),
         };
         self.profiled("host.tls", future)
@@ -508,10 +581,13 @@ impl HostServices for CliHost {
 
     fn secret<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: SecretRequest,
     ) -> HostFuture<'a, Result<SecretResponse, HostError>> {
         let future = match &self.secret {
-            Some(adapter) => Box::pin(async move { adapter.execute(request).await }),
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_scoped(request, &operation).await })
+            }
             None => self.unavailable.secret(request),
         };
         self.profiled("host.secret", future)
@@ -519,6 +595,7 @@ impl HostServices for CliHost {
 
     fn browser<'a>(
         &'a self,
+        _operation: etas_host::execution::OperationContext,
         request: BrowserProtocolRequest,
     ) -> HostFuture<'a, Result<BrowserProtocolResponse, HostError>> {
         let future = self.unavailable.browser(request);
@@ -527,14 +604,16 @@ impl HostServices for CliHost {
 
     fn approval<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: ApprovalRequest,
     ) -> HostFuture<'a, Result<ApprovalResponse, HostError>> {
-        let future = async move { approval_decision(self.approval, request).await };
+        let future = async move { approval_decision(self.approval, request, &operation).await };
         self.profiled("host.approval", future)
     }
 
     fn policy<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: PolicyEvaluationRequest,
     ) -> HostFuture<'a, Result<PolicyResponse, HostError>> {
         let mut request = request;
@@ -546,7 +625,7 @@ impl HostServices for CliHost {
         }
         let future = async move {
             if let Some(adapter) = &self.policy_http {
-                return adapter.evaluate(request).await;
+                return adapter.evaluate_scoped(request, &operation).await;
             }
             if let Some(adapter) = &self.policy_local {
                 return adapter.evaluate(request).await;
@@ -604,11 +683,12 @@ impl HostServices for CliHost {
 
     fn console<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: ConsoleRequest,
     ) -> HostFuture<'a, Result<ConsoleResponse, HostError>> {
         let future = async move {
             let adapter = LocalStdioClient::new();
-            adapter.execute(request).await
+            adapter.execute_scoped(request, &operation).await
         };
         self.profiled("host.console", future)
     }
@@ -635,7 +715,9 @@ fn policy_label_terms(label: &str) -> Vec<String> {
 async fn approval_decision(
     mode: ApprovalMode,
     request: ApprovalRequest,
+    operation: &etas_host::execution::OperationContext,
 ) -> Result<ApprovalResponse, HostError> {
+    operation.signal().check()?;
     let id = request.id;
     let decision = match mode {
         ApprovalMode::Deny => Ok(ApprovalDecision::Denied {
@@ -653,11 +735,26 @@ async fn approval_decision(
                     reason: "CLI approval prompt requires an interactive TTY".to_owned(),
                 })
             } else {
-                eprintln!(
-                    "Etas approval requested: {}\nType `yes` to approve:",
-                    request.reason
-                );
-                let input = LocalStdioClient::new().read_prompt_line().await?;
+                let reason = request.reason;
+                operation
+                    .run_blocking(etas_host::ExecutionBudget::default(), move |_| {
+                        use std::io::Write;
+                        writeln!(
+                            std::io::stderr(),
+                            "Etas approval requested: {reason}\nType `yes` to approve:"
+                        )
+                        .map_err(|error| {
+                            HostError::new(
+                                HostErrorCode::ProviderUnavailable,
+                                format!("cannot write approval prompt: {error}"),
+                            )
+                        })?;
+                        Ok(ApprovalPromptWritten)
+                    })
+                    .await?;
+                let input = LocalStdioClient::new()
+                    .read_prompt_line_scoped(operation)
+                    .await?;
                 if input.trim() == "yes" {
                     Ok(ApprovalDecision::Approved {
                         grant: etas_host::ApprovalGrant {
@@ -674,6 +771,13 @@ async fn approval_decision(
         }
     }?;
     Ok(ApprovalResponse { id, decision })
+}
+
+struct ApprovalPromptWritten;
+impl etas_host::execution::OperationResponse for ApprovalPromptWritten {
+    fn external_outcome(&self) -> etas_host::execution::ExternalOutcome {
+        etas_host::execution::ExternalOutcome::Confirmed
+    }
 }
 
 impl UnavailableHostServices {
@@ -791,19 +895,31 @@ fn unavailable(id: etas_host::HostRequestId, message: &'static str) -> HostError
         .with_detail("request_id", id.0.to_string())
 }
 
+pub(crate) struct RunRequest {
+    pub dry_run: bool,
+    pub allow_effects: bool,
+    pub budget_overrides: RunBudgetOverrides,
+    pub program_args: Vec<String>,
+}
+
 pub(crate) fn run_checked(
     checked: &CheckedProject,
-    dry_run: bool,
-    allow_effects: bool,
+    request: RunRequest,
     config: CliHostConfig,
-    budget_overrides: RunBudgetOverrides,
-    program_args: Vec<String>,
     profile: &ProfileHandle,
-) -> Result<RunResult, CliError> {
+    lifecycle: Option<&super::lifecycle::CommandLifecycle>,
+) -> Result<super::lifecycle::ControlledRun, CliError> {
+    let RunRequest {
+        dry_run,
+        allow_effects,
+        budget_overrides,
+        program_args,
+    } = request;
     let effects_enabled = allow_effects || config.profile_name.is_some();
     let config = if dry_run || !effects_enabled {
         let mut hostless = CliHostConfig::none();
         hostless.execution_limits = config.execution_limits;
+        hostless.shutdown_grace_ms = config.shutdown_grace_ms;
         hostless
     } else {
         config
@@ -834,34 +950,47 @@ pub(crate) fn run_checked(
     let entry = EntryPoint { item };
     let entry_args = entry_args_from_strings(checked, program_args);
     let mut options = config.run_options();
+    let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
+    options.event_observer = Some(journal.clone());
     options.profile = profile.clone();
     options.host_context.authority.policy.active_trace_specs = active_trace_specs;
     options.host_context.authority.policy.trace_spec_facts = trace_spec_facts;
     apply_budget_overrides(&mut options, budget_overrides);
-    Ok(run_checked_blocking(
-        checked, entry, entry_args, &host, options,
-    ))
+    super::lifecycle::run_controlled(
+        config.shutdown_grace_ms,
+        etas_interpreter::Interpreter.create_run(checked, entry, entry_args, &host, options),
+        lifecycle,
+        &journal,
+    )
 }
 
 pub(crate) fn resume_checked(
     checked: &CheckedProject,
     checkpoint: &InterpreterCheckpoint,
     config: CliHostConfig,
-) -> Result<RunResult, CliError> {
+    profile: &ProfileHandle,
+    lifecycle: Option<&super::lifecycle::CommandLifecycle>,
+) -> Result<super::lifecycle::ControlledRun, CliError> {
     let active_trace_specs = active_trace_specs_for_entry(checked, checkpoint.entry_item);
     let trace_spec_facts = trace_spec_facts_for_entry(checked, checkpoint.entry_item);
     let host = CliHost::console(
         config.clone(),
         active_trace_specs.clone(),
         trace_spec_facts.clone(),
-        ProfileHandle::disabled(),
+        profile.clone(),
     )?;
     let mut options = config.run_options();
+    options.profile = profile.clone();
+    let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
+    options.event_observer = Some(journal.clone());
     options.host_context.authority.policy.active_trace_specs = active_trace_specs;
     options.host_context.authority.policy.trace_spec_facts = trace_spec_facts;
-    Ok(resume_checkpoint_blocking(
-        checked, checkpoint, &host, options,
-    ))
+    super::lifecycle::run_controlled(
+        config.shutdown_grace_ms,
+        etas_interpreter::Interpreter.create_resume(checked, checkpoint, &host, options),
+        lifecycle,
+        &journal,
+    )
 }
 
 fn active_trace_specs_for_entry(
