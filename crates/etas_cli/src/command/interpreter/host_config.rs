@@ -32,6 +32,7 @@ use super::host_tool::{
 pub(crate) struct CliHostConfig {
     pub(super) model: Option<CliModelConfig>,
     pub(super) command_allowed_programs: Vec<String>,
+    pub(super) command_isolation: etas_host::CommandIsolation,
     pub(super) workspace_root: Option<WorkspaceRoot>,
     pub(super) filesystem_mode: FilesystemMode,
     pub(super) filesystem_regions: BTreeMap<WorkspaceRegionId, CliFilesystemRegion>,
@@ -50,6 +51,7 @@ pub(crate) struct CliHostConfig {
     pub(super) tool_private_resolution: PrivateResolutionPolicy,
     pub(super) profile_name: Option<String>,
     pub(super) execution_limits: ExecutionLimits,
+    pub(super) shutdown_grace_ms: u64,
 }
 
 #[derive(Clone)]
@@ -197,6 +199,7 @@ impl CliHostConfig {
         Self {
             model: None,
             command_allowed_programs: Vec::new(),
+            command_isolation: etas_host::CommandIsolation::Denied,
             workspace_root: None,
             filesystem_mode: FilesystemMode::None,
             filesystem_regions: BTreeMap::new(),
@@ -215,6 +218,7 @@ impl CliHostConfig {
             tool_private_resolution: PrivateResolutionPolicy::PublicOnly,
             profile_name: None,
             execution_limits: ExecutionLimits::default(),
+            shutdown_grace_ms: 5_000,
         }
     }
 
@@ -297,9 +301,10 @@ impl CliHostConfig {
         sort_dedup_network_allowlist(&mut program_network_allowlist);
         sort_dedup_network_allowlist(&mut adapter_transport_allowlist);
 
-        Ok(Self {
+        let mut config = Self {
             model,
             command_allowed_programs,
+            command_isolation: etas_host::CommandIsolation::Denied,
             workspace_root,
             filesystem_mode,
             filesystem_regions: BTreeMap::new(),
@@ -318,7 +323,14 @@ impl CliHostConfig {
             tool_private_resolution,
             profile_name: None,
             execution_limits: ExecutionLimits::default(),
-        })
+            shutdown_grace_ms: 5_000,
+        };
+        config.apply_command_profile(&RuntimeCommandProfile {
+            isolation: optional_env("ETAS_HOST_COMMAND_ISOLATION")?,
+            ..Default::default()
+        })?;
+        config.validate_command_isolation()?;
+        Ok(config)
     }
 
     pub(super) fn from_environment_with_allow_net(allow_net: &[String]) -> Result<Self, CliError> {
@@ -377,6 +389,7 @@ impl CliHostConfig {
         config.command_allowed_programs.dedup();
         sort_dedup_network_allowlist(&mut config.program_network_allowlist);
         sort_dedup_network_allowlist(&mut config.adapter_transport_allowlist);
+        config.validate_command_isolation()?;
         Ok(config)
     }
 
@@ -456,7 +469,7 @@ impl CliHostConfig {
             self.secret_mode = parse_secret_mode(secret.mode.clone())?;
         }
         if let Some(command) = &profile.command {
-            self.apply_command_profile(command);
+            self.apply_command_profile(command)?;
         }
         if let Some(tools) = &profile.tools {
             self.apply_tools_profile(tools)?;
@@ -492,6 +505,16 @@ impl CliHostConfig {
             .transpose()?;
         self.execution_limits =
             ExecutionLimits::new(max_call_depth, max_steps).map_err(CliError::InvalidUsage)?;
+        let grace = local
+            .shutdown_grace_ms
+            .or(manifest.shutdown_grace_ms)
+            .unwrap_or(5_000);
+        if !(1..=60_000).contains(&grace) {
+            return Err(CliError::InvalidUsage(
+                "`shutdown_grace_ms` must be between 1 and 60000".to_owned(),
+            ));
+        }
+        self.shutdown_grace_ms = grace;
         Ok(())
     }
 
@@ -507,9 +530,40 @@ impl CliHostConfig {
         Ok(())
     }
 
-    fn apply_command_profile(&mut self, profile: &RuntimeCommandProfile) {
+    fn apply_command_profile(&mut self, profile: &RuntimeCommandProfile) -> Result<(), CliError> {
+        use etas_host::{CommandIsolation, IsolationRequirements, PlatformSandboxHook};
+        if let Some(mode) = &profile.isolation {
+            self.command_isolation = match mode.as_str() {
+                "trusted-unconfined" => CommandIsolation::TrustedUnconfined,
+                "landlock" | "container" | "wasi-preopen" => CommandIsolation::Required {
+                    backend: match mode.as_str() {
+                        "landlock" => PlatformSandboxHook::Landlock,
+                        "container" => PlatformSandboxHook::Container,
+                        _ => PlatformSandboxHook::WasiPreopen,
+                    },
+                    guarantees: IsolationRequirements::all(),
+                },
+                _ => {
+                    return Err(CliError::InvalidUsage(format!(
+                        "unknown command isolation `{mode}`; expected trusted-unconfined, landlock, container or wasi-preopen"
+                    )));
+                }
+            };
+        }
         self.command_allowed_programs
             .extend(profile.allow.iter().cloned());
+        Ok(())
+    }
+
+    fn validate_command_isolation(&self) -> Result<(), CliError> {
+        if !self.command_allowed_programs.is_empty()
+            && self.command_isolation == etas_host::CommandIsolation::Denied
+        {
+            return Err(CliError::InvalidUsage(
+                "command allowlist requires an explicit isolation mode in runtime.command.isolation or ETAS_HOST_COMMAND_ISOLATION; use trusted-unconfined only for trusted native programs".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     fn apply_tools_profile(&mut self, profile: &RuntimeToolsProfile) -> Result<(), CliError> {
@@ -609,6 +663,12 @@ impl CliHostConfig {
                     .filter(|value| !value.is_empty())
                     .map(ToOwned::to_owned),
             );
+        }
+        if let Some(isolation) = env.optional("ETAS_HOST_COMMAND_ISOLATION") {
+            self.apply_command_profile(&RuntimeCommandProfile {
+                isolation: Some(isolation),
+                ..Default::default()
+            })?;
         }
         if let Some(network_allowlist) = env.optional("ETAS_HOST_NETWORK_ALLOWLIST") {
             let explicit_endpoints = parse_network_allowlist(Some(network_allowlist))?;
@@ -720,7 +780,7 @@ impl CliHostConfig {
             "filesystem_regions": self.filesystem_regions.iter().map(|(identity, region)| {
                 serde_json::json!({
                     "identity": identity.as_str(),
-                    "root": region.root.canonical_root,
+                    "root": region.root.display_path(),
                     "read": region.read,
                     "write": region.write,
                     "delete": region.delete,
@@ -741,6 +801,11 @@ impl CliHostConfig {
             "session": session_profile_json(&self.session_mode, self.session_id.as_deref()),
             "secret": format!("{:?}", self.secret_mode),
             "command_programs": self.command_allowed_programs,
+            "command_isolation": match self.command_isolation {
+                etas_host::CommandIsolation::Denied => "denied",
+                etas_host::CommandIsolation::TrustedUnconfined => "trusted-unconfined",
+                etas_host::CommandIsolation::Required { backend, .. } => backend.name(),
+            },
             "program_network_endpoints": self.program_network_allowlist.iter().map(|endpoint| {
                 serde_json::json!({
                     "scheme": endpoint.scheme,
@@ -755,10 +820,11 @@ impl CliHostConfig {
                     "port": endpoint.port,
                 })
             }).collect::<Vec<_>>(),
-            "workspace_root": self.workspace_root.as_ref().map(|root| root.canonical_root.display().to_string()),
+            "workspace_root": self.workspace_root.as_ref().map(|root| root.display_path().display().to_string()),
             "execution": {
                 "max_call_depth": self.execution_limits.max_call_depth.get(),
                 "max_steps": self.execution_limits.max_steps.map(NonZeroU64::get),
+                "shutdown_grace_ms": self.shutdown_grace_ms,
             },
         });
         let fingerprint = runtime_profile_fingerprint(&profile);
@@ -766,7 +832,7 @@ impl CliHostConfig {
         profile
     }
 
-    pub(super) fn run_options(&self) -> RunOptions {
+    pub(crate) fn run_options(&self) -> RunOptions {
         let mut grants = vec![
             etas_host::HostActionGrant::allow("Console", "stdin_read_all"),
             etas_host::HostActionGrant::allow("Console", "stdin_read_line"),
@@ -854,7 +920,10 @@ impl CliHostConfig {
                     &self.filesystem_regions,
                 ),
                 NetworkPolicy::allow_endpoints(self.program_network_allowlist.clone()),
-                CommandPolicy::allow_programs(self.command_allowed_programs.clone()),
+                CommandPolicy {
+                    allowed_programs: self.command_allowed_programs.clone(),
+                    isolation: self.command_isolation,
+                },
                 destructive_policy(self.filesystem_mode, &self.filesystem_regions),
             )
         } else {
@@ -2148,6 +2217,72 @@ fn network_endpoint_from_base_url(base_url: &str) -> Result<NetworkEndpoint, Cli
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn command_env_allowlist_requires_explicit_isolation() {
+        use super::*;
+        let mut env = RuntimeEnvOverrides::default();
+        env.values
+            .insert("ETAS_HOST_COMMAND_ALLOWLIST".into(), "/bin/echo".into());
+        let error = CliHostConfig::from_runtime_profile("local".into(), None, None, &env, &[])
+            .err()
+            .expect("allowlist alone must be rejected");
+        assert!(error.to_string().contains("explicit isolation"));
+        env.values.insert(
+            "ETAS_HOST_COMMAND_ISOLATION".into(),
+            "trusted-unconfined".into(),
+        );
+        let config =
+            CliHostConfig::from_runtime_profile("local".into(), None, None, &env, &[]).unwrap();
+        assert_eq!(
+            config.command_isolation,
+            etas_host::CommandIsolation::TrustedUnconfined
+        );
+    }
+
+    #[test]
+    fn command_profiles_require_explicit_isolation_and_do_not_downgrade_for_legacy_env() {
+        use super::*;
+        let env = RuntimeEnvOverrides::default();
+        let profile: RuntimeProfile = toml::from_str("[command]\nallow = ['/bin/echo']\n").unwrap();
+        assert!(
+            CliHostConfig::from_runtime_profile("local".into(), Some(&profile), None, &env, &[])
+                .is_err()
+        );
+        for mode in [
+            "trusted-unconfined",
+            "landlock",
+            "container",
+            "wasi-preopen",
+        ] {
+            let profile: RuntimeProfile = toml::from_str(&format!(
+                "[command]\nallow = ['/bin/echo']\nisolation = '{mode}'\n"
+            ))
+            .unwrap();
+            let config = CliHostConfig::from_runtime_profile(
+                "local".into(),
+                Some(&profile),
+                None,
+                &env,
+                &[],
+            )
+            .unwrap();
+            assert_eq!(config.runtime_profile_json()["command_isolation"], mode);
+            let mut overridden = config.clone();
+            let mut overrides = RuntimeEnvOverrides::default();
+            overrides
+                .values
+                .insert("ETAS_HOST_COMMAND_ALLOWLIST".into(), "/bin/sh".into());
+            overridden.apply_env_overrides(&overrides).unwrap();
+            assert_eq!(overridden.command_isolation, config.command_isolation);
+        }
+        let profile: RuntimeProfile =
+            toml::from_str("[command]\nallow = ['/bin/echo']\nisolation = 'pretend-sandbox'\n")
+                .unwrap();
+        assert!(
+            CliHostConfig::from_runtime_profile("local".into(), Some(&profile), None, &env, &[])
+                .is_err()
+        );
+    }
     use super::*;
 
     #[test]
@@ -2347,10 +2482,12 @@ mod tests {
         let manifest = RuntimeExecutionProfile {
             max_call_depth: Some(120),
             max_steps: Some(1_000_000),
+            shutdown_grace_ms: Some(4_000),
         };
         let local = RuntimeExecutionProfile {
             max_call_depth: Some(96),
             max_steps: Some(500_000),
+            shutdown_grace_ms: Some(2_000),
         };
         let mut config = CliHostConfig::none();
         config
@@ -2371,8 +2508,37 @@ mod tests {
             serde_json::json!({
                 "max_call_depth": 32,
                 "max_steps": 500_000,
+                "shutdown_grace_ms": 2_000,
             })
         );
+    }
+
+    #[test]
+    fn shutdown_grace_is_bounded_and_does_not_change_business_limits() {
+        let mut config = CliHostConfig::none();
+        assert_eq!(config.shutdown_grace_ms, 5_000);
+        for value in [0, 60_001] {
+            let profile = RuntimeExecutionProfile {
+                shutdown_grace_ms: Some(value),
+                ..Default::default()
+            };
+            assert!(
+                config
+                    .apply_execution_config(&profile, &Default::default(), None)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("shutdown_grace_ms")
+            );
+        }
+        let profile = RuntimeExecutionProfile {
+            shutdown_grace_ms: Some(60_000),
+            ..Default::default()
+        };
+        config
+            .apply_execution_config(&profile, &Default::default(), None)
+            .unwrap();
+        assert_eq!(config.shutdown_grace_ms, 60_000);
+        assert_eq!(config.execution_limits, ExecutionLimits::default());
     }
 
     #[test]
@@ -2381,6 +2547,7 @@ mod tests {
         let zero = RuntimeExecutionProfile {
             max_call_depth: Some(0),
             max_steps: None,
+            shutdown_grace_ms: None,
         };
         let error = config
             .apply_execution_config(&zero, &RuntimeExecutionProfile::default(), None)

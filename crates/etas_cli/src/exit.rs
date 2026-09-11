@@ -5,6 +5,8 @@ pub enum CliExit {
     Usage,
     RuntimeFailure,
     InternalCompilerError,
+    Interrupted,
+    Terminated,
 }
 
 impl CliExit {
@@ -15,6 +17,8 @@ impl CliExit {
             Self::Usage => 2,
             Self::RuntimeFailure => 3,
             Self::InternalCompilerError => 4,
+            Self::Interrupted => 130,
+            Self::Terminated => 143,
         }
     }
 }

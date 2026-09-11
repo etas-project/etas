@@ -120,6 +120,8 @@ pub struct ReplayArgs {
 #[cfg(feature = "cli-resume")]
 #[derive(clap::Args, Clone, Debug)]
 pub struct ResumeArgs {
+    #[arg(long, value_name = "PATH")]
+    pub trace_out: Option<std::path::PathBuf>,
     #[arg(value_name = "CHECKPOINT_ID")]
     pub checkpoint_id: String,
 

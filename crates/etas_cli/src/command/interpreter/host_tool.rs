@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use etas_host::{
     HostError, HostErrorCode, HttpToolProtocolAdapter, McpToolProtocolAdapter,
-    PrivateResolutionPolicy, ProcessToolProtocolAdapter, ToolClient, ToolRequest, ToolResponse,
+    PrivateResolutionPolicy, ProcessToolProtocolAdapter, ToolRequest, ToolResponse,
 };
 use etas_interpreter::host::HostFuture;
 use etas_package::RuntimeToolsProfile;
@@ -91,6 +91,7 @@ impl CliToolRouter {
 
     pub(super) fn invoke<'a>(
         &'a self,
+        operation: etas_host::execution::OperationContext,
         request: ToolRequest,
     ) -> Option<HostFuture<'a, Result<ToolResponse, HostError>>> {
         let tool_name = request
@@ -99,15 +100,15 @@ impl CliToolRouter {
             .as_ref()
             .unwrap_or(&request.tool.name);
         match self.tools.get(tool_name)? {
-            CliToolAdapter::Http(adapter) => {
-                Some(Box::pin(async move { adapter.invoke(request).await }))
-            }
-            CliToolAdapter::Mcp(adapter) => {
-                Some(Box::pin(async move { adapter.invoke(request).await }))
-            }
-            CliToolAdapter::Process(adapter) => {
-                Some(Box::pin(async move { adapter.invoke(request).await }))
-            }
+            CliToolAdapter::Http(adapter) => Some(Box::pin(async move {
+                adapter.invoke_scoped(request, &operation).await
+            })),
+            CliToolAdapter::Mcp(adapter) => Some(Box::pin(async move {
+                adapter.invoke_scoped(request, &operation).await
+            })),
+            CliToolAdapter::Process(adapter) => Some(Box::pin(async move {
+                adapter.invoke_scoped(request, &operation).await
+            })),
         }
     }
 }

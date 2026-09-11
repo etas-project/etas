@@ -124,7 +124,7 @@ public flow run_memory_conflict_version(task: RuntimeTask) -> RuntimeReview
     let review = run_three_agent_version(task);
     RuntimeMemory.Reviews.upsert(task.topic, review);
     let handled = handle {
-        let stale = version("999");
+        let stale = version("mv1:0000000000000000000000000000000000000000000000000000000000000000:00000000000000000000000000000000:0000000000000001");
         RuntimeMemory.Reviews.put_versioned(task.topic, review, stale);
         review
     } with {

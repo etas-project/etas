@@ -31,7 +31,7 @@ public flow run_runtime(request: RuntimeRequest) -> RuntimeReview ![Error<IOErro
 
     RuntimeMemory.Reviews.upsert(request.topic, review);
     let handled = handle {
-        let stale = version("999");
+        let stale = version("mv1:0000000000000000000000000000000000000000000000000000000000000000:00000000000000000000000000000000:0000000000000001");
         RuntimeMemory.Reviews.put_versioned(request.topic, review, stale);
         review
     } with {

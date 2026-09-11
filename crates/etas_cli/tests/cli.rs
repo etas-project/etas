@@ -75,6 +75,36 @@ fn check_success_exits_zero() {
 }
 
 #[test]
+fn legacy_command_allowlist_does_not_authorize_unconfined_execution() {
+    let workspace = etas_host::TestWorkspace::create("cli-command-isolation").unwrap();
+    for explicit in [false, true] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        for (name, _) in std::env::vars_os() {
+            if name.to_string_lossy().starts_with("ETAS_HOST_") {
+                command.env_remove(name);
+            }
+        }
+        command
+            .current_dir(workspace.path())
+            .env("ETAS_HOST_COMMAND_ALLOWLIST", "/bin/echo");
+        if explicit {
+            command.env("ETAS_HOST_COMMAND_ISOLATION", "trusted-unconfined");
+        }
+        let (code, stdout, stderr) =
+            run_process_with_command(command, ["run", "--print-runtime-profile"], "");
+        if explicit {
+            assert_eq!(code, 0, "{stderr}");
+            let profile: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+            assert_eq!(profile["command_isolation"], "trusted-unconfined");
+        } else {
+            assert_ne!(code, 0);
+            assert!(stderr.contains("explicit isolation"), "{stderr}");
+            assert!(!stdout.contains("trusted-unconfined"));
+        }
+    }
+}
+
+#[test]
 fn check_with_syntax_error_exits_with_diagnostics() {
     let file = fixture("broken", "flow broken() -> unit {\n  let value = ;\n");
     let (code, stdout, stderr) = run(["etas", "check", path(&file)]);
@@ -4448,7 +4478,9 @@ flow main(args: Array<string>) -> i32 ![Memory.write<ProjectMemory>] {
     assert!(
         versions.iter().any(|record| {
             record["resource"] == "memory:project_memory:Papers:\"paper-1\""
-                && record["version"] == "1"
+                && record["version"]
+                    .as_str()
+                    .is_some_and(|token| etas_host::MemoryVersion::parse(token).is_ok())
         }),
         "checkpoint should record the memory entry version: {checkpoint_json}"
     );
@@ -6046,7 +6078,11 @@ fn multi_agent_system_runtime_variants_http_policy_approval_preserves_grants() {
     assert!(
         policy_requests
             .iter()
-            .any(|request| request.contains("\"name\":\"expected_version\",\"value\":\"999\"")),
+            .any(|request| request.contains(&format!(
+                "\"name\":\"expected_version\",\"value\":\"mv1:{}:{}:0000000000000001\"",
+                "0".repeat(64),
+                "0".repeat(32)
+            ))),
         "HTTP policy server should see the expected version on the versioned memory write that triggers conflict handling:\n{policy_requests:#?}"
     );
     assert!(

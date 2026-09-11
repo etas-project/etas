@@ -33,9 +33,7 @@ pub mod watch;
 
 use std::io::Write;
 
-use etas_utils::{
-    ProfileHandle, ProfileTreeRenderOptions, render_profile_tree_with_options, write_profile_report,
-};
+use etas_utils::{ProfileHandle, ProfileTreeRenderOptions, render_profile_tree_with_options};
 
 use crate::{
     args::{CliArgs, Command},
@@ -57,6 +55,23 @@ pub fn dispatch(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
+    dispatch_with_lifecycle(
+        args,
+        stdout,
+        stderr,
+        #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+        None,
+    )
+}
+
+pub(crate) fn dispatch_with_lifecycle(
+    args: CliArgs,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))] lifecycle: Option<
+        &interpreter::lifecycle::CommandLifecycle,
+    >,
+) -> Result<CliExit, CliError> {
     let workspace = workspace::resolve_workspace(&args.global)?;
     if let Some(config) = config::load_config(&args.global, &workspace)? {
         tracing::debug!(path = %config.path.display(), bytes = config.contents.len(), "loaded etas config");
@@ -67,7 +82,11 @@ pub fn dispatch(
     } else {
         ProfileHandle::disabled()
     };
-    let total_span = profile.span(format!("cli.{command_name}.total"), "cli");
+    let mut total_span = profile.span(format!("cli.{command_name}.total"), "cli");
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+    if let (Some(owner), Some(path)) = (lifecycle, &args.global.profile_out) {
+        owner.profile(path, profile.clone());
+    }
 
     let result = match args.command {
         #[cfg(feature = "cli-check")]
@@ -87,11 +106,15 @@ pub fn dispatch(
         #[cfg(feature = "cli-pkg")]
         Command::Pkg(command) => pkg::run(&args.global, command, &profile, stdout, stderr),
         #[cfg(feature = "cli-run")]
-        Command::Run(command) => run::run(&args.global, command, &profile, stdout, stderr),
+        Command::Run(command) => {
+            run::run(&args.global, command, &profile, lifecycle, stdout, stderr)
+        }
         #[cfg(feature = "cli-replay")]
         Command::Replay(command) => replay::run(&args.global, command, stdout, stderr),
         #[cfg(feature = "cli-resume")]
-        Command::Resume(command) => resume::run(&args.global, command, stdout, stderr),
+        Command::Resume(command) => {
+            resume::run(&args.global, command, &profile, lifecycle, stdout, stderr)
+        }
         #[cfg(feature = "cli-watch")]
         Command::Watch(command) => watch::run(&args.global, command, stdout, stderr),
         #[cfg(feature = "cli-repl")]
@@ -102,19 +125,33 @@ pub fn dispatch(
 
     let status = match &result {
         Ok(CliExit::Success) => "ok",
+        Ok(CliExit::Interrupted | CliExit::Terminated) => "cancelled",
         Ok(_) => "error",
         Err(_) => "error",
     };
-    if status == "ok" {
-        total_span.finish_ok();
-    } else {
-        total_span.finish_error();
-    }
+    #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+    let status = lifecycle.map_or(status, |owner| owner.status(result.as_ref().ok().copied()));
+    total_span.finish(match status {
+        "ok" => etas_utils::ProfileSpanStatus::Ok,
+        "cancelled" => etas_utils::ProfileSpanStatus::Cancelled,
+        "forced" => etas_utils::ProfileSpanStatus::Forced,
+        _ => etas_utils::ProfileSpanStatus::Error,
+    });
     let report = profile.finish_report(status);
     if let Some(path) = &args.global.profile_out
         && let Some(report) = &report
     {
-        write_profile_report(path, report).map_err(|source| CliError::Io {
+        #[cfg(any(feature = "cli-run", feature = "cli-resume"))]
+        if lifecycle.is_none() {
+            interpreter::lifecycle::write_artifact(
+                None,
+                path,
+                serde_json::to_vec_pretty(report)
+                    .map_err(|e| CliError::RuntimeState(e.to_string()))?,
+            )?;
+        }
+        #[cfg(not(any(feature = "cli-run", feature = "cli-resume")))]
+        etas_utils::write_profile_report(path, report).map_err(|source| CliError::Io {
             path: path.clone(),
             source,
         })?;

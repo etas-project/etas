@@ -10,10 +10,11 @@ use crate::{
     exit::CliExit,
 };
 
-pub fn run(
+pub(crate) fn run(
     global: &GlobalOptions,
     args: RunArgs,
     profile: &ProfileHandle,
+    lifecycle: Option<&super::interpreter::lifecycle::CommandLifecycle>,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
@@ -70,19 +71,35 @@ pub fn run(
 
     let result = super::interpreter::run_checked(
         checked,
-        args.dry_run,
-        args.allow_effects,
+        super::interpreter::RunRequest {
+            dry_run: args.dry_run,
+            allow_effects: args.allow_effects,
+            budget_overrides: run_budget_overrides(&args)?,
+            program_args: args.program_args.clone(),
+        },
         host_config.clone(),
-        run_budget_overrides(&args)?,
-        args.program_args.clone(),
         profile,
+        lifecycle,
     )?;
-    super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
+    let result = match result {
+        super::interpreter::lifecycle::ControlledRun::Finished(result) => result,
+        super::interpreter::lifecycle::ControlledRun::Forced(report) => {
+            if let Some(path) = &args.trace_out {
+                super::interpreter::lifecycle::save_trace(lifecycle, path, report.json())?;
+            }
+            return report.render(global, stdout, stderr);
+        }
+    };
     let source_paths = compiled
         .sources
         .iter()
         .map(|(path, _)| path.clone())
         .collect::<Vec<_>>();
+    let report = codec::run_report_json("run", &source_paths, &flow, &result)
+        .map_err(|error| CliError::RuntimeState(error.to_string()))?;
+    if let Some(path) = &args.trace_out {
+        super::interpreter::lifecycle::save_trace(lifecycle, path, report.clone())?;
+    }
     if let Some(dir) = &args.checkpoint_dir {
         let runtime_profile = host_config.runtime_profile_json();
         super::interpreter::write_checkpoint_files(
@@ -91,29 +108,16 @@ pub fn run(
             &flow,
             &result,
             &runtime_profile,
+            lifecycle,
         )?;
     }
 
-    let report = codec::run_report_json("run", &source_paths, &flow, &result)
-        .map_err(|error| CliError::RuntimeState(error.to_string()))?;
-    if let Some(path) = &args.trace_out {
-        std::fs::write(
-            path,
-            serde_json::to_vec_pretty(&report).expect("json serializes"),
-        )
-        .map_err(|source| CliError::Io {
-            path: path.clone(),
-            source,
-        })?;
-    }
+    super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
+    super::interpreter::lifecycle::render_cancellation(global, &result, stderr)?;
 
     render_run_result(global, stdout, &compiled, &result, &report)?;
 
-    if super::interpreter::has_error(&result.diagnostics) {
-        Ok(CliExit::RuntimeFailure)
-    } else {
-        Ok(CliExit::Success)
-    }
+    Ok(super::interpreter::lifecycle::result_exit(&result))
 }
 
 fn validate_run_args(args: &RunArgs) -> Result<(), CliError> {
@@ -288,9 +292,11 @@ fn render_run_result(
                 "{}",
                 serde_json::json!({
                     "type": "run_result",
-                    "value": result.value.as_ref().map(codec::value_json),
+                    "value": result.value().map(codec::value_json),
                     "events": result.events.len(),
                     "checkpoints": result.checkpoints.len(),
+                    "outcome": report.get("outcome"),
+                    "termination": report.get("termination"),
                 })
             )
             .map_err(|source| CliError::Io {
@@ -306,8 +312,7 @@ fn render_run_result(
                     .is_some_and(entry_requires_console)
             {
                 let value = result
-                    .value
-                    .as_ref()
+                    .value()
                     .map(codec::value_json)
                     .unwrap_or(serde_json::Value::Null);
                 writeln!(stdout, "run value: {value}").map_err(|source| CliError::Io {

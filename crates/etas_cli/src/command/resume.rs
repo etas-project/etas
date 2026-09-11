@@ -10,13 +10,14 @@ use crate::{
     exit::CliExit,
 };
 
-pub fn run(
+pub(crate) fn run(
     global: &GlobalOptions,
     args: ResumeArgs,
+    profile: &ProfileHandle,
+    lifecycle: Option<&super::interpreter::lifecycle::CommandLifecycle>,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
-    let profile = ProfileHandle::disabled();
     let checkpoint_dir = args
         .checkpoint_dir
         .unwrap_or_else(|| std::path::PathBuf::from("."));
@@ -70,7 +71,7 @@ pub fn run(
     }
     let compiled = super::interpreter::compile_project(
         global,
-        &profile,
+        profile,
         source_paths.clone(),
         false,
         Some(flow.clone()),
@@ -93,13 +94,31 @@ pub fn run(
     let Some(checked) = compiled.checked.as_ref() else {
         return Ok(CliExit::Diagnostics);
     };
-    let checkpoint = codec::checkpoint_from_json(&checkpoint_json, checked)
-        .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+    let checkpoint = codec::checkpoint_from_json_with_limits(
+        &host_config.run_options().storage_limits,
+        &checkpoint_json,
+        checked,
+    )
+    .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
 
-    let result = super::interpreter::resume_checked(checked, &checkpoint, host_config)?;
-    super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
+    let result =
+        super::interpreter::resume_checked(checked, &checkpoint, host_config, profile, lifecycle)?;
+    let result = match result {
+        super::interpreter::lifecycle::ControlledRun::Finished(result) => result,
+        super::interpreter::lifecycle::ControlledRun::Forced(report) => {
+            if let Some(path) = &args.trace_out {
+                super::interpreter::lifecycle::save_trace(lifecycle, path, report.json())?;
+            }
+            return report.render(global, stdout, stderr);
+        }
+    };
     let report = codec::run_report_json("resume", &source_paths, &flow, &result)
         .map_err(|error| CliError::RuntimeState(error.to_string()))?;
+    if let Some(path) = &args.trace_out {
+        super::interpreter::lifecycle::save_trace(lifecycle, path, report.clone())?;
+    }
+    super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
+    super::interpreter::lifecycle::render_cancellation(global, &result, stderr)?;
 
     match global.format {
         crate::args::global::OutputFormat::Json => {
@@ -115,9 +134,11 @@ pub fn run(
                 serde_json::json!({
                     "type": "resume_result",
                     "checkpoint": checkpoint_id,
-                    "value": result.value.as_ref().map(codec::value_json),
+                    "value": result.value().map(codec::value_json),
                     "events": result.events.len(),
                     "checkpoints": result.checkpoints.len(),
+                    "outcome": report.get("outcome"),
+                    "termination": report.get("termination"),
                 })
             )
             .map_err(|source| CliError::Io {
@@ -128,8 +149,7 @@ pub fn run(
         crate::args::global::OutputFormat::Human | crate::args::global::OutputFormat::Text => {
             if !global.quiet {
                 let value = result
-                    .value
-                    .as_ref()
+                    .value()
                     .map(codec::value_json)
                     .unwrap_or(serde_json::Value::Null);
                 writeln!(stdout, "resumed checkpoint {checkpoint_id}: {value}").map_err(
@@ -157,11 +177,7 @@ pub fn run(
         }
     }
 
-    if super::interpreter::has_error(&result.diagnostics) {
-        Ok(CliExit::RuntimeFailure)
-    } else {
-        Ok(CliExit::Success)
-    }
+    Ok(super::interpreter::lifecycle::result_exit(&result))
 }
 
 fn visible_resume_diagnostics(

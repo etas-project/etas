@@ -20,7 +20,7 @@ let CaseMemory =
 
 flow update_case(id: CaseId, next: Case) -> string ![Memory.write<CaseMemory>, Error<MemoryConflict>] {
     CaseMemory.Cases.put(id, Case { status = "existing" });
-    let stale = version("0");
+    let stale = version("mv1:0000000000000000000000000000000000000000000000000000000000000000:00000000000000000000000000000000:0000000000000001");
     CaseMemory.Cases.put_versioned(id, next, stale);
     return "written";
 }
