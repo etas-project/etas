@@ -20,6 +20,16 @@ use etas_frontend::{
 };
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
+
+fn read_checkpoint_file(path: &Path) -> serde_json::Value {
+    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
+        &fs::read(path).unwrap(),
+        etas_interpreter::api::codec::CheckpointFileLimits::default(),
+    )
+    .unwrap();
+    // These shallow metadata assertions use the logical artifact, not its file encoding.
+    (*document).clone()
+}
 static CLI_PROCESS_LOCK: Mutex<()> = Mutex::new(());
 static MODEL_CLI_E2E_LOCK: Mutex<()> = Mutex::new(());
 
@@ -4423,6 +4433,90 @@ flow main(args: Array<string>) -> i32 ![Memory, Console, Error<IOError>] {
 }
 
 #[test]
+fn run_and_resume_deep_adt_checkpoint_file_without_stack_overflow() {
+    let file = fixture(
+        "deep-adt-checkpoint-output",
+        r#"
+module tests.cli.deep_adt_checkpoint_output;
+import std.runtime.checkpoint;
+enum Link { End, Next(Link) }
+flow main(args: Array<string>) -> i32 {
+    var chain = Link.End;
+    var count: i32 = 0;
+    while count < 1000 limit Iterations(2000) {
+        chain = Link.Next(chain);
+        count = count + 1;
+    }
+    checkpoint("deep-adt");
+    return match chain { Link.Next(_) => 0, Link.End => 1 };
+}
+"#,
+    );
+    let trace = file.with_extension("trace.json");
+    let checkpoints = file.with_extension("checkpoints");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    command.env("ETAS_HOST_MEMORY", "memory");
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&file),
+            "--allow-effects",
+            "--trace-out",
+            path(&trace),
+            "--checkpoint-dir",
+            path(&checkpoints),
+        ],
+        "",
+    );
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains("checkpoints: 1"), "{stdout}");
+    assert!(stdout.contains("\"value\":\"0\""), "{stdout}");
+    let text = fs::read_to_string(&trace).unwrap();
+    assert!(text.matches("\"kind\":\"variant\"").count() >= 1000);
+    assert!(text.len() < 512 * 1000);
+    let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
+    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
+        &bytes,
+        etas_interpreter::api::codec::CheckpointFileLimits::default(),
+    )
+    .unwrap();
+    let mut pending = vec![&*document];
+    let mut variants = 0;
+    while let Some(value) = pending.pop() {
+        match value {
+            serde_json::Value::Object(fields) => {
+                if fields.get("kind").is_some_and(|kind| kind == "variant") {
+                    variants += 1;
+                }
+                pending.extend(fields.values());
+            }
+            serde_json::Value::Array(values) => pending.extend(values),
+            _ => {}
+        }
+    }
+    assert!(variants >= 1000, "checkpoint must retain every constructor");
+    assert!(
+        bytes.len() < 512 * 1000,
+        "checkpoint storage must remain linear in depth"
+    );
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    command.env("ETAS_HOST_MEMORY", "memory");
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["resume", "0", "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains("resumed checkpoint 0"), "{stdout}");
+    assert!(stdout.contains("\"value\":\"0\""), "{stdout}");
+    fs::remove_file(trace).unwrap();
+    fs::remove_dir_all(checkpoints).unwrap();
+}
+
+#[test]
 fn run_checkpoint_records_memory_resource_versions() {
     let file = fixture(
         "checkpoint-memory-version",
@@ -4470,8 +4564,7 @@ flow main(args: Array<string>) -> i32 ![Memory.write<ProjectMemory>] {
     assert!(stdout.contains("checkpoints: 1"), "{stdout}");
     assert!(stderr.is_empty(), "{stderr}");
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-0.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-0.json"));
     let versions = checkpoint_json["checkpoint"]["resource_versions"]
         .as_array()
         .expect("checkpoint should include resource_versions");
@@ -4918,8 +5011,7 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         "full runtime fixture should record a post-memory checkpoint"
     );
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-1.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-1.json"));
     let completed_boundaries = checkpoint_json["checkpoint"]["completed_host_boundaries"]
         .as_array()
         .expect("checkpoint should contain completed host boundary ledger");
@@ -5107,8 +5199,7 @@ fn full_phase1_agent_runtime_uses_trace_spec_with_http_provider() {
         "approval grant precision must be preserved after HTTP policy approval:\n{policy_requests:#?}"
     );
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-1.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-1.json"));
     assert!(
         checkpoint_json["checkpoint"].get("host_context").is_none(),
         "checkpoint must not persist invocation host authority: {checkpoint_json}"
@@ -6094,8 +6185,7 @@ fn multi_agent_system_runtime_variants_http_policy_approval_preserves_grants() {
         "approved memory grant should be preserved on later HTTP policy requests:\n{policy_requests:#?}"
     );
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-4.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-4.json"));
     assert!(
         checkpoint_json["checkpoint"].get("host_context").is_none(),
         "multi-agent checkpoint must not persist invocation host authority: {checkpoint_json}"
@@ -6209,8 +6299,7 @@ fn full_phase1_agent_runtime_runs_with_live_omlx_openai() {
         "live full runtime run should write a checkpoint"
     );
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-1.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-1.json"));
     let completed_boundaries = checkpoint_json["checkpoint"]["completed_host_boundaries"]
         .as_array()
         .expect("live checkpoint should contain completed host boundary ledger");
@@ -6308,8 +6397,7 @@ fn multi_agent_system_runs_with_live_omlx_openai() {
         "live multi-agent run should write the cache-read checkpoint"
     );
     let checkpoint_json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(checkpoint_dir.join("checkpoint-4.json")).unwrap())
-            .unwrap();
+        read_checkpoint_file(&checkpoint_dir.join("checkpoint-4.json"));
     assert!(
         checkpoint_json["checkpoint"]["completed_host_boundaries"]
             .as_array()

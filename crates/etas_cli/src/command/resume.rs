@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use etas_core::{Diagnostic, DiagnosticCode, EffectDiagnosticCode};
 use etas_interpreter::api::codec;
@@ -26,12 +26,19 @@ pub(crate) fn run(
         .parse::<u32>()
         .map_err(|_| CliError::InvalidUsage("checkpoint id must be a numeric id".to_owned()))?;
     let checkpoint_path = super::interpreter::checkpoint_path(&checkpoint_dir, checkpoint_id);
-    let bytes = std::fs::read(&checkpoint_path).map_err(|source| CliError::Io {
-        path: checkpoint_path.clone(),
-        source,
-    })?;
-    let checkpoint_json: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|_| CliError::InvalidUsage("checkpoint artifact is not valid JSON".to_owned()))?;
+    let file_limits = codec::CheckpointFileLimits::default();
+    let mut bytes = Vec::new();
+    std::fs::File::open(&checkpoint_path)
+        .and_then(|file| {
+            file.take(file_limits.max_bytes as u64 + 1)
+                .read_to_end(&mut bytes)
+        })
+        .map_err(|source| CliError::Io {
+            path: checkpoint_path.clone(),
+            source,
+        })?;
+    let checkpoint_json = codec::checkpoint_file_from_bytes(&bytes, file_limits)
+        .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
     let (source_paths, flow) = codec::sources_and_flow_from_checkpoint_json(&checkpoint_json)
         .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
     let checkpoint_profile = checkpoint_json.get("runtime_profile").ok_or_else(|| {
