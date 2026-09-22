@@ -33,6 +33,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn package_metadata_artifact_round_trips_complete_builtin_std_dependency() {
+        let root = temp_dir("builtin-std-selector-roundtrip");
+        fs::write(
+            root.join("etas.toml"),
+            "[package]\nname = \"consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n",
+        )
+        .unwrap();
+        let index = PackageIndex {
+            version: 1,
+            package: PackageIdentity {
+                name: "consumer".into(),
+                version: "0.1.0".into(),
+                edition: "2026".into(),
+            },
+            dependencies: vec![crate::metadata::builtin_std_dependency(
+                "0.1".into(),
+                "2026".into(),
+            )],
+            external_modules: Vec::new(),
+            public_metadata: Default::default(),
+            effect_metadata: Default::default(),
+            tool_bindings: Vec::new(),
+            bins: Vec::new(),
+        };
+        write_fixture_package_metadata_artifact(&root, &index).unwrap();
+        let decoded = read_package_metadata_artifact(&root).unwrap().unwrap();
+        assert_eq!(decoded, index);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn package_metadata_artifact_round_trips_package_index() {
         let root = temp_dir("metadata-artifact-roundtrip");
         fs::create_dir_all(root.join("src")).unwrap();
