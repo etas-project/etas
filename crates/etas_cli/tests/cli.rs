@@ -1983,6 +1983,166 @@ public flow main(args: Array<string>) -> i32 {
 }
 
 #[test]
+fn package_metadata_replays_dependency_std_spec_evidence() {
+    for implementation in ["", "impl MaterialRoot ~ Region;"] {
+        let dependency = package_fixture(
+            "region-evidence-library",
+            &[
+                (
+                    "etas.toml",
+                    r#"[package]
+name = "region-library"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = { version = "0.1" }
+[[bin]]
+name = "probe"
+module = "repro.library"
+flow = "ping"
+"#,
+                ),
+                (
+                    "src/repro/library.es",
+                    &format!(
+                        "module repro.library;\nimport std.fs.Region;\ntype MaterialRoot;\n{implementation}\npublic flow ping() -> i32 ![] {{ return 0; }}\n"
+                    ),
+                ),
+            ],
+        );
+        for args in [
+            ["etas", "pkg", "lock", path(&dependency)],
+            ["etas", "check", path(&dependency), "--all"],
+        ] {
+            let (code, stdout, stderr) = run(args);
+            assert_eq!(code, 0, "{stdout}\n{stderr}");
+        }
+        for extra_import in ["", "import std.fs.Region;"] {
+            let root = package_fixture(
+                "region-evidence-consumer",
+                &[
+                    (
+                        "etas.toml",
+                        &format!(
+                            r#"[package]
+name = "region-consumer"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = {{ version = "0.1" }}
+region_library = {{ path = "{}", import = "repro.library" }}
+[[bin]]
+name = "main"
+module = "repro.consumer"
+flow = "main"
+"#,
+                            dependency.display()
+                        ),
+                    ),
+                    (
+                        "src/repro/consumer.es",
+                        &format!(
+                            "module repro.consumer;\nimport repro.library.ping;\n{extra_import}\npublic flow main() -> i32 ![] {{ return ping(); }}\n"
+                        ),
+                    ),
+                ],
+            );
+            let (code, stdout, stderr) = run(["etas", "pkg", "lock", path(&root)]);
+            assert_eq!(code, 0, "{stdout}\n{stderr}");
+            assert!(dependency.join(".etas/package.etasmeta").is_file());
+            let (code, stdout, stderr) =
+                run(["etas", "check", path(&root), "--all", "--format", "json"]);
+            assert_eq!(
+                code, 0,
+                "impl={implementation:?}, import={extra_import:?}:\n{stdout}\n{stderr}"
+            );
+            fs::remove_dir_all(root).unwrap();
+        }
+        fs::remove_dir_all(dependency).unwrap();
+    }
+}
+
+#[test]
+fn package_metadata_std_spec_evidence_is_used_by_generic_calls() {
+    for implements_region in [false, true] {
+        let implementation = if implements_region {
+            "impl MaterialRoot ~ Region;"
+        } else {
+            ""
+        };
+        let dependency = package_fixture(
+            "region-bound-library",
+            &[
+                (
+                    "etas.toml",
+                    "[package]\nname = \"region-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                ),
+                (
+                    "src/repro/library.es",
+                    &format!(
+                        r#"module repro.library;
+import std.fs.Region;
+public type MaterialRoot = string;
+{implementation}
+public flow make() -> MaterialRoot {{ return MaterialRoot("material"); }}
+public flow require_region<R ~ Region>(root: R) -> i32 ![] {{ return 7; }}
+"#
+                    ),
+                ),
+            ],
+        );
+        let root = package_fixture(
+            "region-bound-consumer",
+            &[
+                (
+                    "etas.toml",
+                    &format!(
+                        r#"[package]
+name = "region-consumer"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = {{ version = "0.1" }}
+region_library = {{ path = "{}", import = "repro.library" }}
+[[bin]]
+name = "main"
+module = "repro.consumer"
+flow = "main"
+"#,
+                        dependency.display()
+                    ),
+                ),
+                (
+                    "src/repro/consumer.es",
+                    "module repro.consumer;\nimport repro.library.{make, require_region};\npublic flow main() -> i32 ![] { return require_region(make()); }\n",
+                ),
+            ],
+        );
+        let (code, stdout, stderr) = run(["etas", "pkg", "lock", path(&root)]);
+        assert_eq!(code, 0, "{stdout}\n{stderr}");
+        let (code, stdout, stderr) =
+            run(["etas", "check", path(&root), "--all", "--format", "json"]);
+        if implements_region {
+            assert_eq!(code, 0, "{stdout}\n{stderr}");
+        } else {
+            assert_eq!(code, 1, "{stdout}\n{stderr}");
+            assert!(
+                stdout.contains("does not satisfy spec bound"),
+                "{stdout}\n{stderr}"
+            );
+        }
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(dependency).unwrap();
+    }
+}
+
+#[test]
 fn pkg_lock_materializes_local_path_dependency_metadata_before_check_all() {
     let dependency = package_fixture(
         "pkg-lock-edk-like-http-dep",
