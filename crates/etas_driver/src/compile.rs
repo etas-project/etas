@@ -72,11 +72,12 @@ pub fn check_project_once(
     let project = session
         .try_open_project(request.input)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
+    let mut check = check_request(options).with_snapshot_detail(request.snapshot_detail);
+    if !check.disk_artifact_access.can_write() {
+        check.retention = etas_frontend::CheckRetention::OneShot;
+    }
     let response = session
-        .check(
-            project,
-            check_request(options).with_snapshot_detail(request.snapshot_detail),
-        )
+        .check(project, check)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
     record_pipeline_profile(options, &response);
     Ok(CompileProjectResponse { response })
@@ -358,6 +359,14 @@ fn record_pipeline_profile(options: &DriverOptions, response: &CheckResponse) {
         response.pipeline_records.len() as u64,
     );
     options.profile.counter(
+        "frontend.hir_index_builds",
+        response.memory.hir_index_builds,
+    );
+    options.profile.counter(
+        "frontend.retained_revisions",
+        u64::from(response.memory.retained_revision.is_some()),
+    );
+    options.profile.counter(
         "frontend.parsed_source_files",
         response
             .output
@@ -426,4 +435,37 @@ fn has_blocking_diagnostics(diagnostics: &[etas_core::Diagnostic]) -> bool {
     diagnostics
         .iter()
         .any(|diagnostic| diagnostic.severity == Severity::Error)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_off_one_shot_check_does_not_retain_an_incremental_revision() {
+        for snapshot_detail in [SnapshotDetailLevel::None, SnapshotDetailLevel::Full] {
+            let output = check_project_once(
+                &DriverOptions {
+                    cache_mode: DriverCacheMode::Off,
+                    ..Default::default()
+                },
+                CompileProjectRequest {
+                    input: ProjectInput::single_source(SourceInput::anonymous(
+                        "flow main() -> i32 { return 42; }",
+                    )),
+                    snapshot_detail,
+                },
+            )
+            .unwrap()
+            .response;
+            assert!(output.output.checked.is_some());
+            assert!(output.memory.retained_revision.is_none());
+            assert!(output.cache.stored_artifacts.is_empty());
+            assert_eq!(
+                output.snapshot.is_some(),
+                snapshot_detail == SnapshotDetailLevel::Full
+            );
+            assert_eq!(output.memory.hir_index_builds, 2);
+        }
+    }
 }
