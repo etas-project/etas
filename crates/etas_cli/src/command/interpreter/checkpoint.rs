@@ -19,7 +19,10 @@ pub(crate) fn write_checkpoint_files(
             object.insert("runtime_profile".to_owned(), runtime_profile.clone());
         }
         let path = checkpoint_path(dir, codec::checkpoint_id(checkpoint));
-        atomic_write_json(&path, &payload, lifecycle)?;
+        let bytes =
+            codec::checkpoint_file_to_bytes(payload, codec::CheckpointFileLimits::default())
+                .map_err(|error| CliError::RuntimeState(error.to_string()))?;
+        atomic_write_bytes(&path, bytes, lifecycle)?;
     }
     Ok(())
 }
@@ -28,14 +31,12 @@ pub fn checkpoint_path(dir: &Path, id: u32) -> PathBuf {
     dir.join(format!("checkpoint-{id}.json"))
 }
 
-fn atomic_write_json(
+fn atomic_write_bytes(
     path: &Path,
-    payload: &serde_json::Value,
+    bytes: Vec<u8>,
     lifecycle: Option<&super::lifecycle::CommandLifecycle>,
 ) -> Result<(), CliError> {
     let tmp = path.with_extension(format!("json.tmp.{}", std::process::id()));
-    let bytes = serde_json::to_vec_pretty(payload)
-        .map_err(|error| CliError::RuntimeState(error.to_string()))?;
     let owned = path.to_owned();
     let write = move || {
         if let Some(parent) = owned.parent() {

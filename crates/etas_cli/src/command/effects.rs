@@ -117,7 +117,7 @@ fn effects_report(
                 symbol.name.clone(),
                 summary,
                 &artifacts.registry,
-                output.types.as_ref().map(|types| &types.store),
+                output.types.as_ref().map(|types| types.store.as_ref()),
             ))
         })
         .collect::<Result<Vec<_>, CliError>>()?;

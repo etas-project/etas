@@ -181,7 +181,7 @@ impl CommandLifecycle {
     ) -> Result<(), CliError> {
         let owned = path.to_owned();
         self.io(path.display().to_string(), true, move || {
-            let bytes = serde_json::to_vec_pretty(&value).map_err(std::io::Error::other)?;
+            let bytes = serde_json::to_vec(&value).map_err(std::io::Error::other)?;
             std::fs::write(owned, bytes)
         })
         .map_err(|source| CliError::Io {
@@ -308,8 +308,7 @@ pub(crate) fn save_trace(
         write_artifact(
             None,
             path,
-            serde_json::to_vec_pretty(&report)
-                .map_err(|e| CliError::RuntimeState(e.to_string()))?,
+            serde_json::to_vec(&report).map_err(|e| CliError::RuntimeState(e.to_string()))?,
         )
     }
 }
