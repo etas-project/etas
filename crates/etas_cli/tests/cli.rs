@@ -30,6 +30,8 @@ mod collection_metadata;
 mod ordered_collections;
 #[path = "cli/priority_queue.rs"]
 mod priority_queue;
+#[path = "cli/record_values.rs"]
+mod record_values;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
 #[path = "cli/text_values.rs"]
