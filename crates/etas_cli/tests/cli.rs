@@ -24,6 +24,9 @@ static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 #[path = "cli/compiler_service.rs"]
 mod compiler_service;
 
+#[path = "cli/collection_metadata.rs"]
+mod collection_metadata;
+
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
         &fs::read(path).unwrap(),
