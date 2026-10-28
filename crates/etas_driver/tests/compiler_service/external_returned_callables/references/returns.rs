@@ -33,7 +33,7 @@ flow main() -> Array<i32> ![] { let callback = make<i32>(); return callback([2])
     let values = values.borrow();
     assert_eq!(values.len(), 1);
     assert_eq!(
-        etas_interpreter::api::codec::value_json(&values[0]),
+        etas_interpreter::api::codec::value_json(&values[0]).unwrap(),
         serde_json::json!({"kind": "number", "type": "i32", "value": "2"})
     );
     assert_eq!(host.calls(), 0);
