@@ -1,5 +1,7 @@
 use super::*;
-use etas_interpreter::api::codec::{checkpoint_artifact_json, checkpoint_from_json};
+use etas_interpreter::api::codec::{
+    CheckpointDocument, checkpoint_artifact_json, checkpoint_from_json,
+};
 use etas_interpreter::api::{
     InterpValue, RunOptions,
     code::{PreparedAgentRevision, SavedAgentRevision},
@@ -42,7 +44,7 @@ pub(super) fn compile(
         .map_err(|error| HostError::new(HostErrorCode::InvalidResponse, error.to_string()))
 }
 
-fn save(body: &str) -> (Vec<u8>, serde_json::Value) {
+fn save(body: &str) -> (Vec<u8>, CheckpointDocument) {
     let (definitions, original) = fresh_definitions();
     let body = definitions.syntax_operations().parse_body(body).unwrap();
     let draft = definitions.with_body(&original, body).unwrap();
