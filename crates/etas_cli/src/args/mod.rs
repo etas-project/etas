@@ -128,6 +128,9 @@ pub struct ResumeArgs {
     #[arg(long, value_name = "NAME")]
     pub profile: Option<String>,
 
+    #[arg(long, value_name = "MODE", value_parser = ["json-schema", "output-tool"], help = "Typed output encoding for the OpenAI-compatible model adapter")]
+    pub model_output_encoding: Option<String>,
+
     #[arg(long, value_name = "PATH")]
     pub runtime_config: Option<std::path::PathBuf>,
 

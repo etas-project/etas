@@ -41,6 +41,7 @@ pub(crate) fn run(
         args.runtime_config.as_deref(),
         &args.allow_net,
         args.max_call_depth,
+        args.model_output_encoding.as_deref(),
     )?;
     if args.print_runtime_profile {
         writeln!(

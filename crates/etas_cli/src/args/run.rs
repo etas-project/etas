@@ -28,6 +28,9 @@ pub struct RunArgs {
     #[arg(long)]
     pub print_runtime_profile: bool,
 
+    #[arg(long, value_name = "MODE", value_parser = ["json-schema", "output-tool"], help = "Typed output encoding for the OpenAI-compatible model adapter")]
+    pub model_output_encoding: Option<String>,
+
     #[arg(long = "allow-net", value_name = "HOST:PORT")]
     pub allow_net: Vec<String>,
 

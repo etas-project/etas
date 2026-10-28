@@ -85,6 +85,7 @@ pub(crate) fn run(
         args.runtime_config.as_deref(),
         &[],
         args.max_call_depth.or(Some(checkpoint_max_call_depth)),
+        args.model_output_encoding.as_deref(),
     )?;
     let current_profile = host_config.runtime_profile_json();
     if checkpoint_profile != &current_profile {
