@@ -26,6 +26,8 @@ mod compiler_service;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
+#[path = "cli/ordered_collections.rs"]
+mod ordered_collections;
 #[path = "cli/priority_queue.rs"]
 mod priority_queue;
 
