@@ -21,6 +21,9 @@ use etas_frontend::{
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(unix)]
+#[path = "cli/command_result.rs"]
+mod command_result;
 #[path = "cli/compiler_service.rs"]
 mod compiler_service;
 
