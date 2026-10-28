@@ -70,3 +70,4 @@ cli-lsp = ["component-ide"]
 
 [dev-dependencies]
 etas_package = { workspace = true, features = ["test-support"] }
+etas_package_metadata.workspace = true
