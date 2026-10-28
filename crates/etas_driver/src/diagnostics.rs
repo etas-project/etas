@@ -7,6 +7,7 @@ pub enum DriverError {
         source: std::io::Error,
     },
     Package(etas_package::PackageError),
+    SourceSnapshot(etas_package::SourceSnapshotError<std::convert::Infallible>),
     FrontendSession(String),
     InvalidInput(String),
 }
@@ -16,6 +17,7 @@ impl fmt::Display for DriverError {
         match self {
             Self::Io { path, source } => write!(f, "failed to read `{}`: {source}", path.display()),
             Self::Package(error) => write!(f, "{error}"),
+            Self::SourceSnapshot(error) => error.fmt(f),
             Self::FrontendSession(message) => write!(f, "frontend session failed: {message}"),
             Self::InvalidInput(message) => f.write_str(message),
         }

@@ -17,7 +17,7 @@ use etas_host::{
     TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
-    api::{EntryPoint, InterpreterCheckpoint, RunOptions, entry_args_from_strings},
+    api::{EntryPoint, RunOptions, entry_args_from_strings},
     host::{HostFuture, HostServiceAvailability, HostServices},
 };
 use etas_utils::{ProfileHandle, ProfileSpanStatus};
@@ -396,6 +396,18 @@ mod tests {
 }
 
 impl HostServices for CliHost {
+    fn compiler<'a>(
+        &'a self,
+        _operation: etas_host::execution::OperationContext,
+        request: etas_host::compiler::CompilerRequest,
+    ) -> HostFuture<'a, Result<etas_host::compiler::CompilerResponse, HostError>> {
+        self.profiled("host.compiler", async move {
+            Err(unavailable(
+                request.id,
+                "compiler service requires a prepared frozen definition environment",
+            ))
+        })
+    }
     fn availability(&self) -> HostServiceAvailability {
         self.availability
     }
@@ -900,6 +912,8 @@ pub(crate) struct RunRequest {
     pub allow_effects: bool,
     pub budget_overrides: RunBudgetOverrides,
     pub program_args: Vec<String>,
+    pub definitions: Option<std::sync::Arc<etas_frontend::code::definition::NativeDefinitionStore>>,
+    pub compiler: Option<etas_driver::compiler::NativeCompilerService>,
 }
 
 pub(crate) fn run_checked(
@@ -914,6 +928,8 @@ pub(crate) fn run_checked(
         allow_effects,
         budget_overrides,
         program_args,
+        definitions,
+        compiler,
     } = request;
     let effects_enabled = allow_effects || config.profile_name.is_some();
     let config = if dry_run || !effects_enabled {
@@ -947,9 +963,15 @@ pub(crate) fn run_checked(
             profile.clone(),
         )?
     };
+    let host = super::compiler::compose_host(host, compiler, config.compiler.is_some())?;
     let entry = EntryPoint { item };
     let entry_args = entry_args_from_strings(checked, program_args);
     let mut options = config.run_options();
+    options.code_definitions = definitions.map(|definitions| {
+        std::sync::Arc::new(etas_interpreter::api::code::PreparedCodeDefinitions::new(
+            definitions,
+        ))
+    });
     let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
     options.event_observer = Some(journal.clone());
     options.profile = profile.clone();
@@ -958,7 +980,13 @@ pub(crate) fn run_checked(
     apply_budget_overrides(&mut options, budget_overrides);
     super::lifecycle::run_controlled(
         config.shutdown_grace_ms,
-        etas_interpreter::Interpreter.create_run(checked, entry, entry_args, &host, options),
+        etas_interpreter::Interpreter.create_run(
+            checked,
+            entry,
+            entry_args,
+            host.as_ref(),
+            options,
+        ),
         lifecycle,
         &journal,
     )
@@ -966,20 +994,28 @@ pub(crate) fn run_checked(
 
 pub(crate) fn resume_checked(
     checked: &CheckedProject,
-    checkpoint: &InterpreterCheckpoint,
+    checkpoint: &etas_interpreter::api::codec::SourceCheckpoint,
+    definitions: Option<std::sync::Arc<etas_frontend::code::definition::NativeDefinitionStore>>,
+    compiler: Option<etas_driver::compiler::NativeCompilerService>,
     config: CliHostConfig,
     profile: &ProfileHandle,
     lifecycle: Option<&super::lifecycle::CommandLifecycle>,
 ) -> Result<super::lifecycle::ControlledRun, CliError> {
-    let active_trace_specs = active_trace_specs_for_entry(checked, checkpoint.entry_item);
-    let trace_spec_facts = trace_spec_facts_for_entry(checked, checkpoint.entry_item);
+    let active_trace_specs = active_trace_specs_for_entry(checked, checkpoint.entry_item());
+    let trace_spec_facts = trace_spec_facts_for_entry(checked, checkpoint.entry_item());
     let host = CliHost::console(
         config.clone(),
         active_trace_specs.clone(),
         trace_spec_facts.clone(),
         profile.clone(),
     )?;
+    let host = super::compiler::compose_host(host, compiler, config.compiler.is_some())?;
     let mut options = config.run_options();
+    options.code_definitions = definitions.map(|definitions| {
+        std::sync::Arc::new(etas_interpreter::api::code::PreparedCodeDefinitions::new(
+            definitions,
+        ))
+    });
     options.profile = profile.clone();
     let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
     options.event_observer = Some(journal.clone());
@@ -987,7 +1023,12 @@ pub(crate) fn resume_checked(
     options.host_context.authority.policy.trace_spec_facts = trace_spec_facts;
     super::lifecycle::run_controlled(
         config.shutdown_grace_ms,
-        etas_interpreter::Interpreter.create_resume(checked, checkpoint, &host, options),
+        etas_interpreter::Interpreter.create_source_resume(
+            checked,
+            checkpoint,
+            host.as_ref(),
+            options,
+        ),
         lifecycle,
         &journal,
     )

@@ -20,8 +20,22 @@ pub(crate) fn run(
 ) -> Result<CliExit, CliError> {
     validate_run_args(&args)?;
     let flow = args.flow.clone().unwrap_or_else(|| "main".to_owned());
+    let project_inputs = if args.input.is_empty() {
+        vec![
+            global
+                .workspace
+                .clone()
+                .unwrap_or_else(|| std::path::PathBuf::from(".")),
+        ]
+    } else {
+        args.input.clone()
+    };
+    let project_inputs = project_inputs
+        .into_iter()
+        .map(|path| std::fs::canonicalize(&path).map_err(|source| CliError::Io { path, source }))
+        .collect::<Result<Vec<_>, _>>()?;
     let host_config = super::interpreter::runtime_config_for_run(
-        &args.input,
+        &project_inputs,
         Some(&flow),
         args.profile.as_deref(),
         args.runtime_config.as_deref(),
@@ -44,9 +58,10 @@ pub(crate) fn run(
     let compiled = super::interpreter::compile_project(
         global,
         profile,
-        args.input.clone(),
+        project_inputs.clone(),
         args.all,
         Some(flow.clone()),
+        host_config.compiler_config().filter(|_| !args.dry_run),
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);
     let visible_compile_diagnostics = visible_run_diagnostics(global, &compiled.diagnostics);
@@ -76,6 +91,8 @@ pub(crate) fn run(
             allow_effects: args.allow_effects,
             budget_overrides: run_budget_overrides(&args)?,
             program_args: args.program_args.clone(),
+            definitions: compiled.definitions.clone(),
+            compiler: compiled.compiler.clone(),
         },
         host_config.clone(),
         profile,
@@ -104,7 +121,8 @@ pub(crate) fn run(
         let runtime_profile = host_config.runtime_profile_json();
         super::interpreter::write_checkpoint_files(
             dir,
-            &source_paths,
+            &project_inputs,
+            args.all,
             &flow,
             &result,
             &runtime_profile,

@@ -9,5 +9,5 @@ public flow BuildTriagePrompt(input: CaseRequest) -> Prompt ![] {
 }
 
 public agent TriageAgent(input: CaseRequest) -> CaseSummary {
-    return BuildTriagePrompt(input);
+    return perform infer<CaseSummary>(BuildTriagePrompt(input));
 }

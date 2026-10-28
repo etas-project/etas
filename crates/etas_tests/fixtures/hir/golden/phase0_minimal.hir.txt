@@ -3,18 +3,19 @@ HirProgram
     s0 TypeAlias Draft
     s1 Agent Writer
     s2 Flow main
-    s3 Param input
-    s4 StdPreludeAlias Array origin=StdPrelude target=std.collections.Array
-    s5 Param args
-    s6 Local input
-    s7 Local draft
+    s3 Flow run
+    s4 Param input
+    s5 StdPreludeAlias Array origin=StdPrelude target=std.collections.Array
+    s6 Param args
+    s7 Local input
+    s8 Local draft
   Scopes
-    sc0 Module(HirModuleId(0)) symbols=[s0,s1,s2,s4]
+    sc0 Module(HirModuleId(0)) symbols=[s0,s1,s2,s5]
     sc1 Item(HirItemId(0)) parent=sc0
-    sc2 Item(HirItemId(1)) parent=sc0 symbols=[s3]
+    sc2 Item(HirItemId(1)) parent=sc0 symbols=[s4]
     sc3 Block(HirBlockId(0)) parent=sc2
-    sc4 Item(HirItemId(2)) parent=sc0 symbols=[s5]
-    sc5 Block(HirBlockId(1)) parent=sc4 symbols=[s6,s7]
+    sc4 Item(HirItemId(2)) parent=sc0 symbols=[s6]
+    sc5 Block(HirBlockId(1)) parent=sc4 symbols=[s7,s8]
   Modules
     m0 scope=sc0 name=tests.phase0
       Item i0
@@ -28,19 +29,19 @@ HirProgram
       Output t2
         Path Draft(s0)
       Body b0 scope=sc3
-    i2 Flow s2 scope=sc4 params=[s5]
+    i2 Flow s2 scope=sc4 params=[s6]
       Return t5
         Primitive I32
       Body b1 scope=sc5
         st0 Let
-          Pat p0 Binding s6
+          Pat p0 Binding s7
           Value e0
             Literal String { value: "draft", span: Span { source: SourceId(1), range: TextRange { start: TextSize(141), end: TextSize(148) } } }
         st1 Let
-          Pat p1 Binding s7
+          Pat p1 Binding s8
           Value e3
             Input e1
-              Path input(s6)
+              Path input(s7)
             Stage
               Expr e2
                 Path Writer(s1)

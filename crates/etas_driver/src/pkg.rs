@@ -206,6 +206,12 @@ fn build_package_metadata_without_dependency_bootstrap(
     let package_root = loaded.package_root.clone().ok_or_else(|| {
         DriverError::InvalidInput("loaded package project did not report a package root".to_owned())
     })?;
+    let definition_origin = loaded
+        .source_definition_provenance
+        .local_package_key()
+        .ok_or_else(|| {
+            DriverError::InvalidInput("package metadata has no captured definition origin".into())
+        })?;
     let compiled = compile_loaded_project(options, loaded.loaded, SnapshotDetailLevel::None)?;
     if compiled.response.output.checked.is_none() {
         return Err(DriverError::InvalidInput(format!(
@@ -222,6 +228,7 @@ fn build_package_metadata_without_dependency_bootstrap(
     let artifact = etas_frontend::emit_package_metadata_artifact(
         &artifact_path,
         PackageMetadataBuildInput {
+            definition_origin: Some(definition_origin),
             package_id: manifest.package.name.clone(),
             package_version: manifest.package.version.clone(),
             package_edition: manifest.package.edition.clone(),

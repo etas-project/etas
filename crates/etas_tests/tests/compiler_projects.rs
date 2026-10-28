@@ -1,6 +1,9 @@
 mod support;
 
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use support::{fixture, path_str, run_cli};
 
@@ -88,16 +91,40 @@ fn compiler_project_positive_application_fixtures_are_layered_workspaces() {
 
 #[test]
 fn compiler_project_metadata_replay_does_not_reanalyze_dependency_source() {
-    let root = fixture("compiler/projects/positive/dependency_spec_trace_metadata_replay");
-    let dependency_source = std::fs::read_to_string(
-        root.join(".etas/vendor/trace-contracts/src/trace_contract/contract.es"),
+    let project = PreparedProject::new(&fixture(
+        "compiler/projects/positive/dependency_spec_trace_metadata_replay",
+    ));
+    let root = &project.0;
+    let loaded = etas_driver::load_project(
+        &etas_driver::DriverOptions {
+            cache_mode: etas_driver::DriverCacheMode::Off,
+            ..Default::default()
+        },
+        etas_driver::LoadProjectRequest {
+            paths: vec![root.clone()],
+            all: true,
+            entry_policy: etas_frontend::EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
     )
     .unwrap();
-    assert!(
-        dependency_source.contains("policy LegacyContract")
-            && dependency_source.contains("follows LegacyContract"),
-        "metadata replay fixture dependency source should contain obsolete syntax that would fail if reanalyzed"
+    assert_eq!(
+        loaded.loaded.input.sources.len(),
+        3,
+        "consumer must load local sources only"
     );
+    let mut dependency_sources = Vec::new();
+    collect_las_sources(&root.join("deps"), &mut dependency_sources);
+    collect_las_sources(&root.join(".etas"), &mut dependency_sources);
+    assert!(
+        dependency_sources.len() > 1,
+        "pkg update must have materialized the real producer"
+    );
+    for source in dependency_sources {
+        std::fs::write(source, "module trace_contract.contract;\npolicy LegacyContract { allow Fs.read<_>; }\nflow stale() -> unit follows LegacyContract { return; }\n").unwrap();
+    }
 
     let index = std::fs::read_to_string(root.join(".etas/package-index.json")).unwrap();
     for required in [
@@ -117,12 +144,19 @@ fn compiler_project_metadata_replay_does_not_reanalyze_dependency_source() {
         );
     }
 
-    let (code, stdout, stderr) =
-        run_cli(["etas", "--workspace", path_str(&root), "check", "--all"]);
-    assert_eq!(
-        code, 0,
-        "metadata replay consumer should check from dependency metadata without reanalyzing source\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    let output = etas_frontend::Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_some(),
+        "metadata replay must not reread dependency source: {:?}",
+        output.diagnostics
     );
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let (code, _, stderr) = run_cli(["etas", "--workspace", path_str(root), "check", "--all"]);
+    assert_eq!(
+        code, 2,
+        "a fresh package load must still reject the tampered payload: {stderr}"
+    );
+    assert!(stderr.contains("payload_checksum_mismatch"), "{stderr}");
 }
 
 #[test]
@@ -131,8 +165,14 @@ fn compiler_project_positive_application_fixtures_check_as_workspaces() {
 
     for project in project_roots("compiler/projects/positive") {
         let name = project.file_name().unwrap().to_string_lossy();
-        let (code, stdout, stderr) =
-            run_cli(["etas", "--workspace", path_str(&project), "check", "--all"]);
+        let prepared = PreparedProject::new(&project);
+        let (code, stdout, stderr) = run_cli([
+            "etas",
+            "--workspace",
+            path_str(&prepared.0),
+            "check",
+            "--all",
+        ]);
 
         if code != 0 || !stdout.contains("checked ") {
             failures.push(format!(
@@ -176,20 +216,24 @@ fn compiler_project_boundary_negative_fixtures_report_diagnostics() {
     let mut failures = Vec::new();
 
     for case in cases {
-        let root = fixture(&format!("compiler/projects/negative/{}", case.name));
-        assert_package_manager_owned_fixture_shape(&root, case.name);
+        let prepared = PreparedProject::new(&fixture(&format!(
+            "compiler/projects/negative/{}",
+            case.name
+        )));
+        let root = &prepared.0;
+        assert_package_manager_owned_fixture_shape(root, case.name);
 
         let (code, _stdout, stderr) = if case.name == "entry_return_type_mismatch" {
             run_cli([
                 "etas",
                 "--workspace",
-                path_str(&root),
+                path_str(root),
                 "check",
                 "--phase1",
                 "--all",
             ])
         } else {
-            run_cli(["etas", "--workspace", path_str(&root), "check", "--all"])
+            run_cli(["etas", "--workspace", path_str(root), "check", "--all"])
         };
 
         if code != 1 {
@@ -252,9 +296,13 @@ fn compiler_project_negative_fixtures_report_project_diagnostics() {
     ];
 
     for case in cases {
-        let root = fixture(&format!("compiler/projects/negative/{}", case.name));
+        let prepared = PreparedProject::new(&fixture(&format!(
+            "compiler/projects/negative/{}",
+            case.name
+        )));
+        let root = &prepared.0;
         let (code, stdout, stderr) =
-            run_cli(["etas", "--workspace", path_str(&root), "check", "--all"]);
+            run_cli(["etas", "--workspace", path_str(root), "check", "--all"]);
 
         assert_eq!(code, 1, "{name} should fail:\n{stderr}", name = case.name);
         assert!(
@@ -287,14 +335,16 @@ fn compiler_project_effect_negative_fixtures_report_effect_diagnostics() {
     let mut failures = Vec::new();
 
     for name in cases {
-        let root = fixture(&format!("compiler/projects/negative/{name}"));
-        assert_project_uses_real_effect_surface(&root);
+        let prepared =
+            PreparedProject::new(&fixture(&format!("compiler/projects/negative/{name}")));
+        let root = &prepared.0;
+        assert_project_uses_real_effect_surface(root);
         if name.starts_with("effect_agent") {
-            assert_project_uses_agent_call_surface(&root);
+            assert_project_uses_agent_call_surface(root);
         }
 
         let (code, _stdout, stderr) =
-            run_cli(["etas", "--workspace", path_str(&root), "check", "--all"]);
+            run_cli(["etas", "--workspace", path_str(root), "check", "--all"]);
 
         if code != 1 {
             failures.push(format!(
@@ -316,6 +366,57 @@ fn compiler_project_effect_negative_fixtures_report_effect_diagnostics() {
         "project-level effect negative fixture regressions:\n{}",
         failures.join("\n\n")
     );
+}
+
+struct PreparedProject(PathBuf);
+
+impl PreparedProject {
+    fn new(source: &Path) -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let root = std::env::temp_dir().join(format!(
+            "etas-project-fixture-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let project = Self(root);
+        copy_fixture_sources(source, &project.0);
+        let (code, stdout, stderr) = run_cli(["etas", "pkg", "update", path_str(&project.0)]);
+        assert_eq!(
+            code,
+            0,
+            "materialize {} from source in an isolated workspace:\n{stdout}\n{stderr}",
+            source.display()
+        );
+        project
+    }
+}
+
+impl Drop for PreparedProject {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.0).unwrap();
+    }
+}
+
+fn copy_fixture_sources(source: &Path, destination: &Path) {
+    for entry in std::fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        if matches!(entry.file_name().to_str(), Some(".etas" | "target")) {
+            continue;
+        }
+        let target = destination.join(entry.file_name());
+        let kind = entry.file_type().unwrap();
+        assert!(
+            !kind.is_symlink(),
+            "project fixtures must not escape through symlinks"
+        );
+        if kind.is_dir() {
+            std::fs::create_dir(&target).unwrap();
+            copy_fixture_sources(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
 }
 
 struct ProjectNegativeCase {

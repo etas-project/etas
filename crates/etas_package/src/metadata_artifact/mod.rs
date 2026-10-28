@@ -105,6 +105,9 @@ edition = "2026"
                     visibility: "public".to_owned(),
                 }],
                 effect_summaries: vec![PackageEffectSummaryMetadata {
+                    handler_requests: None,
+                    returned_callables: None,
+                    default_handler_effects: None,
                     item: vec!["artifact".to_owned(), "apply".to_owned()],
                     public_effects: PackageEffectRowMetadata {
                         effects: vec![PackageEffectRefMetadata {

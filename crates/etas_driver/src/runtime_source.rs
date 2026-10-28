@@ -1,11 +1,12 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use etas_core::{SourceFile, SourceId};
 use etas_package::{ResolvedDependency, ResolvedDependencySource};
-use etas_syntax::ast::{ImportTree, Item, Program};
+use etas_syntax::ast::Program;
 
 use crate::{
     DriverError,
@@ -21,6 +22,66 @@ impl RuntimeSourcePlan {
     pub fn is_empty(&self) -> bool {
         self.dependencies.is_empty()
     }
+
+    pub(crate) fn source_inputs(
+        &self,
+        mut next: u32,
+    ) -> Result<Vec<etas_frontend::SourceInput>, DriverError> {
+        let mut sources = Vec::new();
+        let mut paths = BTreeSet::new();
+        for dependency in self.dependencies.values() {
+            for path in &dependency.source_files {
+                if !path.starts_with(&dependency.source_root) || !paths.insert(path.clone()) {
+                    return Err(DriverError::InvalidInput(
+                        "runtime source path is duplicated or outside its source root".into(),
+                    ));
+                }
+                let relative = path
+                    .strip_prefix(dependency.snapshot.package_root())
+                    .map_err(|_| {
+                        DriverError::InvalidInput(
+                            "runtime source is outside its locked snapshot".into(),
+                        )
+                    })?;
+                let bytes = dependency.snapshot.file(relative).ok_or_else(|| {
+                    DriverError::InvalidInput(
+                        "runtime source is absent from its locked snapshot".into(),
+                    )
+                })?;
+                let text = std::str::from_utf8(bytes)
+                    .map_err(|_| {
+                        DriverError::InvalidInput("locked runtime source is not UTF-8".into())
+                    })?
+                    .to_owned();
+                sources.push(etas_frontend::SourceInput {
+                    id: SourceId(next),
+                    path: Some(path.clone()),
+                    text,
+                    kind: etas_frontend::SourceKind::DependencySourceOverlay {
+                        package: dependency.package,
+                        import_root: dependency.import_root.clone(),
+                    },
+                });
+                next = next.checked_add(1).ok_or_else(|| {
+                    DriverError::InvalidInput("runtime source identity exhausted".into())
+                })?;
+            }
+        }
+        Ok(sources)
+    }
+}
+
+pub(crate) enum RuntimeSourceError<E> {
+    Driver(DriverError),
+    Snapshot(etas_package::SourceSnapshotError<E>),
+    Interrupted(E),
+    ParseResource(etas_syntax::BodyResourceError),
+}
+
+impl<E> From<DriverError> for RuntimeSourceError<E> {
+    fn from(error: DriverError) -> Self {
+        Self::Driver(error)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -32,6 +93,7 @@ pub struct RuntimeSourceDependencyPlan {
     pub seed_modules: BTreeSet<Vec<String>>,
     pub source_modules: BTreeSet<Vec<String>>,
     pub source_files: BTreeSet<PathBuf>,
+    pub(crate) snapshot: Arc<etas_package::LockedPackageSourceSnapshot>,
 }
 
 pub fn materialize_runtime_source_plan(
@@ -39,69 +101,184 @@ pub fn materialize_runtime_source_plan(
     environment: &etas_package::PackageEnvironmentMetadata,
     requirements: &etas_frontend::RuntimeSourceRequirements,
 ) -> Result<RuntimeSourcePlan, DriverError> {
-    let dependencies = flatten_dependencies(&environment.dependencies);
-    let mut plans = BTreeMap::new();
-    for requirement in requirements.dependencies.values() {
-        let dependency = dependencies
-            .iter()
-            .copied()
-            .find(|dependency| {
-                stable_external_package_id(&external_package_key(dependency)) == requirement.package
-            })
-            .ok_or_else(|| {
-                DriverError::InvalidInput(format!(
-                    "runtime source requirement references unknown external package `{}`",
-                    requirement.package.0
-                ))
-            })?;
-        let dependency_package_root = dependency_package_root(package_root, dependency)?;
-        let manifest = etas_package::read_manifest(&dependency_package_root)?;
-        let source_root = dependency_package_root
-            .join(&manifest.source.root)
-            .canonicalize()
-            .map_err(|source| DriverError::Io {
-                path: dependency_package_root.join(&manifest.source.root),
-                source,
-            })?;
-        let plan = plans
-            .entry(dependency.import_root.clone())
-            .or_insert_with(|| RuntimeSourceDependencyPlan {
-                package: requirement.package,
-                import_root: dependency.import_root.clone(),
-                package_root: dependency_package_root.clone(),
-                source_root: source_root.clone(),
-                seed_modules: BTreeSet::new(),
-                source_modules: BTreeSet::new(),
-                source_files: BTreeSet::new(),
-            });
-        for module in &requirement.seed_modules {
-            plan.seed_modules.insert(module.segments.clone());
-            collect_reachable_dependency_sources(
-                &plan.source_root,
-                &dependency.import_root,
-                module.segments.clone(),
-                &mut plan.source_modules,
-                &mut plan.source_files,
-            )?;
-        }
-    }
-    Ok(RuntimeSourcePlan {
-        dependencies: plans,
-    })
+    RuntimeSourceMaterializer::new(package_root, environment).plan(requirements)
 }
 
-fn flatten_dependencies(dependencies: &[ResolvedDependency]) -> Vec<&ResolvedDependency> {
-    fn walk<'a>(dependency: &'a ResolvedDependency, output: &mut Vec<&'a ResolvedDependency>) {
-        output.push(dependency);
-        for child in &dependency.dependencies {
-            walk(child, output);
+pub(crate) struct RuntimeSourceMaterializer<'a> {
+    package_root: &'a Path,
+    environment: &'a etas_package::PackageEnvironmentMetadata,
+    snapshots: BTreeMap<etas_frontend::ExternalPackageId, RuntimeSourcePackageSnapshot>,
+    budget: etas_package::SourceSnapshotBudget,
+}
+
+struct RuntimeSourcePackageSnapshot {
+    import_root: String,
+    snapshot: Arc<etas_package::LockedPackageSourceSnapshot>,
+}
+
+impl<'a> RuntimeSourceMaterializer<'a> {
+    pub(crate) fn new(
+        package_root: &'a Path,
+        environment: &'a etas_package::PackageEnvironmentMetadata,
+    ) -> Self {
+        Self {
+            package_root,
+            environment,
+            snapshots: BTreeMap::new(),
+            budget: Default::default(),
         }
     }
-    let mut output = Vec::new();
-    for dependency in dependencies {
-        walk(dependency, &mut output);
+
+    fn snapshot<E>(
+        &mut self,
+        package: etas_frontend::ExternalPackageId,
+        checkpoint: &impl Fn() -> Result<(), E>,
+    ) -> Result<&RuntimeSourcePackageSnapshot, RuntimeSourceError<E>> {
+        checkpoint().map_err(|error| {
+            RuntimeSourceError::Snapshot(etas_package::SourceSnapshotError::Interrupted(error))
+        })?;
+        let slot = match self.snapshots.entry(package) {
+            std::collections::btree_map::Entry::Vacant(slot) => slot,
+            std::collections::btree_map::Entry::Occupied(slot) => return Ok(slot.into_mut()),
+        };
+        let (dependency, dependency_package_root) =
+            dependency_source_location(self.package_root, &self.environment.dependencies, package)?;
+        let checksum = dependency.source.payload_checksum().ok_or_else(|| {
+            DriverError::InvalidInput(
+                "runtime source dependency has no locked payload checksum".into(),
+            )
+        })?;
+        let snapshot = Arc::new(
+            self.budget
+                .read_locked(&dependency_package_root, checksum, checkpoint)
+                .map_err(RuntimeSourceError::Snapshot)?,
+        );
+        if etas_package::PackageIdentity::current(snapshot.manifest()) != dependency.identity {
+            return Err(DriverError::InvalidInput(
+                "locked runtime source package identity differs from its dependency".into(),
+            )
+            .into());
+        }
+        Ok(slot.insert(RuntimeSourcePackageSnapshot {
+            import_root: dependency.import_root.clone(),
+            snapshot,
+        }))
     }
-    output
+
+    pub(crate) fn plan(
+        &mut self,
+        requirements: &etas_frontend::RuntimeSourceRequirements,
+    ) -> Result<RuntimeSourcePlan, DriverError> {
+        self.plan_controlled(requirements, &|| Ok::<_, std::convert::Infallible>(()))
+            .map_err(|error| match error {
+                RuntimeSourceError::Driver(error) => error,
+                RuntimeSourceError::Snapshot(error) => DriverError::SourceSnapshot(error),
+                RuntimeSourceError::Interrupted(never) => match never {},
+                RuntimeSourceError::ParseResource(error) => DriverError::InvalidInput(format!(
+                    "runtime source parser {:?} limit {} exceeded",
+                    error.kind, error.limit
+                )),
+            })
+    }
+
+    pub(crate) fn plan_controlled<E>(
+        &mut self,
+        requirements: &etas_frontend::RuntimeSourceRequirements,
+        checkpoint: &impl Fn() -> Result<(), E>,
+    ) -> Result<RuntimeSourcePlan, RuntimeSourceError<E>> {
+        let mut plans = BTreeMap::new();
+        for requirement in requirements.dependencies.values() {
+            let package = self.snapshot(requirement.package, checkpoint)?;
+            if requirement.import_root != package.import_root {
+                return Err(DriverError::InvalidInput(
+                    "runtime source requirement has a different locked import root".into(),
+                )
+                .into());
+            }
+            let snapshot = package.snapshot.clone();
+            let source_root = snapshot.package_root().join(snapshot.source_root());
+            let plan = plans.entry(package.import_root.clone()).or_insert_with(|| {
+                RuntimeSourceDependencyPlan {
+                    package: requirement.package,
+                    import_root: package.import_root.clone(),
+                    package_root: snapshot.package_root().to_owned(),
+                    source_root: source_root.clone(),
+                    seed_modules: BTreeSet::new(),
+                    source_modules: BTreeSet::new(),
+                    source_files: BTreeSet::new(),
+                    snapshot,
+                }
+            });
+            plan.seed_modules.extend(
+                requirement
+                    .seed_modules
+                    .iter()
+                    .map(|module| module.segments.clone()),
+            );
+            for module in &requirement.required_modules {
+                checkpoint().map_err(RuntimeSourceError::Interrupted)?;
+                let files = module_source_files(&plan.snapshot, &module.segments, checkpoint)?;
+                plan.source_modules.insert(module.segments.clone());
+                plan.source_files.extend(files);
+            }
+        }
+        Ok(RuntimeSourcePlan {
+            dependencies: plans,
+        })
+    }
+}
+
+fn dependency_source_location<'a>(
+    root: &Path,
+    dependencies: &'a [ResolvedDependency],
+    target: etas_frontend::ExternalPackageId,
+) -> Result<(&'a ResolvedDependency, PathBuf), DriverError> {
+    let mut nodes: Vec<(&ResolvedDependency, Option<usize>)> = Vec::new();
+    let mut pending = dependencies
+        .iter()
+        .rev()
+        .map(|dependency| (dependency, None))
+        .collect::<Vec<_>>();
+    let mut selected: Option<usize> = None;
+    while let Some((dependency, parent)) = pending.pop() {
+        let index = nodes.len();
+        nodes.push((dependency, parent));
+        if stable_external_package_id(&external_package_key(dependency)) == target {
+            if let Some(previous) = selected {
+                if nodes[previous].0 != dependency {
+                    return Err(DriverError::InvalidInput(
+                        "runtime source package has conflicting locked dependency records".into(),
+                    ));
+                }
+            } else {
+                selected = Some(index);
+            }
+        }
+        pending.extend(
+            dependency
+                .dependencies
+                .iter()
+                .rev()
+                .map(|child| (child, Some(index))),
+        );
+    }
+    let selected = selected.ok_or_else(|| {
+        DriverError::InvalidInput(format!(
+            "runtime source requirement references unknown external package `{}`",
+            target.0
+        ))
+    })?;
+    let mut chain = Vec::new();
+    let mut next = Some(selected);
+    while let Some(index) = next {
+        chain.push(nodes[index].0);
+        next = nodes[index].1;
+    }
+    let mut location = root.to_owned();
+    for dependency in chain.into_iter().rev() {
+        location = dependency_package_root(&location, dependency)?;
+    }
+    Ok((nodes[selected].0, location))
 }
 
 fn dependency_package_root(
@@ -150,118 +327,108 @@ fn resolve_dependency_path(base_package_root: &Path, path: &str) -> Result<PathB
         .map_err(|source| DriverError::Io { path, source })
 }
 
-fn collect_reachable_dependency_sources(
-    source_root: &Path,
-    import_root: &str,
-    module: Vec<String>,
-    source_modules: &mut BTreeSet<Vec<String>>,
-    output: &mut BTreeSet<PathBuf>,
-) -> Result<(), DriverError> {
-    let mut pending = vec![module];
-    let mut seen = BTreeSet::<Vec<String>>::new();
-    while let Some(module) = pending.pop() {
-        if !seen.insert(module.clone()) {
-            continue;
-        }
-        let files = module_source_files(source_root, &module)?;
-        source_modules.insert(module.clone());
-        for file in files {
-            if !output.insert(file.clone()) {
-                continue;
-            }
-            let program = parse_dependency_source(&file)?;
-            for imported in dependency_import_modules(import_root, &program, source_root)? {
-                if !seen.contains(&imported) {
-                    pending.push(imported);
-                }
-            }
-        }
+fn module_source_files<E>(
+    snapshot: &etas_package::LockedPackageSourceSnapshot,
+    module: &[String],
+    checkpoint: &impl Fn() -> Result<(), E>,
+) -> Result<Vec<PathBuf>, RuntimeSourceError<E>> {
+    if module.is_empty()
+        || module.iter().any(|segment| {
+            segment.is_empty()
+                || matches!(segment.as_str(), "." | "..")
+                || segment.contains(['/', '\\', '\0'])
+        })
+    {
+        return Err(DriverError::InvalidInput(
+            "runtime source requirement contains an invalid module path".into(),
+        )
+        .into());
     }
-    Ok(())
-}
-
-fn module_source_files(source_root: &Path, module: &[String]) -> Result<Vec<PathBuf>, DriverError> {
-    let relative = module.iter().collect::<PathBuf>();
-    let direct = source_root.join(&relative).with_extension("es");
-    let mod_file = source_root.join(&relative).join("mod.es");
+    let source_root = snapshot.source_root();
+    let relative = source_root.join(module.iter().collect::<PathBuf>());
+    let direct = relative.with_extension("es");
+    let mod_file = relative.join("mod.es");
     let mut files = Vec::new();
-    if direct.is_file() {
-        files.push(direct.canonicalize().map_err(|source| DriverError::Io {
-            path: direct,
-            source,
-        })?);
-    }
-    if mod_file.is_file() {
-        files.push(mod_file.canonicalize().map_err(|source| DriverError::Io {
-            path: mod_file,
-            source,
-        })?);
+    for file in [&direct, &mod_file] {
+        if let Some(bytes) = snapshot.file(file) {
+            if !dependency_source_declares_module(file, bytes, module, checkpoint)? {
+                return Err(DriverError::InvalidInput(format!(
+                    "runtime source `{}` does not declare required module `{}`",
+                    file.display(),
+                    module.join("."),
+                ))
+                .into());
+            }
+            files.push(snapshot.package_root().join(file));
+        }
     }
     if files.is_empty() {
         return Err(DriverError::InvalidInput(format!(
             "runtime source module `{}` is missing under dependency source root `{}`",
             module.join("."),
-            source_root.display()
-        )));
+            snapshot.package_root().join(source_root).display()
+        ))
+        .into());
     }
-    collect_module_part_files(source_root, module, &mut files)?;
-    files.sort();
-    files.dedup();
-    Ok(files)
-}
-
-fn collect_module_part_files(
-    source_root: &Path,
-    module: &[String],
-    output: &mut Vec<PathBuf>,
-) -> Result<(), DriverError> {
-    let relative = module.iter().collect::<PathBuf>();
-    let directory = source_root.join(relative);
-    if !directory.is_dir() {
-        return Ok(());
-    }
-    let entries = std::fs::read_dir(&directory).map_err(|source| DriverError::Io {
-        path: directory.clone(),
-        source,
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|source| DriverError::Io {
-            path: directory.clone(),
-            source,
-        })?;
-        let path = entry.path();
-        if path.is_dir() || path.extension().and_then(|extension| extension.to_str()) != Some("es")
+    for (path, bytes) in snapshot.files() {
+        checkpoint().map_err(RuntimeSourceError::Interrupted)?;
+        if path.parent() != Some(relative.as_path())
+            || path.extension().and_then(|extension| extension.to_str()) != Some("es")
         {
             continue;
         }
         if path.file_name().and_then(|name| name.to_str()) == Some("mod.es") {
             continue;
         }
-        if dependency_source_declares_module(&path, module)? {
-            output.push(path.canonicalize().map_err(|source| DriverError::Io {
-                path: path.clone(),
-                source,
-            })?);
+        if dependency_source_declares_module(path, bytes, module, checkpoint)? {
+            files.push(snapshot.package_root().join(path));
         }
     }
-    Ok(())
+    files.sort();
+    files.dedup();
+    Ok(files)
 }
 
-fn dependency_source_declares_module(path: &Path, module: &[String]) -> Result<bool, DriverError> {
-    let program = parse_dependency_source(path)?;
+fn dependency_source_declares_module<E>(
+    path: &Path,
+    bytes: &[u8],
+    module: &[String],
+    checkpoint: &impl Fn() -> Result<(), E>,
+) -> Result<bool, RuntimeSourceError<E>> {
+    let program = parse_dependency_source(path, bytes, checkpoint)?;
     Ok(program
         .module
         .as_ref()
         .is_some_and(|decl| path_segments(&decl.path) == module))
 }
 
-fn parse_dependency_source(path: &Path) -> Result<Program, DriverError> {
-    let text = std::fs::read_to_string(path).map_err(|source| DriverError::Io {
-        path: path.to_path_buf(),
-        source,
+fn parse_dependency_source<E>(
+    path: &Path,
+    bytes: &[u8],
+    checkpoint: &impl Fn() -> Result<(), E>,
+) -> Result<Program, RuntimeSourceError<E>> {
+    let text = std::str::from_utf8(bytes).map_err(|_| {
+        DriverError::InvalidInput(format!(
+            "locked runtime source `{}` is not UTF-8",
+            path.display()
+        ))
     })?;
     let source = SourceFile::new(SourceId(0), Some(path.to_path_buf()), text);
-    let parsed = etas_syntax::parse_program(source);
+    let parsed = etas_syntax::parse_program_bounded(&source, Default::default(), checkpoint)
+        .map_err(|error| match error {
+            etas_syntax::BoundedBodyParseError::Interrupted(error) => {
+                RuntimeSourceError::Interrupted(error)
+            }
+            etas_syntax::BoundedBodyParseError::Resource(error) => {
+                RuntimeSourceError::ParseResource(error)
+            }
+            etas_syntax::BoundedBodyParseError::Syntax(error) => {
+                RuntimeSourceError::Driver(DriverError::InvalidInput(format!(
+                    "dependency source `{}` has invalid syntax: {error}",
+                    path.display()
+                )))
+            }
+        })?;
     if let Some(diagnostic) = parsed
         .diagnostics
         .iter()
@@ -271,193 +438,16 @@ fn parse_dependency_source(path: &Path) -> Result<Program, DriverError> {
             "dependency source `{}` cannot be parsed for runtime source planning: {}",
             path.display(),
             diagnostic.message
-        )));
+        ))
+        .into());
     }
     Ok(parsed.value)
-}
-
-fn dependency_import_modules(
-    import_root: &str,
-    program: &Program,
-    source_root: &Path,
-) -> Result<Vec<Vec<String>>, DriverError> {
-    let mut modules = BTreeSet::new();
-    for import in &program.imports {
-        collect_import_tree_modules(import_root, source_root, &import.tree, &mut modules)?;
-    }
-    Ok(modules.into_iter().collect())
-}
-
-fn collect_import_tree_modules(
-    import_root: &str,
-    source_root: &Path,
-    tree: &ImportTree,
-    output: &mut BTreeSet<Vec<String>>,
-) -> Result<(), DriverError> {
-    match tree {
-        ImportTree::Single { path, .. } => {
-            collect_candidate_import_path(import_root, source_root, &path_segments(path), output)?;
-        }
-        ImportTree::Group { prefix, items, .. } => {
-            let prefix = path_segments(prefix);
-            collect_candidate_import_path(import_root, source_root, &prefix, output)?;
-            for item in items {
-                let mut candidate = prefix.clone();
-                candidate.push(item.name.text.clone());
-                collect_candidate_import_path(import_root, source_root, &candidate, output)?;
-            }
-        }
-        ImportTree::Wildcard { prefix, .. } => {
-            collect_wildcard_import_path(import_root, source_root, &path_segments(prefix), output)?;
-        }
-        ImportTree::Error { .. } => {}
-    }
-    Ok(())
-}
-
-fn collect_wildcard_import_path(
-    import_root: &str,
-    source_root: &Path,
-    path: &[String],
-    output: &mut BTreeSet<Vec<String>>,
-) -> Result<(), DriverError> {
-    if !path.starts_with(&import_root_segments(import_root)) {
-        return Ok(());
-    }
-    collect_candidate_import_path(import_root, source_root, path, output)?;
-    let relative = path.iter().collect::<PathBuf>();
-    let directory = source_root.join(relative);
-    if directory.is_dir() {
-        collect_module_files_under(source_root, &directory, output)?;
-    }
-    Ok(())
-}
-
-fn collect_module_files_under(
-    source_root: &Path,
-    directory: &Path,
-    output: &mut BTreeSet<Vec<String>>,
-) -> Result<(), DriverError> {
-    let Ok(entries) = std::fs::read_dir(directory) else {
-        return Ok(());
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            collect_module_files_under(source_root, &path, output)?;
-            continue;
-        }
-        if path.extension().and_then(|extension| extension.to_str()) != Some("es") {
-            continue;
-        }
-        let Some(module) = module_path_for_source_file(source_root, &path) else {
-            continue;
-        };
-        output.insert(module);
-    }
-    Ok(())
-}
-
-fn module_path_for_source_file(source_root: &Path, path: &Path) -> Option<Vec<String>> {
-    let relative = path.strip_prefix(source_root).ok()?;
-    if relative.file_name().and_then(|name| name.to_str()) == Some("mod.es") {
-        let parent = relative.parent()?;
-        return pathbuf_segments(parent);
-    }
-    let mut segments = pathbuf_segments(relative)?;
-    let last = segments.last_mut()?;
-    *last = last.strip_suffix(".es").unwrap_or(last).to_owned();
-    Some(segments)
-}
-
-fn pathbuf_segments(path: &Path) -> Option<Vec<String>> {
-    path.iter()
-        .map(|segment| segment.to_str().map(str::to_owned))
-        .collect()
-}
-
-fn collect_candidate_import_path(
-    import_root: &str,
-    source_root: &Path,
-    path: &[String],
-    output: &mut BTreeSet<Vec<String>>,
-) -> Result<(), DriverError> {
-    if !path.starts_with(&import_root_segments(import_root)) {
-        return Ok(());
-    }
-    if module_file_exists(source_root, path) {
-        output.insert(path.to_vec());
-        return Ok(());
-    }
-    if path.len() > 1 {
-        let parent = &path[..path.len() - 1];
-        if module_file_exists(source_root, parent) {
-            let item_name = path.last().expect("item path has last segment");
-            if module_defines_item(source_root, parent, item_name)? {
-                output.insert(parent.to_vec());
-            }
-        }
-    }
-    Ok(())
-}
-
-fn module_file_exists(source_root: &Path, module: &[String]) -> bool {
-    let relative = module.iter().collect::<PathBuf>();
-    source_root.join(&relative).with_extension("es").is_file()
-        || source_root.join(&relative).join("mod.es").is_file()
-}
-
-fn module_defines_item(
-    source_root: &Path,
-    module: &[String],
-    item_name: &str,
-) -> Result<bool, DriverError> {
-    for file in module_source_files(source_root, module)? {
-        let program = parse_dependency_source(&file)?;
-        if program
-            .items
-            .iter()
-            .any(|item| item_name_in_source(&item.item).is_some_and(|name| name == item_name))
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-fn item_name_in_source(item: &Item) -> Option<&str> {
-    match item {
-        Item::Alias(item) => Some(item.name.text.as_str()),
-        Item::Type(item) => Some(item.name.text.as_str()),
-        Item::Enum(item) => Some(item.name.text.as_str()),
-        Item::Spec(item) => Some(item.name.text.as_str()),
-        Item::Impl(_) => None,
-        Item::Effect(item) => Some(item.name.text.as_str()),
-        Item::Protocol(item) => Some(item.name.text.as_str()),
-        Item::Flow(item) => Some(item.name.text.as_str()),
-        Item::Agent(item) => Some(item.name.text.as_str()),
-        Item::TopLevelLet(item) => Some(item.name.text.as_str()),
-        Item::Tool(item) => item
-            .path
-            .segments
-            .last()
-            .map(|segment| segment.text.as_str()),
-        Item::Error { .. } => None,
-    }
 }
 
 fn path_segments(path: &etas_syntax::ast::Path) -> Vec<String> {
     path.segments
         .iter()
         .map(|segment| segment.text.clone())
-        .collect()
-}
-
-fn import_root_segments(import_root: &str) -> Vec<String> {
-    import_root
-        .split('.')
-        .filter(|segment| !segment.is_empty())
-        .map(str::to_owned)
         .collect()
 }
 
@@ -480,7 +470,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn runtime_source_plan_loads_referenced_module_import_closure_only() {
+    fn runtime_source_plan_materializes_only_explicitly_required_modules_and_parts() {
         let root = unique_temp_dir("runtime-source-plan");
         let dependency_root = root.join("dep");
         let dependency_src = dependency_root.join("src");
@@ -545,7 +535,7 @@ flow extra() -> unit { return; }
             import_root: "dep".to_owned(),
             source: ResolvedDependencySource::Path {
                 path: dependency_root.to_string_lossy().into_owned(),
-                checksum: "blake3:test".to_owned(),
+                checksum: etas_package::package_payload_checksum(&dependency_root).unwrap(),
             },
             dependencies: Vec::new(),
             public_metadata: PackagePublicMetadata {
@@ -572,21 +562,14 @@ flow extra() -> unit { return; }
         let requirements =
             runtime_requirements_for_modules([vec!["dep".to_owned(), "api".to_owned()]]);
 
-        let plan = materialize_runtime_source_plan(&root, &environment, &requirements)
+        let mut materializer = RuntimeSourceMaterializer::new(&root, &environment);
+        let plan = materializer
+            .plan(&requirements)
             .expect("runtime source plan");
         let dependency_plan = plan.dependencies.get("dep").expect("dependency plan");
         assert_eq!(
             dependency_plan.source_modules,
-            BTreeSet::from([
-                vec!["dep".to_owned(), "api".to_owned()],
-                vec![
-                    "dep".to_owned(),
-                    "internal".to_owned(),
-                    "extra_helper".to_owned()
-                ],
-                vec!["dep".to_owned(), "internal".to_owned(), "helper".to_owned()],
-                vec!["dep".to_owned(), "types".to_owned()],
-            ])
+            BTreeSet::from([vec!["dep".to_owned(), "api".to_owned()]])
         );
         assert!(
             dependency_plan
@@ -594,7 +577,7 @@ flow extra() -> unit { return; }
                 .contains(&dependency_src.join("dep/api.es").canonicalize().unwrap())
         );
         assert!(
-            dependency_plan.source_files.contains(
+            !dependency_plan.source_files.contains(
                 &dependency_src
                     .join("dep/internal/helper.es")
                     .canonicalize()
@@ -610,7 +593,7 @@ flow extra() -> unit { return; }
             )
         );
         assert!(
-            dependency_plan.source_files.contains(
+            !dependency_plan.source_files.contains(
                 &dependency_src
                     .join("dep/internal/extra_helper.es")
                     .canonicalize()
@@ -623,16 +606,59 @@ flow extra() -> unit { return; }
                 .contains(&dependency_src.join("dep/unused.es").canonicalize().unwrap())
         );
         assert!(
-            dependency_plan
+            !dependency_plan
                 .source_files
                 .contains(&dependency_src.join("dep/types.es").canonicalize().unwrap()),
-            "source-compiled modules must include their source import closure"
+            "type-only imports stay in metadata until frontend explicitly requires their source"
         );
+        fs::write(
+            dependency_src.join("dep/api.es"),
+            "module dep.api; flow call() -> unit { abort(\"changed\"); }",
+        )
+        .unwrap();
+        fs::remove_file(dependency_src.join("dep/internal/helper.es")).unwrap();
+        let later = runtime_requirements_for_modules([vec![
+            "dep".into(),
+            "internal".into(),
+            "helper".into(),
+        ]]);
+        let later_plan = materializer.plan(&later).unwrap();
+        let later_dependency = &later_plan.dependencies["dep"];
+        assert!(Arc::ptr_eq(
+            &dependency_plan.snapshot,
+            &later_dependency.snapshot
+        ));
+        assert!(
+            later_dependency
+                .source_files
+                .contains(&dependency_plan.source_root.join("dep/internal/helper.es"))
+        );
+        let mut loaded = etas_frontend::LoadedProjectInput {
+            input: etas_frontend::ProjectInput::single_source(
+                etas_frontend::SourceInput::anonymous(
+                    "module app; flow main() -> unit { return; }",
+                ),
+            ),
+            sources: Vec::new(),
+        };
+        let added =
+            crate::source::append_runtime_source_dependency_sources(&mut loaded, &plan).unwrap();
+        assert_eq!(added.len(), 2);
+        assert!(
+            added.iter().all(|source| !source.text.contains("changed")),
+            "source materialization must use the verified snapshot, not reread mutable paths"
+        );
+        assert!(matches!(
+            materialize_runtime_source_plan(&root, &environment, &requirements),
+            Err(DriverError::SourceSnapshot(
+                etas_package::SourceSnapshotError::ChecksumMismatch { .. }
+            ))
+        ));
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn runtime_source_plan_follows_wildcard_imports_and_mod_files() {
+    fn runtime_source_plan_materializes_required_mod_files_without_expanding_wildcards() {
         let root = unique_temp_dir("runtime-source-plan-wildcard-mod");
         let dependency_root = root.join("dep");
         let dependency_src = dependency_root.join("src");
@@ -681,8 +707,17 @@ flow call() -> unit { return; }
             dependencies: vec![dependency],
             ..PackageEnvironmentMetadata::default()
         };
-        let requirements =
-            runtime_requirements_for_modules([vec!["dep".to_owned(), "api".to_owned()]]);
+        let mut requirements = runtime_requirements_for_modules([
+            vec!["dep".to_owned(), "api".to_owned()],
+            vec!["dep".to_owned(), "plugins".to_owned()],
+        ]);
+        requirements
+            .dependencies
+            .get_mut(&test_external_package_id())
+            .unwrap()
+            .seed_modules = BTreeSet::from([ModulePath {
+            segments: vec!["dep".into(), "api".into()],
+        }]);
 
         let plan = materialize_runtime_source_plan(&root, &environment, &requirements)
             .expect("runtime source plan");
@@ -692,7 +727,6 @@ flow call() -> unit { return; }
             BTreeSet::from([
                 vec!["dep".to_owned(), "api".to_owned()],
                 vec!["dep".to_owned(), "plugins".to_owned()],
-                vec!["dep".to_owned(), "plugins".to_owned(), "json".to_owned()],
             ])
         );
         assert!(
@@ -708,11 +742,19 @@ flow call() -> unit { return; }
                 .source_files
                 .contains(&dependency_src.join("dep/unused.es").canonicalize().unwrap())
         );
+        assert!(
+            !dependency_plan.source_files.contains(
+                &dependency_src
+                    .join("dep/plugins/json.es")
+                    .canonicalize()
+                    .unwrap()
+            )
+        );
         let _ = fs::remove_dir_all(root);
     }
 
     #[test]
-    fn runtime_source_plan_fails_when_required_runtime_source_is_missing() {
+    fn runtime_source_plan_fails_when_required_runtime_source_is_missing_or_misidentified() {
         let root = unique_temp_dir("runtime-source-plan-missing");
         let dependency_root = root.join("dep");
         fs::create_dir_all(dependency_root.join("src/dep")).expect("create dependency src");
@@ -732,7 +774,7 @@ root = "src"
             &dependency_root,
             vec!["dep".to_owned(), "missing".to_owned(), "call".to_owned()],
         );
-        let environment = PackageEnvironmentMetadata {
+        let mut environment = PackageEnvironmentMetadata {
             dependencies: vec![dependency],
             ..PackageEnvironmentMetadata::default()
         };
@@ -747,7 +789,70 @@ root = "src"
                 .contains("runtime source module `dep.missing` is missing"),
             "{error}"
         );
+        fs::write(
+            dependency_root.join("src/dep/missing.es"),
+            "module dep.other; public flow call() -> unit { return; }",
+        )
+        .unwrap();
+        if let ResolvedDependencySource::Path { checksum, .. } =
+            &mut environment.dependencies[0].source
+        {
+            *checksum = etas_package::package_payload_checksum(&dependency_root).unwrap();
+        }
+        let error =
+            materialize_runtime_source_plan(&root, &environment, &requirements).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("does not declare required module `dep.missing`"),
+            "{error}"
+        );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn runtime_source_plan_preserves_cancellation_during_cached_source_parsing() {
+        let root = unique_temp_dir("runtime-source-cancel");
+        let dependency = root.join("dep");
+        fs::create_dir_all(dependency.join("src/dep")).unwrap();
+        fs::write(
+            dependency.join("etas.toml"),
+            "[package]\nname = \"dep\"\nversion = \"0.1.0\"\nedition = \"2026\"\n",
+        )
+        .unwrap();
+        fs::write(
+            dependency.join("src/dep/api.es"),
+            "module dep.api; public flow run() -> unit { return; }",
+        )
+        .unwrap();
+        let environment = PackageEnvironmentMetadata {
+            dependencies: vec![test_dependency(
+                &dependency,
+                vec!["dep".into(), "api".into(), "run".into()],
+            )],
+            ..Default::default()
+        };
+        let requirements = runtime_requirements_for_modules([vec!["dep".into(), "api".into()]]);
+        let mut materializer = RuntimeSourceMaterializer::new(&root, &environment);
+        materializer.plan(&requirements).unwrap();
+        let calls = std::cell::Cell::new(0);
+        let result = materializer.plan_controlled(&requirements, &|| {
+            let count = calls.get() + 1;
+            calls.set(count);
+            if count == 4 {
+                Err("cancelled in cached parser")
+            } else {
+                Ok(())
+            }
+        });
+        assert!(matches!(
+            result,
+            Err(RuntimeSourceError::Interrupted(
+                "cancelled in cached parser"
+            ))
+        ));
+        assert_eq!(calls.get(), 4);
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn unique_temp_dir(name: &str) -> PathBuf {
@@ -770,7 +875,7 @@ root = "src"
             import_root: "dep".to_owned(),
             source: ResolvedDependencySource::Path {
                 path: dependency_root.to_string_lossy().into_owned(),
-                checksum: "blake3:test".to_owned(),
+                checksum: etas_package::package_payload_checksum(dependency_root).unwrap(),
             },
             dependencies: Vec::new(),
             public_metadata: PackagePublicMetadata {

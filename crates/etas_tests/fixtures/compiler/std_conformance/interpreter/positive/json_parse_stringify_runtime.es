@@ -16,8 +16,7 @@ flow stringify_sample() -> Result<string, JsonError> {
 flow invalid_json_shape() -> i32 {
     return match parse("{") {
         Ok(_) => 1,
-        Err(InvalidJson(message)) => if message == "" { 1 } else { 0 },
-        Err(_) => 1
+        Err(InvalidJson(message)) => if message == "" { 1 } else { 0 }
     };
 }
 

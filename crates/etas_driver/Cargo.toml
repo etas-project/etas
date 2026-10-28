@@ -8,10 +8,13 @@ repository.workspace = true
 
 [dependencies]
 etas_core.workspace = true
+etas_code.workspace = true
+etas_host.workspace = true
 etas_effects.workspace = true
 etas_frontend.workspace = true
 etas_hir.workspace = true
 etas_package.workspace = true
+etas_package_metadata.workspace = true
 etas_std.workspace = true
 etas_syntax.workspace = true
 etas_types.workspace = true
@@ -19,3 +22,8 @@ etas_utils.workspace = true
 blake3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+bincode = { version = "2.0.1", features = ["serde"] }
+tokio.workspace = true
+etas_interpreter.workspace = true

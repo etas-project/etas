@@ -44,26 +44,26 @@ public tool EvidenceLookup(input: RuntimeTask) -> string {
 @limits([Tokens(96)])
 public agent Planner(input: RuntimeTask) -> string
 {
-    return Prompt.new()
+    return perform infer(Prompt.new()
         .system(Trusted("Return a concise plan for the task."))
-        .data(input);
+        .data(input));
 }
 
 @tools([EvidenceLookup], choice = "required")
 @limits([Tokens(256)])
 public agent Researcher(input: RuntimeTask) -> RuntimeEvidence
 {
-    return Prompt.new()
+    return perform infer(Prompt.new()
         .system(Trusted("Your first assistant response must be an EvidenceLookup tool call, not text. EvidenceLookup arguments must be a JSON object with topic:string and draft:string copied from input. After the tool result is returned, answer with JSON containing evidence:string."))
-        .data(input);
+        .data(input));
 }
 
 @limits([Tokens(128)])
 public agent Reviewer(input: RuntimeReviewInput) -> RuntimeReview
 {
-    return Prompt.new()
+    return perform infer(Prompt.new()
         .system(Trusted("Return JSON with summary:string and score:i32."))
-        .data(input);
+        .data(input));
 }
 
 public flow runtime_task(topic: string, draft: string) -> RuntimeTask {

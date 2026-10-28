@@ -23,6 +23,9 @@ use std::{
 
 use crate::error::CliError;
 
+mod compiler;
+pub(super) use compiler::CliCompilerConfig;
+
 use super::host_tool::{
     CliToolBinding, parse_tool_bindings, tool_binding_endpoint, tool_binding_name,
     tool_binding_program, tool_bindings_from_profile,
@@ -30,6 +33,7 @@ use super::host_tool::{
 
 #[derive(Clone)]
 pub(crate) struct CliHostConfig {
+    pub(super) compiler: Option<CliCompilerConfig>,
     pub(super) model: Option<CliModelConfig>,
     pub(super) command_allowed_programs: Vec<String>,
     pub(super) command_isolation: etas_host::CommandIsolation,
@@ -197,6 +201,7 @@ impl RuntimeEnvOverrides {
 impl CliHostConfig {
     pub(super) fn none() -> Self {
         Self {
+            compiler: None,
             model: None,
             command_allowed_programs: Vec::new(),
             command_isolation: etas_host::CommandIsolation::Denied,
@@ -302,6 +307,7 @@ impl CliHostConfig {
         sort_dedup_network_allowlist(&mut adapter_transport_allowlist);
 
         let mut config = Self {
+            compiler: None,
             model,
             command_allowed_programs,
             command_isolation: etas_host::CommandIsolation::Denied,
@@ -399,6 +405,9 @@ impl CliHostConfig {
         base_dir: &Path,
         env: &RuntimeEnvOverrides,
     ) -> Result<(), CliError> {
+        if let Some(compiler) = &profile.compiler {
+            self.compiler = Some(CliCompilerConfig::from_profile(self.compiler, compiler)?);
+        }
         if let Some(model) = &profile.model {
             self.model = Some(model_from_runtime_profile(model, env, self.model.as_ref())?);
         }
@@ -721,7 +730,8 @@ impl CliHostConfig {
     }
 
     pub(super) fn has_effect_adapters(&self) -> bool {
-        self.model.is_some()
+        self.compiler.is_some()
+            || self.model.is_some()
             || !self.command_allowed_programs.is_empty()
             || !self.tool_bindings.is_empty()
             || self.memory_mode != MemoryMode::None
@@ -735,6 +745,10 @@ impl CliHostConfig {
             || self.boundary_policy_ref.is_some()
             || self.session_mode != SessionMode::None
             || self.secret_mode != SecretMode::None
+    }
+
+    pub(crate) fn compiler_config(&self) -> Option<etas_driver::compiler::NativeCompilerConfig> {
+        self.compiler.map(|compiler| compiler.native)
     }
 
     pub(crate) fn runtime_profile_json(&self) -> serde_json::Value {
@@ -773,6 +787,7 @@ impl CliHostConfig {
         let mut profile = serde_json::json!({
             "schema": "etas.cli.runtime-profile.v1",
             "profile": self.profile_name.clone(),
+            "compiler": self.compiler.map(CliCompilerConfig::json),
             "model": model,
             "tools": tools,
             "tool_private_resolution": private_resolution_name(self.tool_private_resolution),
@@ -839,6 +854,9 @@ impl CliHostConfig {
             etas_host::HostActionGrant::allow("Console", "stdout_write"),
             etas_host::HostActionGrant::allow("Console", "stderr_write"),
         ];
+        if let Some(compiler) = self.compiler {
+            compiler.add_grants(&mut grants);
+        }
         if self.model.is_some() {
             grants.push(etas_host::HostActionGrant::allow("Agentic", "infer"));
         }

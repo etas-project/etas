@@ -463,9 +463,11 @@ mod tests {
         let registry = EffectRegistry::with_standard_effects();
         let mut interner = TypeInterner::new();
         let io_error = interner.intern(Type::Named(NamedTypeRef {
+            source_parameter: None,
             name: "IOError".to_owned(),
         }));
         let index_error = interner.intern(Type::Named(NamedTypeRef {
+            source_parameter: None,
             name: "IndexError".to_owned(),
         }));
         let store = interner.into_store();

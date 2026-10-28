@@ -46,6 +46,7 @@ pub fn store_package_payload(
     if destination.exists() {
         let actual = vendor::path_package_payload_checksum(&destination)?;
         if actual == checksum {
+            vendor::validate_materialized_payloads(&destination)?;
             return Ok(relative);
         }
         return Err(PackageError::Manifest {
@@ -83,6 +84,7 @@ pub fn store_package_payload(
             ),
         });
     }
+    vendor::validate_materialized_payloads(&temp)?;
     fs::rename(&temp, &destination).map_err(|source| PackageError::Io {
         path: destination.clone(),
         source,
@@ -151,6 +153,58 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn store_rejects_missing_dependency_payload_even_when_the_root_digest_matches() {
+        let root = temp_dir("store-missing-closure");
+        let payload = temp_dir("store-closure-payload");
+        write_payload_package(&payload, "parent");
+        let child = payload.join(".etas/vendor/child");
+        write_payload_package(&child, "child");
+        let child_checksum = vendor::path_package_payload_checksum(&child).unwrap();
+        let identity =
+            |path: &Path| crate::PackageIdentity::current(&crate::read_manifest(path).unwrap());
+        vendor::write_package_index(
+            &payload,
+            &crate::PackageIndex {
+                version: 1,
+                package: identity(&payload),
+                dependencies: vec![crate::ResolvedDependency {
+                    identity: identity(&child),
+                    import_root: "child".into(),
+                    source: crate::ResolvedDependencySource::Vendor {
+                        path: ".etas/vendor/child".into(),
+                        checksum: child_checksum,
+                        store: None,
+                        definition_origin: Some(
+                            crate::local_definition_package_key(&child, &identity(&child)).unwrap(),
+                        ),
+                    },
+                    dependencies: vec![],
+                    public_metadata: Default::default(),
+                    effect_metadata: Default::default(),
+                    tool_bindings: vec![],
+                }],
+                external_modules: vec![],
+                public_metadata: Default::default(),
+                effect_metadata: Default::default(),
+                tool_bindings: vec![],
+                bins: vec![],
+            },
+        )
+        .unwrap();
+        let checksum = vendor::path_package_payload_checksum(&payload).unwrap();
+        let relative = store_package_payload(&root, &payload, &checksum).unwrap();
+        let stored = root.join(relative);
+        fs::remove_dir_all(stored.join(".etas/vendor/child")).unwrap();
+        assert_eq!(
+            vendor::path_package_payload_checksum(&stored).unwrap(),
+            checksum
+        );
+        assert!(store_package_payload(&root, &payload, &checksum).is_err());
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(payload).unwrap();
+    }
 
     #[test]
     fn store_package_payload_reuses_existing_digest_under_concurrent_writes() {

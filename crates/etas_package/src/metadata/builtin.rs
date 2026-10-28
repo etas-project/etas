@@ -109,7 +109,16 @@ pub fn builtin_std_public_metadata() -> PackagePublicMetadata {
                 ) =>
             {
                 flows.push(flow_signature(symbol.qualified_path.clone(), decl));
-                effect_summaries.push(flow_effect_summary(symbol.qualified_path.clone(), decl));
+                effect_summaries.push(flow_effect_summary(
+                    symbol.qualified_path.clone(),
+                    decl,
+                    symbol.intrinsic.as_ref().is_some_and(|descriptor| {
+                        matches!(
+                            descriptor.lowering,
+                            etas_std::LoweringHint::ForwardAction { .. }
+                        )
+                    }),
+                ));
             }
             StdDecl::Value(decl) => {
                 values.push(value_signature(symbol.qualified_path.clone(), decl))
@@ -190,6 +199,7 @@ fn public_visibility() -> String {
 fn named_signature(path: Vec<String>) -> PackageNamedSignatureMetadata {
     PackageNamedSignatureMetadata {
         path,
+        generic_params: Vec::new(),
         visibility: public_visibility(),
         ty: None,
     }
@@ -198,6 +208,7 @@ fn named_signature(path: Vec<String>) -> PackageNamedSignatureMetadata {
 fn value_signature(path: Vec<String>, decl: &etas_std::ValueDecl) -> PackageNamedSignatureMetadata {
     PackageNamedSignatureMetadata {
         path,
+        generic_params: Vec::new(),
         visibility: public_visibility(),
         ty: Some(package_type_from_std_type(&decl.ty)),
     }
@@ -291,8 +302,26 @@ fn package_action_arg_kind_from_std(
     }
 }
 
-fn flow_effect_summary(path: Vec<String>, decl: &FlowDecl) -> PackageEffectSummaryMetadata {
+fn flow_effect_summary(
+    path: Vec<String>,
+    decl: &FlowDecl,
+    forwarder: bool,
+) -> PackageEffectSummaryMetadata {
     PackageEffectSummaryMetadata {
+        handler_requests: None,
+        returned_callables: None,
+        default_handler_effects: forwarder.then(|| crate::PackageDefaultHandlerEffectsMetadata {
+            direct_effects: Default::default(),
+            default_actions: effect_row_from_std(&decl.requested_actions),
+            handlers: decl
+                .requested_actions
+                .iter()
+                .map(|action| crate::PackageDefaultHandlerContributionMetadata {
+                    action: effect_ref_from_std(action),
+                    produced: effect_row_from_std(&decl.public_effects),
+                })
+                .collect(),
+        }),
         item: path,
         public_effects: effect_row_from_std(&decl.public_effects),
         requested_actions: effect_row_from_std(&decl.requested_actions),
@@ -474,20 +503,9 @@ fn support_constraint_name(constraint: StdSupportConstraint) -> &'static str {
 }
 
 fn runtime_requirement_for_std_effect(decl: &EffectDecl) -> Option<String> {
-    let requirement = match decl.name.as_str() {
-        "Agentic" => "Agentic",
-        "Network" | "Web" | "Db" | "Vector" | "Browser" | "Email" | "Calendar" | "Queue"
-        | "ObjectStore" | "Payment" | "Package" | "Deploy" => "Network",
-        "FileIO" | "Workspace" | "File" => "FileIO",
-        "Command" => "Command",
-        "Memory" => "DurableMemory",
-        "Secret" => "SecretAccess",
-        "Time" | "Clock" => "Time",
-        "Console" => "Console",
-        "Approval" => "Approval",
-        _ => return None,
-    };
-    Some(requirement.to_owned())
+    decl.runtime_requirement
+        .as_ref()
+        .map(|requirement| format!("{requirement:?}"))
 }
 
 fn builtin_std_public_metadata_fingerprint(metadata: &PackagePublicMetadata) -> String {
@@ -499,6 +517,39 @@ fn builtin_std_public_metadata_fingerprint(metadata: &PackagePublicMetadata) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builtin_effect_requirements_follow_structured_registry_metadata_including_compiler() {
+        let registry = standard_registry();
+        let metadata = builtin_std_effect_metadata();
+        for symbol in registry.symbols() {
+            let StdDecl::Effect(declaration) = &symbol.decl else {
+                continue;
+            };
+            let tag = metadata
+                .tags
+                .iter()
+                .find(|tag| tag.path == [declaration.name.clone()])
+                .unwrap();
+            assert_eq!(
+                tag.runtime_requirement,
+                declaration
+                    .runtime_requirement
+                    .as_ref()
+                    .map(|requirement| format!("{requirement:?}"))
+            );
+        }
+        assert_eq!(
+            metadata
+                .tags
+                .iter()
+                .find(|tag| tag.path == ["Code"])
+                .unwrap()
+                .runtime_requirement
+                .as_deref(),
+            Some("Compiler")
+        );
+    }
 
     #[test]
     fn builtin_std_public_metadata_is_projected_from_registry() {

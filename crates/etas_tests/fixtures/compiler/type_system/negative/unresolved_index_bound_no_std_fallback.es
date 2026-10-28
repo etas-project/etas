@@ -1,5 +1,7 @@
 module tests.compiler.type_system.negative.unresolved_index_bound_no_std_fallback;
 
+spec Index;
+
 flow id<T ~ Index>(value: T) -> T
 {
     return value;

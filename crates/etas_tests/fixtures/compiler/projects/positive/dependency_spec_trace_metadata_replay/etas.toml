@@ -8,7 +8,7 @@ root = "src"
 
 [dependencies]
 std = { version = "0.1" }
-trace_contracts = { package = "trace-contracts", version = "0.1.0", import = "trace_contract", path = ".etas/vendor/trace-contracts" }
+trace_contracts = { package = "trace-contracts", version = "0.1.0", import = "trace_contract", path = "deps/trace-contracts" }
 
 [[bin]]
 name = "dependency-spec-trace-metadata-replay"

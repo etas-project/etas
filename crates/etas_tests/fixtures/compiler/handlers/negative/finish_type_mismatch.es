@@ -2,7 +2,8 @@ module tests.compiler.handlers.negative.finish_type_mismatch;
 
 let BadFallback: ![Error<IndexError> => [] for string] = handler {
     Error<IndexError>.raise(err) => {
-        finish 1;
+        let wrong: i32 = 1;
+        finish wrong;
     }
 };
 

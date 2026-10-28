@@ -1,3 +1,4 @@
+mod definition_origin;
 pub mod diagnostics;
 mod file_lock;
 pub mod lockfile;
@@ -7,29 +8,33 @@ mod metadata_artifact;
 mod pack;
 mod resolver;
 mod source;
+mod source_snapshot;
 mod store;
 mod vendor;
 
+pub use definition_origin::local_definition_package_key;
 pub use diagnostics::{PackageDiagnostic, PackageError};
 pub use manifest::{
-    BinTarget, BindingsSection, DependencySpec, Manifest, PackageSection, RuntimeBackendProfile,
-    RuntimeCommandProfile, RuntimeExecutionProfile, RuntimeFilesystemProfile,
-    RuntimeFilesystemRegionProfile, RuntimeModeProfile, RuntimeModelProfile,
-    RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile, RuntimeProfile,
-    RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, SourceSection, ToolBinding,
-    discover_manifest, read_manifest,
+    BinTarget, BindingsSection, DependencySpec, Manifest, PackageSection, ReflectionSection,
+    RuntimeBackendProfile, RuntimeCommandProfile, RuntimeCompilerProfile, RuntimeExecutionProfile,
+    RuntimeFilesystemProfile, RuntimeFilesystemRegionProfile, RuntimeModeProfile,
+    RuntimeModelProfile, RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile,
+    RuntimeProfile, RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, SourceSection,
+    ToolBinding, discover_manifest, read_manifest,
 };
 pub use metadata::{
-    PackageActionSummaryMetadata, PackageActionTraceEventSourceMetadata,
-    PackageActionTraceMetadata, PackageAgentSignatureMetadata,
-    PackageCallableSpecSatisfactionMetadata, PackageEffectActionArgKindMetadata,
-    PackageEffectActionSignatureMetadata, PackageEffectArgMetadata, PackageEffectExtensionMetadata,
-    PackageEffectMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
-    PackageEffectSummaryMetadata, PackageEffectTagMetadata, PackageEnvironmentMetadata,
-    PackageExternalExportMetadata, PackageExternalModuleMetadata,
-    PackageExternalModuleOwnerMetadata, PackageFlowSignatureMetadata, PackageIdentity,
-    PackageIndex, PackageLatentFlowSummaryMetadata, PackageNamedSignatureMetadata,
-    PackagePublicMetadata, PackageReExportMetadata, PackageRecordFieldMetadata,
+    PackageActionRequestMetadata, PackageActionSummaryMetadata,
+    PackageActionTraceEventSourceMetadata, PackageActionTraceMetadata,
+    PackageAgentSignatureMetadata, PackageCallableSpecSatisfactionMetadata,
+    PackageDefaultHandlerContributionMetadata, PackageDefaultHandlerEffectsMetadata,
+    PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
+    PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
+    PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
+    PackageEffectTagMetadata, PackageEnvironmentMetadata, PackageExternalExportMetadata,
+    PackageExternalModuleMetadata, PackageExternalModuleOwnerMetadata,
+    PackageFlowSignatureMetadata, PackageIdentity, PackageIndex, PackageLatentFlowSummaryMetadata,
+    PackageNamedSignatureMetadata, PackageParameterRequestMetadata, PackagePublicMetadata,
+    PackageReExportMetadata, PackageRecordFieldMetadata, PackageRequestInstantiationMetadata,
     PackageSpecBoundMetadata, PackageSpecImplMetadata, PackageSpecKindMetadata,
     PackageSpecMethodMetadata, PackageSpecSignatureMetadata, PackageToolBindingMetadata,
     PackageToolSchemaMetadata, PackageToolSignatureMetadata, PackageTraceSpecClauseKindMetadata,
@@ -52,5 +57,10 @@ pub use resolver::{
     PreparePackageOptions, PreparedPackage, lock_package, materialize_package, prepare_package,
 };
 pub use source::{GitHubSourceConfig, PackageSourceConfig, RegistrySourceConfig};
+pub use source_snapshot::{
+    LockedPackageSourceSnapshot, SourceSnapshotBudget, SourceSnapshotError, SourceSnapshotLimits,
+    SourceSnapshotResource, read_locked_package_sources,
+};
 #[cfg(feature = "test-support")]
 pub use vendor::dependency_lock_checksum as dependency_lock_checksum_for_test;
+pub use vendor::path_package_payload_checksum as package_payload_checksum;

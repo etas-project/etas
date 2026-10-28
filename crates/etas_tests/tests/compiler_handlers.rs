@@ -201,7 +201,7 @@ fn handler_marker(file_name: &str, positive: bool) -> &'static str {
         (false, "handle_with_non_handler.es") => "} with 2",
         (false, "finish_outside_handler.es") => "finish 1;",
         (false, "return_inside_handler_arm.es") => "return true;",
-        (false, "finish_type_mismatch.es") => "finish 1;",
+        (false, "finish_type_mismatch.es") => "finish wrong;",
         (false, "implicit_handler_fallback.es") => "\"fallback\"",
         (false, "reject_with_handler_keyword.es") => "with handler {",
         _ => panic!("unregistered handler fixture `{file_name}`"),

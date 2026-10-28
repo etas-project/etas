@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::BTreeSet,
     path::{Path, PathBuf},
 };
 
@@ -18,6 +18,9 @@ use crate::{
     },
     runtime_source::RuntimeSourcePlan,
 };
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug)]
 pub struct LoadProjectRequest {
@@ -49,6 +52,7 @@ pub struct LoadedDriverProject {
     pub package_root: Option<PathBuf>,
     pub package_environment: Option<etas_package::PackageEnvironmentMetadata>,
     pub mode: DriverProjectMode,
+    pub(crate) source_definition_provenance: crate::compiler::SourceDefinitionProvenance,
 }
 
 pub fn load_project(
@@ -60,7 +64,15 @@ pub fn load_project(
     let import_search_roots =
         import_search_roots(&local_project.project_root, &local_project.roots);
     let source_kind = source_kind(&local_project.roots, request.all);
-    let scope = project_source_load_scope(&request, &local_project.entry);
+    let scope = if local_project.reflection.retain_bodies.is_empty()
+        && local_project.reflection.export_bodies.is_empty()
+    {
+        project_source_load_scope(&request, &local_project.entry)
+    } else {
+        // Retention names are package-wide metadata roots, not entry call edges.
+        // Dependency loading remains metadata-only until frontend requirements.
+        ProjectSourceLoadScope::FullSourceTree
+    };
     let source_load_span = options.profile.span("driver.source_load", "driver");
     let mut loaded = ProjectSourceLoader::default()
         .load(ProjectSourceLoadOptions {
@@ -86,15 +98,23 @@ pub fn load_project(
     loaded.input.environment = local_project.environment;
     drop(environment_span);
     loaded.input.options.entry_policy = request.entry_policy;
+    loaded.input.options.reflection = local_project.reflection;
     append_source_dependency_sources(&mut loaded, &local_project.source_dependencies)?;
     options
         .profile
         .counter("frontend.total_source_files", loaded.sources.len() as u64);
+    let source_definition_provenance = crate::compiler::capture_source_definition_provenance(
+        local_project.mode,
+        local_project.package_root.as_deref(),
+        local_project.package_environment.as_ref(),
+        &loaded.input,
+    )?;
     Ok(LoadedDriverProject {
         loaded,
         package_root: local_project.package_root,
         package_environment: local_project.package_environment,
         mode: local_project.mode,
+        source_definition_provenance,
     })
 }
 
@@ -133,15 +153,16 @@ struct LocalSourceProject {
     package_environment: Option<etas_package::PackageEnvironmentMetadata>,
     mode: DriverProjectMode,
     source_dependencies: Vec<SourceDependencyOverlay>,
+    reflection: etas_frontend::code::definition::ReflectionOptions,
 }
 
 #[derive(Clone, Debug)]
 struct SourceDependencyOverlay {
     package: etas_frontend::ExternalPackageId,
     import_root: String,
-    package_root: PathBuf,
     source_root: PathBuf,
     source_files: Option<BTreeSet<PathBuf>>,
+    snapshot: std::sync::Arc<etas_package::LockedPackageSourceSnapshot>,
 }
 
 fn resolve_project_inputs(
@@ -214,6 +235,7 @@ fn resolve_directory_project(
             package_environment,
             mode: DriverProjectMode::Package,
             source_dependencies,
+            reflection: reflection_options(&prepared.manifest.reflection),
         });
     }
 
@@ -231,6 +253,7 @@ fn resolve_directory_project(
         package_environment: None,
         mode: DriverProjectMode::SourceProject,
         source_dependencies: Vec::new(),
+        reflection: Default::default(),
     })
 }
 
@@ -271,12 +294,19 @@ fn resolve_single_file_project(
         return Ok(LocalSourceProject {
             project_root: prepared.package_root.clone(),
             package_root: Some(prepared.package_root.clone()),
-            roots: paths,
+            roots: if prepared.manifest.reflection.retain_bodies.is_empty()
+                && prepared.manifest.reflection.export_bodies.is_empty()
+            {
+                paths
+            } else {
+                vec![prepared.source_root.clone()]
+            },
             entry: entry_from_package(&prepared, request.flow.clone(), request.entry_policy)?,
             environment: frontend_environment(prepared.environment.clone())?,
             package_environment,
             mode: DriverProjectMode::Package,
             source_dependencies,
+            reflection: reflection_options(&prepared.manifest.reflection),
         });
     }
 
@@ -294,7 +324,17 @@ fn resolve_single_file_project(
         package_environment: None,
         mode,
         source_dependencies: Vec::new(),
+        reflection: Default::default(),
     })
+}
+
+fn reflection_options(
+    section: &etas_package::ReflectionSection,
+) -> etas_frontend::code::definition::ReflectionOptions {
+    etas_frontend::code::definition::ReflectionOptions {
+        retain_bodies: section.retain_bodies.clone(),
+        export_bodies: section.export_bodies.clone(),
+    }
 }
 
 fn source_dependency_overlays(
@@ -302,14 +342,24 @@ fn source_dependency_overlays(
     dependencies: &[etas_package::ResolvedDependency],
 ) -> Result<Vec<SourceDependencyOverlay>, DriverError> {
     let mut overlays = Vec::new();
-    collect_source_dependency_overlays(package_root, dependencies, &mut overlays)?;
+    collect_source_dependency_overlays(
+        package_root,
+        dependencies,
+        &mut overlays,
+        &mut Default::default(),
+    )?;
     overlays.sort_by(|left, right| {
-        left.import_root
-            .cmp(&right.import_root)
-            .then_with(|| left.package_root.cmp(&right.package_root))
+        left.import_root.cmp(&right.import_root).then_with(|| {
+            left.snapshot
+                .package_root()
+                .cmp(right.snapshot.package_root())
+        })
     });
     overlays.dedup_by(|left, right| {
-        left.import_root == right.import_root && left.package_root == right.package_root
+        left.package == right.package
+            && left.import_root == right.import_root
+            && left.snapshot.package_root() == right.snapshot.package_root()
+            && left.snapshot.checksum() == right.snapshot.checksum()
     });
     Ok(overlays)
 }
@@ -325,66 +375,89 @@ fn source_dependency_overlays_for_mode(
     }
 }
 
-fn source_dependency_overlays_from_runtime_plan(
-    plan: &RuntimeSourcePlan,
-) -> Result<Vec<SourceDependencyOverlay>, DriverError> {
-    let mut overlays = Vec::new();
-    for dependency in plan.dependencies.values() {
-        overlays.push(SourceDependencyOverlay {
-            package: dependency.package,
-            import_root: dependency.import_root.clone(),
-            package_root: dependency.package_root.clone(),
-            source_root: dependency.source_root.clone(),
-            source_files: Some(dependency.source_files.clone()),
-        });
-    }
-    Ok(overlays)
-}
-
 pub(crate) fn append_runtime_source_dependency_sources(
     loaded: &mut LoadedProjectInput,
     plan: &RuntimeSourcePlan,
 ) -> Result<Vec<SourceInput>, DriverError> {
-    let previous_sources = loaded
+    let next = loaded
         .input
         .sources
         .iter()
-        .map(|source| source.id)
-        .collect::<HashSet<_>>();
-    let overlays = source_dependency_overlays_from_runtime_plan(plan)?;
-    append_source_dependency_sources(loaded, &overlays)?;
-    Ok(loaded
+        .map(|source| source.id.0)
+        .max()
+        .map_or(Some(0), |id| id.checked_add(1))
+        .ok_or_else(|| DriverError::InvalidInput("runtime source identity exhausted".into()))?;
+    let sources = plan.source_inputs(next)?;
+    let existing = loaded
         .input
         .sources
         .iter()
-        .filter(|source| !previous_sources.contains(&source.id))
-        .cloned()
-        .collect())
+        .filter_map(|source| source.path.as_ref())
+        .collect::<BTreeSet<_>>();
+    if sources
+        .iter()
+        .filter_map(|source| source.path.as_ref())
+        .any(|path| existing.contains(path))
+    {
+        return Err(DriverError::InvalidInput(
+            "runtime source patch replaces an existing source".into(),
+        ));
+    }
+    for source in &sources {
+        if let Some(path) = &source.path {
+            loaded.sources.push((
+                path.clone(),
+                CoreSourceFile::new(source.id, Some(path.clone()), source.text.clone()),
+            ));
+        }
+    }
+    loaded.input.sources.extend(sources.iter().cloned());
+    Ok(sources)
 }
 
 fn collect_source_dependency_overlays(
     base_package_root: &Path,
     dependencies: &[etas_package::ResolvedDependency],
     output: &mut Vec<SourceDependencyOverlay>,
+    budget: &mut etas_package::SourceSnapshotBudget,
 ) -> Result<(), DriverError> {
-    for dependency in dependencies {
-        if let Some(package_root) = source_dependency_package_root(base_package_root, dependency)? {
-            let manifest = etas_package::read_manifest(&package_root)?;
-            let source_root = package_root
-                .join(&manifest.source.root)
-                .canonicalize()
-                .map_err(|source| DriverError::Io {
-                    path: package_root.join(&manifest.source.root),
-                    source,
-                })?;
+    let mut pending = dependencies
+        .iter()
+        .rev()
+        .map(|dependency| (base_package_root.to_owned(), dependency))
+        .collect::<Vec<_>>();
+    while let Some((owner, dependency)) = pending.pop() {
+        if let Some(package_root) = source_dependency_package_root(&owner, dependency)? {
+            let checksum = dependency.source.payload_checksum().ok_or_else(|| {
+                DriverError::InvalidInput("source dependency has no locked payload checksum".into())
+            })?;
+            let snapshot = std::sync::Arc::new(
+                budget
+                    .read_locked(&package_root, checksum, || {
+                        Ok::<_, std::convert::Infallible>(())
+                    })
+                    .map_err(DriverError::SourceSnapshot)?,
+            );
+            if etas_package::PackageIdentity::current(snapshot.manifest()) != dependency.identity {
+                return Err(DriverError::InvalidInput(
+                    "locked source package identity differs from its dependency".into(),
+                ));
+            }
+            let source_root = snapshot.package_root().join(snapshot.source_root());
             output.push(SourceDependencyOverlay {
                 package: stable_external_package_id(&external_package_key(dependency)),
                 import_root: dependency.import_root.clone(),
-                package_root: package_root.clone(),
                 source_root,
                 source_files: None,
+                snapshot,
             });
-            collect_source_dependency_overlays(&package_root, &dependency.dependencies, output)?;
+            pending.extend(
+                dependency
+                    .dependencies
+                    .iter()
+                    .rev()
+                    .map(|child| (package_root.clone(), child)),
+            );
         }
     }
     Ok(())
@@ -423,11 +496,6 @@ fn append_source_dependency_sources(
     if dependencies.is_empty() {
         return Ok(());
     }
-    let Some(project_source_root) = loaded.input.source_root.clone() else {
-        return Err(DriverError::InvalidInput(
-            "source dependency execution requires a project source root".to_owned(),
-        ));
-    };
     let mut next_id = loaded
         .input
         .sources
@@ -446,15 +514,19 @@ fn append_source_dependency_sources(
     for dependency in dependencies {
         let mut real_paths = match &dependency.source_files {
             Some(source_files) => source_files.iter().cloned().collect::<Vec<_>>(),
-            None => {
-                let mut real_paths = Vec::new();
-                collect_source_files(&dependency.source_root, &mut real_paths)?;
-                real_paths
-            }
+            None => dependency
+                .snapshot
+                .files()
+                .filter(|(path, _)| {
+                    path.starts_with(dependency.snapshot.source_root())
+                        && path.extension().and_then(|ext| ext.to_str()) == Some("es")
+                })
+                .map(|(path, _)| dependency.snapshot.package_root().join(path))
+                .collect(),
         };
         real_paths.sort();
         for real_path in real_paths {
-            let relative = real_path
+            real_path
                 .strip_prefix(&dependency.source_root)
                 .map_err(|_| {
                     DriverError::InvalidInput(format!(
@@ -462,55 +534,44 @@ fn append_source_dependency_sources(
                         real_path.display(),
                         dependency.source_root.display()
                     ))
-                })?
-                .to_path_buf();
-            let virtual_path = project_source_root.join(relative);
-            if !paths.insert(virtual_path.clone()) {
+                })?;
+            if !paths.insert(real_path.clone()) {
                 return Err(DriverError::InvalidInput(format!(
-                    "source dependency `{}` maps to duplicate project source path `{}`",
+                    "source dependency `{}` maps to duplicate source path `{}`",
                     dependency.import_root,
-                    virtual_path.display()
+                    real_path.display()
                 )));
             }
-            let text = std::fs::read_to_string(&real_path).map_err(|source| DriverError::Io {
-                path: real_path.clone(),
-                source,
+            let relative = real_path
+                .strip_prefix(dependency.snapshot.package_root())
+                .map_err(|_| {
+                    DriverError::InvalidInput(
+                        "runtime source path differs from its locked snapshot".into(),
+                    )
+                })?;
+            let bytes = dependency.snapshot.file(relative).ok_or_else(|| {
+                DriverError::InvalidInput(
+                    "required runtime source is missing from its locked snapshot".into(),
+                )
             })?;
+            let text = std::str::from_utf8(bytes)
+                .map_err(|_| {
+                    DriverError::InvalidInput("locked runtime source is not UTF-8".into())
+                })?
+                .to_owned();
             let id = SourceId(next_id);
             next_id = next_id.saturating_add(1);
-            let source = CoreSourceFile::new(id, Some(virtual_path.clone()), text.clone());
-            loaded.sources.push((virtual_path.clone(), source));
+            let source = CoreSourceFile::new(id, Some(real_path.clone()), text.clone());
+            loaded.sources.push((real_path.clone(), source));
             loaded.input.sources.push(SourceInput {
                 id,
-                path: Some(virtual_path),
+                path: Some(real_path),
                 text,
                 kind: SourceKind::DependencySourceOverlay {
                     package: dependency.package,
                     import_root: dependency.import_root.clone(),
                 },
             });
-        }
-    }
-    Ok(())
-}
-
-fn collect_source_files(root: &Path, output: &mut Vec<PathBuf>) -> Result<(), DriverError> {
-    for entry in std::fs::read_dir(root).map_err(|source| DriverError::Io {
-        path: root.to_path_buf(),
-        source,
-    })? {
-        let entry = entry.map_err(|source| DriverError::Io {
-            path: root.to_path_buf(),
-            source,
-        })?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_source_files(&path, output)?;
-        } else if path.extension().and_then(|ext| ext.to_str()) == Some("es") {
-            output.push(path.canonicalize().map_err(|source| DriverError::Io {
-                path: path.clone(),
-                source,
-            })?);
         }
     }
     Ok(())
