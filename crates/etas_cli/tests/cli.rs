@@ -26,6 +26,8 @@ static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 mod command_result;
 #[path = "cli/compiler_service.rs"]
 mod compiler_service;
+#[path = "cli/index_inference.rs"]
+mod index_inference;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
