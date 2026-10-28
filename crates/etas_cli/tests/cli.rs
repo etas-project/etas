@@ -41,6 +41,8 @@ mod priority_queue;
 mod record_values;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/source_reexports.rs"]
+mod source_reexports;
 #[path = "cli/text_values.rs"]
 mod text_values;
 #[path = "cli/typed_output.rs"]
