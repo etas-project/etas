@@ -28,6 +28,8 @@ mod command_result;
 mod compiler_service;
 #[path = "cli/index_inference.rs"]
 mod index_inference;
+#[path = "cli/message_cast.rs"]
+mod message_cast;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
