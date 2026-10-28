@@ -32,6 +32,8 @@ mod ordered_collections;
 mod priority_queue;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/text_values.rs"]
+mod text_values;
 #[path = "cli/typed_output.rs"]
 mod typed_output;
 
