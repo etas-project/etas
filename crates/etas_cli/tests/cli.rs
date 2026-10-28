@@ -26,6 +26,8 @@ mod compiler_service;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
+#[path = "cli/priority_queue.rs"]
+mod priority_queue;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(

@@ -466,6 +466,15 @@ fn package_type_from_std_type(ty: &StdType) -> PackageTypeMetadata {
         StdType::Tuple(elements) => PackageTypeMetadata::Tuple {
             elements: elements.iter().map(package_type_from_std_type).collect(),
         },
+        StdType::Function {
+            input,
+            output,
+            effects,
+        } => PackageTypeMetadata::Function {
+            input: input.iter().map(package_type_from_std_type).collect(),
+            output: Box::new(package_type_from_std_type(output)),
+            effects: Some(effect_row_from_std(effects)),
+        },
     }
 }
 
