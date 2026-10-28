@@ -32,6 +32,8 @@ mod ordered_collections;
 mod priority_queue;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/typed_output.rs"]
+mod typed_output;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
@@ -5260,6 +5262,7 @@ backend = "memory"
         "ETAS_HOST_MODEL_ADAPTER",
         "ETAS_HOST_MODEL_BASE_URL",
         "ETAS_HOST_MODEL_NAME",
+        "ETAS_HOST_MODEL_OUTPUT_ENCODING",
         "ETAS_HOST_MODEL_API_KEY",
         "ETAS_HOST_OMLX_API_KEY",
         "ETAS_HOST_MEMORY",

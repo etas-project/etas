@@ -292,6 +292,8 @@ pub struct RuntimeModelProfile {
     #[serde(default)]
     pub enable_thinking: Option<bool>,
     #[serde(default)]
+    pub typed_output_encoding: Option<String>,
+    #[serde(default)]
     pub timeout: Option<RuntimeModelTimeoutProfile>,
     #[serde(default)]
     pub retry: Option<RuntimeRetryProfile>,
@@ -823,6 +825,7 @@ base_url = "http://127.0.0.1:8848/v1"
 api_key_env = "ETAS_HOST_OMLX_API_KEY"
 allow_private = true
 enable_thinking = false
+typed_output_encoding = "json-schema"
 
 [runtime.profiles.local-omlx.model.timeout]
 request_deadline_ms = 300000
@@ -890,6 +893,13 @@ profile = "local-omlx"
                 .as_ref()
                 .and_then(|model| model.enable_thinking),
             Some(false)
+        );
+        assert_eq!(
+            profile
+                .model
+                .as_ref()
+                .and_then(|model| model.typed_output_encoding.as_deref()),
+            Some("json-schema")
         );
         assert_eq!(
             profile
@@ -1013,6 +1023,7 @@ max_call_depth = 96
 [runtime.profiles.local.model]
 adapter = "omlx-openai"
 model = "Qwen3.5-0.8B-MLX-4bit"
+typed_output_encoding = "output-tool"
 "#,
         )
         .expect("runtime manifest parses");
@@ -1020,6 +1031,10 @@ model = "Qwen3.5-0.8B-MLX-4bit"
         assert_eq!(
             base.dependencies["dep"].lock_fingerprint(),
             with_runtime.dependencies["dep"].lock_fingerprint()
+        );
+        assert_eq!(
+            crate::lockfile::manifest_dependency_fingerprint(&base),
+            crate::lockfile::manifest_dependency_fingerprint(&with_runtime)
         );
     }
 }

@@ -3,8 +3,8 @@ use etas_host::{
     FilesystemPolicy, HostValue, HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule,
     LocalStaticPolicyClient, ModelName, ModelProviderCapabilities, ModelProviderId,
     NetworkEndpoint, NetworkPolicy, OmlxRequestOptions, OpenAiProtocolAdapter,
-    PrivateResolutionPolicy, RetryPolicy, SandboxPolicy, TransportTimeoutPolicy, WorkspaceRegionId,
-    WorkspaceRoot,
+    OpenAiTypedOutputEncoding, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy,
+    TransportTimeoutPolicy, WorkspaceRegionId, WorkspaceRoot,
 };
 use etas_interpreter::api::{
     ExecutionLimits, HostExecutionContext, ModelExecutionPolicy, RunOptions,
@@ -24,6 +24,7 @@ use std::{
 use crate::error::CliError;
 
 mod compiler;
+mod model_output;
 pub(super) use compiler::CliCompilerConfig;
 
 use super::host_tool::{
@@ -69,6 +70,7 @@ pub(super) struct CliModelConfig {
     private_resolution: PrivateResolutionPolicy,
     retry: RetryPolicy,
     enable_thinking: Option<bool>,
+    typed_output_encoding: Option<OpenAiTypedOutputEncoding>,
     timeout: TransportTimeoutPolicy,
 }
 
@@ -79,6 +81,7 @@ struct ModelAdapterConfig {
     timeout: TransportTimeoutPolicy,
     private_resolution: PrivateResolutionPolicy,
     enable_thinking: Option<bool>,
+    typed_output_encoding: Option<OpenAiTypedOutputEncoding>,
 }
 
 #[derive(Clone)]
@@ -227,7 +230,7 @@ impl CliHostConfig {
         }
     }
 
-    pub(super) fn from_legacy_environment() -> Result<Self, CliError> {
+    pub(super) fn from_legacy_environment(env: &RuntimeEnvOverrides) -> Result<Self, CliError> {
         let mut command_allowed_programs = optional_env("ETAS_HOST_COMMAND_ALLOWLIST")?
             .map(|value| {
                 value
@@ -256,7 +259,7 @@ impl CliHostConfig {
         command_allowed_programs.sort();
         command_allowed_programs.dedup();
 
-        let model = model_from_environment()?;
+        let model = model_from_environment(env)?;
         let workspace_root = optional_env("ETAS_HOST_WORKSPACE_ROOT")?
             .map(|path| {
                 WorkspaceRoot::new(&path).map_err(|error| {
@@ -339,8 +342,11 @@ impl CliHostConfig {
         Ok(config)
     }
 
-    pub(super) fn from_environment_with_allow_net(allow_net: &[String]) -> Result<Self, CliError> {
-        let mut config = Self::from_legacy_environment()?;
+    pub(super) fn from_environment_with_allow_net(
+        allow_net: &[String],
+        env: &RuntimeEnvOverrides,
+    ) -> Result<Self, CliError> {
+        let mut config = Self::from_legacy_environment(env)?;
         let explicit_endpoints = parse_cli_network_allowlist(allow_net)?;
         config.program_network_allowlist.extend(explicit_endpoints);
         sort_dedup_network_allowlist(&mut config.program_network_allowlist);
@@ -600,6 +606,7 @@ impl CliHostConfig {
             "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
             "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
             "ETAS_HOST_MODEL_RETRY_DELAY_MS",
+            model_output::ENV_KEY,
         ]) {
             self.model = Some(model_from_env_overrides(env, self.model.as_ref())?);
         }
@@ -758,6 +765,7 @@ impl CliHostConfig {
                 "model": model.model.0,
                 "private_resolution": private_resolution_name(model.private_resolution),
                 "enable_thinking": model.enable_thinking,
+                "typed_output_encoding": model.typed_output_encoding.map(OpenAiTypedOutputEncoding::as_str),
                 "timeout": timeout_policy_json(model.timeout),
                 "retry": retry_policy_json(model.retry),
                 "capabilities": {
@@ -1004,15 +1012,21 @@ pub(crate) fn runtime_config_for_run(
     runtime_config: Option<&Path>,
     allow_net: &[String],
     max_call_depth: Option<u32>,
+    model_output_encoding: Option<&str>,
 ) -> Result<CliHostConfig, CliError> {
-    let env = RuntimeEnvOverrides::from_environment()?;
+    let mut env = RuntimeEnvOverrides::from_environment()?;
+    if let Some(encoding) = model_output_encoding {
+        model_output::parse(encoding)?;
+        env.values
+            .insert(model_output::ENV_KEY.into(), encoding.into());
+    }
     let Some(package_root) = package_root_for_inputs(inputs) else {
         if requested_profile.is_some() || runtime_config.is_some() {
             return Err(CliError::InvalidUsage(
                 "`--profile` and `--runtime-config` require an `etas.toml` project".to_owned(),
             ));
         }
-        let mut config = CliHostConfig::from_environment_with_allow_net(allow_net)?;
+        let mut config = CliHostConfig::from_environment_with_allow_net(allow_net, &env)?;
         config.apply_execution_config(
             &RuntimeExecutionProfile::default(),
             &RuntimeExecutionProfile::default(),
@@ -1050,7 +1064,7 @@ pub(crate) fn runtime_config_for_run(
             allow_net,
         )?
     } else {
-        CliHostConfig::from_environment_with_allow_net(allow_net)?
+        CliHostConfig::from_environment_with_allow_net(allow_net, &env)?
     };
     config.apply_execution_config(
         &manifest.runtime.execution,
@@ -1198,6 +1212,7 @@ fn model_from_runtime_profile(
             timeout,
             private_resolution,
             enable_thinking,
+            typed_output_encoding: model_output::select(env, Some(profile), current)?,
         },
     )
 }
@@ -1259,6 +1274,7 @@ fn model_from_env_overrides(
             timeout,
             private_resolution,
             enable_thinking: current.and_then(|model| model.enable_thinking),
+            typed_output_encoding: model_output::select(env, None, current)?,
         },
     )
 }
@@ -1275,6 +1291,7 @@ fn model_from_parts(
         timeout,
         private_resolution,
         enable_thinking,
+        typed_output_encoding,
     } = config;
     if enable_thinking.is_some() && adapter_name != "omlx-openai" {
         return Err(CliError::InvalidUsage(format!(
@@ -1282,7 +1299,7 @@ fn model_from_parts(
         )));
     }
     let auth = api_key.map_or(AuthConfig::None, AuthConfig::BearerToken);
-    let (adapter, base_url, capabilities, private_resolution) = match adapter_name.as_str() {
+    let (adapter, base_url, private_resolution) = match adapter_name.as_str() {
         "openai" => {
             let base_url = base_url_override.ok_or_else(|| {
                 CliError::InvalidUsage("`openai` model adapter requires `base_url`".to_owned())
@@ -1296,7 +1313,6 @@ fn model_from_parts(
                     .map_err(host_transport_error)?,
                 ),
                 base_url,
-                OpenAiProtocolAdapter::capabilities(),
                 private_resolution,
             )
         }
@@ -1313,7 +1329,6 @@ fn model_from_parts(
                     .map_err(host_transport_error)?,
                 ),
                 base_url,
-                AnthropicProtocolAdapter::capabilities(),
                 private_resolution,
             )
         }
@@ -1328,7 +1343,6 @@ fn model_from_parts(
                         .map_err(host_transport_error)?,
                 ),
                 base_url,
-                OpenAiProtocolAdapter::omlx_capabilities(),
                 PrivateResolutionPolicy::AllowPrivate,
             )
         }
@@ -1341,7 +1355,6 @@ fn model_from_parts(
                         .map_err(host_transport_error)?,
                 ),
                 base_url,
-                AnthropicProtocolAdapter::capabilities(),
                 PrivateResolutionPolicy::AllowPrivate,
             )
         }
@@ -1365,6 +1378,8 @@ fn model_from_parts(
                 .with_timeout(timeout),
         ),
     };
+    let (adapter, capabilities, typed_output_encoding) =
+        model_output::configure(adapter, typed_output_encoding)?;
     Ok(CliModelConfig {
         adapter,
         provider: ModelProviderId(adapter_name),
@@ -1375,6 +1390,7 @@ fn model_from_parts(
         private_resolution,
         retry,
         enable_thinking,
+        typed_output_encoding,
         timeout,
     })
 }
@@ -1678,22 +1694,6 @@ fn timeout_policy_from_env(
     timeout_policy_from_parts(connect_timeout_ms, request_deadline_ms)
 }
 
-fn timeout_policy_from_env_vars(
-    connect_name: &'static str,
-    request_name: &'static str,
-    base: TransportTimeoutPolicy,
-) -> Result<TransportTimeoutPolicy, CliError> {
-    let connect_timeout_ms = optional_env(connect_name)?
-        .map(|value| parse_timeout_millis(connect_name, &value))
-        .transpose()?
-        .unwrap_or(duration_millis(base.connect_timeout())?);
-    let request_deadline_ms = optional_env(request_name)?
-        .map(|value| parse_timeout_millis(request_name, &value))
-        .transpose()?
-        .unwrap_or(duration_millis(base.request_deadline())?);
-    timeout_policy_from_parts(connect_timeout_ms, request_deadline_ms)
-}
-
 fn timeout_policy_from_parts(
     connect_timeout_ms: u64,
     request_deadline_ms: u64,
@@ -1800,41 +1800,16 @@ fn runtime_profile_fingerprint(profile: &serde_json::Value) -> String {
     format!("fnv1a64:{hash:016x}")
 }
 
-fn model_from_environment() -> Result<Option<CliModelConfig>, CliError> {
-    let Some(adapter_name) = optional_env("ETAS_HOST_MODEL_ADAPTER")? else {
+fn model_from_environment(env: &RuntimeEnvOverrides) -> Result<Option<CliModelConfig>, CliError> {
+    if env.get("ETAS_HOST_MODEL_ADAPTER").is_none() {
+        if env.get(model_output::ENV_KEY).is_some() {
+            return Err(CliError::InvalidUsage(
+                "`ETAS_HOST_MODEL_OUTPUT_ENCODING` requires a configured model adapter".to_owned(),
+            ));
+        }
         return Ok(None);
-    };
-    let model = required_env("ETAS_HOST_MODEL_NAME")?;
-    let base_url = optional_env("ETAS_HOST_MODEL_BASE_URL")?;
-    let api_key =
-        optional_env("ETAS_HOST_MODEL_API_KEY")?.or(optional_env("ETAS_HOST_OMLX_API_KEY")?);
-    let retry = retry_policy_from_env_vars(
-        "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
-        "ETAS_HOST_MODEL_RETRY_DELAY_MS",
-        default_transport_retry(),
-    )?;
-    let timeout = timeout_policy_from_env_vars(
-        "ETAS_HOST_MODEL_CONNECT_TIMEOUT_MS",
-        "ETAS_HOST_MODEL_REQUEST_DEADLINE_MS",
-        TransportTimeoutPolicy::default(),
-    )?;
-    let private_resolution = private_resolution_from_env_var(
-        "ETAS_HOST_MODEL_ALLOW_PRIVATE",
-        PrivateResolutionPolicy::PublicOnly,
-    )?;
-    model_from_parts(
-        adapter_name,
-        model,
-        ModelAdapterConfig {
-            base_url_override: base_url,
-            api_key,
-            retry,
-            timeout,
-            private_resolution,
-            enable_thinking: None,
-        },
-    )
-    .map(Some)
+    }
+    model_from_env_overrides(env, None).map(Some)
 }
 
 fn optional_env(name: &'static str) -> Result<Option<String>, CliError> {
@@ -2592,6 +2567,7 @@ mod tests {
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
                 enable_thinking: Some(true),
+                typed_output_encoding: None,
                 timeout: Some(RuntimeModelTimeoutProfile {
                     request_deadline_ms: Some(30_000),
                     connect_timeout_ms: Some(2_000),
@@ -2616,6 +2592,7 @@ mod tests {
                 api_key_env: Some("ETAS_TEST_OMLX_KEY".to_owned()),
                 allow_private: Some(true),
                 enable_thinking: Some(false),
+                typed_output_encoding: None,
                 timeout: Some(RuntimeModelTimeoutProfile {
                     request_deadline_ms: Some(300_000),
                     connect_timeout_ms: None,
@@ -2837,6 +2814,7 @@ mod tests {
                 api_key_env: None,
                 allow_private: Some(true),
                 enable_thinking: Some(false),
+                typed_output_encoding: None,
                 timeout: None,
                 retry: Some(RuntimeRetryProfile {
                     attempts: Some(4),
@@ -2860,6 +2838,7 @@ mod tests {
                 api_key_env: None,
                 allow_private: None,
                 enable_thinking: None,
+                typed_output_encoding: None,
                 timeout: None,
                 retry: None,
             }),
