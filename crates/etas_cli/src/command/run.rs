@@ -133,7 +133,7 @@ pub(crate) fn run(
     super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
     super::interpreter::lifecycle::render_cancellation(global, &result, stderr)?;
 
-    render_run_result(global, stdout, &compiled, &result, &report)?;
+    render_run_result(global, stdout, &compiled, &result, report)?;
 
     Ok(super::interpreter::lifecycle::result_exit(&result))
 }
@@ -276,14 +276,11 @@ fn render_run_result(
     stdout: &mut dyn Write,
     compiled: &super::interpreter::CompiledRunInput,
     result: &RunResult,
-    report: &serde_json::Value,
+    mut report: codec::JsonDocument,
 ) -> Result<(), CliError> {
     match global.format {
         crate::args::global::OutputFormat::Json => {
-            writeln!(stdout, "{report}").map_err(|source| CliError::Io {
-                path: "<stdout>".into(),
-                source,
-            })?;
+            super::interpreter::lifecycle::write_json_line(stdout, "", &report)?;
         }
         crate::args::global::OutputFormat::Jsonl => {
             for diagnostic in &result.diagnostics {
@@ -305,22 +302,15 @@ fn render_run_result(
                     source,
                 })?;
             }
-            writeln!(
-                stdout,
-                "{}",
-                serde_json::json!({
-                    "type": "run_result",
-                    "value": result.value().map(codec::value_json),
-                    "events": result.events.len(),
-                    "checkpoints": result.checkpoints.len(),
-                    "outcome": report.get("outcome"),
-                    "termination": report.get("termination"),
-                })
-            )
-            .map_err(|source| CliError::Io {
-                path: "<stdout>".into(),
-                source,
-            })?;
+            let mut line = codec::JsonDocument::from(serde_json::json!({
+                "type": "run_result", "value": null,
+                "events": result.events.len(), "checkpoints": result.checkpoints.len(),
+                "outcome": null, "termination": null,
+            }));
+            for key in ["value", "outcome", "termination"] {
+                line[key] = report[key].take();
+            }
+            super::interpreter::lifecycle::write_json_line(stdout, "", &line)?;
         }
         crate::args::global::OutputFormat::Human | crate::args::global::OutputFormat::Text => {
             if !global.quiet
@@ -329,14 +319,11 @@ fn render_run_result(
                     .as_ref()
                     .is_some_and(entry_requires_console)
             {
-                let value = result
-                    .value()
-                    .map(codec::value_json)
-                    .unwrap_or(serde_json::Value::Null);
-                writeln!(stdout, "run value: {value}").map_err(|source| CliError::Io {
-                    path: "<stdout>".into(),
-                    source,
-                })?;
+                super::interpreter::lifecycle::write_json_line(
+                    stdout,
+                    "run value: ",
+                    &report["value"],
+                )?;
                 writeln!(
                     stdout,
                     "events: {}, checkpoints: {}",

@@ -30,6 +30,8 @@ mod collection_metadata;
 mod ordered_collections;
 #[path = "cli/priority_queue.rs"]
 mod priority_queue;
+#[path = "cli/runtime_report.rs"]
+mod runtime_report;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
