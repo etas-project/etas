@@ -5,7 +5,7 @@ use super::{
     signals::{SignalSource, Signals},
 };
 use crate::{error::CliError, exit::CliExit};
-use etas_interpreter::api::RunInvocation;
+use etas_interpreter::api::{RunInvocation, codec::JsonDocument};
 use std::{
     cell::RefCell,
     path::{Path, PathBuf},
@@ -23,7 +23,7 @@ struct State {
     runtime: Option<tokio::runtime::Runtime>,
     signals: Signals,
     stop: StopState,
-    trace: Option<(PathBuf, serde_json::Value)>,
+    trace: Option<(PathBuf, JsonDocument)>,
     profile: Option<(PathBuf, etas_utils::ProfileHandle)>,
     pending_output: Vec<String>,
     finalization_deadline: Option<tokio::time::Instant>,
@@ -108,7 +108,7 @@ impl CommandLifecycle {
         }
     }
 
-    pub(crate) fn trace(&self, path: &Path, report: serde_json::Value) {
+    pub(crate) fn trace(&self, path: &Path, report: JsonDocument) {
         self.0.borrow_mut().trace = Some((path.to_owned(), report));
     }
     pub(crate) fn profile(&self, path: &Path, profile: etas_utils::ProfileHandle) {
@@ -158,7 +158,11 @@ impl CommandLifecycle {
             })
         };
         if let Some((path, report)) = artifact {
-            self.write_json(&path, report)?;
+            let owned = path.to_owned();
+            self.io(path.display().to_string(), true, move || {
+                write_trace_file(&owned, &report)
+            })
+            .map_err(|source| CliError::Io { path, source })?;
         }
         Ok(())
     }
@@ -299,16 +303,22 @@ pub(crate) fn write_artifact(
 pub(crate) fn save_trace(
     lifecycle: Option<&CommandLifecycle>,
     path: &Path,
-    report: serde_json::Value,
+    report: JsonDocument,
 ) -> Result<(), CliError> {
     if let Some(lifecycle) = lifecycle {
         lifecycle.trace(path, report);
         Ok(())
     } else {
-        write_artifact(
-            None,
-            path,
-            serde_json::to_vec(&report).map_err(|e| CliError::RuntimeState(e.to_string()))?,
-        )
+        write_trace_file(path, &report).map_err(|source| CliError::Io {
+            path: path.to_owned(),
+            source,
+        })
     }
+}
+
+fn write_trace_file(path: &Path, report: &JsonDocument) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut output = std::io::BufWriter::new(std::fs::File::create(path)?);
+    report.write_to(&mut output)?;
+    output.flush()
 }

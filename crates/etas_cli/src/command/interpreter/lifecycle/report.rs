@@ -4,7 +4,7 @@ use crate::{
     exit::CliExit,
 };
 use etas_host::execution::{CancellationReason, ExternalOutcome, PendingWork};
-use etas_interpreter::api::{RunOutcome, RunResult};
+use etas_interpreter::api::{RunOutcome, RunResult, codec::JsonDocument};
 
 pub(crate) enum ControlledRun {
     Finished(Box<RunResult>),
@@ -15,22 +15,32 @@ pub(crate) struct ForcedShutdown {
     pub(super) exit: CliExit,
     pub(super) trigger: &'static str,
     pub(super) pending: PendingWork,
-    pub(super) events: Vec<serde_json::Value>,
+    pub(super) events: Vec<JsonDocument>,
 }
 
 impl ForcedShutdown {
-    pub(crate) fn json(&self) -> serde_json::Value {
+    pub(crate) fn json(&self) -> JsonDocument {
         let operations: Vec<_> = self.pending.operations().iter().map(|op| serde_json::json!({
             "id": op.id().as_u64(), "request_id": op.request().map(|id| id.0),
             "dispatched": op.dispatched(), "owner_lost": op.owner_lost(),
             "completed_units": op.completed_units(), "external_outcome": external_outcome(op.outcome()),
         })).collect();
-        serde_json::json!({
+        let mut report = JsonDocument::from(serde_json::json!({
             "schema": "etas.cli.interpreter-report.v1", "incomplete": true,
             "outcome": {"kind": "cancelled"}, "termination": null, "shutdown": "pending",
-            "trigger": self.trigger, "exit_code": self.exit.code(), "events": self.events,
+            "trigger": self.trigger, "exit_code": self.exit.code(), "events": null,
             "pending_scopes": self.pending.scopes().len(), "pending_operations": operations,
-        })
+        }));
+        report["events"] = serde_json::Value::Array(
+            self.events
+                .iter()
+                .map(|event| {
+                    let mut event = event.clone();
+                    std::mem::take(&mut *event)
+                })
+                .collect(),
+        );
+        report
     }
     pub(crate) fn render(
         &self,
@@ -39,22 +49,39 @@ impl ForcedShutdown {
         stderr: &mut dyn std::io::Write,
     ) -> Result<CliExit, CliError> {
         let report = self.json();
-        let written = match global.format {
-            OutputFormat::Json | OutputFormat::Jsonl => writeln!(stdout, "{report}"),
-            _ => writeln!(
-                stderr,
-                "execution stopped waiting ({}); termination unconfirmed: {} scopes, {} operations pending\n{report}",
+        match global.format {
+            OutputFormat::Json | OutputFormat::Jsonl => write_json_line(stdout, "", &report)?,
+            _ => {
+                writeln!(stderr,
+                "execution stopped waiting ({}); termination unconfirmed: {} scopes, {} operations pending",
                 self.trigger,
                 self.pending.scopes().len(),
                 self.pending.operations().len()
-            ),
-        };
-        written.map_err(|source| CliError::Io {
-            path: "<shutdown-report>".into(),
-            source,
-        })?;
+                ).map_err(|source| CliError::Io { path: "<shutdown-report>".into(), source })?;
+                write_json_line(stderr, "", &report)?;
+            }
+        }
         Ok(self.exit)
     }
+}
+
+pub(crate) fn write_json_line(
+    output: &mut dyn std::io::Write,
+    prefix: &str,
+    value: &serde_json::Value,
+) -> Result<(), CliError> {
+    use std::io::Write;
+    let mut output = std::io::BufWriter::new(output);
+    let write = (|| {
+        output.write_all(prefix.as_bytes())?;
+        etas_interpreter::api::codec::write_json(&mut output, value)?;
+        output.write_all(b"\n")?;
+        output.flush()
+    })();
+    write.map_err(|source| CliError::Io {
+        path: "<output>".into(),
+        source,
+    })
 }
 
 fn external_outcome(value: Option<&ExternalOutcome>) -> serde_json::Value {
@@ -125,6 +152,31 @@ mod tests {
     use super::*;
     use etas_host::{HostError, HostErrorCode, TraceContext, TraceId, execution::ExecutionScope};
     use etas_interpreter::api::InterpValue;
+
+    #[test]
+    fn forced_report_keeps_deep_events_stack_safe_and_marks_them_incomplete() {
+        let mut payload = serde_json::Value::Bool(true);
+        for _ in 0..20_000 {
+            payload = serde_json::Value::Array(vec![payload]);
+        }
+        let scope = ExecutionScope::new_owned();
+        let report = ForcedShutdown {
+            exit: CliExit::Interrupted,
+            trigger: "second_signal",
+            pending: scope.pending().unwrap(),
+            events: vec![JsonDocument::from(payload)],
+        };
+        let document = report.json();
+        assert_eq!(document["incomplete"], true);
+        assert_eq!(document["shutdown"], "pending");
+        assert_eq!(document["termination"], serde_json::Value::Null);
+        let mut bytes = Vec::new();
+        write_json_line(&mut bytes, "", &document).unwrap();
+        assert!(bytes.ends_with(b"}\n"));
+        assert_eq!(bytes.iter().filter(|byte| **byte == b'[').count(), 20_002);
+        assert_eq!(document, report.json());
+        scope.finish_body(false).unwrap();
+    }
 
     fn completed_with_cleanup_error() -> RunResult {
         let scope = ExecutionScope::new_owned();

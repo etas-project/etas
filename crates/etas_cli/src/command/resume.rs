@@ -139,7 +139,7 @@ pub(crate) fn run(
             return report.render(global, stdout, stderr);
         }
     };
-    let report = codec::run_report_json("resume", &source_paths, &flow, &result)
+    let mut report = codec::run_report_json("resume", &source_paths, &flow, &result)
         .map_err(|error| CliError::RuntimeState(error.to_string()))?;
     if let Some(path) = &args.trace_out {
         super::interpreter::lifecycle::save_trace(lifecycle, path, report.clone())?;
@@ -149,41 +149,25 @@ pub(crate) fn run(
 
     match global.format {
         crate::args::global::OutputFormat::Json => {
-            writeln!(stdout, "{report}").map_err(|source| CliError::Io {
-                path: "<stdout>".into(),
-                source,
-            })?;
+            super::interpreter::lifecycle::write_json_line(stdout, "", &report)?;
         }
         crate::args::global::OutputFormat::Jsonl => {
-            writeln!(
-                stdout,
-                "{}",
-                serde_json::json!({
-                    "type": "resume_result",
-                    "checkpoint": checkpoint_id,
-                    "value": result.value().map(codec::value_json),
-                    "events": result.events.len(),
-                    "checkpoints": result.checkpoints.len(),
-                    "outcome": report.get("outcome"),
-                    "termination": report.get("termination"),
-                })
-            )
-            .map_err(|source| CliError::Io {
-                path: "<stdout>".into(),
-                source,
-            })?;
+            let mut line = codec::JsonDocument::from(serde_json::json!({
+                "type": "resume_result", "checkpoint": checkpoint_id, "value": null,
+                "events": result.events.len(), "checkpoints": result.checkpoints.len(),
+                "outcome": null, "termination": null,
+            }));
+            for key in ["value", "outcome", "termination"] {
+                line[key] = report[key].take();
+            }
+            super::interpreter::lifecycle::write_json_line(stdout, "", &line)?;
         }
         crate::args::global::OutputFormat::Human | crate::args::global::OutputFormat::Text => {
             if !global.quiet {
-                let value = result
-                    .value()
-                    .map(codec::value_json)
-                    .unwrap_or(serde_json::Value::Null);
-                writeln!(stdout, "resumed checkpoint {checkpoint_id}: {value}").map_err(
-                    |source| CliError::Io {
-                        path: "<stdout>".into(),
-                        source,
-                    },
+                super::interpreter::lifecycle::write_json_line(
+                    stdout,
+                    &format!("resumed checkpoint {checkpoint_id}: "),
+                    &report["value"],
                 )?;
                 writeln!(
                     stdout,
