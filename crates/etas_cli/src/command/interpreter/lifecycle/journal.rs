@@ -3,21 +3,28 @@ use std::sync::Mutex;
 
 /// Session-local journal; never captures live frames, authority or raw requests.
 #[derive(Debug, Default)]
-pub(crate) struct EventJournal(Mutex<Vec<codec::JsonDocument>>);
+pub(crate) struct EventJournal(
+    Mutex<Vec<Result<codec::JsonDocument, codec::InterpreterCodecError>>>,
+);
 
 impl RunEventObserver for EventJournal {
     fn observe(&self, event: &WorkflowEvent) {
         if let Ok(mut events) = self.0.lock() {
-            events.push(codec::event_json(event).into());
+            events.push(codec::event_json(event));
         }
     }
 }
 
 impl EventJournal {
     pub(crate) fn snapshot(&self) -> Result<Vec<codec::JsonDocument>, crate::error::CliError> {
-        self.0.lock().map(|events| events.clone()).map_err(|_| {
+        let events = self.0.lock().map_err(|_| {
             crate::error::CliError::RuntimeState("execution event journal poisoned".into())
-        })
+        })?;
+        events
+            .iter()
+            .cloned()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| crate::error::CliError::RuntimeState(error.to_string()))
     }
 }
 

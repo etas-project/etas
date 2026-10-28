@@ -179,7 +179,7 @@ fn published_definition_origins_replay_through_binary_driver_and_reflection_with
             .unwrap();
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
         assert_eq!(host.calls(), 0);
-        let json = etas_interpreter::api::codec::value_json(result.value().unwrap());
+        let json = etas_interpreter::api::codec::value_json(result.value().unwrap()).unwrap();
         assert!(json.to_string().contains("StaticValue"));
         assert!(!result.events.iter().any(|event| matches!(
             event,
