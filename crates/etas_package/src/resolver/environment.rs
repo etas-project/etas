@@ -499,6 +499,7 @@ fn validate_resolved_payload(
             path,
             checksum,
             store,
+            ..
         } => {
             let payload_root = package_root.join(path);
             let actual =

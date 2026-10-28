@@ -4,9 +4,9 @@ import std.io.{println};
 import app.agent.model.{smoke_request};
 
 agent SmokeWriter(input: string) -> string {
-    return Prompt.new()
+    return perform infer(Prompt.new()
         .system(Trusted("Return one short smoke-test sentence."))
-        .data(input);
+        .data(input));
 }
 
 public flow run_agent_smoke(topic: string) -> string ![Error<IOError>] {

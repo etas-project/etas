@@ -89,7 +89,25 @@ pub enum ResolvedDependencySource {
         checksum: String,
         #[serde(default)]
         store: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        definition_origin: Option<etas_code::PackageKey>,
     },
+}
+
+impl ResolvedDependencySource {
+    pub fn payload_checksum(&self) -> Option<&str> {
+        match self {
+            Self::Builtin { .. } => None,
+            Self::Registry { checksum, .. }
+            | Self::Git { checksum, .. }
+            | Self::GitHubClone { checksum, .. }
+            | Self::Path { checksum, .. }
+            | Self::Vendor { checksum, .. } => Some(checksum),
+            Self::GitHubRelease {
+                payload_checksum, ..
+            } => Some(payload_checksum),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -145,6 +163,10 @@ pub struct PackageIndex {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackagePublicMetadata {
     #[serde(default)]
+    pub definition_descriptors: Option<etas_code::descriptor::DefinitionDescriptorSet>,
+    #[serde(default)]
+    pub definition_origins: Option<etas_code::identity::PackageDefinitionOrigins>,
+    #[serde(default)]
     pub modules: Vec<PackageExternalModuleMetadata>,
     #[serde(default)]
     pub types: Vec<PackageNamedSignatureMetadata>,
@@ -194,7 +216,9 @@ pub struct PackagePublicMetadata {
 
 impl PackagePublicMetadata {
     pub fn is_empty(&self) -> bool {
-        self.modules.is_empty()
+        self.definition_descriptors.is_none()
+            && self.definition_origins.is_none()
+            && self.modules.is_empty()
             && self.types.is_empty()
             && self.values.is_empty()
             && self.enums.is_empty()
@@ -278,6 +302,8 @@ pub enum PackageAnnotationValueKindMetadata {
 pub struct PackageNamedSignatureMetadata {
     pub path: Vec<String>,
     #[serde(default)]
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
+    #[serde(default)]
     pub visibility: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ty: Option<PackageTypeMetadata>,
@@ -308,7 +334,7 @@ pub struct PackageAgentSignatureMetadata {
     pub param_names: Vec<String>,
     #[serde(default)]
     pub input: Vec<PackageTypeMetadata>,
-    pub output: PackageTypeMetadata,
+    pub output: Option<PackageTypeMetadata>,
     #[serde(default)]
     pub effects: Option<PackageEffectRowMetadata>,
     #[serde(default)]
@@ -411,6 +437,10 @@ pub enum PackageEffectArgMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PackageTypeMetadata {
+    Enum {
+        path: Vec<String>,
+        variants: Vec<PackageRecordFieldMetadata>,
+    },
     Primitive {
         name: String,
     },
@@ -512,6 +542,12 @@ pub struct PackageRecordFieldMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectSummaryMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handler_requests: Option<PackageRequestInstantiationMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub returned_callables: Option<etas_package_metadata::CallableValueGraph>,
+    #[serde(default)]
+    pub default_handler_effects: Option<PackageDefaultHandlerEffectsMetadata>,
     pub item: Vec<String>,
     #[serde(default)]
     pub public_effects: PackageEffectRowMetadata,
@@ -522,6 +558,37 @@ pub struct PackageEffectSummaryMetadata {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub latent_flows: Vec<PackageLatentFlowSummaryMetadata>,
     pub action_trace: PackageActionTraceMetadata,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageRequestInstantiationMetadata {
+    pub actions: Vec<PackageActionRequestMetadata>,
+    pub parameters: Vec<PackageParameterRequestMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageActionRequestMetadata {
+    pub action: PackageEffectRefMetadata,
+    pub type_bindings: Option<Vec<(String, PackageTypeMetadata)>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageParameterRequestMetadata {
+    pub parameter: String,
+    pub excluded: Vec<PackageEffectRefMetadata>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageDefaultHandlerEffectsMetadata {
+    pub direct_effects: PackageEffectRowMetadata,
+    pub default_actions: PackageEffectRowMetadata,
+    pub handlers: Vec<PackageDefaultHandlerContributionMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageDefaultHandlerContributionMetadata {
+    pub action: PackageEffectRefMetadata,
+    pub produced: PackageEffectRowMetadata,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]

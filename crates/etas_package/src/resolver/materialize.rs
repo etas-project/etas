@@ -131,6 +131,19 @@ fn materialized_source(
                 path: vendored_payload.relative_path,
                 checksum: vendored_payload.checksum,
                 store: Some(vendored_payload.store_path),
+                definition_origin: Some(
+                    crate::local_definition_package_key(
+                        &source_package.package_root,
+                        &source_package.package_index.package,
+                    )
+                    .map_err(|error| {
+                        PackageDiagnostic::new(
+                            "package.materialize.invalid_definition_origin",
+                            error.to_string(),
+                            Some(source_package.package_root.join("etas.toml")),
+                        )
+                    })?,
+                ),
             })
         }
         source::SourceCandidate::Registry {

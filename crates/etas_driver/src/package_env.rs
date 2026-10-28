@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use etas_frontend::{
     ExternalModuleId, ExternalPackageId, ExternalSymbolId, ModulePath, ProjectEnvironmentInput,
@@ -23,6 +23,13 @@ use etas_std::{StdDecl, StdSymbolKind};
 
 use crate::DriverError;
 
+#[cfg(test)]
+mod callback_replay_tests;
+#[cfg(test)]
+mod default_handlers_tests;
+#[cfg(test)]
+mod request_instantiation_tests;
+
 pub fn frontend_environment(
     metadata: etas_package::PackageEnvironmentMetadata,
 ) -> Result<ProjectEnvironmentInput, DriverError> {
@@ -32,6 +39,11 @@ pub fn frontend_environment(
     let external_public_metadata = external_public_metadata(&metadata, &external_packages)?;
     let tool_bindings = project_tool_bindings(&metadata, &external_packages)?;
     Ok(ProjectEnvironmentInput {
+        external_package_dependencies: external_package_dependencies(
+            &metadata,
+            &external_packages,
+        )?,
+        external_definition_origins: external_definition_origins(&metadata, &external_packages)?,
         external_packages: external_packages.clone(),
         external_modules: metadata
             .external_modules
@@ -48,6 +60,93 @@ pub fn frontend_environment(
         environment_fingerprint: Some(metadata.metadata_fingerprint),
         external_modules_fingerprint: None,
     })
+}
+
+fn external_package_dependencies(
+    metadata: &etas_package::PackageEnvironmentMetadata,
+    packages: &[ProjectExternalPackageInput],
+) -> Result<Vec<etas_frontend::ProjectExternalPackageDependencyInput>, DriverError> {
+    let ids = packages
+        .iter()
+        .map(|package| (external_package_key_from_input(package), package.id))
+        .collect::<BTreeMap<_, _>>();
+    let mut edges = BTreeSet::new();
+    for package in flatten_dependencies(&metadata.dependencies) {
+        if is_builtin_dependency(package) {
+            continue;
+        }
+        let owner = ids.get(&external_package_key(package)).ok_or_else(|| {
+            DriverError::InvalidInput(
+                "dependency graph owner has no prepared package identity".into(),
+            )
+        })?;
+        for dependency in &package.dependencies {
+            if is_builtin_dependency(dependency) {
+                continue;
+            }
+            let target = ids.get(&external_package_key(dependency)).ok_or_else(|| {
+                DriverError::InvalidInput(
+                    "dependency graph target has no prepared package identity".into(),
+                )
+            })?;
+            edges.insert((*owner, *target));
+        }
+    }
+    Ok(edges
+        .into_iter()
+        .map(
+            |(package, dependency)| etas_frontend::ProjectExternalPackageDependencyInput {
+                package,
+                dependency,
+            },
+        )
+        .collect())
+}
+
+fn external_definition_origins(
+    metadata: &etas_package::PackageEnvironmentMetadata,
+    packages: &[ProjectExternalPackageInput],
+) -> Result<Vec<etas_frontend::ProjectExternalDefinitionOriginsInput>, DriverError> {
+    let mut seen = BTreeSet::new();
+    let mut origins = Vec::new();
+    for dependency in flatten_dependencies(&metadata.dependencies) {
+        if is_builtin_dependency(dependency) {
+            continue;
+        }
+        let key = external_package_key(dependency);
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        let Some(source) = &dependency.public_metadata.definition_origins else {
+            if dependency.public_metadata.definition_descriptors.is_some() {
+                return Err(DriverError::InvalidInput(
+                    "package definition descriptors have no canonical origin bindings".into(),
+                ));
+            }
+            continue;
+        };
+        let package = packages
+            .iter()
+            .find(|package| external_package_key_from_input(package) == key)
+            .ok_or_else(|| {
+                DriverError::InvalidInput(
+                    "definition origin has no matching prepared package".into(),
+                )
+            })?;
+        let mut source = source.clone();
+        for module in &mut source.modules {
+            module.path = dependency_path(package, &module.path);
+        }
+        for binding in &mut source.declarations {
+            binding.module = dependency_path(package, &binding.module);
+        }
+        origins.push(etas_frontend::ProjectExternalDefinitionOriginsInput {
+            package: package.id,
+            origins: source,
+            descriptors: dependency.public_metadata.definition_descriptors.clone(),
+        });
+    }
+    Ok(origins)
 }
 
 fn project_tool_bindings(
@@ -315,7 +414,10 @@ fn external_public_metadata_input(
                     .iter()
                     .map(|param| dependency_type_input_with_graph(package, packages, param))
                     .collect(),
-                output: dependency_type_input_with_graph(package, packages, &signature.output),
+                output: signature
+                    .output
+                    .as_ref()
+                    .map(|output| dependency_type_input_with_graph(package, packages, output)),
                 effects: signature
                     .effects
                     .as_ref()
@@ -474,6 +576,90 @@ fn external_public_metadata_input(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                handler_requests: summary.handler_requests.as_ref().map(|template| {
+                    etas_frontend::ProjectExternalRequestInstantiationInput {
+                        actions: template
+                            .actions
+                            .iter()
+                            .map(
+                                |instance| etas_frontend::ProjectExternalActionRequestInput {
+                                    action: dependency_effect_ref_input(
+                                        package,
+                                        packages,
+                                        &instance.action,
+                                    ),
+                                    type_bindings: instance.type_bindings.as_ref().map(
+                                        |bindings| {
+                                            bindings
+                                                .iter()
+                                                .map(|(name, ty)| {
+                                                    (
+                                                        name.clone(),
+                                                        dependency_type_input_with_graph(
+                                                            package, packages, ty,
+                                                        ),
+                                                    )
+                                                })
+                                                .collect()
+                                        },
+                                    ),
+                                },
+                            )
+                            .collect(),
+                        parameters: template
+                            .parameters
+                            .iter()
+                            .map(
+                                |parameter| etas_frontend::ProjectExternalParameterRequestInput {
+                                    parameter: parameter.parameter.clone(),
+                                    excluded: parameter
+                                        .excluded
+                                        .iter()
+                                        .map(|effect| {
+                                            dependency_effect_ref_input(package, packages, effect)
+                                        })
+                                        .collect(),
+                                },
+                            )
+                            .collect(),
+                    }
+                }),
+                default_handler_effects: summary.default_handler_effects.as_ref().map(|effects| {
+                    etas_frontend::ProjectExternalDefaultHandlerEffectsInput {
+                        direct_effects: dependency_effect_row_input(
+                            package,
+                            packages,
+                            &effects.direct_effects,
+                        ),
+                        default_actions: dependency_effect_row_input(
+                            package,
+                            packages,
+                            &effects.default_actions,
+                        ),
+                        handlers: effects
+                            .handlers
+                            .iter()
+                            .map(|handler| {
+                                etas_frontend::ProjectExternalDefaultHandlerContributionInput {
+                                    action: dependency_effect_ref_input(
+                                        package,
+                                        packages,
+                                        &handler.action,
+                                    ),
+                                    produced: dependency_effect_row_input(
+                                        package,
+                                        packages,
+                                        &handler.produced,
+                                    ),
+                                }
+                            })
+                            .collect(),
+                    }
+                }),
+                returned_callables: summary
+                    .returned_callables
+                    .as_ref()
+                    .map(|graph| dependency_callable_values(package, packages, graph)),
                 item: dependency_path_with_graph(package, packages, &summary.item),
                 public_effects: dependency_effect_row_input(
                     package,
@@ -551,6 +737,7 @@ fn named_signature_input(
 ) -> ProjectExternalNamedSignatureInput {
     ProjectExternalNamedSignatureInput {
         path: dependency_path_with_graph(package, packages, &signature.path),
+        generic_params: callable_generic_params_input(package, packages, &signature.generic_params),
         visibility: signature.visibility.clone(),
         ty: signature
             .ty
@@ -764,6 +951,21 @@ fn is_standard_effect_base(base: &str) -> bool {
         }
         _ => false,
     })
+}
+
+fn dependency_callable_values(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    graph: &etas_package_metadata::CallableValueGraph,
+) -> etas_package_metadata::CallableValueGraph {
+    use etas_package_metadata::CallableValuePathKind;
+    let mut graph = graph.clone();
+    graph.remap_paths(|kind, path| match kind {
+        CallableValuePathKind::Type => dependency_type_path(package, packages, path),
+        CallableValuePathKind::Effect if is_standard_effect_path(path) => path.to_vec(),
+        _ => dependency_path_with_graph(package, packages, path),
+    });
+    graph
 }
 
 fn dependency_effect_row_input(
@@ -1014,6 +1216,18 @@ fn dependency_type_input_with_graph(
     ty: &etas_package::PackageTypeMetadata,
 ) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::Enum { path, variants } => {
+            ProjectExternalTypeInput::Enum {
+                path: dependency_type_path(package, packages, path),
+                variants: variants
+                    .iter()
+                    .map(|variant| ProjectExternalRecordFieldInput {
+                        name: variant.name.clone(),
+                        ty: dependency_type_input_with_graph(package, packages, &variant.ty),
+                    })
+                    .collect(),
+            }
+        }
         etas_package::PackageTypeMetadata::Named { path } => {
             ProjectExternalTypeInput::Named(dependency_type_path(package, packages, path))
         }
@@ -1184,6 +1398,18 @@ fn is_standard_type_path(path: &[String]) -> bool {
 
 fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::Enum { path, variants } => {
+            ProjectExternalTypeInput::Enum {
+                path: path.clone(),
+                variants: variants
+                    .iter()
+                    .map(|variant| ProjectExternalRecordFieldInput {
+                        name: variant.name.clone(),
+                        ty: type_input(&variant.ty),
+                    })
+                    .collect(),
+            }
+        }
         etas_package::PackageTypeMetadata::Primitive { name } => {
             ProjectExternalTypeInput::Primitive(name.clone())
         }
@@ -1484,6 +1710,7 @@ fn runtime_requirement(value: &str) -> Result<etas_effects::RuntimeRequirementRe
         "FileIO" => Ok(etas_effects::RuntimeRequirementReason::FileIO),
         "Command" => Ok(etas_effects::RuntimeRequirementReason::Command),
         "SecretAccess" => Ok(etas_effects::RuntimeRequirementReason::SecretAccess),
+        "Compiler" => Ok(etas_effects::RuntimeRequirementReason::Compiler),
         "RuntimeHandler" => Ok(etas_effects::RuntimeRequirementReason::RuntimeHandler),
         other => Err(DriverError::InvalidInput(format!(
             "unknown package effect runtime requirement `{other}`"
@@ -1546,10 +1773,12 @@ mod tests {
                     path: ".etas/vendor/errors".to_owned(),
                     checksum: "blake3:00".to_owned(),
                     store: None,
+                    definition_origin: None,
                 },
                 dependencies: Vec::new(),
                 public_metadata: etas_package::PackagePublicMetadata {
                     effects: vec![etas_package::PackageNamedSignatureMetadata {
+                        generic_params: Vec::new(),
                         path: vec!["errors".to_owned(), "Net".to_owned()],
                         visibility: "public".to_owned(),
                         ty: None,
@@ -1651,6 +1880,7 @@ mod tests {
                     path: ".etas/vendor/generic-fs".to_owned(),
                     checksum: "blake3:00".to_owned(),
                     store: None,
+                    definition_origin: None,
                 },
                 dependencies: Vec::new(),
                 public_metadata: etas_package::PackagePublicMetadata {
@@ -1666,6 +1896,9 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        handler_requests: None,
+                        returned_callables: None,
+                        default_handler_effects: None,
                         item: vec!["api".to_owned(), "read".to_owned()],
                         public_effects: generic_effect.clone(),
                         requested_actions: generic_effect,
@@ -1778,10 +2011,12 @@ mod tests {
                     path: ".etas/vendor/edk-http".to_owned(),
                     checksum: "blake3:00".to_owned(),
                     store: None,
+                    definition_origin: None,
                 },
                 dependencies: Vec::new(),
                 public_metadata: etas_package::PackagePublicMetadata {
                     effects: vec![etas_package::PackageNamedSignatureMetadata {
+                        generic_params: Vec::new(),
                         path: vec!["effects".to_owned(), "EdkHttp".to_owned()],
                         visibility: "public".to_owned(),
                         ty: None,
@@ -1806,6 +2041,9 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        handler_requests: None,
+                        returned_callables: None,
+                        default_handler_effects: None,
                         item: vec!["client".to_owned(), "request".to_owned()],
                         public_effects: row(vec![
                             effect(

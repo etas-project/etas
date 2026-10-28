@@ -14,7 +14,7 @@ use etas_utils::ProfileHandle;
 
 use crate::{
     DriverError, LoadProjectRequest, LoadedDriverProject, SourceDependencyMode, load_project,
-    runtime_source::{RuntimeSourcePlan, materialize_runtime_source_plan},
+    runtime_source::{RuntimeSourceMaterializer, RuntimeSourcePlan},
     source::append_runtime_source_dependency_sources,
 };
 
@@ -141,15 +141,20 @@ pub fn compile_runnable_project_with_loaded(
     };
     let mut runtime_loaded = metadata_loaded.clone();
     let mut materialized = RuntimeSourceMaterializedSet::default();
+    let mut source_materializer = RuntimeSourceMaterializer::new(package_root, package_environment);
     let mut revision = 1;
     let mut iterations = 0_u64;
     loop {
         let requirements = response
             .output
             .runtime_source_requirements
-            .clone()
-            .unwrap_or_default();
-        let delta = materialized.delta(&requirements);
+            .as_ref()
+            .ok_or_else(|| {
+                DriverError::FrontendSession(
+                    "runnable compilation has no checked runtime source requirements".into(),
+                )
+            })?;
+        let delta = materialized.delta(requirements);
         if delta.is_empty() {
             options
                 .profile
@@ -160,8 +165,7 @@ pub fn compile_runnable_project_with_loaded(
             });
         }
 
-        let runtime_plan =
-            materialize_runtime_source_plan(package_root, package_environment, &delta)?;
+        let runtime_plan = source_materializer.plan(&delta)?;
         if runtime_plan.is_empty() {
             return Err(DriverError::InvalidInput(
                 "runtime source requirements could not be materialized".to_owned(),
@@ -228,12 +232,15 @@ pub fn compile_runnable_project_with_loaded(
 }
 
 #[derive(Default)]
-struct RuntimeSourceMaterializedSet {
+pub(crate) struct RuntimeSourceMaterializedSet {
     modules: BTreeMap<ExternalPackageId, BTreeSet<ModulePath>>,
 }
 
 impl RuntimeSourceMaterializedSet {
-    fn delta(&self, requirements: &RuntimeSourceRequirements) -> RuntimeSourceRequirements {
+    pub(crate) fn delta(
+        &self,
+        requirements: &RuntimeSourceRequirements,
+    ) -> RuntimeSourceRequirements {
         let mut delta = RuntimeSourceRequirements::default();
         for (package, requirement) in &requirements.dependencies {
             let materialized = self.modules.get(package);
@@ -266,7 +273,7 @@ impl RuntimeSourceMaterializedSet {
         delta
     }
 
-    fn record_plan(&mut self, plan: &RuntimeSourcePlan) {
+    pub(crate) fn record_plan(&mut self, plan: &RuntimeSourcePlan) {
         for dependency in plan.dependencies.values() {
             self.modules.entry(dependency.package).or_default().extend(
                 dependency
@@ -367,6 +374,50 @@ fn record_pipeline_profile(options: &DriverOptions, response: &CheckResponse) {
         u64::from(response.memory.retained_revision.is_some()),
     );
     options.profile.counter(
+        "frontend.retained_revision.estimated_bytes",
+        response.memory.retained_revision_estimated_bytes,
+    );
+    if let Some(cache) = &response.memory.cache_after {
+        options
+            .profile
+            .counter("frontend.cache.budget_bytes", cache.budget_bytes);
+        options.profile.counter(
+            "frontend.cache.estimated_retained_bytes",
+            cache.estimated_retained_bytes,
+        );
+        options.profile.counter(
+            "frontend.cache.payload_estimated_bytes",
+            cache.payload_estimated_bytes,
+        );
+        options.profile.counter(
+            "frontend.cache.bookkeeping_estimated_bytes",
+            cache.bookkeeping_estimated_bytes,
+        );
+        options
+            .profile
+            .counter("frontend.cache.evicted_artifacts", cache.evicted_artifacts);
+        options.profile.counter(
+            "frontend.cache.rejected_insertions",
+            cache.rejected_insertions,
+        );
+        for kind in &cache.by_kind {
+            options.profile.counter(
+                format!(
+                    "frontend.cache.{}.{}.referenced_payload_estimated_bytes",
+                    kind.namespace, kind.kind
+                ),
+                kind.referenced_payload_estimated_bytes,
+            );
+            options.profile.counter(
+                format!(
+                    "frontend.cache.{}.{}.entry_bookkeeping_estimated_bytes",
+                    kind.namespace, kind.kind
+                ),
+                kind.entry_bookkeeping_estimated_bytes,
+            );
+        }
+    }
+    options.profile.counter(
         "frontend.parsed_source_files",
         response
             .output
@@ -460,6 +511,16 @@ mod tests {
             .response;
             assert!(output.output.checked.is_some());
             assert!(output.memory.retained_revision.is_none());
+            assert_eq!(output.memory.retained_revision_estimated_bytes, 0);
+            assert_eq!(
+                output
+                    .memory
+                    .cache_after
+                    .as_ref()
+                    .unwrap()
+                    .estimated_retained_bytes,
+                0
+            );
             assert!(output.cache.stored_artifacts.is_empty());
             assert_eq!(
                 output.snapshot.is_some(),
@@ -467,5 +528,52 @@ mod tests {
             );
             assert_eq!(output.memory.hir_index_builds, 2);
         }
+    }
+
+    #[test]
+    fn memory_profile_counters_come_from_the_checked_cache_graph() {
+        let profile = ProfileHandle::enabled("memory-profile");
+        let options = DriverOptions {
+            profile: profile.clone(),
+            ..Default::default()
+        };
+        let mut session = FrontendSession::new();
+        let project = session.open_project(ProjectInput::single_source(SourceInput::anonymous(
+            "flow main() -> i32 { return 42; }",
+        )));
+        let response = session.check(project, CheckRequest::default()).unwrap();
+        record_pipeline_profile(&options, &response);
+        let report = profile.finish_report("ok").unwrap();
+        let counter = |name: &str| {
+            report
+                .counters
+                .iter()
+                .find(|counter| counter.name == name)
+                .map(|counter| counter.value)
+                .unwrap()
+        };
+        let usage = response.memory.cache_after.as_ref().unwrap();
+        assert_eq!(
+            counter("frontend.cache.estimated_retained_bytes"),
+            usage.estimated_retained_bytes
+        );
+        assert_eq!(
+            counter("frontend.cache.payload_estimated_bytes"),
+            usage.payload_estimated_bytes
+        );
+        assert_eq!(
+            counter("frontend.retained_revision.estimated_bytes"),
+            response.memory.retained_revision_estimated_bytes
+        );
+        let checked = usage
+            .by_kind
+            .iter()
+            .find(|kind| kind.kind == "checked_project")
+            .unwrap();
+        assert_eq!(
+            counter("frontend.cache.frontend.checked_project.referenced_payload_estimated_bytes"),
+            checked.referenced_payload_estimated_bytes
+        );
+        assert!(checked.referenced_payload_estimated_bytes > 0);
     }
 }

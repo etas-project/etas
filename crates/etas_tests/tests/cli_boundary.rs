@@ -1,8 +1,11 @@
 mod support;
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use support::{fixture, path_str, run_cli};
+use support::{fixture, path_str, reported_value, run_cli};
 
 #[test]
 fn cli_check_maps_valid_and_invalid_programs_to_stable_exit_codes() {
@@ -273,8 +276,10 @@ fn cli_run_executes_checked_hir_with_interpreter() {
 
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("run value"));
-    assert!(stdout.contains("\"kind\":\"int\""));
-    assert!(stdout.contains("\"value\":42"));
+    assert_eq!(
+        reported_value(&stdout, "run value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"42"})
+    );
     assert!(stderr.is_empty());
 }
 
@@ -294,8 +299,10 @@ fn cli_run_executes_explicit_multi_source_project_with_interpreter() {
 
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("run value"));
-    assert!(stdout.contains("\"kind\":\"int\""));
-    assert!(stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&stdout, "run value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
     assert!(stderr.is_empty());
 }
 
@@ -308,8 +315,10 @@ fn cli_run_all_discovers_workspace_sources_as_one_project() {
 
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("run value"));
-    assert!(stdout.contains("\"kind\":\"int\""));
-    assert!(stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&stdout, "run value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
     assert!(stderr.is_empty());
 }
 
@@ -336,7 +345,10 @@ fn cli_run_writes_interpreter_trace_and_replay_reads_it() {
     ]);
 
     assert_eq!(run_code, 0, "{run_stderr}");
-    assert!(run_stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&run_stdout, "run value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
     assert!(run_stderr.is_empty());
     let trace_text = fs::read_to_string(&trace).unwrap();
     assert!(trace_text.contains("etas.cli.interpreter-report.v1"));
@@ -345,7 +357,10 @@ fn cli_run_writes_interpreter_trace_and_replay_reads_it() {
 
     assert_eq!(replay_code, 0, "{replay_stderr}");
     assert!(replay_stdout.contains("replayed interpreter report"));
-    assert!(replay_stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&replay_stdout, "value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
     assert!(replay_stderr.is_empty());
 }
 
@@ -380,10 +395,16 @@ fn cli_resume_continues_multi_source_project_checkpoint() {
     assert_eq!(run_code, 0, "{run_stderr}");
 
     let checkpoint = checkpoints.join("checkpoint-0.json");
-    let checkpoint_text = fs::read_to_string(&checkpoint).unwrap();
-    assert!(checkpoint_text.contains("\"sources\""));
-    assert!(checkpoint_text.contains(path_str(&main)));
-    assert!(checkpoint_text.contains(path_str(&support)));
+    let checkpoint = etas_interpreter::api::codec::checkpoint_file_from_bytes(
+        &fs::read(checkpoint).unwrap(),
+        Default::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        checkpoint["sources"],
+        serde_json::json!([fs::canonicalize(&root).unwrap()])
+    );
+    assert_eq!(checkpoint["source_load_all"], true);
 
     let (resume_code, resume_stdout, resume_stderr) = run_cli([
         "etas",
@@ -395,7 +416,10 @@ fn cli_resume_continues_multi_source_project_checkpoint() {
         path_str(&checkpoints),
     ]);
     assert_eq!(resume_code, 0, "{resume_stderr}");
-    assert!(resume_stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&resume_stdout, "resumed checkpoint 0: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
 }
 
 #[test]
@@ -420,7 +444,10 @@ fn cli_run_accepts_budget_options_as_runtime_overrides() {
     ]);
 
     assert_eq!(code, 0, "{stderr}");
-    assert!(stdout.contains("\"value\":1"), "{stdout}");
+    assert_eq!(
+        reported_value(&stdout, "run value: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"1"})
+    );
     assert!(stderr.is_empty(), "{stderr}");
 }
 
@@ -494,7 +521,10 @@ flow main(args: Array<string>) -> i32 {
 
     assert_eq!(resume_code, 0, "{resume_stderr}");
     assert!(resume_stdout.contains("resumed checkpoint 0"));
-    assert!(resume_stdout.contains("\"value\":0"));
+    assert_eq!(
+        reported_value(&resume_stdout, "resumed checkpoint 0: "),
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
     assert!(resume_stderr.is_empty(), "{resume_stderr}");
 }
 
@@ -506,7 +536,7 @@ fn temp_project_root(name: &str) -> PathBuf {
     root
 }
 
-fn write_two_file_project(root: &PathBuf) -> (PathBuf, PathBuf) {
+fn write_two_file_project(root: &Path) -> (PathBuf, PathBuf) {
     let src = root.join("src").join("app");
     fs::create_dir_all(&src).unwrap();
     fs::write(

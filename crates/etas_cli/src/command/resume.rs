@@ -39,8 +39,24 @@ pub(crate) fn run(
         })?;
     let checkpoint_json = codec::checkpoint_file_from_bytes(&bytes, file_limits)
         .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+    if checkpoint_json
+        .get("cli_schema")
+        .and_then(serde_json::Value::as_str)
+        != Some(super::interpreter::CLI_CHECKPOINT_SCHEMA)
+    {
+        return Err(CliError::InvalidUsage(
+            "unsupported CLI checkpoint schema; recreate the checkpoint with the current CLI"
+                .to_owned(),
+        ));
+    }
     let (source_paths, flow) = codec::sources_and_flow_from_checkpoint_json(&checkpoint_json)
         .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+    let source_load_all = checkpoint_json
+        .get("source_load_all")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or_else(|| {
+            CliError::InvalidUsage("checkpoint artifact is missing source-load scope".to_owned())
+        })?;
     let checkpoint_profile = checkpoint_json.get("runtime_profile").ok_or_else(|| {
         CliError::InvalidUsage("checkpoint artifact is missing runtime profile metadata".to_owned())
     })?;
@@ -80,8 +96,9 @@ pub(crate) fn run(
         global,
         profile,
         source_paths.clone(),
-        false,
+        source_load_all,
         Some(flow.clone()),
+        host_config.compiler_config(),
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);
     let visible_compile_diagnostics = visible_resume_diagnostics(global, &compiled.diagnostics);
@@ -101,15 +118,18 @@ pub(crate) fn run(
     let Some(checked) = compiled.checked.as_ref() else {
         return Ok(CliExit::Diagnostics);
     };
-    let checkpoint = codec::checkpoint_from_json_with_limits(
-        &host_config.run_options().storage_limits,
-        &checkpoint_json,
-        checked,
-    )
-    .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+    let checkpoint = codec::SourceCheckpoint::from_document(checkpoint_json, checked)
+        .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
 
-    let result =
-        super::interpreter::resume_checked(checked, &checkpoint, host_config, profile, lifecycle)?;
+    let result = super::interpreter::resume_checked(
+        checked,
+        &checkpoint,
+        compiled.definitions.clone(),
+        compiled.compiler.clone(),
+        host_config,
+        profile,
+        lifecycle,
+    )?;
     let result = match result {
         super::interpreter::lifecycle::ControlledRun::Finished(result) => result,
         super::interpreter::lifecycle::ControlledRun::Forced(report) => {

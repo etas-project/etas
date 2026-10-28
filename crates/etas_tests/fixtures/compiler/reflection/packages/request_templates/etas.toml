@@ -1,0 +1,16 @@
+[package]
+name = "request-template-consumer"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+requests = { package = "request-template-producer", version = "0.1.0", import = "requests", path = "deps/requests" }
+
+[[bin]]
+name = "request-template-consumer"
+module = "app.main"
+flow = "main"

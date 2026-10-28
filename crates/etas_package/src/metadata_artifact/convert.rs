@@ -1,4 +1,5 @@
 use std::{path::Path, path::PathBuf};
+mod request_templates;
 
 use crate::{
     BinTarget, PackageError,
@@ -60,6 +61,8 @@ fn public_metadata_from_metadata(
     path: &Path,
 ) -> Result<PackagePublicMetadata, PackageError> {
     Ok(PackagePublicMetadata {
+        definition_origins: metadata.definition_origins,
+        definition_descriptors: metadata.definition_descriptors,
         modules: metadata
             .modules
             .into_iter()
@@ -88,7 +91,7 @@ fn public_metadata_from_metadata(
         agents: metadata
             .agents
             .into_iter()
-            .map(|signature| agent_signature_from_metadata(signature, path))
+            .map(agent_signature_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
         tools: metadata
             .tools
@@ -364,10 +367,12 @@ fn resolved_source_from_metadata(
             path,
             checksum,
             store,
+            definition_origin,
         } => crate::metadata::ResolvedDependencySource::Vendor {
             path,
             checksum,
             store,
+            definition_origin,
         },
     }
 }
@@ -411,6 +416,7 @@ fn named_signature_from_metadata(
 ) -> Result<PackageNamedSignatureMetadata, PackageError> {
     Ok(PackageNamedSignatureMetadata {
         path: signature.path,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         visibility: visibility_from_metadata(signature.visibility),
         ty: signature.ty.map(type_from_metadata).transpose()?,
     })
@@ -444,7 +450,6 @@ fn flow_signature_from_metadata(
 
 fn agent_signature_from_metadata(
     signature: etas_package_metadata::CallableSignature,
-    path: &Path,
 ) -> Result<crate::metadata::PackageAgentSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageAgentSignatureMetadata {
         path: signature.path,
@@ -455,11 +460,7 @@ fn agent_signature_from_metadata(
             .into_iter()
             .map(type_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
-        output: signature
-            .output
-            .map(type_from_metadata)
-            .transpose()?
-            .ok_or_else(|| missing(path, "agent signature is missing output type"))?,
+        output: signature.output.map(type_from_metadata).transpose()?,
         effects: signature
             .effects
             .map(effect_row_from_metadata)
@@ -786,6 +787,19 @@ fn type_from_metadata(
         })
     };
     match ty.kind {
+        etas_package_metadata::TypeKind::Enum => Ok(PackageTypeMetadata::Enum {
+            path: ty.path,
+            variants: ty
+                .fields
+                .into_iter()
+                .map(|variant| {
+                    Ok(PackageRecordFieldMetadata {
+                        name: variant.name,
+                        ty: type_from_metadata(variant.ty)?,
+                    })
+                })
+                .collect::<Result<_, PackageError>>()?,
+        }),
         etas_package_metadata::TypeKind::Primitive => {
             Ok(PackageTypeMetadata::Primitive { name: ty.name })
         }
@@ -1016,6 +1030,30 @@ fn effect_summary_from_metadata(
     summary: etas_package_metadata::EffectSummary,
 ) -> Result<PackageEffectSummaryMetadata, PackageError> {
     Ok(PackageEffectSummaryMetadata {
+        handler_requests: summary
+            .handler_requests
+            .map(request_templates::from_metadata)
+            .transpose()?,
+        default_handler_effects: summary
+            .default_handler_effects
+            .map(|effects| {
+                Ok::<_, PackageError>(crate::PackageDefaultHandlerEffectsMetadata {
+                    direct_effects: effect_row_from_metadata(effects.direct_effects)?,
+                    default_actions: effect_row_from_metadata(effects.default_actions)?,
+                    handlers: effects
+                        .handlers
+                        .into_iter()
+                        .map(|handler| {
+                            Ok(crate::PackageDefaultHandlerContributionMetadata {
+                                action: effect_ref_from_metadata(handler.action)?,
+                                produced: effect_row_from_metadata(handler.produced)?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, PackageError>>()?,
+                })
+            })
+            .transpose()?,
+        returned_callables: summary.returned_callables,
         item: summary.item,
         public_effects: effect_row_from_metadata(summary.public_effects)?,
         requested_actions: effect_row_from_metadata(summary.requested_actions)?,

@@ -21,6 +21,9 @@ use etas_frontend::{
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
+#[path = "cli/compiler_service.rs"]
+mod compiler_service;
+
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
         &fs::read(path).unwrap(),
@@ -85,6 +88,91 @@ fn check_success_exits_zero() {
 }
 
 #[test]
+fn run_pure_agent_reflection_uses_prepared_single_file_definitions_without_host_authority() {
+    let file = fixture(
+        "pure-agent-reflection",
+        r#"
+module tests.cli.reflection;
+agent Worker() -> i32 { return 1; }
+flow main(args: Array<string>) -> i32 {
+    let definition = ^Worker;
+    return match definition.body { Some(_) => 1, None => 0, };
+}
+"#,
+    );
+    let (code, stdout, stderr) = run(["etas", "run", path(&file)]);
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"0"}"#),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn run_pure_agent_reflection_obeys_package_body_retention() {
+    let workspace = etas_host::TestWorkspace::create("cli-retained-reflection").unwrap();
+    fs::create_dir_all(workspace.path().join("src/app")).unwrap();
+    fs::write(
+        workspace.path().join("src/app/main.es"),
+        r#"
+module app.main;
+agent Worker() -> i32 { return 1; }
+flow main(args: Array<string>) -> i32 {
+    let definition = ^Worker;
+    return match definition.body { Some(_) => 1, None => 0, };
+}
+
+"#,
+    )
+    .unwrap();
+    for retained in [false, true] {
+        let reflection = if retained {
+            "[reflection]\nretain_bodies = [\"app.main.Worker\"]\n"
+        } else {
+            ""
+        };
+        fs::write(
+            workspace.path().join("etas.toml"),
+            format!(
+                "[package]\nname = \"reflection-app\"\nversion = \"0.1.0\"\n{reflection}[[bin]]\nname = \"app\"\nmodule = \"app.main\"\nflow = \"main\"\n"
+            ),
+        )
+        .unwrap();
+        let (code, stdout, stderr) = run(["etas", "run", path(workspace.path())]);
+        assert_eq!(code, 0, "retained={retained}\n{stderr}\n{stdout}");
+        let expected = if retained { "1" } else { "0" };
+        assert!(
+            stdout.contains(&format!(
+                r#"run value: {{"kind":"number","type":"i32","value":"{expected}"}}"#
+            )),
+            "{stdout}"
+        );
+        assert!(stderr.is_empty(), "{stderr}");
+    }
+}
+
+#[test]
+fn prepared_definitions_do_not_enable_the_compiler_service_or_grant_code_authority() {
+    let file = fixture(
+        "reflection-without-compiler-authority",
+        r#"
+module tests.cli.no_compiler_authority;
+import std.compiler.{compile, CompileError};
+agent Worker() -> i32 { return 1; }
+flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
+    let revised = compile(^Worker);
+    return revised();
+}
+"#,
+    );
+    let (code, stdout, stderr) = run(["etas", "run", path(&file)]);
+    assert_eq!(code, 3, "{stderr}\n{stdout}");
+    assert!(stderr.contains("Compiler"), "{stderr}");
+    assert!(!stdout.contains(r#""value":"1""#), "{stdout}");
+}
+
+#[test]
 fn legacy_command_allowlist_does_not_authorize_unconfined_execution() {
     let workspace = etas_host::TestWorkspace::create("cli-command-isolation").unwrap();
     for explicit in [false, true] {
@@ -112,6 +200,100 @@ fn legacy_command_allowlist_does_not_authorize_unconfined_execution() {
             assert!(!stdout.contains("trusted-unconfined"));
         }
     }
+}
+
+#[test]
+fn run_checkpoint_exports_the_exact_captured_agent_source_bundle() {
+    let workspace = etas_host::TestWorkspace::create("cli-checkpoint-code-source").unwrap();
+    fs::create_dir_all(workspace.path().join("src/app")).unwrap();
+    fs::write(
+        workspace.path().join("src/app/main.es"),
+        r#"
+module app.main;
+import std.runtime.checkpoint;
+import std.compiler.{compile, CompileError};
+agent Worker() -> i32 { return 19; }
+flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
+    let selected = compile(^Worker);
+    checkpoint("selected");
+    return selected();
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        workspace.path().join("etas.toml"),
+        r#"
+[package]
+name = "checkpoint-code-source"
+version = "0.1.0"
+[reflection]
+retain_bodies = ["app.main.Worker"]
+[[bin]]
+name = "app"
+module = "app.main"
+flow = "main"
+[runtime]
+default_profile = "local"
+[runtime.profiles.local.compiler]
+backend = "native"
+allow_compile = true
+"#,
+    )
+    .unwrap();
+    let checkpoints = workspace.path().join("checkpoints");
+    let (code, stdout, stderr) = run([
+        "etas",
+        "run",
+        path(workspace.path()),
+        "--profile",
+        "local",
+        "--checkpoint-dir",
+        path(&checkpoints),
+    ]);
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(stdout.contains("\"value\":\"19\""), "{stdout}");
+    let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
+    let artifact =
+        etas_interpreter::api::codec::checkpoint_file_from_bytes(&bytes, Default::default())
+            .unwrap();
+    let sources = artifact["code_sources"].as_array().unwrap();
+    assert_eq!(sources.len(), 1);
+    let source: etas_interpreter::api::code::SavedAgentRevision =
+        serde_json::from_value(sources[0].clone()).unwrap();
+    source.validate(Default::default()).unwrap();
+    assert!(source.source.source.text.contains("return 19;"));
+    assert!(artifact["checkpoint"].get("retained_code").is_none());
+    assert_eq!(
+        artifact["sources"][0],
+        path(workspace.path().canonicalize().unwrap().as_path())
+    );
+    assert_eq!(artifact["source_load_all"], false);
+    assert_eq!(artifact["cli_schema"], "etas.cli.checkpoint.v1");
+    let trace = workspace.path().join("resumed-trace.json");
+    let (code, stdout, stderr) = run([
+        "etas",
+        "resume",
+        "0",
+        "--checkpoint-dir",
+        path(&checkpoints),
+        "--profile",
+        "local",
+        "--trace-out",
+        path(&trace),
+    ]);
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(stdout.contains("\"value\":\"19\""), "{stdout}");
+    let trace: serde_json::Value = serde_json::from_slice(&fs::read(trace).unwrap()).unwrap();
+    let compiler_requests = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| {
+            event["kind"] == "host_request_started" && event["request_kind"] == "compiler"
+        })
+        .count();
+    assert_eq!(compiler_requests, 1, "{trace}");
 }
 
 #[test]
@@ -2755,6 +2937,51 @@ public flow main() -> i32 {
         "path dependency metadata should be materialized"
     );
 
+    let pdf_metadata = etas_package::read_package_metadata_artifact(&pdf)
+        .unwrap()
+        .unwrap();
+    let workspace_dependency = pdf_metadata
+        .dependencies
+        .iter()
+        .find(|dependency| dependency.import_root == "edk.workspace")
+        .unwrap();
+    let expected_origin = etas_package::local_definition_package_key(
+        &workspace,
+        &etas_package::PackageIdentity::current(&etas_package::read_manifest(&workspace).unwrap()),
+    )
+    .unwrap();
+    assert!(matches!(&workspace_dependency.source,
+        etas_package::ResolvedDependencySource::Vendor { definition_origin: Some(origin), .. }
+            if *origin == expected_origin
+    ));
+
+    let loaded = etas_driver::load_project(
+        &etas_driver::DriverOptions {
+            workspace: Some(root.clone()),
+            cache_mode: etas_driver::DriverCacheMode::Off,
+            ..Default::default()
+        },
+        etas_driver::LoadProjectRequest {
+            paths: vec![root.clone()],
+            all: true,
+            entry_policy: etas_frontend::EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::All,
+        },
+    )
+    .unwrap();
+    let output = etas_frontend::Frontend.check_project(loaded.loaded.input.clone());
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    let origins = etas_driver::compiler::source_definition_origins(&loaded, &checked).unwrap();
+    assert!(
+        origins
+            .values()
+            .any(|origin| origin.package() == expected_origin
+                && origin.module() == ["edk", "workspace", "effects"])
+    );
+
     let (code, stdout, stderr) = run(["etas", "check", path(&root)]);
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("checked 1 file"), "{stdout}");
@@ -4040,9 +4267,9 @@ import std.collections.Array;
 import std.io.println;
 
 agent UnreachableReviewer(input: string) -> string {
-    return Prompt.new()
+    return perform infer(Prompt.new()
         .system(Trusted("Return a short review."))
-        .data(input);
+        .data(input));
 }
 
 public flow unused_agent_path(topic: string) -> string {
@@ -5531,7 +5758,7 @@ import std.io.println;
 @model(model = "mock-agent-model")
 @tools([EvidenceLookup])
 agent Reviewer(input: string) -> string ![Network] {
-  return Prompt.new().user(Public(input));
+  return perform infer(Prompt.new().user(Public(input)));
 }
 
 flow main(args: Array<string>) -> i32 ![Network, Error<IOError>] {
@@ -5813,13 +6040,13 @@ spec RuntimeGate: trace = +Agentic & +Network & +Console;
 
 @model(model = "mock-agent-model")
 agent Planner(input: string) -> string {
-  return Prompt.new().user(Public(input));
+  return perform infer(Prompt.new().user(Public(input)));
 }
 
 @model(model = "mock-agent-model")
 @tools([EvidenceLookup])
 agent Reviewer(input: string) -> string ![Network] {
-  return Prompt.new().user(Public(input));
+  return perform infer(Prompt.new().user(Public(input)));
 }
 
 flow main(args: Array<string>) -> i32 ![Network, Error<IOError>] ~ RuntimeGate + EvidenceRuntimeGate

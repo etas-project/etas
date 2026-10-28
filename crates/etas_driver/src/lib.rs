@@ -1,4 +1,5 @@
 pub mod compile;
+pub mod compiler;
 pub mod diagnostics;
 pub mod package_env;
 pub mod pkg;

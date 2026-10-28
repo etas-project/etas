@@ -39,6 +39,14 @@ pub fn run_cli<const N: usize>(args: [&str; N]) -> (i32, String, String) {
     )
 }
 
+pub fn reported_value(stdout: &str, prefix: &str) -> serde_json::Value {
+    let value = stdout
+        .lines()
+        .find_map(|line| line.strip_prefix(prefix))
+        .unwrap_or_else(|| panic!("missing `{prefix}` result in: {stdout}"));
+    serde_json::from_str(value).expect("CLI runtime value must use the canonical JSON ABI")
+}
+
 pub fn run_cli_with_env<const N: usize, const M: usize>(
     args: [&str; N],
     env: [(&str, &str); M],

@@ -6,6 +6,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{PackageDiagnostic, PackageError};
+mod reflection;
+mod runtime_compiler;
+pub use reflection::ReflectionSection;
+pub use runtime_compiler::RuntimeCompilerProfile;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -21,11 +25,14 @@ pub struct Manifest {
     pub bindings: BindingsSection,
     #[serde(default)]
     pub runtime: RuntimeSection,
+    #[serde(default)]
+    pub reflection: ReflectionSection,
 }
 
 impl Manifest {
     pub fn validate(&self, manifest_path: &Path) -> Result<(), PackageError> {
         let mut diagnostics = Vec::new();
+        diagnostics.extend(self.reflection.validate(manifest_path));
         if self.package.name.trim().is_empty() {
             diagnostics.push(PackageDiagnostic::new(
                 "package.manifest.missing_name",
@@ -243,6 +250,8 @@ pub struct RuntimeExecutionProfile {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeProfile {
+    #[serde(default)]
+    pub compiler: Option<RuntimeCompilerProfile>,
     #[serde(default)]
     pub model: Option<RuntimeModelProfile>,
     #[serde(default)]

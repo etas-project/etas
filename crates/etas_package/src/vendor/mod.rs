@@ -15,6 +15,9 @@ use crate::{
     metadata_artifact, store,
 };
 
+mod dependencies;
+pub(crate) use dependencies::validate_materialized_payloads;
+
 pub fn package_index_path(package_root: &Path) -> PathBuf {
     package_root.join(".etas").join("package-index.json")
 }
@@ -99,6 +102,9 @@ pub fn write_vendored_path_dependency(
     let source_artifact = package_metadata_artifact_path(source_package_root);
     if source_artifact.is_file() {
         copy_file(&source_artifact, &package_metadata_artifact_path(&temp))?;
+    }
+    if let Some(index) = read_package_index(source_package_root)? {
+        dependencies::copy_materialized_payloads(source_package_root, &temp, &index.dependencies)?;
     }
 
     let source_checksum = path_package_payload_checksum(source_package_root)?;
@@ -258,14 +264,11 @@ pub fn path_package_payload_checksum(package_root: &Path) -> Result<String, Pack
     let mut hasher = blake3::Hasher::new();
     for file in files {
         let relative = file.strip_prefix(package_root).unwrap_or(&file);
-        hasher.update(relative.to_string_lossy().as_bytes());
-        hasher.update(&[0]);
         let bytes = std::fs::read(&file).map_err(|source| PackageError::Io {
             path: file.clone(),
             source,
         })?;
-        hasher.update(&bytes);
-        hasher.update(&[0]);
+        crate::source_snapshot::hash_payload_file(&mut hasher, relative, &bytes);
     }
     Ok(format!("blake3:{}", hasher.finalize().to_hex()))
 }
@@ -401,6 +404,8 @@ enum DependencyChecksumSource<'a> {
         path: &'a str,
         payload_checksum: &'a str,
         store: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        definition_origin: Option<etas_code::PackageKey>,
     },
 }
 
@@ -464,10 +469,12 @@ impl<'a> From<&'a ResolvedDependencySource> for DependencyChecksumSource<'a> {
                 path,
                 checksum,
                 store,
+                definition_origin,
             } => Self::Vendor {
                 path,
                 payload_checksum: checksum,
                 store: store.as_deref(),
+                definition_origin: *definition_origin,
             },
         }
     }
@@ -483,6 +490,43 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn vendor_definition_origin_is_part_of_the_locked_dependency_identity() {
+        let key = |bytes| {
+            etas_code::PackageKey::from_canonical_fingerprint(etas_code::CodeFingerprint::of_bytes(
+                "etas.test.vendor-lock-origin",
+                bytes,
+            ))
+        };
+        let mut dependency = ResolvedDependency {
+            identity: crate::PackageIdentity {
+                name: "library".into(),
+                version: "1.0.0".into(),
+                edition: "2026".into(),
+            },
+            import_root: "alias".into(),
+            source: ResolvedDependencySource::Vendor {
+                path: ".etas/vendor/alias".into(),
+                checksum: "unchanged-payload".into(),
+                store: None,
+                definition_origin: Some(key(b"owner-one")),
+            },
+            dependencies: vec![],
+            public_metadata: Default::default(),
+            effect_metadata: Default::default(),
+            tool_bindings: vec![],
+        };
+        let before = dependency_lock_checksum(&dependency);
+        let ResolvedDependencySource::Vendor {
+            definition_origin, ..
+        } = &mut dependency.source
+        else {
+            unreachable!()
+        };
+        *definition_origin = Some(key(b"owner-two"));
+        assert_ne!(dependency_lock_checksum(&dependency), before);
+    }
 
     #[test]
     fn write_vendored_path_dependency_is_serialized_under_concurrent_writes() {

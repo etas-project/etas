@@ -20,6 +20,7 @@ use crate::{
         PackageTypeMetadata, PackageTypeSpecSatisfactionMetadata,
     },
 };
+mod request_templates;
 
 #[cfg(any(test, feature = "test-support"))]
 pub(super) fn package_index_to_metadata(
@@ -152,10 +153,12 @@ fn resolved_source_to_metadata(
             path,
             checksum,
             store,
+            definition_origin,
         } => etas_package_metadata::ResolvedDependencySource::Vendor {
             path: path.clone(),
             checksum: checksum.clone(),
             store: store.clone(),
+            definition_origin: *definition_origin,
         },
     }
 }
@@ -164,6 +167,8 @@ fn public_metadata_to_metadata(
     metadata: &PackagePublicMetadata,
 ) -> Result<etas_package_metadata::PublicMetadata, PackageError> {
     Ok(etas_package_metadata::PublicMetadata {
+        definition_origins: metadata.definition_origins.clone(),
+        definition_descriptors: metadata.definition_descriptors.clone(),
         modules: metadata
             .modules
             .iter()
@@ -414,6 +419,7 @@ fn named_signature_to_metadata(
 ) -> Result<etas_package_metadata::NamedSignature, PackageError> {
     Ok(etas_package_metadata::NamedSignature {
         path: signature.path.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         visibility: visibility_to_metadata(&signature.visibility)?,
         ty: signature.ty.as_ref().map(type_to_metadata).transpose()?,
     })
@@ -453,7 +459,11 @@ fn agent_signature_to_metadata(
             .iter()
             .map(type_to_metadata)
             .collect::<Result<Vec<_>, _>>()?,
-        output: Some(type_to_metadata(&signature.output)?),
+        output: signature
+            .output
+            .as_ref()
+            .map(type_to_metadata)
+            .transpose()?,
         effects: signature
             .effects
             .as_ref()
@@ -762,6 +772,19 @@ fn action_arg_kind_to_metadata(
 fn type_to_metadata(ty: &PackageTypeMetadata) -> Result<etas_package_metadata::Type, PackageError> {
     let mut metadata = etas_package_metadata::Type::default();
     match ty {
+        PackageTypeMetadata::Enum { path, variants } => {
+            metadata.kind = etas_package_metadata::TypeKind::Enum;
+            metadata.path = path.clone();
+            metadata.fields = variants
+                .iter()
+                .map(|variant| {
+                    Ok(etas_package_metadata::TypeField {
+                        name: variant.name.clone(),
+                        ty: type_to_metadata(&variant.ty)?,
+                    })
+                })
+                .collect::<Result<_, PackageError>>()?;
+        }
         PackageTypeMetadata::Primitive { name } => {
             metadata.kind = etas_package_metadata::TypeKind::Primitive;
             metadata.name = name.clone();
@@ -1008,6 +1031,32 @@ fn effect_summary_to_metadata(
     summary: &PackageEffectSummaryMetadata,
 ) -> Result<etas_package_metadata::EffectSummary, PackageError> {
     Ok(etas_package_metadata::EffectSummary {
+        handler_requests: summary
+            .handler_requests
+            .as_ref()
+            .map(request_templates::to_metadata)
+            .transpose()?,
+        default_handler_effects: summary
+            .default_handler_effects
+            .as_ref()
+            .map(|effects| {
+                Ok::<_, PackageError>(etas_package_metadata::DefaultHandlerEffects {
+                    direct_effects: effect_row_to_metadata(&effects.direct_effects)?,
+                    default_actions: effect_row_to_metadata(&effects.default_actions)?,
+                    handlers: effects
+                        .handlers
+                        .iter()
+                        .map(|handler| {
+                            Ok(etas_package_metadata::DefaultHandlerContribution {
+                                action: effect_ref_to_metadata(&handler.action)?,
+                                produced: effect_row_to_metadata(&handler.produced)?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>, PackageError>>()?,
+                })
+            })
+            .transpose()?,
+        returned_callables: summary.returned_callables.clone(),
         item: summary.item.clone(),
         public_effects: effect_row_to_metadata(&summary.public_effects)?,
         requested_actions: effect_row_to_metadata(&summary.requested_actions)?,

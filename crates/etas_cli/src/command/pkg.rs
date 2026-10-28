@@ -167,6 +167,7 @@ fn driver_error(error: DriverError) -> CliError {
     match error {
         DriverError::Io { path, source } => CliError::Io { path, source },
         DriverError::Package(error) => CliError::InvalidUsage(error.to_string()),
+        DriverError::SourceSnapshot(error) => CliError::InvalidUsage(error.to_string()),
         DriverError::FrontendSession(message) => CliError::FrontendSession(message),
         DriverError::InvalidInput(message) => CliError::InvalidUsage(message),
     }

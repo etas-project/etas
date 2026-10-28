@@ -27,6 +27,8 @@ fn compiler_fixtures_use_feature_before_polarity_layout() {
         "compiler/handlers/negative",
         "compiler/policies/positive",
         "compiler/policies/negative",
+        "compiler/reflection/positive",
+        "compiler/reflection/negative",
     ] {
         let path = fixture(expected);
         assert!(path.is_dir(), "{} should exist", path.display());

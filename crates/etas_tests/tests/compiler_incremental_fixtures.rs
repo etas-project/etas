@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 use etas_cache::ArtifactKey;
 use etas_core::{DiagnosticCode, SourceId, TypeDiagnosticCode};
 use etas_frontend::{
-    BODY_UNIT_KIND, CheckRequest, EnvironmentChange, ExternalModuleId, ExternalSymbolId,
-    FrontendSession, ModulePath, ProjectEntry, ProjectEnvironmentInput, ProjectExternalExportInput,
-    ProjectExternalModuleInput, ProjectInput, ProjectOutput, ProjectRevision, SourceChange,
+    BODY_UNIT_KIND, CheckRequest, EnvironmentChange, ExternalModuleId, ExternalPackageId,
+    ExternalSymbolId, FrontendSession, FrontendSessionOptions, ModulePath, ProjectEntry,
+    ProjectEnvironmentInput, ProjectExternalExportInput, ProjectExternalModuleInput,
+    ProjectExternalPackageInput, ProjectInput, ProjectOutput, ProjectRevision, SourceChange,
     SourceInput, SourceKind, SourceVersion, UnitId, UnitKind, UnitTarget,
 };
 use etas_utils::UnitKey;
@@ -113,7 +114,11 @@ fn compiler_incremental_body_fixture_reuses_unchanged_bodies_and_replaces_diagno
     let changed = source_id(&sources, "src/app/body/workload.es");
     let unchanged = source_id(&sources, "src/app/body/chain.es");
 
-    let mut session = FrontendSession::new();
+    // Complete-reuse assertions require an admitted working set, not an LRU miss.
+    let mut session = FrontendSession::with_options(
+        FrontendSessionOptions::memory_only().with_memory_cache_byte_budget(256 * 1024 * 1024),
+    )
+    .unwrap();
     let project = session.open_project(input);
     let first = session
         .check(project, CheckRequest::default())
@@ -123,7 +128,17 @@ fn compiler_incremental_body_fixture_reuses_unchanged_bodies_and_replaces_diagno
         "{:?}",
         first.diagnostics.diagnostics
     );
+    let usage = first.memory.cache_after.as_ref().unwrap();
+    assert_eq!(
+        usage.evicted_artifacts, 0,
+        "reuse workload must fit its explicit cache budget: {usage:?}"
+    );
+    assert_eq!(
+        usage.rejected_insertions, 0,
+        "reuse workload must be admitted: {usage:?}"
+    );
     let unchanged_body_keys = body_artifact_keys_for_source(&first.output, unchanged);
+    let first_manifest = session.artifact_manifest(project).unwrap().clone();
     assert!(
         unchanged_body_keys.len() > 50,
         "fixture should provide many unchanged body artifacts"
@@ -144,10 +159,47 @@ fn compiler_incremental_body_fixture_reuses_unchanged_bodies_and_replaces_diagno
         "{:?}",
         second.diagnostics.diagnostics
     );
+    let first_signatures = &first.output.signature_types.as_ref().unwrap().store;
+    let second_signatures = &second.output.signature_types.as_ref().unwrap().store;
+    let changed_signature_types = first_signatures
+        .iter()
+        .zip(second_signatures.iter())
+        .filter(|((_, first), (_, second))| first != second)
+        .take(8)
+        .collect::<Vec<_>>();
+    assert!(
+        first_signatures.len() == second_signatures.len() && changed_signature_types.is_empty(),
+        "body-only edit changed declaration type universe: {} -> {} types; differences: {changed_signature_types:?}",
+        first_signatures.len(),
+        second_signatures.len()
+    );
+    let second_manifest = session.artifact_manifest(project).unwrap();
+    for record in &first_manifest.records {
+        if !unchanged_body_keys
+            .iter()
+            .any(|(key, _)| *key == record.key.to_cache_key())
+        {
+            continue;
+        }
+        for dependency in &record.dependencies {
+            if let Some(expected) = dependency.fingerprint {
+                assert_eq!(
+                    second_manifest
+                        .get(&dependency.key)
+                        .map(|record| record.fingerprint),
+                    Some(expected),
+                    "unchanged body dependency changed: {}",
+                    dependency.key.to_cache_key()
+                );
+            }
+        }
+    }
     for (type_key, effect_key) in &unchanged_body_keys {
         assert!(
             second.cache.reused_artifacts.contains(type_key),
-            "unchanged sibling source TypeFacts should be reused after body-only edit: {type_key}"
+            "unchanged sibling source TypeFacts should be reused after body-only edit: {type_key}; retained revision: {}; initial cache: {:?}",
+            first.memory.retained_revision_estimated_bytes,
+            first.memory.cache_after
         );
         assert!(
             second.cache.reused_artifacts.contains(effect_key),
@@ -217,6 +269,52 @@ fn compiler_incremental_body_fixture_reuses_unchanged_bodies_and_replaces_diagno
             .diagnostics
             .republish_sources
             .contains(&changed)
+    );
+}
+
+#[test]
+fn compiler_incremental_fixture_recomputes_body_facts_with_zero_cache_capacity() {
+    let root = fixture("compiler/incremental/body_reuse_workload");
+    let (input, sources) = project_input_from_workspace(&root);
+    let changed = source_id(&sources, "src/app/body/workload.es");
+    let unchanged = source_id(&sources, "src/app/body/chain.es");
+    let mut session = FrontendSession::with_options(
+        FrontendSessionOptions::memory_only().with_memory_cache_byte_budget(0),
+    )
+    .unwrap();
+    let project = session.open_project(input);
+    let first = session.check(project, CheckRequest::default()).unwrap();
+    assert!(first.output.checked.is_some(), "{:?}", first.diagnostics);
+    let unchanged_keys = body_artifact_keys_for_source(&first.output, unchanged);
+    assert!(unchanged_keys.len() > 50);
+    assert_eq!(first.memory.cache_after.as_ref().unwrap().entries, 0);
+    apply_replace(
+        &mut session,
+        project,
+        changed,
+        SourceVersion(1),
+        &root.join("edits/body_only_edit/src/app/body/workload.es"),
+    );
+    let second = session.check(project, CheckRequest::incremental()).unwrap();
+    assert!(second.output.checked.is_some(), "{:?}", second.diagnostics);
+    assert_eq!(
+        second
+            .memory
+            .cache_after
+            .as_ref()
+            .unwrap()
+            .estimated_retained_bytes,
+        0
+    );
+    for (types, effects) in unchanged_keys {
+        assert!(!second.cache.reused_artifacts.contains(&types));
+        assert!(!second.cache.reused_artifacts.contains(&effects));
+    }
+    assert!(
+        second
+            .pipeline_records
+            .iter()
+            .any(|record| record.pass == "TypeCheckBodyPass")
     );
 }
 
@@ -508,8 +606,8 @@ fn module_paths_for_delta(output: &ProjectOutput, modules: &[UnitKey]) -> Vec<St
     paths
 }
 
-fn apply_replace(
-    session: &mut FrontendSession,
+fn apply_replace<S: etas_frontend::FrontendArtifactStore + 'static>(
+    session: &mut FrontendSession<S>,
     project: etas_frontend::ProjectSessionId,
     source: SourceId,
     version: SourceVersion,
@@ -534,9 +632,21 @@ fn apply_replace(
 }
 
 fn external_environment() -> ProjectEnvironmentInput {
+    use etas_frontend::{
+        ProjectExternalEffectSummaryInput, ProjectExternalFlowSignatureInput,
+        ProjectExternalNamedSignatureInput, ProjectExternalPublicMetadataInput,
+        ProjectExternalTypeInput,
+    };
     ProjectEnvironmentInput {
+        external_packages: vec![ProjectExternalPackageInput {
+            id: ExternalPackageId(0),
+            name: "dep".into(),
+            version: "1.0.0".into(),
+            edition: "2026".into(),
+            import_root: "dep".into(),
+        }],
         external_modules: vec![ProjectExternalModuleInput {
-            package: None,
+            package: Some(ExternalPackageId(0)),
             id: ExternalModuleId(1),
             path: ModulePath {
                 segments: vec!["dep".to_owned(), "math".to_owned()],
@@ -553,6 +663,51 @@ fn external_environment() -> ProjectEnvironmentInput {
                     visibility: etas_hir::Visibility::Public,
                 },
             ],
+        }],
+        external_public_metadata: vec![ProjectExternalPublicMetadataInput {
+            package: ExternalPackageId(0),
+            types: vec![ProjectExternalNamedSignatureInput {
+                path: vec!["dep".into(), "math".into(), "Number".into()],
+                generic_params: Vec::new(),
+                visibility: "public".into(),
+                ty: Some(ProjectExternalTypeInput::Primitive("i32".into())),
+            }],
+            flows: vec![ProjectExternalFlowSignatureInput {
+                path: vec!["dep".into(), "math".into(), "add".into()],
+                generic_params: Vec::new(),
+                param_names: vec!["left".into(), "right".into()],
+                params: vec![ProjectExternalTypeInput::Primitive("i32".into()); 2],
+                output: ProjectExternalTypeInput::Primitive("i32".into()),
+                effects: Some(Default::default()),
+                visibility: "public".into(),
+            }],
+            effect_summaries: vec![ProjectExternalEffectSummaryInput {
+                handler_requests: None,
+                item: vec!["dep".into(), "math".into(), "add".into()],
+                returned_callables: None,
+                default_handler_effects: None,
+                public_effects: Default::default(),
+                requested_actions: Default::default(),
+                handled_requested_actions: Default::default(),
+                latent_flows: Vec::new(),
+                action_trace: Default::default(),
+            }],
+            values: Vec::new(),
+            enums: Vec::new(),
+            agents: Vec::new(),
+            tools: Vec::new(),
+            tool_schemas: Vec::new(),
+            effects: Vec::new(),
+            actions: Vec::new(),
+            trace_specs: Vec::new(),
+            spec_signatures: Vec::new(),
+            spec_impls: Vec::new(),
+            type_spec_satisfactions: Vec::new(),
+            callable_spec_satisfactions: Vec::new(),
+            trace_spec_conformances: Vec::new(),
+            action_summaries: Vec::new(),
+            trace_spec_summaries: Vec::new(),
+            re_exports: Vec::new(),
         }],
         ..ProjectEnvironmentInput::default()
     }

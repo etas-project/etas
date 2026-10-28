@@ -152,7 +152,7 @@ fn compiler_algorithm_support_module_exports_imported_helpers() {
         let source = std::fs::read_to_string(&fixture).unwrap();
         for imported in support_algorithm_imports(&source) {
             assert!(
-                exports.iter().any(|export| *export == imported),
+                exports.contains(&imported),
                 "{} imports tests.compiler.support.algorithms.{imported}, but the support module does not export it",
                 fixture.display()
             );
@@ -288,8 +288,8 @@ fn expected_diagnostic_lines(expected_text: &str) -> Vec<&str> {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>();
     assert!(
-        lines.len() >= 2,
-        "expected diagnostic metadata should include a diagnostic code and message"
+        lines.first().is_some_and(|line| line.contains("::")),
+        "expected diagnostic metadata must start with a stable diagnostic code"
     );
     lines
 }
