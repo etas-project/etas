@@ -1,4 +1,95 @@
 use super::*;
+
+#[test]
+fn compile_reuses_checked_dependency_effect_identity_with_source_overlay() {
+    use etas_host::console::ConsoleOperation;
+    use etas_interpreter::{
+        Interpreter,
+        api::{EntryPoint, RunOptions, code::PreparedCodeDefinitions},
+    };
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.io.{println, eprintln};
+public effect Choice { action decide() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("first")?; eprintln("second")?; resume; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{compile, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] { wrapped(f); return; }
+flow callback() -> unit ![Choice.decide] { perform Choice.decide(); return; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return false; }, };
+    let candidate = compile((^normalize).with_body(body));
+    candidate(callback);
+    return true;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let host = CompilerHost::new(no_host::NoHost::with_console(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(Arc::new(PreparedCodeDefinitions::new(definitions))),
+        ..Default::default()
+    };
+    for (effect, action) in [
+        ("Code", "compile"),
+        ("Console", "stdout_write"),
+        ("Console", "stderr_write"),
+    ] {
+        options
+            .host_context
+            .authority
+            .grants
+            .push(HostActionGrant::allow(effect, action));
+    }
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+    assert_eq!(
+        host.inner().console_events(),
+        vec![
+            ConsoleOperation::WriteStdout {
+                text: "first".into(),
+                newline: true
+            },
+            ConsoleOperation::WriteStderr {
+                text: "second".into(),
+                newline: true
+            },
+        ]
+    );
+}
 use etas_interpreter::api::InterpValue;
 
 #[test]

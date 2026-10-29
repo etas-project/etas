@@ -1631,6 +1631,7 @@ fn dependency_effect_metadata(
         .collect::<Vec<_>>();
     collect_dependency_effect_extensions(&metadata.dependencies, packages, &mut extensions);
     Ok(etas_effects::DependencyEffectMetadata {
+        source_bindings: Vec::new(),
         tags,
         actions: Vec::new(),
         extensions,
