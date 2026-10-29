@@ -468,6 +468,125 @@ public flow lookup() -> i32 { return 7; }
 }
 
 #[test]
+fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
+    use etas_code::descriptor::{EffectTargetInfo, ParameterHandlerScopeInfo, TraceInfo};
+
+    let workspace = workspace_with_source(
+        r#"
+module library.api;
+public flow relay(f: () -> unit ![]) -> unit ![] {
+    handle { f(); } with { Console.stdout_write(_) => { resume; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+        .unwrap()
+        .unwrap();
+    let descriptors = metadata.public_metadata.definition_descriptors.unwrap();
+    let mut scopes = descriptors
+        .graph
+        .traces
+        .iter()
+        .filter_map(|trace| match trace {
+            TraceInfo::ParameterCall(call)
+                if call
+                    .callable
+                    .as_declaration()
+                    .is_some_and(|id| id.declaration() == ["relay"]) =>
+            {
+                call.handlers.as_ref()
+            }
+            _ => None,
+        });
+    let handlers = scopes
+        .next()
+        .expect("checked callback scope in published trace");
+    let [ParameterHandlerScopeInfo::ResumeUnit { actions }] = handlers.as_slice() else {
+        panic!("expected one checked resuming handler: {handlers:?}");
+    };
+    let row = &descriptors.graph.rows[actions.0 as usize];
+    assert!(row.tail.is_none());
+    assert!(
+        matches!(row.effects.as_slice(), [effect] if matches!(&effect.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write"))
+    );
+
+    let mut loaded = consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+flow main() -> unit { let definition = ^relay; return; }
+"#
+    .into();
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    let checked = check(&loaded);
+    let replayed = checked.external_definition_origins()[0]
+        .descriptors
+        .as_ref()
+        .unwrap();
+    assert_eq!(replayed, &descriptors);
+
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+flow write() -> unit ![] { println("hello")?; return; }
+flow main() -> unit ![] { relay(write); return; }
+"#
+    .into();
+    let checked = check(&loaded);
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    let console = etas_effects::Effect::Action(etas_effects::ActionRef {
+        tag: etas_effects::CONSOLE_TAG,
+        action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+    });
+    assert!(
+        summary.requested_actions.effects.contains(&console),
+        "{summary:?}"
+    );
+    assert!(
+        !summary.default_actions.effects.contains(&console),
+        "{summary:?}"
+    );
+}
+
+#[test]
+fn callback_default_actions_remain_possible_for_partial_or_mixed_external_scopes() {
+    for body in [
+        r#"handle { f(); } with { Console.stdout_write("other") => { resume; } };"#,
+        r#"handle { f(); } with { Console.stdout_write(_) => { resume; } }; f();"#,
+    ] {
+        let workspace = workspace_with_source(&format!(
+            "module library.api; public flow relay(f: () -> unit ![]) -> unit ![] {{ {body} return; }} public flow lookup() -> i32 {{ return 7; }}"
+        ));
+        let mut loaded = consumer(&workspace, "first");
+        loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+flow write() -> unit ![] { println("hello")?; return; }
+flow main() -> unit ![] { relay(write); return; }
+"#
+        .into();
+        let checked = check(&loaded);
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        let console = etas_effects::Effect::Action(etas_effects::ActionRef {
+            tag: etas_effects::CONSOLE_TAG,
+            action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+        });
+        assert!(
+            summary.requested_actions.effects.contains(&console),
+            "{body}: {summary:?}"
+        );
+        assert!(
+            summary.default_actions.effects.contains(&console),
+            "{body}: {summary:?}"
+        );
+    }
+}
+
+#[test]
 fn published_agent_headers_keep_default_and_auxiliary_methods_separate_without_private_method_exports()
  {
     use etas_code::descriptor::*;
