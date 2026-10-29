@@ -41,6 +41,75 @@ pub(super) fn prepared_with_bodies(
     (checked, definitions)
 }
 
+#[test]
+fn editing_agent_checks_cancellation_during_method_snapshot_rebuild() {
+    struct CancelAt {
+        calls: AtomicUsize,
+        at: usize,
+        kind: etas_utils::PipelineInterruptionKind,
+    }
+    impl etas_utils::PipelineExecutionControl for CancelAt {
+        fn checkpoint(&self) -> Result<(), etas_utils::PipelineInterruption> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) + 1 == self.at {
+                return Err(etas_utils::PipelineInterruption {
+                    kind: self.kind,
+                    reason: "cancel during edit".into(),
+                });
+            }
+            Ok(())
+        }
+    }
+    let (checked, definitions) = prepared_with_bodies(
+        r#"
+module app;
+agent Worker() -> i32 ![] { return 1; }
+impl agent Worker {
+    flow one() -> i32 ![] { return 1; }
+    flow two() -> i32 ![] { return 2; }
+}
+flow main() -> unit { let definition = ^Worker; return; }
+"#,
+        &["app.Worker"],
+    );
+    let expression = checked
+        .types
+        .reflections
+        .iter()
+        .find_map(|(expr, fact)| {
+            matches!(
+                fact.target,
+                etas_types::CheckedReflectionTarget::Agent { .. }
+            )
+            .then_some(*expr)
+        })
+        .unwrap();
+    let original = definitions.reflect_agent(expression).unwrap();
+    let body = definitions
+        .syntax_operations()
+        .parse_body("return 2;")
+        .unwrap();
+    let retained = definitions.retained_bytes().unwrap();
+    for kind in [
+        etas_utils::PipelineInterruptionKind::Cancelled,
+        etas_utils::PipelineInterruptionKind::ResourceLimit,
+    ] {
+        let control = CancelAt {
+            calls: AtomicUsize::new(0),
+            at: 3,
+            kind,
+        };
+        let result = definitions.with_body_controlled(&original, body.clone(), &control);
+        assert!(
+            matches!(result, Err(etas_code::definition::DefinitionOperationError::Syntax(
+            etas_code::syntax::SyntaxOperationError::Interrupted(interruption)
+        )) if interruption.kind == kind)
+        );
+        assert_eq!(control.calls.load(Ordering::SeqCst), 3);
+        assert_eq!(definitions.retained_bytes().unwrap(), retained);
+    }
+    assert!(definitions.with_body(&original, body).is_ok());
+}
+
 fn execute_source(body: &str, allowed: bool) -> etas_interpreter::api::RunResult {
     execute_source_with(body, allowed, |definitions| {
         NativeCompilerService::new(definitions, Default::default())
