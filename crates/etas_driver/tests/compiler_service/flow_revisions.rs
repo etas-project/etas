@@ -1,6 +1,210 @@
 use super::*;
 
 #[test]
+fn metadata_only_effectful_handler_callback_with_argument_replays() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.io.{println, eprintln};
+public effect Choice { action decide() -> unit; }
+public flow wrapped(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] {
+    handle { f(enabled); } with { Choice.decide() => { println("first")?; eprintln("second")?; resume; } };
+    return;
+}
+
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f, enabled); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    let changed = match parse_body("wrapped(f, true); return;") { Ok(body) => body, Err(_) => { return "parse changed"; }, };
+    if check((^normalize).with_body(changed)).status != "rejected" { return "changed argument accepted"; }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
+fn metadata_only_callback_literal_arguments_are_preserved() {
+    for (ty, value, changed) in [("bool", "true", "false"), ("i32", "-42", "17")] {
+        let source = format!(
+            r#"module library.api;
+import std.io.println;
+public effect Choice {{ action decide() -> unit; }}
+public flow wrapped(f: ({ty}) -> unit ![Choice.decide]) -> unit ![] {{
+    handle {{ f({value}); }} with {{ Choice.decide() => {{ println("handled")?; resume; }} }};
+    return;
+}}
+public flow wrapped_other(f: ({ty}) -> unit ![Choice.decide]) -> unit ![] {{
+    handle {{ f({changed}); }} with {{ Choice.decide() => {{ println("handled")?; resume; }} }};
+    return;
+}}
+public flow lookup() -> i32 {{ return 7; }}
+"#
+        );
+        let workspace = origin_metadata::workspace_with_source(&source);
+        let mut loaded = origin_metadata::consumer(&workspace, "first");
+        loaded.loaded.input.sources[0].text = format!(
+            r#"
+module app.main;
+import first.library.api.{{wrapped, wrapped_other, Choice}};
+import std.compiler.{{check, parse_body, CompileError}};
+flow normalize(f: ({ty}) -> unit ![Choice.decide]) -> unit ![] {{ wrapped(f); return; }}
+flow main() -> string ![Error<CompileError>] {{
+    let body = match parse_body("wrapped(f); return;") {{ Ok(body) => body, Err(_) => {{ return "parse"; }}, }};
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) {{ if diagnostic.severity == "error" {{ return diagnostic.code; }} }}
+    let altered = match parse_body("wrapped_other(f); return;") {{ Ok(body) => body, Err(_) => {{ return "parse changed"; }}, }};
+    if check((^normalize).with_body(altered)).status != "rejected" {{ return "changed argument accepted"; }}
+    return report.status;
+}}
+"#
+        );
+        loaded
+            .loaded
+            .input
+            .options
+            .reflection
+            .retain_bodies
+            .push("app.main.normalize".into());
+        let checked = origin_metadata::check(&loaded);
+        let definitions = etas_driver::compiler::prepare_native_definitions(
+            &loaded,
+            &checked,
+            Default::default(),
+        )
+        .unwrap();
+        let result = revisions::execute_prepared(
+            (checked, definitions),
+            Some(20000),
+            Default::default(),
+            true,
+        );
+        assert!(
+            result.diagnostics.is_empty(),
+            "{ty}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            result.value(),
+            Some(&InterpValue::String("accepted".into())),
+            "{ty}"
+        );
+    }
+}
+
+#[test]
+fn compiled_dependency_callback_preserves_argument_and_handler() {
+    use etas_host::console::ConsoleOperation;
+    use etas_interpreter::{
+        Interpreter,
+        api::{EntryPoint, RunOptions, code::PreparedCodeDefinitions},
+    };
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public flow wrapped(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] {
+    handle { f(enabled); } with { Choice.decide() => { println("handled")?; resume; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{compile, parse_body, CompileError};
+flow normalize(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
+flow callback(enabled: bool) -> unit ![Choice.decide] { if enabled { perform Choice.decide(); } return; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f, enabled); return;") { Ok(body) => body, Err(_) => { return false; }, };
+    let candidate = compile((^normalize).with_body(body));
+    candidate(callback, true);
+    candidate(callback, false);
+    return true;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let host = CompilerHost::new(no_host::NoHost::with_console(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(Arc::new(PreparedCodeDefinitions::new(definitions))),
+        ..Default::default()
+    };
+    for (effect, action) in [("Code", "compile"), ("Console", "stdout_write")] {
+        options
+            .host_context
+            .authority
+            .grants
+            .push(HostActionGrant::allow(effect, action));
+    }
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+    assert_eq!(
+        host.inner().console_events(),
+        vec![ConsoleOperation::WriteStdout {
+            text: "handled".into(),
+            newline: true
+        }]
+    );
+}
+
+#[test]
 fn compile_reuses_checked_dependency_effect_identity_with_source_overlay() {
     use etas_host::console::ConsoleOperation;
     use etas_interpreter::{
