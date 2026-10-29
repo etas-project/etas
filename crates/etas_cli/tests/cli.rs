@@ -37,6 +37,8 @@ mod collection_metadata;
 mod control_regressions;
 #[path = "cli/ordered_collections.rs"]
 mod ordered_collections;
+#[path = "cli/prelude_namespaces.rs"]
+mod prelude_namespaces;
 #[path = "cli/priority_queue.rs"]
 mod priority_queue;
 #[path = "cli/record_values.rs"]
