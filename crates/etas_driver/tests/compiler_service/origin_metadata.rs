@@ -474,7 +474,7 @@ fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
     let workspace = workspace_with_source(
         r#"
 module library.api;
-import std.io.println;
+import std.io.{println, eprintln};
 public effect Choice { action decide() -> bool; }
 public flow relay(f: () -> unit ![]) -> unit ![] {
     handle { f(); } with { Console.stdout_write(_) => { resume; } };
@@ -489,7 +489,7 @@ public flow stop(f: () -> unit ![]) -> unit ![] {
     return;
 }
 public flow logged(f: () -> unit ![Choice.decide]) -> unit ![] {
-    handle { f(); } with { Choice.decide() => { println("handled")?; resume true; } };
+    handle { f(); } with { Choice.decide() => { println("handled")?; eprintln("after")?; resume true; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -557,6 +557,44 @@ flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped
         .as_ref()
         .unwrap();
     assert_eq!(replayed, &descriptors);
+    let logged = replayed
+        .graph
+        .traces
+        .iter()
+        .find_map(|trace| match trace {
+            TraceInfo::ParameterCall(call)
+                if call
+                    .callable
+                    .as_declaration()
+                    .is_some_and(|id| id.declaration() == ["logged"]) =>
+            {
+                call.handlers.as_deref()
+            }
+            _ => None,
+        })
+        .expect("published callback handler must survive consumer loading");
+    let [ParameterHandlerScopeInfo::Handle { arms }] = logged else {
+        panic!("expected a single handler scope");
+    };
+    let [arm] = arms.as_slice() else {
+        panic!("expected a single handler arm");
+    };
+    let mut pending = vec![arm.trace];
+    let mut actions = Vec::new();
+    while let Some(reference) = pending.pop() {
+        match &replayed.graph.traces[reference.0 as usize] {
+            TraceInfo::Empty => {}
+            TraceInfo::Event(effect) => {
+                let EffectTargetInfo::Action { name, .. } = &effect.target else {
+                    panic!("handler trace event must retain action identity");
+                };
+                actions.push(name.as_str());
+            }
+            TraceInfo::Seq(parts) => pending.extend(parts.iter().rev().copied()),
+            other => panic!("expected exact ordered handler trace, got {other:?}"),
+        }
+    }
+    assert_eq!(actions, ["stdout_write", "stderr_write"]);
 
     loaded.loaded.input.sources[0].text = r#"
 module app.main;
