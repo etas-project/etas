@@ -1,6 +1,244 @@
 use super::*;
 
 #[test]
+fn metadata_only_callback_preserves_generic_nominal_selector() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public type Region<T> = { value: T };
+public effect Choice { action decide<T>() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide<Region<i32>>]) -> unit ![] {
+    handle { f(); } with { Choice.decide<Region<i32>>() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice, Region};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide<Region<i32>>]) -> unit ![] { wrapped(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut forged = loaded.clone();
+    let set = forged
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let requested = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["wrapped"])
+        })
+        .unwrap()
+        .analysis
+        .effects
+        .requested
+        .unwrap();
+    let original = set.graph.rows[requested.0 as usize]
+        .effects
+        .iter()
+        .find_map(|effect| match &effect.arguments[..] {
+            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(*ty),
+            _ => None,
+        })
+        .expect("requested action has a type selector");
+    let etas_code::descriptor::TypeInfo::Applied {
+        constructor,
+        arguments,
+    } = &set.graph.types[original.0 as usize]
+    else {
+        panic!("expected generic nominal");
+    };
+    assert_eq!(arguments.len(), 1);
+    let constructor = *constructor;
+    let other_arg = etas_code::descriptor::TypeInfoRef(set.graph.types.len() as u32);
+    set.graph
+        .types
+        .push(etas_code::descriptor::TypeInfo::Primitive(
+            etas_code::descriptor::PrimitiveInfo::U32,
+        ));
+    let altered = etas_code::descriptor::TypeInfoRef(set.graph.types.len() as u32);
+    set.graph
+        .types
+        .push(etas_code::descriptor::TypeInfo::Applied {
+            constructor,
+            arguments: vec![other_arg],
+        });
+    let row = &mut set.graph.rows[requested.0 as usize];
+    let selector = row
+        .effects
+        .iter_mut()
+        .find_map(|effect| match &mut effect.arguments[..] {
+            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
+            _ => None,
+        })
+        .unwrap();
+    *selector = altered;
+    let checked = origin_metadata::check(&forged);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&forged, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_ne!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
+fn metadata_only_callback_preserves_nominal_type_selector_identity() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public type Region = string;
+public type Other = string;
+public effect Choice { action decide<T>() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide<Region>]) -> unit ![] {
+    handle { f(); } with { Choice.decide<Region>() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice, Region};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide<Region>]) -> unit ![] { wrapped(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut forged = loaded.clone();
+    let set = forged
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let other = set.graph.types.iter().position(|ty| matches!(ty,
+        etas_code::descriptor::TypeInfo::Nominal { definition, .. } if definition.declaration() == ["Other"]
+    )).expect("published Other declaration");
+    let requested = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["wrapped"])
+        })
+        .unwrap()
+        .analysis
+        .effects
+        .requested
+        .unwrap();
+    let row = &mut set.graph.rows[requested.0 as usize];
+    let selector = row
+        .effects
+        .iter_mut()
+        .find_map(|effect| match &mut effect.arguments[..] {
+            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
+            _ => None,
+        })
+        .expect("requested action has a nominal selector");
+    *selector = etas_code::descriptor::TypeInfoRef(other as u32);
+    let checked = origin_metadata::check(&forged);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&forged, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_ne!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
 fn metadata_only_callback_preserves_nested_type_selector() {
     let workspace = origin_metadata::workspace_with_source(
         r#"
@@ -451,9 +689,10 @@ fn compiled_dependency_callback_preserves_argument_and_handler() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
 import std.io.println;
+public type Region<T> = { value: T };
 public effect Choice { action decide<T>() -> unit; }
-public flow wrapped(f: (bool) -> unit ![Choice.decide<i32>], enabled: bool) -> unit ![] {
-    handle { f(enabled); f(enabled); } with { Choice.decide<i32>() => { println("handled")?; resume; } };
+public flow wrapped(f: (bool) -> unit ![Choice.decide<Region<i32>>], enabled: bool) -> unit ![] {
+    handle { f(enabled); f(enabled); } with { Choice.decide<Region<i32>>() => { println("handled")?; resume; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -462,10 +701,10 @@ public flow lookup() -> i32 { return 7; }
     let mut loaded = origin_metadata::consumer(&workspace, "first");
     loaded.loaded.input.sources[0].text = r#"
 module app.main;
-import first.library.api.{wrapped, Choice};
+import first.library.api.{wrapped, Choice, Region};
 import std.compiler.{compile, parse_body, CompileError};
-flow normalize(f: (bool) -> unit ![Choice.decide<i32>], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
-flow callback(enabled: bool) -> unit ![Choice.decide<i32>] { if enabled { perform Choice.decide<i32>(); } return; }
+flow normalize(f: (bool) -> unit ![Choice.decide<Region<i32>>], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
+flow callback(enabled: bool) -> unit ![Choice.decide<Region<i32>>] { if enabled { perform Choice.decide<Region<i32>>(); } return; }
 flow main() -> bool ![Error<CompileError>] {
     let body = match parse_body("wrapped(f, enabled); return;") { Ok(body) => body, Err(_) => { return false; }, };
     let candidate = compile((^normalize).with_body(body));
