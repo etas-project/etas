@@ -219,17 +219,9 @@ pub(super) fn build_environment(
     let public_metadata = index
         .map(|index| index.public_metadata.clone())
         .unwrap_or_default();
-    let mut effect_metadata = index
+    let effect_metadata = index
         .map(|index| index.effect_metadata.clone())
         .unwrap_or_default();
-    for dependency in &dependencies {
-        effect_metadata
-            .tags
-            .extend(dependency.effect_metadata.tags.clone());
-        effect_metadata
-            .extensions
-            .extend(dependency.effect_metadata.extensions.clone());
-    }
 
     let metadata_fingerprint = environment_fingerprint(
         manifest,
@@ -394,7 +386,7 @@ fn environment_fingerprint(
     effect_metadata: &metadata::PackageEffectMetadata,
 ) -> String {
     let mut fingerprint_parts = vec![
-        "etas-package-env:v2".to_owned(),
+        "etas-package-env:v3".to_owned(),
         manifest.package.name.clone(),
         manifest.package.version.clone(),
         manifest.package.edition.clone(),
@@ -419,6 +411,7 @@ fn environment_fingerprint(
                 dependency.import_root
             ));
         }
+        append_dependency_effect_fingerprint(&mut fingerprint_parts, dependency, "");
     }
     for module in external_modules {
         fingerprint_parts.push(format!("module:{}:{}", module.id, module.path.join(".")));
@@ -447,6 +440,37 @@ fn environment_fingerprint(
         ));
     }
     fingerprint_parts.join("|")
+}
+
+fn append_dependency_effect_fingerprint(
+    parts: &mut Vec<String>,
+    dependency: &ResolvedDependency,
+    parent: &str,
+) {
+    let identity = format!(
+        "{parent}/{}:{}:{}:{}",
+        dependency.import_root,
+        dependency.identity.name,
+        dependency.identity.version,
+        dependency.identity.edition
+    );
+    for tag in &dependency.effect_metadata.tags {
+        parts.push(format!(
+            "dep-effect-tag:{identity}:{}:{}",
+            tag.path.join("."),
+            tag.runtime_requirement.as_deref().unwrap_or_default()
+        ));
+    }
+    for extension in &dependency.effect_metadata.extensions {
+        parts.push(format!(
+            "dep-effect-extension:{identity}:{}:{}",
+            extension.child.join("."),
+            extension.parent.join(".")
+        ));
+    }
+    for child in &dependency.dependencies {
+        append_dependency_effect_fingerprint(parts, child, &identity);
+    }
 }
 
 fn dependency_source_checksum(dependency: &ResolvedDependency) -> &str {
@@ -710,4 +734,58 @@ fn lockfile_package_for_spec<'a>(
         .packages
         .iter()
         .find(|package| package.import_root == import_root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dependency(name: &str, children: Vec<ResolvedDependency>) -> ResolvedDependency {
+        ResolvedDependency {
+            identity: metadata::PackageIdentity {
+                name: name.into(),
+                version: "1.0.0".into(),
+                edition: "2026".into(),
+            },
+            import_root: name.into(),
+            source: metadata::ResolvedDependencySource::Builtin {
+                checksum: "unchanged".into(),
+            },
+            dependencies: children,
+            public_metadata: Default::default(),
+            effect_metadata: Default::default(),
+            tool_bindings: vec![],
+        }
+    }
+
+    fn fingerprint(dependency: &ResolvedDependency) -> Vec<String> {
+        let mut parts = Vec::new();
+        append_dependency_effect_fingerprint(&mut parts, dependency, "");
+        parts
+    }
+
+    #[test]
+    fn transitive_effect_metadata_changes_environment_fingerprint() {
+        let mut root = dependency("parent", vec![dependency("child", vec![])]);
+        let before = fingerprint(&root);
+        root.dependencies[0]
+            .effect_metadata
+            .tags
+            .push(metadata::PackageEffectTagMetadata {
+                path: vec!["child".into(), "Effect".into()],
+                runtime_requirement: Some("network".into()),
+            });
+        let with_tag = fingerprint(&root);
+        assert_ne!(before, with_tag);
+        root.dependencies[0].effect_metadata.extensions.push(
+            metadata::PackageEffectExtensionMetadata {
+                child: vec!["child".into(), "Effect".into()],
+                parent: vec!["parent".into(), "Effect".into()],
+            },
+        );
+        assert_ne!(with_tag, fingerprint(&root));
+        let before_rename = fingerprint(&root);
+        root.import_root = "other_alias".into();
+        assert_ne!(before_rename, fingerprint(&root));
+    }
 }

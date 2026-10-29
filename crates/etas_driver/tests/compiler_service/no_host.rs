@@ -1,11 +1,16 @@
 use etas_host::{HostError, HostErrorCode, execution::OperationContext};
 use etas_interpreter::host::{HostFuture, HostServiceAvailability, HostServices};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{
+    Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
 #[derive(Default)]
 pub(super) struct NoHost {
     calls: AtomicUsize,
     checkpoint: bool,
+    console_enabled: bool,
+    console_events: Mutex<Vec<etas_host::console::ConsoleOperation>>,
 }
 impl NoHost {
     pub fn calls(&self) -> usize {
@@ -16,6 +21,15 @@ impl NoHost {
             checkpoint: true,
             ..Self::default()
         }
+    }
+    pub(super) fn with_console() -> Self {
+        Self {
+            console_enabled: true,
+            ..Self::default()
+        }
+    }
+    pub(super) fn console_events(&self) -> Vec<etas_host::console::ConsoleOperation> {
+        self.console_events.lock().unwrap().clone()
     }
 }
 
@@ -32,6 +46,7 @@ impl HostServices for NoHost {
     fn availability(&self) -> HostServiceAvailability {
         HostServiceAvailability {
             checkpoint: self.checkpoint,
+            console: self.console_enabled,
             ..Default::default()
         }
     }
@@ -50,8 +65,37 @@ impl HostServices for NoHost {
         tls: etas_host::TlsConnectRequest => etas_host::TlsConnectResponse,
         secret: etas_host::SecretRequest => etas_host::SecretResponse,
         browser: etas_host::BrowserProtocolRequest => etas_host::BrowserProtocolResponse,
-        console: etas_host::console::ConsoleRequest => etas_host::console::ConsoleResponse,
         approval: etas_host::ApprovalRequest => etas_host::ApprovalResponse,
         policy: etas_host::PolicyEvaluationRequest => etas_host::PolicyResponse,
+    }
+
+    fn console<'a>(
+        &'a self,
+        _: OperationContext,
+        request: etas_host::console::ConsoleRequest,
+    ) -> HostFuture<'a, Result<etas_host::console::ConsoleResponse, HostError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async move {
+            if !self.console_enabled {
+                return Err(HostError::new(
+                    HostErrorCode::ProviderUnavailable,
+                    "pure candidate unexpectedly requested a Host service",
+                ));
+            }
+            match request.operation {
+                operation @ (etas_host::console::ConsoleOperation::WriteStdout { .. }
+                | etas_host::console::ConsoleOperation::WriteStderr { .. }) => {
+                    self.console_events.lock().unwrap().push(operation);
+                    Ok(etas_host::console::ConsoleResponse {
+                        id: request.id,
+                        result: etas_host::console::ConsoleResult::Written,
+                    })
+                }
+                _ => Err(HostError::new(
+                    HostErrorCode::ProviderUnavailable,
+                    "console input is not configured for this test",
+                )),
+            }
+        })
     }
 }

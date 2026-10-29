@@ -2,6 +2,164 @@ use super::*;
 use etas_interpreter::api::InterpValue;
 
 #[test]
+fn metadata_only_effectful_handler_without_callback_contract_fails_closed() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.{println, eprintln};
+public effect Choice { action decide() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("first")?; eprintln("second")?; resume; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] { wrapped(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    assert!(
+        !loaded
+            .loaded
+            .input
+            .environment
+            .external_effect_metadata
+            .tags
+            .iter()
+            .any(|tag| tag.path == ["library", "api", "Choice"])
+    );
+    assert!(
+        loaded
+            .loaded
+            .input
+            .environment
+            .external_effect_metadata
+            .tags
+            .iter()
+            .any(|tag| tag.path == ["first", "library", "api", "Choice"])
+    );
+    let checked = origin_metadata::check(&loaded);
+    assert_eq!(checked.sources.sources.len(), 1);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String(
+            "code::UnprovenParametricDeterminism".into()
+        ))
+    );
+}
+
+#[test]
+fn source_compile_preserves_effectful_handler_arm_order_at_host_boundary() {
+    use etas_host::console::ConsoleOperation;
+    use etas_interpreter::{
+        Interpreter,
+        api::{EntryPoint, RunOptions, code::PreparedCodeDefinitions},
+    };
+
+    let (checked, definitions) = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{compile, check, parse_body, CompileError};
+import std.io.{println, eprintln};
+effect Choice { action decide() -> unit; }
+flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("first")?; eprintln("second")?; resume; } };
+    return;
+}
+flow callback() -> unit ![Choice.decide] { perform Choice.decide(); return; }
+flow main() -> bool ![Error<CompileError>] {
+    let wrong = match parse_body("handle { f(); } with { Choice.decide() => { eprintln(\"second\")?; println(\"first\")?; resume; } }; return;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    if check((^normalize).with_body(wrong)).status != "rejected" { return false; }
+    let body = match parse_body("handle { f(); } with { Choice.decide() => { println(\"first\")?; eprintln(\"second\")?; resume; } }; return;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^normalize).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let current = compile(draft);
+    current(callback);
+    return true;
+}
+"#,
+        &["app.normalize"],
+    );
+    let service = NativeCompilerService::new(definitions.clone(), Default::default());
+    let host = CompilerHost::new(no_host::NoHost::with_console(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(Arc::new(PreparedCodeDefinitions::new(definitions))),
+        ..Default::default()
+    };
+    for (effect, action) in [
+        ("Code", "check"),
+        ("Code", "compile"),
+        ("Console", "stdout_write"),
+        ("Console", "stderr_write"),
+    ] {
+        options
+            .host_context
+            .authority
+            .grants
+            .push(HostActionGrant::allow(effect, action));
+    }
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+    assert_eq!(
+        host.inner().console_events(),
+        vec![
+            ConsoleOperation::WriteStdout {
+                text: "first".into(),
+                newline: true
+            },
+            ConsoleOperation::WriteStderr {
+                text: "second".into(),
+                newline: true
+            },
+        ]
+    );
+    assert_eq!(host.inner().calls(), 2);
+}
+
+#[test]
 fn flow_compile_contracts_survive_source_package_binary_projection_and_metadata_only_replay() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
