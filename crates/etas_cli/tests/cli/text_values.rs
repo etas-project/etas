@@ -128,3 +128,58 @@ flow main(args: Array<string>) -> i32 {
     assert!(stdout.contains("replayed interpreter report"), "{stdout}");
     assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
 }
+
+#[test]
+fn segmented_text_membership_and_order_survive_real_cli_checkpoint_resume() {
+    let source = fixture(
+        "segmented-text-membership",
+        r#"
+module tests.cli.segmented_text_membership;
+import std.runtime.checkpoint;
+flow main(args: Array<string>) -> i32 {
+    let prefix = "中😀";
+    let key = prefix + "é";
+    let map = {key => 7};
+    let set = #{key, "中😀é"};
+    let ordered = OrderedMap.new<string, i32>().insert(key, 9).insert("a", 1);
+    let kept = Some(key);
+    checkpoint("segmented-text-membership");
+    let other = "中" + "😀é";
+    var count = 0;
+    for item in set limit Iterations(4) {
+        if item != other { return 1; }
+        count = count + 1;
+    }
+    if key == other && key != "中😀é" && "a" < key && kept == Some(other)
+        && map.get(other) == Some(7) && map.get("missing") == None
+        && count == 1
+        && ordered.get(other) == Some(9) && ordered.get("a") == Some(1) {
+        return 0;
+    }
+    return 1;
+}
+"#,
+    );
+    let checkpoints = temp_path("segmented-text-membership-checkpoints", "dir");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["run", path(&source), "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    let saved = checkpoints.join("checkpoint-0.json");
+    let before = fs::read(&saved).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["resume", "0", "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    assert_eq!(fs::read(&saved).unwrap(), before);
+}
