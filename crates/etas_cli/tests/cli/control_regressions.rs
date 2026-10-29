@@ -135,3 +135,58 @@ fn packaged_cli_reports_the_embedded_compiler_patch_version() {
         env!("CARGO_PKG_VERSION")
     );
 }
+
+#[test]
+fn packaged_cli_infers_inline_finish_result_constructor_context() {
+    let file = fixture(
+        "inline-finish-answer",
+        r#"
+module app.main;
+effect Probe { action ask() -> bool; }
+type Value = { number: i32 };
+flow controller() -> Result<Value, string> ![Probe] {
+    let selected = perform Probe.ask();
+    if selected { Ok(Value { number = 7 }) } else { Err("controller") }
+}
+flow main(args: Array<string>) -> i32 {
+    let value = controller() with { Probe.ask() => { finish Err("sentinel"); } };
+    return match value { Ok(value) => value.number, Err(_) => 0 };
+}
+"#,
+    );
+    let (code, stdout, stderr) =
+        run_process_with_command(isolated_command(), ["run", path(&file)], "");
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"0"}"#),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn packaged_cli_executes_canonical_unit_patterns_and_generic_values() {
+    let file = fixture(
+        "canonical-unit",
+        r#"
+module app.main;
+let constant_pair: (unit, i32) = ((), 5);
+flow identity(value: ()) -> unit { return value; }
+flow main(args: Array<string>) -> i32 {
+    let pair: (unit, i32) = (identity(()), 7);
+    let optional: Option<unit> = Some(());
+    let ((), number) = pair;
+    let ((), increment) = constant_pair;
+    return match optional { Some(()) => number + increment, None => 0 };
+}
+"#,
+    );
+    let (code, stdout, stderr) =
+        run_process_with_command(isolated_command(), ["run", path(&file)], "");
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"12"}"#),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+}
