@@ -105,6 +105,7 @@ edition = "2026"
                     visibility: "public".to_owned(),
                 }],
                 effect_summaries: vec![PackageEffectSummaryMetadata {
+                    behavior: None,
                     handler_requests: None,
                     returned_callables: None,
                     default_handler_effects: None,

@@ -1030,6 +1030,7 @@ fn effect_summary_from_metadata(
     summary: etas_package_metadata::EffectSummary,
 ) -> Result<PackageEffectSummaryMetadata, PackageError> {
     Ok(PackageEffectSummaryMetadata {
+        behavior: summary.behavior,
         handler_requests: summary
             .handler_requests
             .map(request_templates::from_metadata)

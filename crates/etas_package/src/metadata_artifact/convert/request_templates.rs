@@ -10,6 +10,19 @@ pub(super) fn from_metadata(
             .map(|instance| {
                 Ok(crate::PackageActionRequestMetadata {
                     action: effect_ref_from_metadata(instance.action)?,
+                    signature: instance
+                        .signature
+                        .map(|signature| {
+                            Ok::<_, PackageError>(crate::PackageActionRequestSignatureMetadata {
+                                params: signature
+                                    .params
+                                    .into_iter()
+                                    .map(type_from_metadata)
+                                    .collect::<Result<_, _>>()?,
+                                output: type_from_metadata(signature.output)?,
+                            })
+                        })
+                        .transpose()?,
                     type_bindings: instance
                         .type_bindings
                         .map(|bindings| {

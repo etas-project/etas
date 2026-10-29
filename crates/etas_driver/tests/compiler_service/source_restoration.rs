@@ -1,5 +1,5 @@
 use super::*;
-use etas_code::definition::{AgentSourceBundle, CodeDefinitionOperations};
+use etas_code::definition::{CodeDefinitionOperations, DefinitionSourceBundle};
 use etas_interpreter::{
     Interpreter,
     api::code::PreparedCodeDefinitions,
@@ -35,7 +35,7 @@ fn saved_source() -> Vec<u8> {
 }
 
 fn restore_and_run(bytes: &[u8], allowed: bool) -> etas_interpreter::api::RunResult {
-    let saved: AgentSourceBundle = serde_json::from_slice(bytes).unwrap();
+    let saved: DefinitionSourceBundle = serde_json::from_slice(bytes).unwrap();
     let (checked, definitions) = source::prepared(PROGRAM);
     let expression = *checked.types.reflections.keys().next().unwrap();
     let original = definitions.reflect_agent(expression).unwrap();
@@ -122,7 +122,7 @@ fn saved_source_cannot_restore_old_compiler_authority() {
 
 #[test]
 fn self_consistent_saved_source_is_rechecked_instead_of_executing_the_original() {
-    let mut saved: AgentSourceBundle = serde_json::from_slice(&saved_source()).unwrap();
+    let mut saved: DefinitionSourceBundle = serde_json::from_slice(&saved_source()).unwrap();
     saved.source.text = "return false;".into();
     saved.source.source_start = 0;
     saved.source.source_length = saved.source.text.len() as u64;

@@ -239,10 +239,23 @@ public flow lookup() -> i32 { return 7; }
         let output = Frontend.check_project(loaded.loaded.input);
         assert!(output.checked.is_none());
         assert!(
-            output.diagnostics.iter().any(|diagnostic| diagnostic.code
-                == etas_core::DiagnosticCode::Effect(
-                    etas_core::EffectDiagnosticCode::IncompleteEffectFacts
-                )),
+            output
+                .diagnostics
+                .iter()
+                .any(|diagnostic| if forged_support {
+                    diagnostic.code
+                        == etas_core::DiagnosticCode::Type(
+                            etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                        )
+                        && diagnostic
+                            .message
+                            .contains("independent determinism exceeds its summary")
+                } else {
+                    diagnostic.code
+                        == etas_core::DiagnosticCode::Effect(
+                            etas_core::EffectDiagnosticCode::IncompleteEffectFacts,
+                        )
+                }),
             "{:?}",
             output.diagnostics
         );

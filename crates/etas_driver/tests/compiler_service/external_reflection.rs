@@ -45,7 +45,11 @@ flow main() -> bool {{
     }};
     return definition.methods.len() == 1 && definition.body == None
         && (definition.signature == None) == {bare}
-        && method.body == None && method.effects.requested != None;
+        && method.body == None && method.effects.requested != None
+        && method.revision == (^Remote.explain).revision
+        && method.dependencies == (^Remote.explain).dependencies
+        && method.dependencies.lexical_owner == definition.dependencies.lexical_owner
+        && method.revision.key != definition.revision.key;
 }}
 "#
             );
@@ -53,7 +57,18 @@ flow main() -> bool {{
             let checked = origin_metadata::check(&loaded);
             let definitions =
                 prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
-            let expression = *checked.types.reflections.keys().next().unwrap();
+            let expression = checked
+                .types
+                .reflections
+                .iter()
+                .find_map(|(expr, fact)| {
+                    matches!(
+                        fact.target,
+                        etas_types::CheckedReflectionTarget::Agent { .. }
+                    )
+                    .then_some(*expr)
+                })
+                .unwrap();
             let reflected = definitions.reflect_agent(expression).unwrap();
             let view = definitions.resolve(&reflected).unwrap();
             assert_eq!(view.revision(), &snapshot.revision_info());
@@ -116,6 +131,9 @@ flow main() -> bool {{
 
 #[test]
 fn metadata_only_generic_callable_reflection_uses_its_own_graph_and_never_executes_the_body() {
+    use etas_code::{definition::CodeDefinitionOperations, syntax::CodeSyntaxOperations};
+    use etas_frontend::code::definition::NativeDefinitionError;
+
     let workspace = origin_metadata::workspace_with_source(
         "module library.api; public flow lookup<T>(value: T) -> T ![] { return value; }",
     );
@@ -126,8 +144,10 @@ fn metadata_only_generic_callable_reflection_uses_its_own_graph_and_never_execut
             r#"
 module app.main;
 import {alias}.library.api.lookup as renamed;
+import std.compiler.diff;
 flow main() -> bool {{
     let definition = ^renamed;
+    let changes = diff(definition, definition);
     let parameter = match definition.signature.parameters.get(0) {{
         Some(parameter) => parameter, None => {{ return false; }},
     }};
@@ -139,7 +159,11 @@ flow main() -> bool {{
         && definition.effects.requested != None
         && definition.effects.default_handled != None
         && definition.determinism != None
-        && definition.trace != None;
+        && definition.trace != None
+        && changes.old_revision == definition.revision
+        && changes.identity == definition.dependencies.lexical_owner
+        && changes.body_changed == None && !changes.old_body_available
+        && changes.requested_changed == Some(false);
 }}
 "#
         );
@@ -178,6 +202,53 @@ flow main() -> bool {{
                 .is_none()
         );
         assert_ne!(graph, definitions.catalog().descriptors());
+        let reflected = definitions.reflect_flow(expr).unwrap();
+        let view = definitions.resolve(&reflected).unwrap();
+        let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+            .unwrap()
+            .unwrap();
+        let snapshot = &metadata
+            .public_metadata
+            .definition_descriptors
+            .as_ref()
+            .unwrap()
+            .headers
+            .as_ref()
+            .unwrap()
+            .snapshots
+            .as_ref()
+            .unwrap()
+            .flows[0];
+        assert_eq!(view.revision(), &snapshot.revision_info());
+        assert_eq!(view.dependency_info().unwrap(), snapshot.dependencies);
+        assert!(matches!(
+            view.environment(),
+            Err(NativeDefinitionError::MissingSourceEnvironment)
+        ));
+        assert!(matches!(
+            definitions.body_overlay(&reflected),
+            Err(NativeDefinitionError::MissingSourceEnvironment)
+        ));
+        let body = definitions
+            .syntax_operations()
+            .parse_body("return value;")
+            .unwrap();
+        let draft = definitions.with_body(&reflected, body).unwrap();
+        let edited = definitions.resolve(&draft).unwrap();
+        assert_eq!(
+            edited.revision().inputs().parent,
+            Some(reflected.revision().key())
+        );
+        assert_eq!(edited.dependency_info().unwrap(), snapshot.dependencies);
+        assert!(edited.current_analysis().is_err());
+        assert!(matches!(
+            edited.environment(),
+            Err(NativeDefinitionError::MissingSourceEnvironment)
+        ));
+        assert!(matches!(
+            definitions.body_overlay(&draft),
+            Err(NativeDefinitionError::MissingSourceEnvironment)
+        ));
 
         let host = no_host::NoHost::default();
         let result = runtime()
@@ -225,10 +296,10 @@ fn a_newly_compiled_body_can_reflect_a_frozen_external_callable_without_source_o
     loaded.loaded.input.sources[0].text = r#"
 module app.main;
 import first.library.api.lookup as renamed;
-import std.compiler.{compile, parse_body, CompileError};
+import std.compiler.{compile, diff, parse_body, CompileError};
 agent Worker(value: bool) -> bool ![] { return value; }
 flow main() -> bool ![Error<CompileError>] {
-    let body = match parse_body("let d = ^renamed; return d.body == None && d.signature.generics.len() == 1 && d.signature.parameters.len() == 1;") {
+    let body = match parse_body("let d = ^renamed; let changes = diff(d, d); return d.body == None && d.signature.generics.len() == 1 && d.signature.parameters.len() == 1 && changes.old_revision == d.revision && changes.identity == d.dependencies.lexical_owner;") {
         Ok(body) => body,
         Err(_) => { return false; },
     };

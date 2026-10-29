@@ -576,6 +576,7 @@ fn external_public_metadata_input(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                behavior: summary.behavior.clone(),
                 handler_requests: summary.handler_requests.as_ref().map(|template| {
                     etas_frontend::ProjectExternalRequestInstantiationInput {
                         actions: template
@@ -583,6 +584,24 @@ fn external_public_metadata_input(
                             .iter()
                             .map(
                                 |instance| etas_frontend::ProjectExternalActionRequestInput {
+                                    signature: instance.signature.as_ref().map(|signature| {
+                                        etas_frontend::ProjectExternalActionRequestSignatureInput {
+                                            params: signature
+                                                .params
+                                                .iter()
+                                                .map(|ty| {
+                                                    dependency_type_input_with_graph(
+                                                        package, packages, ty,
+                                                    )
+                                                })
+                                                .collect(),
+                                            output: dependency_type_input_with_graph(
+                                                package,
+                                                packages,
+                                                &signature.output,
+                                            ),
+                                        }
+                                    }),
                                     action: dependency_effect_ref_input(
                                         package,
                                         packages,
@@ -1896,6 +1915,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        behavior: None,
                         handler_requests: None,
                         returned_callables: None,
                         default_handler_effects: None,
@@ -2041,6 +2061,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        behavior: None,
                         handler_requests: None,
                         returned_callables: None,
                         default_handler_effects: None,

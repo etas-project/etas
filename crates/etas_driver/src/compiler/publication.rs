@@ -6,7 +6,7 @@ use std::{
 use etas_code::{
     CodeFingerprint, DefinitionKey, RevisionInfo,
     artifact::{CheckedCodeLease, CheckedCodeRef},
-    definition::AgentDefinitionRef,
+    definition::DefinitionRef,
 };
 use etas_core::memory::MemoryFootprint;
 use etas_frontend::code::service::{CandidatePublisher, CheckedCandidate};
@@ -17,7 +17,7 @@ use super::{NativeCompilerConfig, NativeCompilerService};
 #[derive(etas_core::RetainedSize)]
 struct NativeCandidate {
     candidate: CheckedCandidate,
-    definition: AgentDefinitionRef,
+    definition: DefinitionRef,
 }
 
 impl std::fmt::Debug for NativeCandidate {
@@ -49,7 +49,7 @@ impl NativeCandidateStore {
     pub(super) fn retain(
         &self,
         candidate: CheckedCandidate,
-        definition: AgentDefinitionRef,
+        definition: DefinitionRef,
         config: NativeCompilerConfig,
     ) -> Result<CheckedCodeRef, HostError> {
         let mut objects = self.objects.lock().map_err(lock_error)?;
@@ -112,7 +112,7 @@ impl NativeCompilerService {
         &self,
         reference: &CheckedCodeRef,
     ) -> Result<
-        AgentDefinitionRef,
+        DefinitionRef,
         CandidatePublicationError<etas_frontend::code::definition::NativeDefinitionError>,
     > {
         let candidate = self

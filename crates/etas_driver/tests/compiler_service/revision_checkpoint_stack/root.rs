@@ -3,7 +3,7 @@ use std::sync::Arc;
 use etas_interpreter::api::codec::{checkpoint_artifact_json, checkpoint_from_json_with_revisions};
 use etas_interpreter::api::{
     InterpValue, RunOptions,
-    code::{PreparedRevisionSet, SavedAgentRevision},
+    code::{PreparedRevisionSet, SavedCodeRevision},
 };
 
 use super::super::{no_host::NoHost, revision_checkpoint::compile, runtime, source};
@@ -33,7 +33,7 @@ fn a_candidate_root_preserves_its_revision_while_a_frozen_agent_call_is_active()
         assert!(!artifact["checkpoint"]["code_revision"].is_null());
         (serde_json::to_vec(&saved).unwrap(), artifact)
     };
-    let saved: SavedAgentRevision = serde_json::from_slice(&saved).unwrap();
+    let saved: SavedCodeRevision = serde_json::from_slice(&saved).unwrap();
     let (checked, definitions) = source::prepared(super::NESTED);
     let expression = *checked.types.reflections.keys().next().unwrap();
     let original = definitions.reflect_agent(expression).unwrap();

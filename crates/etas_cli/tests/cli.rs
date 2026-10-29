@@ -283,7 +283,7 @@ allow_compile = true
             .unwrap();
     let sources = artifact["code_sources"].as_array().unwrap();
     assert_eq!(sources.len(), 1);
-    let source: etas_interpreter::api::code::SavedAgentRevision =
+    let source: etas_interpreter::api::code::SavedCodeRevision =
         serde_json::from_value(sources[0].clone()).unwrap();
     source.validate(Default::default()).unwrap();
     assert!(source.source.source.text.contains("return 19;"));

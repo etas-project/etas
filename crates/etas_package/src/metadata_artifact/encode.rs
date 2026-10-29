@@ -1056,6 +1056,7 @@ fn effect_summary_to_metadata(
                 })
             })
             .transpose()?,
+        behavior: summary.behavior.clone(),
         returned_callables: summary.returned_callables.clone(),
         item: summary.item.clone(),
         public_effects: effect_row_to_metadata(&summary.public_effects)?,

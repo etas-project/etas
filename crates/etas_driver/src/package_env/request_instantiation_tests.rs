@@ -11,6 +11,12 @@ impl Drop for Project {
 
 #[test]
 fn binary_request_template_with_an_undeclared_generic_is_rejected_at_its_import() {
+    for location in ["binding", "signature"] {
+        reject_undeclared_request_generic(location);
+    }
+}
+
+fn reject_undeclared_request_generic(location: &str) {
     let producer = r#"module requests;
 import std.compiler.{AgentDef, CompileError, compile};
 public flow build<A>(definition: AgentDef<A>) -> A ![Error<CompileError>] { return compile(definition); }
@@ -62,7 +68,17 @@ public flow build<A>(definition: AgentDef<A>) -> A ![Error<CompileError>] { retu
         .as_mut()
         .unwrap();
     assert_eq!(bindings[0].ty.kind, etas_package_metadata::TypeKind::Var);
-    bindings[0].ty.name = "Undeclared".into();
+    if location == "binding" {
+        bindings[0].ty.name = "Undeclared".into();
+    } else {
+        let output = &mut summary.handler_requests.as_mut().unwrap().actions[0]
+            .signature
+            .as_mut()
+            .unwrap()
+            .output;
+        assert_eq!(output.kind, etas_package_metadata::TypeKind::Var);
+        output.name = "Undeclared".into();
+    }
     // The binary is structurally valid. Generic scope is checked by the
     // frontend environment boundary, after package and driver projection.
     let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();

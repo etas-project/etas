@@ -153,7 +153,7 @@ fn published_definition_origins_replay_through_binary_driver_and_reflection_with
         let expression = *checked.types.reflections.keys().next().unwrap();
         let reference = definitions.reflect_agent(expression).unwrap();
         let view = definitions.resolve(&reference).unwrap();
-        let annotation = &view.annotations()[0];
+        let annotation = &view.annotations().unwrap()[0];
         assert!(
             matches!(annotation.arguments[0].value.as_ref(), StaticValueInfo::Reference(AnnotationReferenceInfo::Module { package, path }) if *package == expected.package && path == &["library", "api"])
         );
@@ -236,6 +236,46 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
         )
         .unwrap();
     }
+    for snapshot in &mut input
+        .descriptors
+        .as_mut()
+        .unwrap()
+        .headers
+        .as_mut()
+        .unwrap()
+        .snapshots
+        .as_mut()
+        .unwrap()
+        .flows
+    {
+        let original = snapshot.identity.package();
+        snapshot.identity = DefinitionKey::new(
+            forged,
+            snapshot.identity.module().to_vec(),
+            snapshot.identity.declaration().to_vec(),
+            snapshot.identity.kind(),
+        )
+        .unwrap();
+        snapshot.revision.definition =
+            etas_code::CallableId::declaration(snapshot.identity.clone()).unwrap();
+        snapshot.dependencies.lexical_owner = snapshot.identity.clone();
+        for module in &mut snapshot.dependencies.modules {
+            if module.package == original {
+                module.package = forged;
+            }
+        }
+        for binding in &mut snapshot.dependencies.bindings {
+            if binding.definition.package() == original {
+                binding.definition = DefinitionKey::new(
+                    forged,
+                    binding.definition.module().to_vec(),
+                    binding.definition.declaration().to_vec(),
+                    binding.definition.kind(),
+                )
+                .unwrap();
+            }
+        }
+    }
     let checked = check(&loaded);
     let error = prepare_native_definitions(&loaded, &checked, Default::default())
         .err()
@@ -286,6 +326,21 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .callables[0]
         .id = etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
+    // This forged Tool no longer claims a Flow snapshot. Keep the graph
+    // internally coherent so the frontend can reject the export-kind mismatch.
+    metadata
+        .public_metadata
+        .definition_descriptors
+        .as_mut()
+        .unwrap()
+        .headers
+        .as_mut()
+        .unwrap()
+        .snapshots
+        .as_mut()
+        .unwrap()
+        .flows
+        .clear();
     let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
     let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
     etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
@@ -547,16 +602,7 @@ flow inspect() -> unit { let definition = ^Worker; return; }
     let native = definitions.resolve(&reference).unwrap();
     assert_eq!(snapshot.revision_info(), *native.revision());
     assert_eq!(snapshot.dependencies, native.dependency_info().unwrap());
-    assert_eq!(
-        native
-            .environment()
-            .unwrap()
-            .contract()
-            .header()
-            .methods
-            .len(),
-        2
-    );
+    assert_eq!(native.environment().unwrap().contract().methods().len(), 2);
     assert_eq!(headers.agents[0].methods.len(), 1);
     for alias in ["first", "second"] {
         let consumer = consumer(&workspace, alias);

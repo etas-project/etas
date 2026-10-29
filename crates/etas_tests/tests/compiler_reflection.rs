@@ -25,6 +25,20 @@ macro_rules! positive_fixtures {
 positive_fixtures! {
     pure_snapshot, 0, true;
     callable_descriptors, 0, true;
+    bound_flow_snapshot, 0, true;
+    bound_flow_compile, 1, true;
+    bound_effect_flow_compile, 1, true;
+    bound_effect_row_compile, 1, true;
+    bound_nonempty_effect_row_compile, 3, true;
+    bound_callback_nonreturn_rejected, 1, true;
+    bound_callback_argument_change_rejected, 1, true;
+    bound_callback_literal_argument_compile, 1, true;
+    bound_callback_input_argument_compile, 2, true;
+    bound_callback_input_identity_rejected, 1, true;
+    bound_callback_integer_literal_compile, 2, true;
+    bound_callback_signed_boundary_compile, 1, true;
+    conditional_callback_rejected, 1, true;
+    bound_flow_revision_checkpoint, 1, true;
     pure_syntax_operations, 0, true;
     compile_and_adopt, 1, true;
     rejection_keeps_binding, 2, true;
@@ -42,6 +56,16 @@ positive_fixtures! {
     diff_surface, 0, true;
     diff_unavailable_bodies, 0, false;
     diff_checkpoint, 0, true;
+    flow_diff_surface, 0, true;
+    flow_diff_unavailable_bodies, 0, false;
+    flow_diff_checkpoint, 0, true;
+    method_revision_snapshots, 1, true;
+    returned_flow_reflection, 1, true;
+    flow_binding_reflection_in_revision, 1, true;
+    flow_parameter_reflection_in_revision, 1, true;
+    returned_generic_flow, 1, true;
+    flow_revision_checkpoint, 1, true;
+    flow_value_revision_checkpoint, 1, true;
 }
 
 const NEGATIVE: &[(&str, &str)] = &[
@@ -49,9 +73,11 @@ const NEGATIVE: &[(&str, &str)] = &[
     ("string_body", "type::TypeMismatch"),
     ("wrong_agent_identity", "type::Mismatch"),
     ("definition_not_callable", "type::TypeMismatch"),
-    ("callable_not_agent_definition", "type::TypeMismatch"),
+    ("compile_erased_callable", "type::TypeMismatch"),
+    ("compile_method_descriptor", "type::TypeMismatch"),
     ("diff_wrong_identity", "type::TypeMismatch"),
     ("diff_report_readonly", "type::TypeMismatch"),
+    ("diff_wrong_flow_signature", "type::TypeMismatch"),
     ("handler_wrong_identity", "type::TypeMismatch"),
     ("handler_heterogeneous_requests", "type::TypeMismatch"),
     ("handler_deferred_wrong_identity", "type::TypeMismatch"),
@@ -104,7 +130,11 @@ fn assert_positive_fixture(name: &str, compiler_requests: usize, retained: bool)
         "--trace-out",
         path_str(&trace),
     ]);
-    assert_eq!(code, 0, "{name}: {stdout}\n{stderr}");
+    let trace_source = std::fs::read_to_string(&trace);
+    assert_eq!(
+        code, 0,
+        "{name}: {stdout}\n{stderr}\ntrace: {trace_source:?}"
+    );
     assert!(stderr.is_empty(), "{name}: {stderr}");
     let result = reported_value(&stdout, "run value: ");
     assert_eq!(
@@ -112,7 +142,7 @@ fn assert_positive_fixture(name: &str, compiler_requests: usize, retained: bool)
         serde_json::json!({"kind": "number", "type": "i32", "value": "0"}),
         "{name}"
     );
-    let trace: serde_json::Value = serde_json::from_slice(&std::fs::read(trace).unwrap()).unwrap();
+    let trace: serde_json::Value = serde_json::from_str(&trace_source.unwrap()).unwrap();
     let requests = trace["events"]
         .as_array()
         .unwrap()
@@ -161,7 +191,117 @@ fn default_input_uses_the_selected_workspace_and_its_compiler_profile() {
 
 #[test]
 fn diff_report_survives_checkpoint_and_resume_as_descriptive_data() {
-    let source = support::fixture("compiler/reflection/positive/diff_checkpoint.es");
+    for name in ["diff_checkpoint", "flow_diff_checkpoint"] {
+        reflection_checkpoint_round_trip(name);
+    }
+}
+
+#[test]
+fn flow_revision_checkpoint_restores_a_scoped_invocation() {
+    for name in [
+        "flow_revision_checkpoint",
+        "flow_value_revision_checkpoint",
+        "bound_flow_revision_checkpoint",
+    ] {
+        reflection_checkpoint_round_trip(name);
+    }
+}
+
+#[test]
+fn bound_effectful_callback_revision_executes_its_checked_host_action() {
+    let source = support::fixture("compiler/reflection/effectful/bound_callback.es");
+    let project = FixtureProject::new(&source, true);
+    let trace = project.0.join("trace.json");
+    let (code, stdout, stderr) = run_cli([
+        "--format",
+        "json",
+        "run",
+        path_str(&project.0),
+        "--profile",
+        "fixture",
+        "--trace-out",
+        path_str(&trace),
+    ]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        result["value"],
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"})
+    );
+    let trace: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(trace).unwrap()).unwrap();
+    let requests = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["kind"] == "host_request_started")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|event| event["request_kind"] == "compiler")
+            .count(),
+        3
+    );
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|event| event["request_kind"] == "console")
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn callback_revision_accepts_an_enclosing_disjoint_handler() {
+    let source = support::fixture("compiler/reflection/effectful/disjoint_handler.es");
+    let project = FixtureProject::new(&source, true);
+    let trace = project.0.join("trace.json");
+    let (code, stdout, stderr) = run_cli([
+        "--format",
+        "json",
+        "run",
+        path_str(&project.0),
+        "--profile",
+        "fixture",
+        "--trace-out",
+        path_str(&trace),
+    ]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    let result: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        result["value"],
+        serde_json::json!({"kind":"number", "type":"i32", "value":"0"}),
+        "{stderr}"
+    );
+    let trace: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(trace).unwrap()).unwrap();
+    let requests = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["kind"] == "host_request_started")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|event| event["request_kind"] == "compiler")
+            .count(),
+        10
+    );
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|event| event["request_kind"] == "console")
+            .count(),
+        4
+    );
+}
+
+fn reflection_checkpoint_round_trip(name: &str) {
+    let source = support::fixture(&format!("compiler/reflection/positive/{name}.es"));
     let project = FixtureProject::new(&source, true);
     let checkpoints = project.0.join("checkpoints");
     let (code, stdout, stderr) = run_cli([

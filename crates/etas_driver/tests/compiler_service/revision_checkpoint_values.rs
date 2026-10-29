@@ -1,7 +1,7 @@
 use super::revision_checkpoint::compile;
 use super::*;
 use etas_interpreter::api::codec::{checkpoint_artifact_json, checkpoint_from_json};
-use etas_interpreter::api::{InterpValue, RunOptions, code::SavedAgentRevision};
+use etas_interpreter::api::{InterpValue, RunOptions, code::SavedCodeRevision};
 
 const CAPTURED: &str = r#"
 module app;
@@ -20,7 +20,7 @@ fn captured_definitions(
 ) -> (
     etas_frontend::CheckedProgram,
     Arc<NativeDefinitionStore>,
-    AgentDefinitionRef,
+    DefinitionRef,
 ) {
     let (checked, definitions) = source::prepared(program);
     let expression = *checked.types.reflections.keys().next().unwrap();
@@ -99,7 +99,7 @@ pub(super) fn save_checkpoint_at(
         source.validate(Default::default()).unwrap();
         assert!(
             saved.iter().any(|bytes| {
-                let expected: SavedAgentRevision = serde_json::from_slice(bytes).unwrap();
+                let expected: SavedCodeRevision = serde_json::from_slice(bytes).unwrap();
                 expected == *source
             }),
             "checkpoint exported an unrelated or changed revision"
@@ -143,7 +143,7 @@ pub(super) fn restore_captured(
     let (checked, definitions, original) = captured_definitions(program);
     let mut revisions = etas_interpreter::api::code::PreparedRevisionSet::new(checked.clone());
     for bytes in saved {
-        let saved: SavedAgentRevision = serde_json::from_slice(bytes).unwrap();
+        let saved: SavedCodeRevision = serde_json::from_slice(bytes).unwrap();
         let draft = definitions
             .restore_source_draft(&original, &saved.source, Default::default())
             .unwrap();
@@ -371,7 +371,7 @@ fn a_candidate_root_restores_a_captured_frozen_original_agent() {
         (serde_json::to_vec(&source).unwrap(), artifact)
     };
     let (source, artifact) = bytes_and_artifact;
-    let saved: SavedAgentRevision = serde_json::from_slice(&source).unwrap();
+    let saved: SavedCodeRevision = serde_json::from_slice(&source).unwrap();
     let (checked, definitions, original) = captured_definitions(CAPTURED);
     let draft = definitions
         .restore_source_draft(&original, &saved.source, Default::default())
@@ -442,7 +442,7 @@ fn captured_agent_references_reject_identity_tampering_and_resource_expansion() 
         (0, "differs from its freshly prepared revision"),
         (1, "absent from its prepared revision"),
         (2, "frozen method differs from its declared agent owner"),
-        (3, "does not identify an agent default method"),
+        (3, "does not identify its agent entry or ordinary flow"),
         (4, "exceeds byte budget"),
         (5, "exceeds node"),
     ] {

@@ -543,6 +543,8 @@ pub struct PackageRecordFieldMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectSummaryMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behavior: Option<etas_package_metadata::CallableValueBehavior>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handler_requests: Option<PackageRequestInstantiationMetadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub returned_callables: Option<etas_package_metadata::CallableValueGraph>,
@@ -570,6 +572,13 @@ pub struct PackageRequestInstantiationMetadata {
 pub struct PackageActionRequestMetadata {
     pub action: PackageEffectRefMetadata,
     pub type_bindings: Option<Vec<(String, PackageTypeMetadata)>>,
+    pub signature: Option<PackageActionRequestSignatureMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageActionRequestSignatureMetadata {
+    pub params: Vec<PackageTypeMetadata>,
+    pub output: PackageTypeMetadata,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
