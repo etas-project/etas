@@ -1,6 +1,163 @@
 use super::*;
 
 #[test]
+fn metadata_only_callback_preserves_nested_type_selector() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide<T>() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide<Array<i32>>]) -> unit ![] {
+    handle { f(); } with { Choice.decide<Array<i32>>() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide<Array<i32>>]) -> unit ![] { wrapped(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
+fn metadata_only_callback_preserves_type_selector() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide<T>() -> unit; }
+public flow wrapped(f: () -> unit ![Choice.decide<i32>]) -> unit ![] {
+    handle { f(); } with { Choice.decide<i32>() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{wrapped, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide<i32>]) -> unit ![] { wrapped(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut forged = loaded.clone();
+    let set = forged
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let requested = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["wrapped"])
+        })
+        .unwrap()
+        .analysis
+        .effects
+        .requested
+        .unwrap();
+    let other = etas_code::descriptor::TypeInfoRef(set.graph.types.len() as u32);
+    set.graph
+        .types
+        .push(etas_code::descriptor::TypeInfo::Primitive(
+            etas_code::descriptor::PrimitiveInfo::U32,
+        ));
+    let row = &mut set.graph.rows[requested.0 as usize];
+    let selector = row
+        .effects
+        .iter_mut()
+        .find_map(|effect| match &mut effect.arguments[..] {
+            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
+            _ => None,
+        })
+        .expect("requested action has a type selector");
+    *selector = other;
+    let checked = origin_metadata::check(&forged);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&forged, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_ne!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
 fn metadata_only_rejects_reordered_distinct_callbacks() {
     let workspace = origin_metadata::workspace_with_source(
         r#"
@@ -294,9 +451,9 @@ fn compiled_dependency_callback_preserves_argument_and_handler() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
 import std.io.println;
-public effect Choice { action decide() -> unit; }
-public flow wrapped(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] {
-    handle { f(enabled); f(enabled); } with { Choice.decide() => { println("handled")?; resume; } };
+public effect Choice { action decide<T>() -> unit; }
+public flow wrapped(f: (bool) -> unit ![Choice.decide<i32>], enabled: bool) -> unit ![] {
+    handle { f(enabled); f(enabled); } with { Choice.decide<i32>() => { println("handled")?; resume; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -307,8 +464,8 @@ public flow lookup() -> i32 { return 7; }
 module app.main;
 import first.library.api.{wrapped, Choice};
 import std.compiler.{compile, parse_body, CompileError};
-flow normalize(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
-flow callback(enabled: bool) -> unit ![Choice.decide] { if enabled { perform Choice.decide(); } return; }
+flow normalize(f: (bool) -> unit ![Choice.decide<i32>], enabled: bool) -> unit ![] { wrapped(f, enabled); return; }
+flow callback(enabled: bool) -> unit ![Choice.decide<i32>] { if enabled { perform Choice.decide<i32>(); } return; }
 flow main() -> bool ![Error<CompileError>] {
     let body = match parse_body("wrapped(f, enabled); return;") { Ok(body) => body, Err(_) => { return false; }, };
     let candidate = compile((^normalize).with_body(body));
