@@ -1463,6 +1463,66 @@ flow main() -> i32 {} {{
 }
 
 #[test]
+fn instantiated_effect_row_flow_revision_uses_bound_effect_environment() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+import std.io.println;
+flow identity<effect E>(value: bool) -> bool ![E] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = identity;
+    let effectful: (bool) -> bool ![Console.stdout_write] = identity;
+    if check(^effectful).status != "accepted" { return false; }
+    let body = match parse_body("return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    if check((^effectful).with_body(body)).status != "accepted" { return false; }
+    let changed = match parse_body("println(\"changed\")?; return value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    if check((^effectful).with_body(changed)).status != "rejected" { return false; }
+    let candidate = compile(draft);
+    return !candidate(true) && candidate(false) && original(true);
+}
+"#,
+        &["app.identity"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn instantiated_generic_flow_revision_uses_bound_type_environment() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow identity<T>(value: T) -> T ![] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = identity;
+    let integer: (i32) -> i32 ![] = identity;
+    let body = match parse_body("return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    if check((^integer).with_body(body)).status != "rejected" { return false; }
+    let candidate = compile(draft);
+    return !candidate(true) && candidate(false) && original(true) && integer(42) == 42;
+}
+"#,
+        &["app.identity"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
 fn spec_ordinary_flow_revision_example_compiles_and_runs() {
     let prepared = source::prepared_with_bodies(
         r#"
