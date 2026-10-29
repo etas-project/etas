@@ -574,7 +574,7 @@ pub struct PackageActionRequestMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageParameterRequestMetadata {
-    pub parameter: String,
+    pub parameter: etas_package_metadata::CallableRequestTarget,
     pub excluded: Vec<PackageEffectRefMetadata>,
 }
 
@@ -601,7 +601,7 @@ pub enum PackageActionTraceMetadata {
         source: PackageActionTraceEventSourceMetadata,
     },
     ParameterCall {
-        parameter: String,
+        parameter: etas_package_metadata::CallableRequestTarget,
     },
     Seq {
         children: Vec<PackageActionTraceMetadata>,
@@ -617,7 +617,7 @@ pub enum PackageActionTraceMetadata {
     },
     Widened {
         actions: Vec<PackageEffectRefMetadata>,
-        parameter_calls: Vec<String>,
+        parameter_calls: Vec<etas_package_metadata::CallableRequestTarget>,
     },
 }
 
@@ -675,6 +675,7 @@ pub enum PackageSpecKindMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageSpecMethodMetadata {
     pub name: String,
+    pub receiver_param: Option<u32>,
     pub path: Vec<String>,
     #[serde(default)]
     pub signature: Option<PackageFlowSignatureMetadata>,
@@ -694,7 +695,7 @@ pub struct PackageSpecImplMetadata {
     #[serde(default)]
     pub args: Vec<PackageTypeMetadata>,
     #[serde(default)]
-    pub methods: Vec<String>,
+    pub methods: Vec<etas_package_metadata::SpecImplMethod>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

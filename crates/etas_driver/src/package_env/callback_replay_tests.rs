@@ -76,7 +76,7 @@ public flow ignore(unused: () -> unit ![]) -> unit { return; }
     else {
         panic!("{relay:?}");
     };
-    assert_eq!(trace.iter().filter(|trace| matches!(trace, etas_package::PackageActionTraceMetadata::ParameterCall { parameter } if parameter == "g")).count(), 2);
+    assert_eq!(trace.iter().filter(|trace| matches!(trace, etas_package::PackageActionTraceMetadata::ParameterCall { parameter: etas_package_metadata::CallableRequestTarget::Parameter(parameter) } if parameter == "g")).count(), 2);
     assert!(relay.requested_actions.effects.is_empty());
     assert!(relay.requested_actions.tail.is_none());
     let environment = frontend_environment(PackageEnvironmentMetadata {

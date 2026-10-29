@@ -526,6 +526,7 @@ fn spec_method_to_metadata(
 ) -> Result<etas_package_metadata::SpecMethod, PackageError> {
     Ok(etas_package_metadata::SpecMethod {
         name: method.name.clone(),
+        receiver_param: method.receiver_param,
         path: method.path.clone(),
         signature: method
             .signature
