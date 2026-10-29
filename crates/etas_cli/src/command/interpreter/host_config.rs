@@ -24,6 +24,7 @@ use std::{
 use crate::error::CliError;
 
 mod compiler;
+mod model_auth;
 mod model_output;
 pub(super) use compiler::CliCompilerConfig;
 
@@ -65,6 +66,7 @@ pub(super) struct CliModelConfig {
     pub(super) provider: ModelProviderId,
     pub(super) capabilities: ModelProviderCapabilities,
     pub(super) model: ModelName,
+    auth: AuthConfig,
     base_url: String,
     endpoint: NetworkEndpoint,
     private_resolution: PrivateResolutionPolicy,
@@ -76,7 +78,7 @@ pub(super) struct CliModelConfig {
 
 struct ModelAdapterConfig {
     base_url_override: Option<String>,
-    api_key: Option<String>,
+    auth: AuthConfig,
     retry: RetryPolicy,
     timeout: TransportTimeoutPolicy,
     private_resolution: PrivateResolutionPolicy,
@@ -607,7 +609,8 @@ impl CliHostConfig {
             "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
             "ETAS_HOST_MODEL_RETRY_DELAY_MS",
             model_output::ENV_KEY,
-        ]) {
+        ]) || (self.model.is_some() && env.contains_any(model_auth::ENV_KEYS))
+        {
             self.model = Some(model_from_env_overrides(env, self.model.as_ref())?);
         }
         if let Some(workspace_root) = env.optional("ETAS_HOST_WORKSPACE_ROOT") {
@@ -1161,15 +1164,7 @@ fn model_from_runtime_profile(
         .optional("ETAS_HOST_MODEL_BASE_URL")
         .or_else(|| profile.base_url.clone())
         .or_else(|| current.map(|model| model.base_url.clone()));
-    let api_key = env
-        .optional("ETAS_HOST_MODEL_API_KEY")
-        .or_else(|| env.optional("ETAS_HOST_OMLX_API_KEY"))
-        .or_else(|| {
-            profile
-                .api_key_env
-                .as_deref()
-                .and_then(|name| env.optional(name))
-        });
+    let auth = model_auth::resolve(env, profile.api_key_env.as_deref(), current);
     let retry = retry_policy_from_env(
         env,
         "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
@@ -1207,7 +1202,7 @@ fn model_from_runtime_profile(
         model,
         ModelAdapterConfig {
             base_url_override: base_url,
-            api_key,
+            auth,
             retry,
             timeout,
             private_resolution,
@@ -1240,9 +1235,7 @@ fn model_from_env_overrides(
     let base_url = env
         .optional("ETAS_HOST_MODEL_BASE_URL")
         .or_else(|| current.map(|model| model.base_url.clone()));
-    let api_key = env
-        .optional("ETAS_HOST_MODEL_API_KEY")
-        .or_else(|| env.optional("ETAS_HOST_OMLX_API_KEY"));
+    let auth = model_auth::resolve(env, None, current);
     let retry = retry_policy_from_env(
         env,
         "ETAS_HOST_MODEL_RETRY_ATTEMPTS",
@@ -1269,7 +1262,7 @@ fn model_from_env_overrides(
         model,
         ModelAdapterConfig {
             base_url_override: base_url,
-            api_key,
+            auth,
             retry,
             timeout,
             private_resolution,
@@ -1286,7 +1279,7 @@ fn model_from_parts(
 ) -> Result<CliModelConfig, CliError> {
     let ModelAdapterConfig {
         base_url_override,
-        api_key,
+        auth,
         retry,
         timeout,
         private_resolution,
@@ -1298,7 +1291,6 @@ fn model_from_parts(
             "runtime model `enable_thinking` is only supported by the `omlx-openai` adapter, not `{adapter_name}`"
         )));
     }
-    let auth = api_key.map_or(AuthConfig::None, AuthConfig::BearerToken);
     let (adapter, base_url, private_resolution) = match adapter_name.as_str() {
         "openai" => {
             let base_url = base_url_override.ok_or_else(|| {
@@ -1367,13 +1359,13 @@ fn model_from_parts(
     let adapter = match adapter {
         CliModelAdapter::OpenAi(adapter) => CliModelAdapter::OpenAi(
             adapter
-                .with_auth(auth)
+                .with_auth(auth.clone())
                 .with_retry(retry)
                 .with_timeout(timeout),
         ),
         CliModelAdapter::Anthropic(adapter) => CliModelAdapter::Anthropic(
             adapter
-                .with_auth(auth)
+                .with_auth(auth.clone())
                 .with_retry(retry)
                 .with_timeout(timeout),
         ),
@@ -1385,6 +1377,7 @@ fn model_from_parts(
         provider: ModelProviderId(adapter_name),
         capabilities,
         model: ModelName(model),
+        auth,
         base_url: base_url.clone(),
         endpoint: network_endpoint_from_base_url(&base_url)?,
         private_resolution,
