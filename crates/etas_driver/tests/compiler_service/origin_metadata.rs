@@ -474,8 +474,13 @@ fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
     let workspace = workspace_with_source(
         r#"
 module library.api;
+public effect Choice { action decide() -> bool; }
 public flow relay(f: () -> unit ![]) -> unit ![] {
     handle { f(); } with { Console.stdout_write(_) => { resume; } };
+    return;
+}
+public flow choose(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { resume true; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -503,20 +508,25 @@ public flow lookup() -> i32 { return 7; }
     let handlers = scopes
         .next()
         .expect("checked callback scope in published trace");
-    let [ParameterHandlerScopeInfo::ResumeUnit { actions }] = handlers.as_slice() else {
+    let [ParameterHandlerScopeInfo::Resume { arms }] = handlers.as_slice() else {
         panic!("expected one checked resuming handler: {handlers:?}");
     };
-    let row = &descriptors.graph.rows[actions.0 as usize];
-    assert!(row.tail.is_none());
     assert!(
-        matches!(row.effects.as_slice(), [effect] if matches!(&effect.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write"))
+        matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write") && arm.value == etas_code::descriptor::ReturnObservationInfo::Unit)
     );
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["choose"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Resume { arms }])
+                if matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "decide")
+                    && arm.value == etas_code::descriptor::ReturnObservationInfo::Bool(true)))
+    )), "boolean handler must survive metadata projection");
 
     let mut loaded = consumer(&workspace, "first");
     loaded.loaded.input.sources[0].text = r#"
 module app.main;
 import first.library.api.relay;
-flow main() -> unit { let definition = ^relay; return; }
+import first.library.api.choose;
+flow main() -> unit { let definition = ^relay; let choice = ^choose; return; }
 "#
     .into();
     assert_eq!(loaded.loaded.input.sources.len(), 1);
