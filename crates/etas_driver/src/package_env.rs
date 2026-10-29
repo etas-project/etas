@@ -1392,7 +1392,7 @@ fn is_standard_type_path(path: &[String]) -> bool {
     }
     path.len() == 1
         && registry
-            .lookup_prelude(&path[0])
+            .lookup_prelude_in_namespace(&path[0], etas_std::StdNamespace::Type)
             .is_some_and(|symbol| matches!(symbol.kind, StdSymbolKind::Type))
 }
 
