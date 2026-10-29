@@ -1,6 +1,168 @@
 use super::*;
 
 #[test]
+fn metadata_only_rejects_reordered_distinct_callbacks() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public flow pair(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); g(); } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow reversed(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { g(); f(); } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{pair, reversed, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide]) -> unit ![] { pair(f, g); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("pair(f, g); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    let changed = match parse_body("reversed(f, g); return;") { Ok(body) => body, Err(_) => { return "parse reversed"; }, };
+    if check((^normalize).with_body(changed)).status != "rejected" { return "reordering accepted"; }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
+fn metadata_only_replays_each_callback_call_in_order() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public flow twice(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); f(); } with { Choice.decide() => { println("handled")?; resume; } };
+    return;
+}
+public flow once(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("handled")?; resume; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{twice, once, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] { twice(f); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("twice(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    let reduced = match parse_body("once(f); return;") { Ok(body) => body, Err(_) => { return "parse reduced"; }, };
+    if check((^normalize).with_body(reduced)).status != "rejected" { return "missing callback accepted"; }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut incomplete = loaded.clone();
+    let set = incomplete
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let root = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["twice"])
+        })
+        .unwrap()
+        .analysis
+        .outcomes
+        .unwrap();
+    let etas_code::descriptor::TraceInfo::Choice(branches) = &mut set.graph.traces[root.0 as usize]
+    else {
+        panic!("expected outcome choice");
+    };
+    assert_eq!(branches.len(), 3);
+    branches.pop();
+    let checked = origin_metadata::check(&incomplete);
+    let definitions = etas_driver::compiler::prepare_native_definitions(
+        &incomplete,
+        &checked,
+        Default::default(),
+    )
+    .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String(
+            "code::MissingOutcomeSensitiveSummary".into()
+        ))
+    );
+}
+
+#[test]
 fn metadata_only_effectful_handler_callback_with_argument_replays() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
@@ -134,7 +296,7 @@ fn compiled_dependency_callback_preserves_argument_and_handler() {
 import std.io.println;
 public effect Choice { action decide() -> unit; }
 public flow wrapped(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] {
-    handle { f(enabled); } with { Choice.decide() => { println("handled")?; resume; } };
+    handle { f(enabled); f(enabled); } with { Choice.decide() => { println("handled")?; resume; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -197,10 +359,13 @@ flow main() -> bool ![Error<CompileError>] {
     assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
     assert_eq!(
         host.inner().console_events(),
-        vec![ConsoleOperation::WriteStdout {
-            text: "handled".into(),
-            newline: true
-        }]
+        vec![
+            ConsoleOperation::WriteStdout {
+                text: "handled".into(),
+                newline: true
+            };
+            2
+        ]
     );
 }
 
