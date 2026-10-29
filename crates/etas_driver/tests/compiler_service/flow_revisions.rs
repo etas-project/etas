@@ -1,6 +1,92 @@
 use super::*;
 
 #[test]
+fn metadata_only_callback_loop_preserves_origin_and_rejects_unproved_outcomes() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public effect Other { action decide() -> unit; }
+public flow each(f: () -> unit ![Choice.decide], values: Array<bool>) -> unit ![] {
+    handle { for value in values limit Iterations(8) { f(); } } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow extra(f: () -> unit ![Choice.decide], values: Array<bool>) -> unit ![] {
+    handle { perform Other.decide(); } with { Other.decide() => { resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    let descriptors = loaded
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter()
+        .find_map(|origin| origin.descriptors.as_ref())
+        .unwrap();
+    let header = descriptors
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["each"])
+        })
+        .unwrap();
+    assert!(header.analysis.outcomes.is_none());
+    assert!(matches!(
+        header.analysis.trace.map(|id| &descriptors.graph.traces[id.0 as usize]),
+        Some(etas_code::descriptor::TraceInfo::Widened { parameter_calls, .. })
+            if parameter_calls.len() == 1 && parameter_calls[0].position == 0
+    ));
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{each, extra, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide], values: Array<bool>) -> unit ![] { each(f, values); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("each(f, values); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    if report.status != "rejected" { return "loop accepted without proof"; }
+    let changed = match parse_body("extra(f, values); return;") { Ok(body) => body, Err(_) => { return "parse extra"; }, };
+    if check((^normalize).with_body(changed)).status != "rejected" { return "extra action accepted"; }
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String(
+            "code::UnprovenParametricDeterminism".into()
+        ))
+    );
+}
+
+#[test]
 fn compiled_dependency_callback_respects_branch_choice() {
     use etas_host::console::ConsoleOperation;
     use etas_interpreter::{
