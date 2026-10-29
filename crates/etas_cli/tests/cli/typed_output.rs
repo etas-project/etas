@@ -1,6 +1,9 @@
 use super::*;
 use serde_json::{Value, json};
 
+#[path = "typed_output/credentials.rs"]
+mod credentials;
+
 fn project(base_url: &str, encoding: Option<&str>) -> PathBuf {
     let encoding = encoding.map_or(String::new(), |value| {
         format!("typed_output_encoding = {value:?}")
