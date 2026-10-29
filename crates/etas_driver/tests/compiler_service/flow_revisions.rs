@@ -1,6 +1,193 @@
 use super::*;
 
 #[test]
+fn compiled_dependency_callback_respects_branch_choice() {
+    use etas_host::console::ConsoleOperation;
+    use etas_interpreter::{
+        Interpreter,
+        api::{EntryPoint, RunOptions, code::PreparedCodeDefinitions},
+    };
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public flow choose(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], enabled: bool) -> unit ![] {
+    handle { if enabled { f(); } else { g(); } } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{choose, Choice};
+import std.compiler.{compile, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], enabled: bool) -> unit ![] { choose(f, g, enabled); return; }
+flow f() -> unit ![Choice.decide] { perform Choice.decide(); return; }
+flow g() -> unit ![Choice.decide] { return; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("choose(f, g, enabled); return;") { Ok(body) => body, Err(_) => { return false; }, };
+    let candidate = compile((^normalize).with_body(body));
+    candidate(f, g, true);
+    candidate(f, g, false);
+    return true;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let host = CompilerHost::new(no_host::NoHost::with_console(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(Arc::new(PreparedCodeDefinitions::new(definitions))),
+        ..Default::default()
+    };
+    for (effect, action) in [("Code", "compile"), ("Console", "stdout_write")] {
+        options
+            .host_context
+            .authority
+            .grants
+            .push(HostActionGrant::allow(effect, action));
+    }
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+    assert_eq!(
+        host.inner().console_events(),
+        vec![ConsoleOperation::WriteStdout {
+            text: "handled".into(),
+            newline: true
+        }]
+    );
+}
+
+#[test]
+fn metadata_only_reflection_preserves_callback_branch_choices() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"
+module library.api;
+import std.io.println;
+public effect Choice { action decide() -> unit; }
+public flow choose(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], enabled: bool) -> unit ![] {
+    handle { if enabled { f(); } else { g(); } } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow both(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], enabled: bool) -> unit ![] {
+    handle { f(); g(); } with { Choice.decide() => { println("handled")?; resume; } }; return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.{choose, both, Choice};
+import std.compiler.{check, parse_body, CompileError};
+flow normalize(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], enabled: bool) -> unit ![] { choose(f, g, enabled); return; }
+flow main() -> string ![Error<CompileError>] {
+    let body = match parse_body("choose(f, g, enabled); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
+    let report = check((^normalize).with_body(body));
+    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    let changed = match parse_body("both(f, g, enabled); return;") { Ok(body) => body, Err(_) => { return "parse both"; }, };
+    if check((^normalize).with_body(changed)).status != "rejected" { return "sequential calls accepted"; }
+    return report.status;
+}
+"#.into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut incomplete = loaded.clone();
+    let set = incomplete
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let root = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["choose"])
+        })
+        .unwrap()
+        .analysis
+        .outcomes
+        .unwrap();
+    let etas_code::descriptor::TraceInfo::Choice(branches) = &mut set.graph.traces[root.0 as usize]
+    else {
+        panic!("expected outcome choice");
+    };
+    assert_eq!(branches.len(), 3);
+    branches.pop();
+    let checked = origin_metadata::check(&incomplete);
+    let definitions = etas_driver::compiler::prepare_native_definitions(
+        &incomplete,
+        &checked,
+        Default::default(),
+    )
+    .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_ne!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+}
+
+#[test]
 fn metadata_only_callback_preserves_generic_nominal_selector() {
     let workspace = origin_metadata::workspace_with_source(
         r#"
