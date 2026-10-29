@@ -604,6 +604,29 @@ flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped
         .as_ref()
         .unwrap();
     assert_eq!(replayed, &descriptors);
+    let fingerprint = etas_package_metadata::definition_descriptors_fingerprint(&descriptors);
+    let (call_index, _) = replayed.graph.traces.iter().enumerate().find(|(_, trace)| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["logged"])
+            && call.handlers.as_ref().is_some_and(|handlers| !handlers.is_empty())
+    )).expect("checked handler call must be present in the descriptor");
+    let reference = etas_effects::ParameterHandlerScopeRef::External {
+        graph: fingerprint,
+        parameter_call: call_index as u32,
+        call_index: 0,
+        scope: 0,
+    };
+    let (graph, _) = checked
+        .effects
+        .external_handler_scope(reference)
+        .expect("checked effect facts must retain the exact published graph");
+    assert_eq!(graph, &replayed.graph);
+    let invalid = etas_effects::ParameterHandlerScopeRef::External {
+        graph: fingerprint,
+        parameter_call: call_index as u32,
+        call_index: 1,
+        scope: 0,
+    };
+    assert!(checked.effects.external_handler_scope(invalid).is_none());
     let logged = replayed
         .graph
         .traces
