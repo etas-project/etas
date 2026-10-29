@@ -468,6 +468,52 @@ public flow lookup() -> i32 { return 7; }
 }
 
 #[test]
+fn external_callable_contract_rejects_effect_signature_arity_mismatch() {
+    let workspace = workspace_with_source(
+        r#"
+module library.api;
+public flow relay(f: () -> unit ![]) -> unit ![] { return; }
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+flow main() -> unit { relay(() => { return; }); return; }
+"#
+    .into();
+    let relay = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "relay"))
+        .unwrap();
+    relay.param_names.clear();
+    relay.params.clear();
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.message.contains(
+                "external callable contract and effect summary have different parameter arity",
+            )
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    let source = &loaded.loaded.input.sources[0];
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let range = diagnostic.primary.span.range;
+    assert!(
+        source.text[range.start.0 as usize..range.end.0 as usize].contains("first.library.api")
+    );
+    assert!(output.checked.is_none());
+}
+
+#[test]
 fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
     use etas_code::descriptor::{EffectTargetInfo, ParameterHandlerScopeInfo, TraceInfo};
 
@@ -480,6 +526,7 @@ public flow relay(f: () -> unit ![]) -> unit ![] {
     handle { f(); } with { Console.stdout_write(_) => { resume; } };
     return;
 }
+
 public flow choose(f: () -> unit ![Choice.decide]) -> unit ![] {
     handle { f(); } with { Choice.decide() => { resume true; } };
     return;
