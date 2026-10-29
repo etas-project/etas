@@ -487,7 +487,14 @@ fn external_public_metadata_input(
                     .iter()
                     .map(|arg| dependency_type_input_with_graph(package, packages, arg))
                     .collect(),
-                methods: implementation.methods.clone(),
+                methods: implementation
+                    .methods
+                    .iter()
+                    .map(|method| etas_package_metadata::SpecImplMethod {
+                        identity: method.identity.clone(),
+                        callable: dependency_callable_values(package, packages, &method.callable),
+                    })
+                    .collect(),
             })
             .collect(),
         type_spec_satisfactions: metadata
@@ -611,7 +618,11 @@ fn external_public_metadata_input(
                             .iter()
                             .map(
                                 |parameter| etas_frontend::ProjectExternalParameterRequestInput {
-                                    parameter: parameter.parameter.clone(),
+                                    parameter: dependency_callable_request_target(
+                                        package,
+                                        packages,
+                                        &parameter.parameter,
+                                    ),
                                     excluded: parameter
                                         .excluded
                                         .iter()
@@ -790,6 +801,7 @@ fn spec_signature_input(
             .iter()
             .map(|method| ProjectExternalSpecMethodInput {
                 name: method.name.clone(),
+                receiver_param: method.receiver_param,
                 path: dependency_path_with_graph(package, packages, &method.path),
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
@@ -968,6 +980,21 @@ fn dependency_callable_values(
     graph
 }
 
+fn dependency_callable_request_target(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    target: &etas_package_metadata::CallableRequestTarget,
+) -> etas_package_metadata::CallableRequestTarget {
+    use etas_package_metadata::CallableValuePathKind;
+    let mut target = target.clone();
+    target.remap_paths(|kind, path| match kind {
+        CallableValuePathKind::Type => dependency_type_path(package, packages, path),
+        CallableValuePathKind::Effect if is_standard_effect_path(path) => path.to_vec(),
+        _ => dependency_path_with_graph(package, packages, path),
+    });
+    target
+}
+
 fn dependency_effect_row_input(
     package: &ProjectExternalPackageInput,
     packages: &[ProjectExternalPackageInput],
@@ -1017,7 +1044,7 @@ fn dependency_action_trace_input(
         }
         etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
             ProjectExternalActionTraceInput::ParameterCall {
-                parameter: parameter.clone(),
+                parameter: dependency_callable_request_target(package, packages, parameter),
             }
         }
         etas_package::PackageActionTraceMetadata::Seq { children } => {
@@ -1057,7 +1084,10 @@ fn dependency_action_trace_input(
                 .iter()
                 .map(|action| dependency_effect_ref_input(package, packages, action))
                 .collect(),
-            parameter_calls: parameter_calls.clone(),
+            parameter_calls: parameter_calls
+                .iter()
+                .map(|target| dependency_callable_request_target(package, packages, target))
+                .collect(),
         },
     }
 }
@@ -1392,7 +1422,7 @@ fn is_standard_type_path(path: &[String]) -> bool {
     }
     path.len() == 1
         && registry
-            .lookup_prelude(&path[0])
+            .lookup_prelude_in_namespace(&path[0], etas_std::StdNamespace::Type)
             .is_some_and(|symbol| matches!(symbol.kind, StdSymbolKind::Type))
 }
 

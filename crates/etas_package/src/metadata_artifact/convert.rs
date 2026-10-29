@@ -527,6 +527,7 @@ fn spec_method_from_metadata(
 ) -> Result<PackageSpecMethodMetadata, PackageError> {
     Ok(PackageSpecMethodMetadata {
         name: method.name,
+        receiver_param: method.receiver_param,
         path: method.path,
         signature: method
             .signature

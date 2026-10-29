@@ -2,6 +2,21 @@ use super::*;
 use etas_driver::compiler::prepare_native_definitions;
 use etas_frontend::code::definition::StaticReflectionView;
 
+#[path = "external_spec_methods/control_self.rs"]
+mod control_self;
+#[path = "external_spec_methods/frozen_self.rs"]
+mod frozen_self;
+#[path = "external_spec_methods/implementation_replay.rs"]
+mod implementation_replay;
+#[path = "external_spec_methods/implicit_self.rs"]
+mod implicit_self;
+#[path = "external_spec_methods/invalid_self_metadata.rs"]
+mod invalid_self_metadata;
+#[path = "external_spec_methods/runtime_self.rs"]
+mod runtime_self;
+#[path = "external_spec_methods/type_method_identity.rs"]
+mod type_method_identity;
+
 #[test]
 fn external_spec_method_reflection_retains_trace_spec_selection() {
     let workspace = origin_metadata::workspace_with_source(
