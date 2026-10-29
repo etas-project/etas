@@ -474,6 +474,7 @@ fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
     let workspace = workspace_with_source(
         r#"
 module library.api;
+import std.io.println;
 public effect Choice { action decide() -> bool; }
 public flow relay(f: () -> unit ![]) -> unit ![] {
     handle { f(); } with { Console.stdout_write(_) => { resume; } };
@@ -485,6 +486,10 @@ public flow choose(f: () -> unit ![Choice.decide]) -> unit ![] {
 }
 public flow stop(f: () -> unit ![]) -> unit ![] {
     handle { f(); } with { Console.stdout_write(_) => { finish (); } };
+    return;
+}
+public flow logged(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("handled")?; resume true; } };
     return;
 }
 public flow lookup() -> i32 { return 7; }
@@ -529,6 +534,11 @@ public flow lookup() -> i32 { return 7; }
             && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
                 if matches!(arms.as_slice(), [arm] if matches!(&arm.completion, etas_code::descriptor::ParameterHandlerCompletionInfo::Finish { .. })))
     )), "finish handler must survive metadata projection");
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["logged"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
+                if matches!(arms.as_slice(), [arm] if !matches!(descriptors.graph.traces[arm.trace.0 as usize], TraceInfo::Empty)))
+    )), "effectful handler trace must survive metadata projection");
 
     let mut loaded = consumer(&workspace, "first");
     loaded.loaded.input.sources[0].text = r#"
@@ -536,7 +546,8 @@ module app.main;
 import first.library.api.relay;
 import first.library.api.choose;
 import first.library.api.stop;
-flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped = ^stop; return; }
+import first.library.api.logged;
+flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped = ^stop; let logging = ^logged; return; }
 "#
     .into();
     assert_eq!(loaded.loaded.input.sources.len(), 1);
