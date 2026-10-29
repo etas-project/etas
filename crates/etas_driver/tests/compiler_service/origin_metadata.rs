@@ -483,6 +483,10 @@ public flow choose(f: () -> unit ![Choice.decide]) -> unit ![] {
     handle { f(); } with { Choice.decide() => { resume true; } };
     return;
 }
+public flow stop(f: () -> unit ![]) -> unit ![] {
+    handle { f(); } with { Console.stdout_write(_) => { finish (); } };
+    return;
+}
 public flow lookup() -> i32 { return 7; }
 "#,
     );
@@ -508,25 +512,31 @@ public flow lookup() -> i32 { return 7; }
     let handlers = scopes
         .next()
         .expect("checked callback scope in published trace");
-    let [ParameterHandlerScopeInfo::Resume { arms }] = handlers.as_slice() else {
+    let [ParameterHandlerScopeInfo::Handle { arms }] = handlers.as_slice() else {
         panic!("expected one checked resuming handler: {handlers:?}");
     };
     assert!(
-        matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write") && arm.value == etas_code::descriptor::ReturnObservationInfo::Unit)
+        matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write") && arm.completion.value() == &etas_code::descriptor::ReturnObservationInfo::Unit)
     );
     assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
         TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["choose"])
-            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Resume { arms }])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
                 if matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "decide")
-                    && arm.value == etas_code::descriptor::ReturnObservationInfo::Bool(true)))
+                    && arm.completion.value() == &etas_code::descriptor::ReturnObservationInfo::Bool(true)))
     )), "boolean handler must survive metadata projection");
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["stop"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
+                if matches!(arms.as_slice(), [arm] if matches!(&arm.completion, etas_code::descriptor::ParameterHandlerCompletionInfo::Finish { .. })))
+    )), "finish handler must survive metadata projection");
 
     let mut loaded = consumer(&workspace, "first");
     loaded.loaded.input.sources[0].text = r#"
 module app.main;
 import first.library.api.relay;
 import first.library.api.choose;
-flow main() -> unit { let definition = ^relay; let choice = ^choose; return; }
+import first.library.api.stop;
+flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped = ^stop; return; }
 "#
     .into();
     assert_eq!(loaded.loaded.input.sources.len(), 1);
