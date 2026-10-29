@@ -8407,7 +8407,10 @@ fn package_action_trace_parameter_calls(
 ) -> usize {
     match trace {
         etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
-            usize::from(parameter == expected)
+            usize::from(matches!(
+                parameter,
+                etas_package_metadata::CallableRequestTarget::Parameter(name) if name == expected
+            ))
         }
         etas_package::PackageActionTraceMetadata::Seq { children }
         | etas_package::PackageActionTraceMetadata::Choice { children } => children
@@ -8421,7 +8424,10 @@ fn package_action_trace_parameter_calls(
             parameter_calls, ..
         } => parameter_calls
             .iter()
-            .filter(|parameter| parameter.as_str() == expected)
+            .filter(|parameter| matches!(
+                parameter,
+                etas_package_metadata::CallableRequestTarget::Parameter(name) if name == expected
+            ))
             .count(),
         etas_package::PackageActionTraceMetadata::Empty
         | etas_package::PackageActionTraceMetadata::Event { .. }
