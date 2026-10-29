@@ -1463,6 +1463,30 @@ flow main() -> i32 {} {{
 }
 
 #[test]
+fn ordinary_flow_revision_with_checked_limit_constructor_executes() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow target(flag: bool) -> bool ![] { let limit = Iterations(8); return flag; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("let limit = Iterations(9); return flag;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^target).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let replacement = compile(draft);
+    return replacement(true) && !replacement(false);
+}
+"#,
+        &["app.target"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(10000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
 fn ordinary_flow_direct_actions_use_real_reports_and_reject_invalid_candidates() {
     let prepared = source::prepared_with_bodies(
         r#"
