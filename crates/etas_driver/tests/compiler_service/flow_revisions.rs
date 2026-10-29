@@ -1463,6 +1463,41 @@ flow main() -> i32 {} {{
 }
 
 #[test]
+fn spec_ordinary_flow_revision_example_compiles_and_runs() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+flow normalize(text: string) -> string ![] {
+    return std.text.trim(text);
+}
+flow RunAfterFlowRevision(text: string) -> bool {
+    var current = normalize;
+    let definition = ^current;
+    let original_revision = definition.revision.key;
+    let replacement: string =
+        "let cleaned = std.text.trim(text); return cleaned;";
+    match std.compiler.parse_body(replacement) {
+        Ok(syntax) => {
+            let edited = definition.with_body(syntax);
+            match std.compiler.compile(edited)? {
+                Ok(candidate) => { current = candidate; },
+                Err(_) => {},
+            };
+        },
+        Err(_) => {},
+    };
+    return (^current).revision.key != original_revision && current(text) == "hello";
+}
+flow main() -> bool { return RunAfterFlowRevision("  hello  "); }
+"#,
+        &["app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(10000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
 fn ordinary_flow_revision_with_checked_limit_constructor_executes() {
     let prepared = source::prepared_with_bodies(
         r#"
