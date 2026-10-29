@@ -6,7 +6,7 @@ fn checked_text_queries_and_parse_errors_survive_cli_checkpoint_resume() {
         "checked-text-queries",
         r#"
 module tests.cli.checked_text_queries;
-import std.text.{parse_i32, contains, starts_with, ends_with, len};
+import std.text.{parse_i32, contains, starts_with, ends_with, len, trim, lines, split, join};
 import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {
     var text = "start";
@@ -19,13 +19,21 @@ flow main(args: Array<string>) -> i32 {
     text = text + "end";
     let error = parse_i32("not-an-integer");
     let number = parse_i32("000" + "42");
+    let line_prefix = "  A\r";
+    let line_parts = lines(trim(line_prefix + "\n中😀\n\ré  "));
+    let split_prefix = "中😀:";
+    let separator_prefix = ":";
+    let separated = split(split_prefix + ":tail::", separator_prefix + ":");
+    let combined = join(separated, "-" + ":");
     checkpoint("checked-text-queries");
     let invalid = match error { Ok(_) => false, Err(_) => true };
     let valid = match number { Ok(value) => value == 42, Err(_) => false };
     if invalid && valid && len(alias) == 517 && len(text) == 520
         && starts_with(text, "start中") && ends_with(text, "😀end")
         && contains(text, "😀end") && !contains(text, "missing")
-        && text[5] == '中' && text[6] == '😀' { return 0; }
+        && text[5] == '中' && text[6] == '😀'
+        && line_parts == ["A", "中😀", "\ré"]
+        && separated == ["中😀", "tail", ""] && combined == "中😀-:tail-:" { return 0; }
     return 1;
 }
 "#,
