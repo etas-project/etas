@@ -2,7 +2,7 @@ use super::*;
 use etas_interpreter::api::InterpValue;
 
 #[test]
-fn metadata_only_effectful_handler_without_callback_contract_fails_closed() {
+fn metadata_only_effectful_handler_callback_contract_replays() {
     let workspace = origin_metadata::workspace_with_source(
         r#"
 module library.api;
@@ -25,6 +25,9 @@ flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
     for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    let unsafe_body = match parse_body("f(); return;") { Ok(body) => body, Err(_) => { return "parse unsafe"; }, };
+    let unsafe_report = check((^normalize).with_body(unsafe_body));
+    if unsafe_report.status != "rejected" { return "unsafe accepted"; }
     return report.status;
 }
 "#.into();
@@ -59,6 +62,41 @@ flow main() -> string ![Error<CompileError>] {
     assert_eq!(checked.sources.sources.len(), 1);
     let definitions =
         etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String("accepted".into()))
+    );
+    let mut forged = loaded.clone();
+    let set = forged
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let mut replaced = 0;
+    for trace in &mut set.graph.traces {
+        if let etas_code::descriptor::TraceInfo::Event(event) = trace
+            && let etas_code::descriptor::EffectTargetInfo::Action { name, .. } = &mut event.target
+            && name == "stderr_write"
+        {
+            *name = "stdout_write".into();
+            replaced += 1;
+        }
+    }
+    assert!(replaced > 0);
+    let checked = origin_metadata::check(&forged);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&forged, &checked, Default::default())
             .unwrap();
     let result = revisions::execute_prepared(
         (checked, definitions),

@@ -4,7 +4,10 @@ use etas_frontend::{
     FrontendSession, SourceInput,
     code::service::{CandidateBodyAnalysis, NativeCompilerError},
 };
-use etas_host::{HostError, HostErrorCode, compiler::CompilerRequest};
+use etas_host::{
+    HostError, HostErrorCode,
+    compiler::{CompilerOperation, CompilerRequest},
+};
 
 use super::{NativeCompilerService, control::CompilerOperationControl};
 use crate::{
@@ -69,6 +72,14 @@ impl NativeCompilerService {
                 Some(etas_frontend::code::contract::CandidateContractAnalysis::Analyzed { checks, .. })
                     if checks.iter().any(|check| matches!(check.relation, etas_frontend::code::contract::ContractRelation::Rejected(_))));
             if source_rejected || contract_rejected {
+                return Ok(Ok(analysis));
+            }
+            let contract_proven = matches!(analysis.contract_analysis(),
+                Some(etas_frontend::code::contract::CandidateContractAnalysis::Analyzed { checks, .. })
+                    if !checks.is_empty() && checks.iter().all(|check| matches!(check.relation, etas_frontend::code::contract::ContractRelation::Proven)));
+            if request.operation == CompilerOperation::Check
+                && (contract_proven || materializer.is_none())
+            {
                 return Ok(Ok(analysis));
             }
             let Some(requirements) = &analysis.output().runtime_source_requirements else {
