@@ -33,6 +33,8 @@ mod message_cast;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
+#[path = "cli/control_regressions.rs"]
+mod control_regressions;
 #[path = "cli/ordered_collections.rs"]
 mod ordered_collections;
 #[path = "cli/priority_queue.rs"]
