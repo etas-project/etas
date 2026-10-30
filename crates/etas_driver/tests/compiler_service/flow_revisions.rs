@@ -1463,6 +1463,41 @@ flow main() -> i32 {} {{
 }
 
 #[test]
+fn reflected_pure_finite_for_loop_is_rejected_without_outcome_proof() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, parse_body};
+flow target(values: Array<bool>) -> bool ![] {
+    for value in values limit Iterations(8) { let copy = value; }
+    return true;
+}
+flow main() -> string {
+    let body = match parse_body("for value in values limit Iterations(8) { let local = value; } return true;") {
+        Ok(body) => body, Err(_) => { return "parse failed"; },
+    };
+    let draft = (^target).with_body(body);
+    let report = check(draft);
+    if report.status != "rejected" { return report.status; }
+    for diagnostic in report.diagnostics limit Iterations(64) {
+        if diagnostic.severity == "error" { return diagnostic.code; }
+    }
+    return report.status;
+}
+"#,
+        &["app.target"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&InterpValue::String(
+            "code::MissingOutcomeSensitiveSummary".into()
+        ))
+    );
+}
+
+#[test]
 fn instantiated_effect_row_flow_revision_uses_bound_effect_environment() {
     let prepared = source::prepared_with_bodies(
         r#"
