@@ -43,6 +43,8 @@ mod prelude_namespaces;
 mod priority_queue;
 #[path = "cli/record_values.rs"]
 mod record_values;
+#[path = "cli/replay_keys.rs"]
+mod replay_keys;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
 #[path = "cli/source_reexports.rs"]
@@ -5434,10 +5436,10 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
     assert!(
         completed_boundaries
             .iter()
-            .any(|boundary| boundary["kind"] == "tool"
-                && boundary["key"]
-                    .as_str()
-                    .is_some_and(|key| key.contains("tool:app.runtime.tools.EvidenceLookup"))),
+            .any(
+                |boundary| replay_keys::is_checked_source_tool_boundary(boundary)
+                    && boundary["occurrence"]["call_id"] == "tool-call-1"
+            ),
         "full runtime checkpoint must record completed source/tool boundary ledger: {checkpoint_json}"
     );
 
@@ -6840,10 +6842,7 @@ fn full_phase1_agent_runtime_runs_with_live_omlx_openai() {
     assert!(
         completed_boundaries
             .iter()
-            .any(|boundary| boundary["kind"] == "tool"
-                && boundary["key"]
-                    .as_str()
-                    .is_some_and(|key| key.contains("tool:app.runtime.tools.EvidenceLookup"))),
+            .any(replay_keys::is_checked_source_tool_boundary),
         "live full runtime checkpoint must record the source tool-call boundary: {checkpoint_json}"
     );
     assert!(
@@ -6929,12 +6928,9 @@ fn multi_agent_system_runs_with_live_omlx_openai() {
     assert!(
         checkpoint_json["checkpoint"]["completed_host_boundaries"]
             .as_array()
-            .is_some_and(|boundaries| boundaries.iter().any(|boundary| {
-                boundary["kind"] == "tool"
-                    && boundary["key"].as_str().is_some_and(|key| {
-                        key.contains("tool:app.agent.runtime_variants.EvidenceLookup")
-                    })
-            })),
+            .is_some_and(|boundaries| boundaries
+                .iter()
+                .any(replay_keys::is_checked_source_tool_boundary)),
         "live multi-agent checkpoint must record the source tool-call boundary: {checkpoint_json}"
     );
 }

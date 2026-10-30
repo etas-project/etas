@@ -124,9 +124,15 @@ pub(crate) fn run(
 
     let result = super::interpreter::resume_checked(
         checked,
-        &checkpoint,
-        compiled.definitions.clone(),
-        compiled.compiler.clone(),
+        super::interpreter::ResumeRequest {
+            checkpoint: &checkpoint,
+            definitions: compiled.definitions.clone(),
+            compiler: compiled.compiler.clone(),
+            replay_key_provider: super::interpreter::replay_key_provider(
+                args.checkpoint_key_dir.as_deref(),
+                true,
+            )?,
+        },
         host_config,
         profile,
         lifecycle,
