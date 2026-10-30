@@ -4895,7 +4895,9 @@ flow main(args: Array<string>) -> i32 {
     assert!(stdout.contains("checkpoints: 1"), "{stdout}");
     assert!(stdout.contains("\"value\":\"0\""), "{stdout}");
     let text = fs::read_to_string(&trace).unwrap();
-    assert!(text.matches("\"kind\":\"variant\"").count() >= 1000);
+    assert!(text.contains("\"kind\":\"checkpoint_summary\""));
+    assert!(text.contains("\"resumable\":false"));
+    assert!(!text.contains("\"machine\":"));
     assert!(text.len() < 512 * 1000);
     let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
     let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
@@ -7103,7 +7105,7 @@ fn top_level_examples_check_and_run_from_cli() {
     assert!(
         fs::read_to_string(&trace)
             .unwrap()
-            .contains("etas.cli.interpreter-report.v1")
+            .contains("etas.cli.interpreter-report.v2")
     );
 
     let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");
