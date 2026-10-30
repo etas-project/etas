@@ -49,6 +49,8 @@ mod record_values;
 mod replay_keys;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/secret_checkpoint.rs"]
+mod secret_checkpoint;
 #[path = "cli/segmented_concat.rs"]
 mod segmented_concat;
 #[path = "cli/source_reexports.rs"]
