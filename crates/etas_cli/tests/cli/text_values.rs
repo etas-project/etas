@@ -1,6 +1,86 @@
 use super::*;
 
 #[test]
+fn segmented_unicode_case_mapping_preserves_aliases_across_cli_checkpoint_resume() {
+    let piece = "AΣ\u{301}Aßİ中😀 ";
+    let original = piece.repeat(32);
+    let input = format!("{original}AΣ\u{301}");
+    let quoted = |text: &str| serde_json::to_string(text).unwrap();
+    let source = fixture(
+        "segmented-unicode-case",
+        &format!(
+            r#"
+module tests.cli.segmented_unicode_case;
+import std.text.{{lowercase, uppercase}};
+import std.runtime.checkpoint;
+flow main(args: Array<string>) -> i32 {{
+    var growing = "";
+    var index = 0;
+    while index < 32 limit Iterations(64) {{
+        growing = growing + {piece};
+        index = index + 1;
+    }}
+    let original = growing;
+    let source = growing + "AΣ́";
+    let lower = lowercase(source);
+    let upper = uppercase(source);
+    growing = growing + "!";
+    checkpoint("unicode-case");
+    if lower == {lower} && upper == {upper} && original == {original}
+        && source == {input} && growing == {appended} {{ return 0; }}
+    return 1;
+}}
+"#,
+            piece = quoted(piece),
+            lower = quoted(&input.to_lowercase()),
+            upper = quoted(&input.to_uppercase()),
+            original = quoted(&original),
+            input = quoted(&input),
+            appended = quoted(&format!("{original}!"))
+        ),
+    );
+    let checkpoints = temp_path("unicode-case-checkpoints", "dir");
+    let trace = temp_path("unicode-case-trace", "json");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "run",
+            path(&source),
+            "--checkpoint-dir",
+            path(&checkpoints),
+            "--trace-out",
+            path(&trace),
+        ],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    let saved = checkpoints.join("checkpoint-0.json");
+    let before = fs::read(&saved).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["resume", "0", "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    assert_eq!(
+        fs::read(saved).unwrap(),
+        before,
+        "resume changed its input artifact"
+    );
+    let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+}
+
+#[test]
 fn checked_text_queries_and_parse_errors_survive_cli_checkpoint_resume() {
     let source = fixture(
         "checked-text-queries",
