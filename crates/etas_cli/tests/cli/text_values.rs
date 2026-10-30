@@ -1,6 +1,71 @@
 use super::*;
 
 #[test]
+fn segmented_prompt_json_matches_source_after_cli_checkpoint_resume() {
+    let piece = "中😀\n\"\\\u{0}payload";
+    let original = piece.repeat(32);
+    let input = format!("{original}tail");
+    let source = fixture(
+        "segmented-prompt-json",
+        &format!(
+            r#"
+module tests.cli.segmented_prompt_json;
+import std.runtime.checkpoint;
+flow main(args: Array<string>) -> i32 {{
+    var source = "";
+    var index = 0;
+    while index < 32 limit Iterations(64) {{
+        source = source + {piece};
+        index = index + 1;
+    }}
+    let original = source;
+    let prompt = Prompt.new().data({{payload = source + "tail"}});
+    source = source + "!";
+    checkpoint("segmented-prompt-json");
+    let completed = prompt.data({{original, appended = source}});
+    let expected = Prompt.new().data({{payload = {input}}})
+        .data({{original = {original}, appended = {appended}}});
+    if completed == expected && original == {original} && source == {appended} {{ return 0; }}
+    return 1;
+}}
+"#,
+            piece = serde_json::to_string(piece).unwrap(),
+            input = serde_json::to_string(&input).unwrap(),
+            original = serde_json::to_string(&original).unwrap(),
+            appended = serde_json::to_string(&format!("{original}!")).unwrap(),
+        ),
+    );
+    let checkpoints = temp_path("segmented-prompt-checkpoints", "dir");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["run", path(&source), "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    let saved = checkpoints.join("checkpoint-0.json");
+    let before = fs::read(&saved).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    remove_legacy_runtime_host_env(&mut command);
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        ["resume", "0", "--checkpoint-dir", path(&checkpoints)],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    assert_eq!(
+        fs::read(saved).unwrap(),
+        before,
+        "resume changed its input artifact"
+    );
+}
+
+#[test]
 fn segmented_unicode_case_mapping_preserves_aliases_across_cli_checkpoint_resume() {
     let piece = "AΣ\u{301}Aßİ中😀 ";
     let original = piece.repeat(32);
