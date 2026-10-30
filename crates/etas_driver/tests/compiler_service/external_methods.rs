@@ -3,6 +3,130 @@ use etas_driver::compiler::prepare_native_definitions;
 use etas_frontend::code::definition::StaticReflectionView;
 
 #[test]
+fn external_erased_callable_definitions_preserve_read_only_metadata() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public flow inspect(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] { return value; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.inspect;
+import std.compiler.CallableDef;
+flow one(value: bool) -> bool ![] { return value; }
+flow two(value: i32) -> i32 ![] { return value; }
+flow check_external(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] {
+    return inspect(value, values);
+}
+flow inspect_local(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] { return value; }
+flow main() -> bool ![] {
+    let first: CallableDef = ^one;
+    let items: Array<CallableDef> = [^one, ^two];
+    let selected = inspect_local(first, items);
+    return selected.id == first.id;
+}
+"#.into();
+    let checked = origin_metadata::check(&loaded);
+    let mut invalid = loaded.loaded.input.clone();
+    invalid.sources[0].text = r#"module app.main;
+import first.library.api.inspect;
+import std.compiler.{CallableDef, compile};
+flow invalid(value: CallableDef, values: Array<CallableDef>) -> (bool) -> bool ![] {
+    return compile(inspect(value, values));
+}
+flow main() -> unit { return; }
+"#
+    .into();
+    let invalid = Frontend.check_project(invalid);
+    assert!(
+        invalid.checked.is_none(),
+        "erased external descriptor was compiled as a typed descriptor"
+    );
+    assert!(
+        invalid.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::TypeMismatch)
+            && diagnostic
+                .message
+                .contains("do not match any registered overload")),
+        "{:?}",
+        invalid.diagnostics
+    );
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let host = no_host::NoHost::default();
+    let result = runtime()
+        .block_on(etas_interpreter::Interpreter.run_checked(
+            &checked,
+            etas_interpreter::api::EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            etas_interpreter::api::RunOptions {
+                code_definitions: Some(Arc::new(
+                    etas_interpreter::api::code::PreparedCodeDefinitions::new(definitions),
+                )),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::Bool(true))
+    );
+
+    let root = workspace.0.join("consumer-first");
+    let source = loaded.loaded.input.sources[0]
+        .text
+        .replace("inspect_local(first, items)", "inspect(first, items)");
+    std::fs::write(root.join("src/app/main.es"), source).unwrap();
+    let compiled = etas_driver::compile_runnable_project_with_loaded(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+        etas_frontend::SnapshotDetailLevel::Full,
+    )
+    .unwrap();
+    assert!(
+        compiled.response.output.diagnostics.is_empty(),
+        "{:?}",
+        compiled.response.output.diagnostics
+    );
+    let checked = compiled.response.output.checked.unwrap();
+    let definitions =
+        prepare_native_definitions(&compiled.loaded, &checked, Default::default()).unwrap();
+    let host = no_host::NoHost::default();
+    let result = runtime()
+        .block_on(etas_interpreter::Interpreter.run_checked(
+            &checked,
+            etas_interpreter::api::EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            etas_interpreter::api::RunOptions {
+                code_definitions: Some(Arc::new(
+                    etas_interpreter::api::code::PreparedCodeDefinitions::new(definitions),
+                )),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::Bool(true))
+    );
+}
+
+#[test]
 fn external_callable_effect_selector_preserves_agent_method_identity() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
