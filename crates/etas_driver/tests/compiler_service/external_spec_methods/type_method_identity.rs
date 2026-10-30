@@ -116,12 +116,11 @@ public flow lookup() -> i32 ![] { return 7; }
 }
 
 #[test]
-fn behavioral_self_binary_impl_evidence_rejects_wrong_owner_and_signature_at_import_span() {
+fn behavioral_self_impl_evidence_is_rejected_by_encoder_and_at_import_span() {
     for change in [0, 1, 2] {
         let workspace = origin_metadata::workspace_with_source(LIBRARY);
-        let root = origin_metadata::consumer(&workspace, "dep")
-            .package_root
-            .unwrap();
+        let initial = origin_metadata::consumer(&workspace, "dep");
+        let root = initial.package_root.clone().unwrap();
         let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
         let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
             &artifact,
@@ -132,8 +131,9 @@ fn behavioral_self_binary_impl_evidence_rejects_wrong_owner_and_signature_at_imp
             .identity
             .clone();
         let method = &mut metadata.public_metadata.spec_impls[1].methods[0];
+        let original_identity = method.identity.clone();
         if change == 0 {
-            method.identity = first;
+            method.identity = first.clone();
         } else {
             let etas_package_metadata::CallableValueSource::Value(index) =
                 method.callable.sources[0]
@@ -161,30 +161,57 @@ fn behavioral_self_binary_impl_evidence_rejects_wrong_owner_and_signature_at_imp
                     });
             }
         }
-        let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
-        let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
-        etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
-        etas_package::materialize_package(etas_package::MaterializePackageOptions {
-            package_root: root.clone(),
-            source_config: Some(etas_package::PackageSourceConfig::read_project(&root).unwrap()),
-        })
-        .unwrap();
-        etas_package::lock_package(etas_package::LockPackageOptions {
-            package_root: root.clone(),
-        })
-        .unwrap();
-        let loaded = etas_driver::load_project(
-            &origin_metadata::options(&root),
-            etas_driver::LoadProjectRequest {
-                paths: vec![root],
-                all: true,
-                entry_policy: EntryPolicy::Optional,
-                flow: None,
-                bin: None,
-                source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
-            },
-        )
-        .unwrap();
+        let loaded = if change == 0 {
+            let error = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("conflicting published behavior graphs"),
+                "{error}"
+            );
+            // A public environment can also arrive from an embedding, without
+            // passing through our encoder. Keep its import-boundary rejection.
+            let mut loaded = initial;
+            let method = loaded
+                .loaded
+                .input
+                .environment
+                .external_public_metadata
+                .iter_mut()
+                .flat_map(|metadata| &mut metadata.spec_impls)
+                .flat_map(|implementation| &mut implementation.methods)
+                .find(|method| method.identity == original_identity)
+                .expect("loaded binary method evidence");
+            method.identity = first;
+            loaded
+        } else {
+            let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
+            let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
+            etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+            etas_package::materialize_package(etas_package::MaterializePackageOptions {
+                package_root: root.clone(),
+                source_config: Some(
+                    etas_package::PackageSourceConfig::read_project(&root).unwrap(),
+                ),
+            })
+            .unwrap();
+            etas_package::lock_package(etas_package::LockPackageOptions {
+                package_root: root.clone(),
+            })
+            .unwrap();
+            etas_driver::load_project(
+                &origin_metadata::options(&root),
+                etas_driver::LoadProjectRequest {
+                    paths: vec![root],
+                    all: true,
+                    entry_policy: EntryPolicy::Optional,
+                    flow: None,
+                    bin: None,
+                    source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+                },
+            )
+            .unwrap()
+        };
         let output = Frontend.check_project(loaded.loaded.input.clone());
         assert!(output.checked.is_none());
         let diagnostic = output

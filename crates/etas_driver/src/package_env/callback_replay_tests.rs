@@ -3,10 +3,14 @@ use etas_package::{PackageEnvironmentMetadata, ResolvedDependency, ResolvedDepen
 
 use super::frontend_environment;
 
-struct PackageFixture(std::path::PathBuf);
+pub(super) struct PackageFixture(pub(super) std::path::PathBuf);
 
 impl PackageFixture {
     fn new(source: &str) -> Self {
+        Self::named("callbacks", source)
+    }
+
+    pub(super) fn named(name: &str, source: &str) -> Self {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let root = std::env::temp_dir().join(format!(
             "etas-closed-callback-replay-{}-{}",
@@ -17,7 +21,7 @@ impl PackageFixture {
         std::fs::write(root.join("src/main.es"), source).unwrap();
         std::fs::write(
             root.join("etas.toml"),
-            "[package]\nname = \"callbacks\"\nversion = \"0.1.0\"\nedition = \"2026\"\n",
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2026\"\n"),
         )
         .unwrap();
         Self(root)

@@ -16,8 +16,8 @@ fn handler_positive_fixtures_cover_current_spec_surface() {
     let fixtures = fixtures_under(HANDLER_POSITIVE);
     assert_eq!(
         fixtures.len(),
-        12,
-        "expected 12 positive handler compiler fixtures"
+        13,
+        "expected 13 positive handler compiler fixtures"
     );
 
     let mut failures = Vec::new();
@@ -109,6 +109,15 @@ fn only_rejection_fixture_uses_obsolete_with_handler_keyword() {
     );
 }
 
+#[test]
+fn terminal_resume_does_not_execute_the_unreachable_second_resume() {
+    let source = support::fixture("compiler/handlers/positive/resume_is_terminal.es");
+    let (code, stdout, stderr) = run_cli(["run", path_str(&source)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
 fn assert_handler_fixture_shape(fixture: &Path, positive: bool, failures: &mut Vec<String>) {
     let source = std::fs::read_to_string(fixture).unwrap();
     let Some(file_name) = fixture.file_name().and_then(|name| name.to_str()) else {
@@ -187,8 +196,9 @@ fn handler_marker(file_name: &str, positive: bool) -> &'static str {
         (true, "nested_handlers.es") => "guarded_label() with AutoGate",
         (true, "index_error_inline_handler.es") => "Error<IndexError>.raise(err)",
         (true, "handler_value_no_top_level_effect.es") => "let AutoGate: ![Gate => []] = handler",
+        (true, "resume_is_terminal.es") => "resume false;",
         (false, "resume_outside_handler.es") => "resume true;",
-        (false, "resume_twice.es") => "resume false;",
+        (false, "resume_twice.es") => "repeat();",
         (false, "resume_never_action.es") => "resume \"fallback\";",
         (false, "resume_captured_by_lambda.es") => "=> {",
         (false, "bare_handler_arm_block.es") => "let invalid = {",
