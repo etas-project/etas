@@ -35,6 +35,8 @@ mod message_cast;
 mod collection_metadata;
 #[path = "cli/control_regressions.rs"]
 mod control_regressions;
+#[path = "cli/filesystem_errors.rs"]
+mod filesystem_errors;
 #[path = "cli/ordered_collections.rs"]
 mod ordered_collections;
 #[path = "cli/prelude_namespaces.rs"]
