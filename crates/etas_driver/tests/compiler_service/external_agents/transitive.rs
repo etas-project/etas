@@ -396,6 +396,31 @@ public flow lookup() -> i32 { return 7; }
 }
 
 #[test]
+fn transitive_reexport_preserves_callable_method_effect_selector() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public agent Worker(value: bool) -> bool ![] { return value; }
+public flow invoke(draft: CallableDef<() -> unit ![Agentic.infer<Worker.run, bool>]>) -> unit ![] { return; }
+"#,
+    );
+    relay(
+        &workspace,
+        r#"module relay.api;
+public import base.library.api.invoke;
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let loaded = consumer(
+        &workspace,
+        "module app.main; import middle.relay.api.invoke; flow main() -> unit { return; }",
+    );
+    let checked = Frontend.check_project(loaded.loaded.input);
+    assert!(checked.diagnostics.is_empty(), "{:?}", checked.diagnostics);
+    assert!(checked.checked.is_some());
+}
+
+#[test]
 fn malformed_transitive_binary_metadata_is_anchored_to_the_introducing_import() {
     let workspace = origin_metadata::workspace_with_source(BASE);
     relay(
