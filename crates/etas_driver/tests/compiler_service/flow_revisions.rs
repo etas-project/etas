@@ -2413,6 +2413,140 @@ public flow run_mark() -> unit ![Mark.record<Array<i32>>] { perform Mark.record<
 }
 
 #[test]
+fn imported_callable_parameter_names_match_reflection_descriptor() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public flow lookup(value: i32) -> i32 ![] { return value; }",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.lookup; flow main() -> unit { return; }".into();
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    let flow = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "lookup"))
+        .unwrap();
+    assert_eq!(flow.param_names, ["value"]);
+    flow.param_names[0] = "different".into();
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_none(),
+        "inconsistent parameter names were accepted"
+    );
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic.message.contains("parameter name")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize]
+            .contains("first.library.api.lookup")
+    );
+}
+
+#[test]
+fn external_unnamed_parameter_matches_descriptor_without_a_name() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public flow lookup(_: i32) -> i32 ![] { return 1; }",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.lookup; flow main() -> unit { let definition = ^lookup; return; }".into();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
+fn binary_metadata_cannot_rename_a_reflected_callable_parameter() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public flow lookup(value: i32) -> i32 ![] { return value; }",
+    );
+    let _baseline = origin_metadata::consumer(&workspace, "first");
+    let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
+    let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
+        &artifact,
+        &std::fs::read(&artifact).unwrap(),
+    )
+    .unwrap();
+    let flow = metadata
+        .public_metadata
+        .flows
+        .iter_mut()
+        .find(|flow| flow.path.last().is_some_and(|name| name == "lookup"))
+        .unwrap();
+    flow.param_names[0] = "wrong".into();
+    let bytes = etas_package_metadata::encode_metadata_artifact(
+        &header,
+        etas_package_metadata::package_metadata_to_sections(&metadata).unwrap(),
+    )
+    .unwrap();
+    etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+    let root = workspace.0.join("consumer-first");
+    etas_package::materialize_package(etas_package::MaterializePackageOptions {
+        package_root: root.clone(),
+        source_config: Some(etas_package::PackageSourceConfig::read_project(&root).unwrap()),
+    })
+    .unwrap();
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: root.clone(),
+    })
+    .unwrap();
+    let mut loaded = etas_driver::load_project(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.lookup; flow main() -> unit { return; }".into();
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.checked.is_none());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic.message.contains("parameter names")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize]
+            .contains("first.library.api.lookup")
+    );
+}
+
+#[test]
 fn imported_alias_cannot_disagree_with_its_published_descriptor() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;

@@ -127,6 +127,62 @@ flow main() -> unit { return; }
 }
 
 #[test]
+fn external_explicit_agent_entry_preserves_parameter_names() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public agent Worker; impl agent Worker { public flow run(value: i32) -> i32 ![] { return value; } } public flow lookup() -> i32 { return 7; }",
+    );
+    let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+        .unwrap()
+        .unwrap();
+    let agent = metadata
+        .public_metadata
+        .agents
+        .iter()
+        .find(|agent| agent.path.last().is_some_and(|name| name == "Worker"))
+        .unwrap();
+    assert_eq!(agent.param_names, ["value"]);
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.Worker; flow main() -> unit { let definition = ^Worker; return; }".into();
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    for wrong_type in [false, true] {
+        let mut forged = loaded.loaded.input.clone();
+        let agent = forged
+            .environment
+            .external_public_metadata
+            .iter_mut()
+            .flat_map(|metadata| &mut metadata.agents)
+            .find(|agent| agent.path.last().is_some_and(|name| name == "Worker"))
+            .unwrap();
+        if wrong_type {
+            agent.input[0] = etas_frontend::ProjectExternalTypeInput::Primitive("bool".into());
+        } else {
+            agent.param_names[0] = "wrong".into();
+        }
+        let output = Frontend.check_project(forged);
+        assert!(output.checked.is_none());
+        assert!(
+            output.diagnostics.iter().any(|diagnostic| diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts
+                )
+                && diagnostic.message.contains(if wrong_type {
+                    "parameter type"
+                } else {
+                    "parameter names"
+                })),
+            "{:?}",
+            output.diagnostics
+        );
+    }
+}
+
+#[test]
 fn external_callable_effect_selector_preserves_agent_method_identity() {
     let workspace = origin_metadata::workspace_with_source(
         r#"module library.api;
