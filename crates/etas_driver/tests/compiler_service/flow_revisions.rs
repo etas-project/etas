@@ -2413,6 +2413,201 @@ public flow run_mark() -> unit ![Mark.record<Array<i32>>] { perform Mark.record<
 }
 
 #[test]
+fn imported_alias_cannot_disagree_with_its_published_descriptor() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public alias Draft<T> = CallableDef<(T) -> T ![]>;
+public flow lookup() -> i32 { return 1; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.Draft;
+flow inspect(value: Draft<i32>) -> unit ![] { return; }
+flow main() -> unit ![] { return; }
+"#
+    .into();
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    let mut missing = loaded.loaded.input.clone();
+    let set = missing
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let before = set.declarations.len();
+    set.declarations
+        .retain(|root| root.definition.declaration() != ["Draft"]);
+    assert_eq!(set.declarations.len() + 1, before);
+    let output = Frontend.check_project(missing);
+    assert!(
+        output.checked.is_none(),
+        "missing alias descriptor was accepted"
+    );
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("public alias has no checked descriptor root")),
+        "{:?}",
+        output.diagnostics
+    );
+    let mut wrong_kind = loaded.loaded.input.clone();
+    let alias = wrong_kind
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.types)
+        .find(|item| item.path.last().is_some_and(|name| name == "Draft"))
+        .unwrap();
+    alias.ty = Some(etas_frontend::ProjectExternalTypeInput::Nominal {
+        path: alias.path.clone(),
+        representation: Some(Box::new(
+            etas_frontend::ProjectExternalTypeInput::Primitive("bool".into()),
+        )),
+    });
+    let output = Frontend.check_project(wrong_kind);
+    assert!(
+        output.checked.is_none(),
+        "alias descriptor accepted as a nominal type"
+    );
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("alias descriptor and public signature disagree on declaration kind")),
+        "{:?}",
+        output.diagnostics
+    );
+    let alias = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.types)
+        .find(|item| item.path.last().is_some_and(|name| name == "Draft"))
+        .unwrap();
+    let Some(etas_frontend::ProjectExternalTypeInput::Alias { target, .. }) = &mut alias.ty else {
+        panic!("expected alias")
+    };
+    **target = etas_frontend::ProjectExternalTypeInput::Primitive("bool".into());
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_none(),
+        "inconsistent alias metadata was accepted"
+    );
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic
+                    .message
+                    .contains("alias descriptor and public signature disagree")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api.Draft")
+    );
+}
+
+#[test]
+fn binary_metadata_cannot_change_an_alias_descriptor_target() {
+    use etas_package_metadata::{Type, TypeKind};
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public alias Draft<T> = CallableDef<(T) -> T ![]>;
+public flow lookup() -> i32 { return 1; }
+"#,
+    );
+    let _baseline = origin_metadata::consumer(&workspace, "first");
+    let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
+    let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
+        &artifact,
+        &std::fs::read(&artifact).unwrap(),
+    )
+    .unwrap();
+    let alias = metadata
+        .public_metadata
+        .types
+        .iter_mut()
+        .find(|item| item.path.last().is_some_and(|name| name == "Draft"))
+        .unwrap();
+    let ty = alias.ty.as_mut().unwrap();
+    assert_eq!(ty.kind, TypeKind::Alias);
+    assert_eq!(ty.children.len(), 1);
+    ty.children[0] = Type {
+        kind: TypeKind::Primitive,
+        name: "bool".into(),
+        ..Default::default()
+    };
+    let bytes = etas_package_metadata::encode_metadata_artifact(
+        &header,
+        etas_package_metadata::package_metadata_to_sections(&metadata).unwrap(),
+    )
+    .unwrap();
+    etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+    let root = workspace.0.join("consumer-first");
+    etas_package::materialize_package(etas_package::MaterializePackageOptions {
+        package_root: root.clone(),
+        source_config: Some(etas_package::PackageSourceConfig::read_project(&root).unwrap()),
+    })
+    .unwrap();
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: root.clone(),
+    })
+    .unwrap();
+    let mut loaded = etas_driver::load_project(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.Draft; flow main() -> unit { return; }".into();
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.checked.is_none());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic
+                    .message
+                    .contains("alias descriptor and public signature disagree")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api.Draft")
+    );
+}
+
+#[test]
 fn aliased_external_callable_definition_checks_its_inner_signature() {
     use etas_code::descriptor::{TypeInfo, TypeInfoRef};
     use etas_code::{DefinitionKey, DefinitionKind};
