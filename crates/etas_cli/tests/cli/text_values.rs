@@ -1,6 +1,80 @@
 use super::*;
 
 #[test]
+fn cold_text_console_and_prompt_checkpoint_preserve_escaped_values_after_file_resume() {
+    let piece = "中😀e\u{301}\n\"'";
+    let expected = format!("{}tail", piece.repeat(64));
+    let source = fixture(
+        "cold-text-codec",
+        &format!(
+            r#"
+module tests.cli.cold_text_codec;
+import std.io.println;
+import std.runtime.checkpoint;
+flow main(args: Array<string>) -> i32 {{
+    var text = "";
+    var i = 0;
+    while i < 64 limit Iterations(128) {{
+        text = text + {piece};
+        i = i + 1;
+    }}
+    let original = text;
+    let prompt = Prompt.new().data({{payload = text + "tail"}});
+    checkpoint("cold-text-codec");
+    text = text + "tail";
+    if prompt != Prompt.new().data({{payload = {expected}}})
+        || original + "tail" != text {{ abort("text changed across checkpoint"); }}
+    println(text);
+    return 0;
+}}
+"#,
+            piece = serde_json::to_string(piece).unwrap(),
+            expected = serde_json::to_string(&expected).unwrap()
+        ),
+    );
+    let checkpoints = temp_path("cold-text-codec-checkpoints", "dir");
+    let keys = etas_host::TestWorkspace::create("cold-text-codec-keys").unwrap();
+    let key_dir = keys.path().join("private");
+    let command = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        command
+            .env_clear()
+            .env("HOME", keys.path())
+            .env("PATH", "/usr/bin:/bin");
+        command
+    };
+    let mut checkpoint_bytes = None;
+    for resume in [false, true, true] {
+        let report = temp_path("cold-text-codec-report", "json");
+        let (code, stdout, stderr) = run_process_with_command(
+            command(),
+            [
+                if resume { "resume" } else { "run" },
+                if resume { "0" } else { path(&source) },
+                "--checkpoint-dir",
+                path(&checkpoints),
+                "--checkpoint-key-dir",
+                path(&key_dir),
+                "--trace-out",
+                path(&report),
+            ],
+            "",
+        );
+        assert_eq!(code, 0, "{stdout}\n{stderr}");
+        assert!(stderr.is_empty(), "{stderr}");
+        let report: serde_json::Value = serde_json::from_slice(&fs::read(report).unwrap()).unwrap();
+        assert_eq!(report["value"]["value"], "0");
+        assert!(stdout.starts_with(&format!("{expected}\n")), "{stdout}");
+        let saved = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
+        if let Some(before) = &checkpoint_bytes {
+            assert_eq!(&saved, before, "resume rewrote its input artifact");
+        } else {
+            checkpoint_bytes = Some(saved);
+        }
+    }
+}
+
+#[test]
 fn segmented_prompt_json_matches_source_after_cli_checkpoint_resume() {
     let piece = "中😀\n\"\\\u{0}payload";
     let original = piece.repeat(32);
