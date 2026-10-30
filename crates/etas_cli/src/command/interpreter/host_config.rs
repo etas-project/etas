@@ -203,6 +203,30 @@ impl RuntimeEnvOverrides {
     }
 }
 
+pub(super) fn checkpoint_key_directory(explicit: Option<&Path>) -> Result<PathBuf, CliError> {
+    let env = RuntimeEnvOverrides::from_environment()?;
+    let path = if let Some(path) = explicit {
+        path.to_owned()
+    } else if let Some(path) = env.get("ETAS_CHECKPOINT_KEY_DIR") {
+        PathBuf::from(path)
+    } else if let Some(state) = env.get("XDG_STATE_HOME") {
+        PathBuf::from(state).join("etas/checkpoint-keys")
+    } else if let Some(home) = env.get("HOME") {
+        PathBuf::from(home).join(".local/state/etas/checkpoint-keys")
+    } else {
+        return Err(CliError::InvalidUsage(
+            "persistent checkpoints require --checkpoint-key-dir or a private user state directory"
+                .into(),
+        ));
+    };
+    if !path.is_absolute() {
+        return Err(CliError::InvalidUsage(
+            "checkpoint replay-key directory must be an absolute host path".into(),
+        ));
+    }
+    Ok(path)
+}
+
 impl CliHostConfig {
     pub(super) fn none() -> Self {
         Self {

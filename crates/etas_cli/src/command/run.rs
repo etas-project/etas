@@ -88,6 +88,10 @@ pub(crate) fn run(
     let result = super::interpreter::run_checked(
         checked,
         super::interpreter::RunRequest {
+            replay_key_provider: super::interpreter::replay_key_provider(
+                args.checkpoint_key_dir.as_deref(),
+                args.checkpoint_dir.is_some(),
+            )?,
             dry_run: args.dry_run,
             allow_effects: args.allow_effects,
             budget_overrides: run_budget_overrides(&args)?,

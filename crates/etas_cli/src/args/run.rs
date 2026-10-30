@@ -45,6 +45,13 @@ pub struct RunArgs {
 
     #[arg(
         long,
+        value_name = "PATH",
+        help = "Private host-managed checkpoint replay-key directory (outside program workspaces)"
+    )]
+    pub checkpoint_key_dir: Option<PathBuf>,
+
+    #[arg(
+        long,
         value_name = "DEPTH",
         help = "Maximum heap-backed interpreter call depth (1..=65536)"
     )]
