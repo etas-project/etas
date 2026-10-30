@@ -2298,6 +2298,121 @@ public flow invoke<T>(draft: Draft<T>) -> unit ![] { return; }
 }
 
 #[test]
+fn imported_callable_definition_accepts_a_checked_applied_alias() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public alias Draft<T> = CallableDef<(Array<T>) -> T ![]>;
+public flow invoke<T>(draft: Draft<T>) -> unit ![] { return; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.invoke;
+flow sample(value: Array<i32>) -> i32 ![] { return 1; }
+flow main() -> unit ![] { invoke<i32>(^sample); return; }
+"#
+    .into();
+    let signature = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+        .unwrap();
+    signature.params[0] = etas_frontend::ProjectExternalTypeInput::Applied {
+        path: vec![
+            "first".into(),
+            "library".into(),
+            "api".into(),
+            "Draft".into(),
+        ],
+        args: vec![etas_frontend::ProjectExternalTypeInput::Var("T".into())],
+    };
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+    for args in [
+        vec![etas_frontend::ProjectExternalTypeInput::Primitive(
+            "bool".into(),
+        )],
+        vec![],
+    ] {
+        let mut forged = loaded.loaded.input.clone();
+        let signature = forged
+            .environment
+            .external_public_metadata
+            .iter_mut()
+            .flat_map(|metadata| &mut metadata.flows)
+            .find(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+            .unwrap();
+        let etas_frontend::ProjectExternalTypeInput::Applied { args: actual, .. } =
+            &mut signature.params[0]
+        else {
+            panic!("expected alias")
+        };
+        *actual = args;
+        let output = Frontend.check_project(forged);
+        assert!(output.checked.is_none());
+        assert!(
+            output.diagnostics.iter().any(|d| d.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts
+                )),
+            "{:?}",
+            output.diagnostics
+        );
+    }
+}
+
+#[test]
+fn imported_effect_summary_resolves_checked_applied_alias() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+public alias Selection<T> = Array<T>;
+public effect Mark { action record<T>() -> unit; }
+public flow run_mark() -> unit ![Mark.record<Array<i32>>] { perform Mark.record<Array<i32>>(); return; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.run_mark; flow main() -> unit { run_mark(); return; }".into();
+    let summary = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.effect_summaries)
+        .find(|summary| summary.item.last().is_some_and(|name| name == "run_mark"))
+        .unwrap();
+    for row in [&mut summary.public_effects, &mut summary.requested_actions] {
+        let effect = row
+            .effects
+            .iter_mut()
+            .find(|effect| effect.path.last().is_some_and(|name| name == "record"))
+            .unwrap();
+        effect.args[0] = etas_frontend::ProjectExternalEffectArgInput::Type(
+            etas_frontend::ProjectExternalTypeInput::Applied {
+                path: vec![
+                    "first".into(),
+                    "library".into(),
+                    "api".into(),
+                    "Selection".into(),
+                ],
+                args: vec![etas_frontend::ProjectExternalTypeInput::Primitive(
+                    "i32".into(),
+                )],
+            },
+        );
+    }
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
 fn aliased_external_callable_definition_checks_its_inner_signature() {
     use etas_code::descriptor::{TypeInfo, TypeInfoRef};
     use etas_code::{DefinitionKey, DefinitionKind};
