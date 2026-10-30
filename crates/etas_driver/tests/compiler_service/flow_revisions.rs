@@ -2476,6 +2476,207 @@ fn external_unnamed_parameter_matches_descriptor_without_a_name() {
 }
 
 #[test]
+fn recursive_generic_nominal_descriptor_compares_by_identity() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public type Node<T> = { children: List<Node<T>>, value: T }; public flow lookup() -> i32 { return 1; }",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.Node; flow inspect(value: Node<i32>) -> unit { return; } flow main() -> unit { return; }".into();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
+fn imported_nominal_representation_cannot_disagree_with_its_descriptor() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public type Payload = { flag: bool }; public flow lookup(value: Payload) -> bool ![] { return value.flag; }",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.Payload; flow inspect(value: Payload) -> unit { return; } flow main() -> unit { return; }".into();
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    let mut hidden_root = loaded.loaded.input.clone();
+    let set = hidden_root
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let before = set.declarations.len();
+    set.declarations
+        .retain(|root| root.definition.declaration() != ["Payload"]);
+    assert_eq!(set.declarations.len() + 1, before);
+    let item = hidden_root
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.types)
+        .find(|item| item.path.last().is_some_and(|name| name == "Payload"))
+        .unwrap();
+    item.visibility = "private".into();
+    let output = Frontend.check_project(hidden_root);
+    assert!(
+        output.checked.is_none(),
+        "public nominal descriptor root was hidden through altered visibility"
+    );
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("public nominal type has no checked descriptor root")),
+        "{:?}",
+        output.diagnostics
+    );
+    let mut omitted = loaded.loaded.input.clone();
+    let declaration = omitted
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.types)
+        .find(|item| item.path.last().is_some_and(|name| name == "Payload"))
+        .unwrap();
+    let Some(etas_frontend::ProjectExternalTypeInput::Nominal { representation, .. }) =
+        &mut declaration.ty
+    else {
+        panic!("expected nominal")
+    };
+    *representation = None;
+    let omitted_output = Frontend.check_project(omitted);
+    assert!(
+        omitted_output.checked.is_none(),
+        "omitted nominal representation was accepted"
+    );
+    assert!(
+        omitted_output
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic
+                .message
+                .contains("nominal descriptor and public signature disagree on representation")),
+        "{:?}",
+        omitted_output.diagnostics
+    );
+    let declaration = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.types)
+        .find(|item| item.path.last().is_some_and(|name| name == "Payload"))
+        .unwrap();
+    let Some(etas_frontend::ProjectExternalTypeInput::Nominal {
+        representation: Some(representation),
+        ..
+    }) = &mut declaration.ty
+    else {
+        panic!("expected nominal representation")
+    };
+    let etas_frontend::ProjectExternalTypeInput::Record { fields } = representation.as_mut() else {
+        panic!("expected record")
+    };
+    fields[0].ty = etas_frontend::ProjectExternalTypeInput::Primitive("i32".into());
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_none(),
+        "inconsistent nominal representation was accepted"
+    );
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)
+            && diagnostic.message.contains("nominal descriptor")),
+        "{:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
+fn binary_metadata_cannot_change_nominal_representation() {
+    use etas_package_metadata::{Type, TypeKind};
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public type Payload = { flag: bool }; public flow lookup(value: Payload) -> bool ![] { return value.flag; }",
+    );
+    let _baseline = origin_metadata::consumer(&workspace, "first");
+    let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
+    let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
+        &artifact,
+        &std::fs::read(&artifact).unwrap(),
+    )
+    .unwrap();
+    let item = metadata
+        .public_metadata
+        .types
+        .iter_mut()
+        .find(|item| item.path.last().is_some_and(|name| name == "Payload"))
+        .unwrap();
+    let nominal = item.ty.as_mut().unwrap();
+    assert_eq!(nominal.kind, TypeKind::Nominal);
+    assert_eq!(nominal.children[0].kind, TypeKind::Record);
+    nominal.children[0].fields[0].ty = Type {
+        kind: TypeKind::Primitive,
+        name: "i32".into(),
+        ..Default::default()
+    };
+    let bytes = etas_package_metadata::encode_metadata_artifact(
+        &header,
+        etas_package_metadata::package_metadata_to_sections(&metadata).unwrap(),
+    )
+    .unwrap();
+    etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+    let root = workspace.0.join("consumer-first");
+    etas_package::materialize_package(etas_package::MaterializePackageOptions {
+        package_root: root.clone(),
+        source_config: Some(etas_package::PackageSourceConfig::read_project(&root).unwrap()),
+    })
+    .unwrap();
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: root.clone(),
+    })
+    .unwrap();
+    let mut loaded = etas_driver::load_project(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.Payload; flow main() -> unit { return; }".into();
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.checked.is_none());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic
+                    .message
+                    .contains("nominal descriptor and public signature disagree on representation")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize]
+            .contains("first.library.api.Payload")
+    );
+}
+
+#[test]
 fn binary_metadata_cannot_rename_a_reflected_callable_parameter() {
     let workspace = origin_metadata::workspace_with_source(
         "module library.api; public flow lookup(value: i32) -> i32 ![] { return value; }",
