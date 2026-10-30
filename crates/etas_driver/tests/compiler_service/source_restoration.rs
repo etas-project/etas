@@ -18,6 +18,183 @@ flow main(draft: AgentDef<Worker>) -> i32 ![Error<CompileError>] {
 }
 "#;
 
+const FLOW_PROGRAM: &str = r#"
+module app;
+import std.compiler.{CompileError, compile, parse_body};
+flow normalize(text: string) -> string ![] { return std.text.trim(text); }
+flow main(source: string) -> string ![Error<CompileError>] {
+    let body = match parse_body(source) {
+        Ok(body) => body,
+        Err(_) => { return "parse-failed"; },
+    };
+    let next = compile((^normalize).with_body(body));
+    return next("  Hello  ");
+}
+"#;
+
+fn saved_flow_source() -> Vec<u8> {
+    let (checked, definitions) = source::prepared_with_bodies(FLOW_PROGRAM, &["app.normalize"]);
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    let original = definitions.reflect_flow(expression).unwrap();
+    let draft = definitions
+        .with_body(
+            &original,
+            definitions
+                .syntax_operations()
+                .parse_body("let cleaned = std.text.trim(text); return cleaned;")
+                .unwrap(),
+        )
+        .unwrap();
+    serde_json::to_vec(&definitions.save_source(&draft, Default::default()).unwrap()).unwrap()
+}
+
+fn restore_flow_and_run(bytes: &[u8], allowed: bool) -> etas_interpreter::api::RunResult {
+    let saved: DefinitionSourceBundle = serde_json::from_slice(bytes).unwrap();
+    let (checked, definitions) = source::prepared_with_bodies(FLOW_PROGRAM, &["app.normalize"]);
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    let original = definitions.reflect_flow(expression).unwrap();
+    let draft = definitions
+        .restore_source_draft(&original, &saved, Default::default())
+        .unwrap();
+    assert_eq!(draft.revision().inputs(), &saved.revision);
+    assert!(
+        definitions
+            .resolve(&draft)
+            .unwrap()
+            .checked_implementation()
+            .is_none()
+    );
+    let prepared = Arc::new(PreparedCodeDefinitions::new(definitions.clone()));
+    let value = InterpValue::String(saved.source.text.clone().into());
+    let service = NativeCompilerService::new(definitions, Default::default());
+    let host = CompilerHost::new(no_host::NoHost::default(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(prepared),
+        ..Default::default()
+    };
+    if allowed {
+        options
+            .host_context
+            .authority
+            .grants
+            .push(HostActionGrant::allow("Code", "compile"));
+    }
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![value],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert_eq!(host.inner().calls(), 0);
+    result
+}
+
+#[test]
+fn saved_flow_source_recompiles_in_a_fresh_run() {
+    let result = restore_flow_and_run(&saved_flow_source(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::String("Hello".into())));
+    assert_eq!(
+        result
+            .events
+            .iter()
+            .filter(|event| matches!(
+                event,
+                etas_interpreter::api::WorkflowEvent::HostTrace(
+                    etas_host::TraceEvent::HostRequestStarted {
+                        kind: etas_host::HostRequestKind::Compiler,
+                        ..
+                    }
+                )
+            ))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn saved_flow_source_does_not_restore_compiler_authority() {
+    let result = restore_flow_and_run(&saved_flow_source(), false);
+    assert!(result.value().is_none());
+    assert!(!result.diagnostics.is_empty());
+    assert!(result.events.iter().all(|event| !matches!(
+        event,
+        etas_interpreter::api::WorkflowEvent::HostTrace(
+            etas_host::TraceEvent::HostRequestStarted {
+                kind: etas_host::HostRequestKind::Compiler,
+                ..
+            }
+        )
+    )));
+}
+
+#[test]
+fn saved_flow_source_cannot_rebind_to_another_target() {
+    let saved: DefinitionSourceBundle = serde_json::from_slice(&saved_flow_source()).unwrap();
+    let other_source = FLOW_PROGRAM.replace("normalize", "other");
+    let (checked, definitions) = source::prepared_with_bodies(&other_source, &["app.other"]);
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    let other = definitions.reflect_flow(expression).unwrap();
+    assert!(matches!(
+        definitions.restore_source_draft(&other, &saved, Default::default()),
+        Err(
+            etas_frontend::code::definition::NativeDefinitionError::SourceBundle(
+                etas_code::definition::SourceBundleError::TargetMismatch
+            )
+        )
+    ));
+}
+
+#[test]
+fn self_consistent_saved_flow_source_is_rechecked() {
+    let mut saved: DefinitionSourceBundle = serde_json::from_slice(&saved_flow_source()).unwrap();
+    saved.source.text = "return false;".into();
+    saved.source.source_start = 0;
+    saved.source.source_length = saved.source.text.len() as u64;
+    saved.source.source_unit =
+        CodeFingerprint::of_bytes("etas.code.source-unit.v1", saved.source.text.as_bytes());
+    saved.source.content =
+        CodeFingerprint::of_bytes("etas.code.body-content.v1", saved.source.text.as_bytes());
+    saved.revision.content = saved.source.content;
+    saved.revision_key = etas_code::RevisionKey::from_inputs(&saved.revision);
+    let result = restore_flow_and_run(&serde_json::to_vec(&saved).unwrap(), true);
+    assert!(result.value().is_none());
+    assert!(!result.diagnostics.is_empty());
+}
+
+#[test]
+fn compiled_callable_definition_parameter_without_contract_facts_fails_closed() {
+    let input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"
+module app;
+import std.compiler.{CallableDef, CompileError, compile};
+flow main(draft: CallableDef<(string) -> string ![]>) -> string ![Error<CompileError>] {
+    let next = compile(draft);
+    return next("value");
+}
+"#,
+    ));
+    let output = Frontend.check_project(input);
+    assert!(output.checked.is_none());
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Effect(
+                etas_core::EffectDiagnosticCode::IncompleteEffectFacts
+            )
+            && diagnostic
+                .message
+                .contains("callable source requires a solved checked effect fact")),
+        "{:?}",
+        output.diagnostics
+    );
+}
+
 fn saved_source() -> Vec<u8> {
     let (checked, definitions) = source::prepared(PROGRAM);
     let expression = *checked.types.reflections.keys().next().unwrap();
