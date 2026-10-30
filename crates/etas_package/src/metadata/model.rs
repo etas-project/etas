@@ -708,7 +708,7 @@ pub struct PackageTypeSpecSatisfactionMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageCallableSpecSatisfactionMetadata {
-    pub item: Vec<String>,
+    pub item: etas_package_metadata::CallableContractTarget,
     pub spec: Vec<String>,
     #[serde(default)]
     pub args: Vec<PackageTypeMetadata>,
@@ -716,7 +716,7 @@ pub struct PackageCallableSpecSatisfactionMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageTraceSpecConformanceMetadata {
-    pub item: Vec<String>,
+    pub item: etas_package_metadata::CallableContractTarget,
     pub target: PackageTraceSpecConformanceTargetMetadata,
 }
 

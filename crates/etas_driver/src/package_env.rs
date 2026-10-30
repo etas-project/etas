@@ -28,6 +28,8 @@ mod callback_replay_tests;
 #[cfg(test)]
 mod default_handlers_tests;
 #[cfg(test)]
+mod method_contracts_tests;
+#[cfg(test)]
 mod request_instantiation_tests;
 
 pub fn frontend_environment(
@@ -514,7 +516,7 @@ fn external_public_metadata_input(
             .callable_spec_satisfactions
             .iter()
             .map(|fact| ProjectExternalCallableSpecSatisfactionInput {
-                item: dependency_path_with_graph(package, packages, &fact.item),
+                item: dependency_contract_target(package, packages, &fact.item),
                 spec: dependency_path_with_graph(package, packages, &fact.spec),
                 args: fact
                     .args
@@ -527,7 +529,7 @@ fn external_public_metadata_input(
             .trace_spec_conformances
             .iter()
             .map(|fact| ProjectExternalTraceSpecConformanceInput {
-                item: dependency_path_with_graph(package, packages, &fact.item),
+                item: dependency_contract_target(package, packages, &fact.item),
                 target: match &fact.target {
                     etas_package::PackageTraceSpecConformanceTargetMetadata::Inline => {
                         ProjectExternalTraceSpecConformanceTargetInput::Inline
@@ -898,6 +900,23 @@ fn dependency_path(package: &ProjectExternalPackageInput, path: &[String]) -> Ve
         .into_iter()
         .chain(path.iter().cloned())
         .collect()
+}
+
+fn dependency_contract_target(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    target: &etas_package_metadata::CallableContractTarget,
+) -> etas_package_metadata::CallableContractTarget {
+    match target {
+        etas_package_metadata::CallableContractTarget::Item(path) => {
+            etas_package_metadata::CallableContractTarget::Item(dependency_path_with_graph(
+                package, packages, path,
+            ))
+        }
+        etas_package_metadata::CallableContractTarget::Method(identity) => {
+            etas_package_metadata::CallableContractTarget::Method(identity.clone())
+        }
+    }
 }
 
 fn dependency_path_with_graph(

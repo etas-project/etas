@@ -10,7 +10,7 @@ HirProgram
     s7 Local input
     s8 Local draft
   Scopes
-    sc0 Module(HirModuleId(0)) symbols=[s0,s1,s2,s5]
+    sc0 Module(HirModuleId(0)) symbols=[s0,s1,s2]
     sc1 Item(HirItemId(0)) parent=sc0
     sc2 Item(HirItemId(1)) parent=sc0 symbols=[s4]
     sc3 Block(HirBlockId(0)) parent=sc2
