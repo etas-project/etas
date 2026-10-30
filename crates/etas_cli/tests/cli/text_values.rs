@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn cold_text_console_and_prompt_checkpoint_preserve_escaped_values_after_file_resume() {
     let piece = "中😀e\u{301}\n\"'";
-    let expected = format!("{}tail", piece.repeat(64));
+    let original = piece.repeat(64);
+    let expected = format!("{original}tail");
     let source = fixture(
         "cold-text-codec",
         &format!(
@@ -20,15 +21,18 @@ flow main(args: Array<string>) -> i32 {{
     }}
     let original = text;
     let prompt = Prompt.new().data({{payload = text + "tail"}});
+    let channels = Prompt.new().user(Public(text)).assistant(text);
     checkpoint("cold-text-codec");
     text = text + "tail";
     if prompt != Prompt.new().data({{payload = {expected}}})
+        || channels != Prompt.new().user(Public({original})).assistant({original})
         || original + "tail" != text {{ abort("text changed across checkpoint"); }}
     println(text);
     return 0;
 }}
 "#,
             piece = serde_json::to_string(piece).unwrap(),
+            original = serde_json::to_string(&original).unwrap(),
             expected = serde_json::to_string(&expected).unwrap()
         ),
     );
