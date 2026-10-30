@@ -1463,38 +1463,91 @@ flow main() -> i32 {} {{
 }
 
 #[test]
-fn reflected_pure_finite_for_loop_is_rejected_without_outcome_proof() {
+fn reflected_pure_finite_for_loop_can_be_recompiled() {
     let prepared = source::prepared_with_bodies(
         r#"
 module app;
-import std.compiler.{check, parse_body};
+import std.compiler.{check, compile, parse_body, CompileError};
 flow target(values: Array<bool>) -> bool ![] {
     for value in values limit Iterations(8) { let copy = value; }
     return true;
 }
-flow main() -> string {
+flow main() -> bool ![Error<CompileError>] {
     let body = match parse_body("for value in values limit Iterations(8) { let local = value; } return true;") {
-        Ok(body) => body, Err(_) => { return "parse failed"; },
+        Ok(body) => body, Err(_) => { return false; },
     };
     let draft = (^target).with_body(body);
-    let report = check(draft);
-    if report.status != "rejected" { return report.status; }
-    for diagnostic in report.diagnostics limit Iterations(64) {
-        if diagnostic.severity == "error" { return diagnostic.code; }
-    }
-    return report.status;
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate([true, false]);
 }
 "#,
         &["app.target"],
     );
     let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
     assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-    assert_eq!(
-        result.value(),
-        Some(&InterpValue::String(
-            "code::MissingOutcomeSensitiveSummary".into()
-        ))
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn reflected_bounded_loop_rejects_unproven_early_return_paths() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, parse_body};
+flow target(values: Array<bool>) -> bool {
+    for value in values limit Iterations(2) { if value { return true; } }
+    return false;
+}
+flow main() -> string {
+    let same = match parse_body("for value in values limit Iterations(2) { if value { return true; } } return false;") {
+        Ok(body) => body, Err(_) => { return "parse-same"; },
+    };
+    let changed = match parse_body("for value in values limit Iterations(2) { if value { return false; } } return true;") {
+        Ok(body) => body, Err(_) => { return "parse-changed"; },
+    };
+    if check((^target).with_body(same)).status != "rejected" { return "same-accepted"; }
+    if check((^target).with_body(changed)).status != "rejected" { return "changed-accepted"; }
+    return "ok";
+}
+"#,
+        &["app.target"],
     );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::String("ok".into())));
+}
+
+#[test]
+fn reflected_bounded_loop_rejects_unproven_action_outcomes() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, parse_body};
+flow target(values: Array<bool>) -> unit ![Console.stdout_write, Console.stderr_write] {
+    for value in values limit Iterations(2) {
+        perform Console.stdout_write("a");
+        perform Console.stderr_write("b");
+    }
+    return;
+}
+flow main() -> string {
+    let same = match parse_body("for value in values limit Iterations(2) { perform Console.stdout_write(\"a\"); perform Console.stderr_write(\"b\"); } return;") {
+        Ok(body) => body, Err(_) => { return "parse-same"; },
+    };
+    let changed = match parse_body("for value in values limit Iterations(2) { perform Console.stderr_write(\"b\"); perform Console.stdout_write(\"a\"); } return;") {
+        Ok(body) => body, Err(_) => { return "parse-changed"; },
+    };
+    if check((^target).with_body(same)).status != "rejected" { return "same-accepted"; }
+    if check((^target).with_body(changed)).status != "rejected" { return "changed-accepted"; }
+    return "ok";
+}
+"#,
+        &["app.target"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::String("ok".into())));
 }
 
 #[test]
