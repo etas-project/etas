@@ -49,6 +49,8 @@ mod record_values;
 mod replay_keys;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/segmented_concat.rs"]
+mod segmented_concat;
 #[path = "cli/source_reexports.rs"]
 mod source_reexports;
 #[path = "cli/text_values.rs"]
