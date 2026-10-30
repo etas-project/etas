@@ -499,9 +499,9 @@ flow main() -> unit { relay(() => { return; }); return; }
         .diagnostics
         .iter()
         .find(|diagnostic| {
-            diagnostic.message.contains(
-                "external callable contract and effect summary have different parameter arity",
-            )
+            diagnostic
+                .message
+                .contains("callable descriptor and public signature disagree on parameter count")
         })
         .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
     let source = &loaded.loaded.input.sources[0];

@@ -1463,6 +1463,287 @@ flow main() -> i32 {} {{
 }
 
 #[test]
+fn external_callable_definition_parameter_keeps_its_frozen_action_contract() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Error<CompileError>] {
+    let next = compile(draft);
+    return next(value);
+}
+"#,
+    );
+    for denied in [false, true] {
+        let mut loaded = origin_metadata::consumer(&workspace, "first");
+        loaded.loaded.input.sources[0].text = format!(
+            r#"module app.main;
+import first.library.api.invoke;
+import std.io.println;
+spec Quiet: trace = -Console.stdout_write;
+flow local(value: i32) -> i32 ![] {{ println("frozen")?; return value; }}
+flow main() -> i32 {} {{
+    let result = invoke(^local, 4)?;
+    return match result {{ Ok(value) => value, Err(_) => 0, }};
+}}
+"#,
+            if denied { "~ Quiet" } else { "" }
+        );
+        let output = Frontend.check_project(loaded.loaded.input);
+        if denied {
+            assert!(
+                output.diagnostics.iter().any(|diagnostic| diagnostic.code
+                    == etas_core::DiagnosticCode::Effect(
+                        etas_core::EffectDiagnosticCode::TraceSpecDenied
+                    )),
+                "{:?}",
+                output.diagnostics
+            );
+        } else {
+            assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+            let checked = output.checked.unwrap();
+            assert_eq!(checked.sources.sources.len(), 1);
+            let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+            let stdout = etas_effects::Effect::Action(etas_effects::ActionRef {
+                tag: etas_effects::CONSOLE_TAG,
+                action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+            });
+            assert!(
+                summary.requested_actions.effects.contains(&stdout),
+                "{summary:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn external_callable_definition_specializes_effect_row_contract() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public flow invoke<effect E>(draft: CallableDef<(i32) -> i32 ![E]>, value: i32) -> i32 ![E, Error<CompileError>] {
+    let next = compile(draft); return next(value);
+}
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.invoke;
+flow local(value: i32) -> i32 ![Console.stdout_write] { perform Console.stdout_write("value"); return value; }
+flow main() -> i32 ![Console.stdout_write] { let result = invoke(^local, 4)?; return match result { Ok(value) => value, Err(_) => 0, }; }
+"#.into();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    let stdout = etas_effects::Effect::Action(etas_effects::ActionRef {
+        tag: etas_effects::CONSOLE_TAG,
+        action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+    });
+    assert!(
+        summary.escaping_effects.effects.contains(&stdout),
+        "{summary:?}"
+    );
+    assert!(
+        summary.requested_actions.effects.contains(&stdout),
+        "{summary:?}"
+    );
+}
+
+#[test]
+fn external_callable_definition_alias_preserves_parameter_contract() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public alias Draft = CallableDef<(i32) -> i32 ![]>;
+public flow invoke(draft: Draft, value: i32) -> i32 ![Error<CompileError>] {
+    let next = compile(draft);
+    return next(value);
+}
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.invoke;
+flow local(value: i32) -> i32 ![] { return value; }
+flow main() -> i32 { let result = invoke(^local, 4)?; return match result { Ok(value) => value, Err(_) => 0, }; }
+"#.into();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
+fn forged_callable_definition_parameter_role_is_rejected_at_import() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Error<CompileError>] {
+    let next = compile(draft);
+    return next(value);
+}
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.invoke; flow main() -> unit { return; }".into();
+    let set = loaded
+        .loaded
+        .input
+        .environment
+        .external_definition_origins
+        .iter_mut()
+        .find_map(|origin| origin.descriptors.as_mut())
+        .unwrap();
+    let header = set
+        .headers
+        .as_ref()
+        .unwrap()
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["invoke"])
+        })
+        .unwrap();
+    let etas_code::descriptor::TypeInfo::Function(signature) =
+        &set.graph.types[header.signature.0 as usize]
+    else {
+        panic!("missing callable signature")
+    };
+    let parameter = signature.parameters[0].ty;
+    let etas_code::descriptor::TypeInfo::Builtin { constructor, .. } =
+        &mut set.graph.types[parameter.0 as usize]
+    else {
+        panic!("missing callable definition role")
+    };
+    assert_eq!(
+        *constructor,
+        etas_code::descriptor::BuiltinTypeInfo::CallableDefinition
+    );
+    *constructor = etas_code::descriptor::BuiltinTypeInfo::Option;
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(output.checked.is_none());
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)
+            && diagnostic
+                .message
+                .contains("trace parameter call requires a checked callback function")),
+        "{:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
+fn external_descriptor_contract_cannot_be_rebound_to_an_unrelated_parameter_type() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Error<CompileError>] {
+    let next = compile(draft);
+    return next(value);
+}
+"#,
+    );
+    for wrapped in [true, false] {
+        let mut loaded = origin_metadata::consumer(&workspace, "first");
+        loaded.loaded.input.sources[0].text = format!(
+            r#"module app.main;
+import first.library.api.invoke;
+flow local(value: i32) -> i32 ![] {{ return value; }}
+flow main() -> i32 {{ let result = invoke({}, 4)?; return match result {{ Ok(value) => value, Err(_) => 0, }}; }}
+"#,
+            if wrapped { "Some(local)" } else { "local" }
+        );
+        let signature = loaded
+            .loaded
+            .input
+            .environment
+            .external_public_metadata
+            .iter_mut()
+            .flat_map(|metadata| &mut metadata.flows)
+            .find(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+            .unwrap();
+        let etas_frontend::ProjectExternalTypeInput::Applied { args, .. } = &signature.params[0]
+        else {
+            panic!("expected CallableDef parameter")
+        };
+        let inner = args[0].clone();
+        signature.params[0] = if wrapped {
+            etas_frontend::ProjectExternalTypeInput::Option(Box::new(inner))
+        } else {
+            inner
+        };
+        let output = Frontend.check_project(loaded.loaded.input);
+        assert!(
+            output.checked.is_none(),
+            "mismatched descriptor and public signature were accepted"
+        );
+        assert!(
+            output.diagnostics.iter().any(|diagnostic| diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts
+                )),
+            "{:?}",
+            output.diagnostics
+        );
+    }
+}
+
+#[test]
+fn external_callable_definition_cannot_change_its_inner_signature() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.{CallableDef, CompileError, compile};
+public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Error<CompileError>] {
+    let next = compile(draft); return next(value);
+}
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.invoke;
+flow local(value: bool) -> i32 ![] { return 1; }
+flow main() -> i32 { let result = invoke(^local, 4)?; return match result { Ok(value) => value, Err(_) => 0, }; }
+"#.into();
+    let signature = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+        .unwrap();
+    let etas_frontend::ProjectExternalTypeInput::Applied { args, .. } = &mut signature.params[0]
+    else {
+        panic!("expected CallableDef parameter")
+    };
+    let etas_frontend::ProjectExternalTypeInput::Function { input, .. } = &mut args[0] else {
+        panic!("expected function contract")
+    };
+    input[0] = etas_frontend::ProjectExternalTypeInput::Primitive("bool".into());
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_none(),
+        "mismatched inner callable signature was accepted"
+    );
+    assert!(
+        output.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Effect(
+                etas_core::EffectDiagnosticCode::IncompleteEffectFacts
+            )
+            && diagnostic
+                .message
+                .contains("matching checked callable parameter interface")),
+        "{:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
 fn reflected_pure_finite_for_loop_can_be_recompiled() {
     let prepared = source::prepared_with_bodies(
         r#"

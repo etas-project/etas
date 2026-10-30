@@ -169,7 +169,7 @@ fn self_consistent_saved_flow_source_is_rechecked() {
 }
 
 #[test]
-fn compiled_callable_definition_parameter_without_contract_facts_fails_closed() {
+fn compiled_callable_definition_parameter_has_symbolic_contract_facts() {
     let input = ProjectInput::single_source(SourceInput::anonymous(
         r#"
 module app;
@@ -181,17 +181,130 @@ flow main(draft: CallableDef<(string) -> string ![]>) -> string ![Error<CompileE
 "#,
     ));
     let output = Frontend.check_project(input);
-    assert!(output.checked.is_none());
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
+fn saved_flow_source_restores_through_a_typed_definition_parameter() {
+    const PROGRAM: &str = r#"
+module app;
+import std.compiler.{CallableDef, CompileError, compile};
+flow normalize(text: string) -> string ![] { return std.text.trim(text); }
+flow other(value: i32) -> i32 ![] { return value; }
+flow inspect() -> unit { let definition = ^normalize; let other_definition = ^other; return; }
+flow main(draft: CallableDef<(string) -> string ![]>) -> string ![Error<CompileError>] {
+    let next = compile(draft);
+    return next("  Hello  ");
+}
+"#;
+    let find = |checked: &etas_frontend::CheckedProgram,
+                definitions: &etas_frontend::code::definition::NativeDefinitionStore,
+                name: &str| {
+        checked
+            .checked_reflections()
+            .keys()
+            .copied()
+            .find(|expression| {
+                matches!(definitions.catalog().static_reflection(*expression),
+                Ok(etas_frontend::code::definition::StaticReflectionView::Callable(header))
+                    if header.id.as_declaration().is_some_and(|id| id.declaration() == [name]))
+            })
+            .unwrap()
+    };
+    let (checked, definitions) = source::prepared_with_bodies(PROGRAM, &["app.normalize"]);
+    let expression = find(&checked, &definitions, "normalize");
+    let original = definitions.reflect_flow(expression).unwrap();
+    let body = definitions
+        .syntax_operations()
+        .parse_body("let cleaned = std.text.trim(text); return cleaned;")
+        .unwrap();
+    let draft = definitions.with_body(&original, body).unwrap();
+    let bytes =
+        serde_json::to_vec(&definitions.save_source(&draft, Default::default()).unwrap()).unwrap();
+
+    let saved: DefinitionSourceBundle = serde_json::from_slice(&bytes).unwrap();
+    let (checked, definitions) = source::prepared_with_bodies(PROGRAM, &["app.normalize"]);
+    let expression = find(&checked, &definitions, "normalize");
+    let other_expression = find(&checked, &definitions, "other");
+    let original = definitions.reflect_flow(expression).unwrap();
+    let draft = definitions
+        .restore_source_draft(&original, &saved, Default::default())
+        .unwrap();
+    let prepared = Arc::new(PreparedCodeDefinitions::new(definitions.clone()));
     assert!(
-        output.diagnostics.iter().any(|diagnostic| diagnostic.code
-            == etas_core::DiagnosticCode::Effect(
-                etas_core::EffectDiagnosticCode::IncompleteEffectFacts
-            )
-            && diagnostic
-                .message
-                .contains("callable source requires a solved checked effect fact")),
+        prepared
+            .callable_definition_value_at(other_expression, draft.clone())
+            .is_err()
+    );
+    assert!(
+        prepared
+            .callable_definition_value_at(etas_hir::HirExprId(u32::MAX), draft.clone())
+            .is_err()
+    );
+    let value = prepared
+        .callable_definition_value_at(expression, draft)
+        .unwrap();
+    let foreign_value = value.clone();
+    let service = NativeCompilerService::new(definitions, Default::default());
+    let host = CompilerHost::new(no_host::NoHost::default(), service.clone())
+        .with_candidate_resolver(Arc::new(service));
+    let mut options = RunOptions {
+        code_definitions: Some(prepared),
+        ..Default::default()
+    };
+    options
+        .host_context
+        .authority
+        .grants
+        .push(HostActionGrant::allow("Code", "compile"));
+    let result = runtime()
+        .block_on(Interpreter.run_checked(
+            &checked,
+            EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![value],
+            &host,
+            options,
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::String("Hello".into())));
+
+    let (other_checked, other_definitions) =
+        source::prepared_with_bodies(PROGRAM, &["app.normalize"]);
+    let other_prepared = Arc::new(PreparedCodeDefinitions::new(other_definitions.clone()));
+    let other_service = NativeCompilerService::new(other_definitions, Default::default());
+    let other_host = CompilerHost::new(no_host::NoHost::default(), other_service.clone())
+        .with_candidate_resolver(Arc::new(other_service));
+    let mut other_options = RunOptions {
+        code_definitions: Some(other_prepared),
+        ..Default::default()
+    };
+    other_options
+        .host_context
+        .authority
+        .grants
+        .push(HostActionGrant::allow("Code", "compile"));
+    let rejected = runtime()
+        .block_on(Interpreter.run_checked(
+            &other_checked,
+            EntryPoint {
+                item: other_checked.entry.unwrap(),
+            },
+            vec![foreign_value],
+            &other_host,
+            other_options,
+        ))
+        .unwrap();
+    assert!(rejected.value().is_none());
+    assert!(
+        rejected.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("different checked program or type identity")),
         "{:?}",
-        output.diagnostics
+        rejected.diagnostics
     );
 }
 
