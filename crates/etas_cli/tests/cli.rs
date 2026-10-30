@@ -5999,6 +5999,118 @@ public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Fs.list<Pro
 }
 
 #[test]
+fn runtime_profile_bounded_file_reads_preserve_errors_and_never_return_prefixes() {
+    let project = package_fixture(
+        "bounded-file-read",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "bounded-file-read"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "bounded-file-read"
+module = "app.workspace"
+flow = "main"
+profile = "local"
+[runtime.profiles.local.filesystem.regions."app.workspace.ProjectRoot"]
+root = "."
+read = true
+"#,
+            ),
+            (
+                "src/app/workspace.es",
+                r#"module app.workspace;
+import std.fs.{Region, IOError, ReadLimitError, path, read_bytes_limited};
+import std.effects.Fs;
+import std.codec.text.utf8_encode;
+type ProjectRoot;
+impl ProjectRoot ~ Region;
+
+flow load(name: string, limit: usize) -> bytes ![Fs.read<ProjectRoot>, Error<IOError>, Error<ReadLimitError>] {
+    let target = match path<ProjectRoot>(name) {
+        Ok(target) => target,
+        Err(_) => abort("invalid test path"),
+    };
+    return read_bytes_limited(target, limit);
+}
+
+public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>, Error<ReadLimitError>] {
+    let exact = load("input.txt", 4);
+    let empty = load("empty.txt", 0);
+    return if exact == utf8_encode("abcd") && empty == utf8_encode("") { 0 } else { 2 };
+}
+
+public flow overflow(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("input.txt", 3); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 3 { 3 } else { 99 }; }
+    };
+}
+
+public flow zero(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("input.txt", 0); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 0 { 0 } else { 99 }; }
+    };
+}
+
+public flow missing(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<ReadLimitError>] {
+    return handle { let unexpected = load("missing.txt", 2048); 999 } with {
+        Error<IOError>.raise(_) => { finish 7; }
+    };
+}
+
+public flow large(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("large.bin", 2048); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 2048 { 0 } else { 99 }; }
+    };
+}
+"#,
+            ),
+            ("input.txt", "abcd"),
+            ("empty.txt", ""),
+        ],
+    );
+    let large_path = project.join("large.bin");
+    std::fs::File::create(&large_path)
+        .unwrap()
+        .set_len(1 << 30)
+        .unwrap();
+    for (flow, expected) in [
+        ("main", "0"),
+        ("overflow", "3"),
+        ("zero", "0"),
+        ("missing", "7"),
+        ("large", "0"),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        remove_legacy_runtime_host_env(&mut command);
+        let (code, stdout, stderr) = run_process_with_command(
+            command,
+            [
+                "run",
+                path(&project),
+                "--profile",
+                "local",
+                "--flow",
+                flow,
+                "--allow-effects",
+            ],
+            "",
+        );
+        assert_eq!(code, 0, "{flow}: stderr={stderr:?}, stdout={stdout:?}");
+        assert!(
+            stdout.contains(&format!(r#""value":"{expected}""#)),
+            "{flow}: {stdout}"
+        );
+        assert!(stderr.is_empty(), "{flow}: {stderr}");
+    }
+    std::fs::remove_file(large_path).unwrap();
+}
+
+#[test]
 fn edk_backed_external_tool_multi_agent_runtime_uses_package_metadata() {
     let _guard = lock_model_cli_e2e();
     let dependency = package_fixture(
