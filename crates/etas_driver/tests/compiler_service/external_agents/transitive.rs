@@ -323,6 +323,79 @@ flow main() -> bool {
 }
 
 #[test]
+fn transitive_reexport_rejects_a_tampered_callable_definition_signature() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public flow invoke(draft: CallableDef<(i32) -> i32 ![]>) -> unit ![] { return; }
+"#,
+    );
+    relay(
+        &workspace,
+        r#"module relay.api;
+public import base.library.api.invoke;
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = consumer(
+        &workspace,
+        "module app.main; import middle.relay.api.invoke; flow main() -> unit { return; }",
+    );
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    let signatures = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .filter(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        signatures.len(),
+        1,
+        "expected canonical declaration, not a duplicate re-export signature"
+    );
+    let etas_frontend::ProjectExternalTypeInput::Applied { args, .. } =
+        &mut signatures.into_iter().next().unwrap().params[0]
+    else {
+        panic!("expected CallableDef")
+    };
+    let etas_frontend::ProjectExternalTypeInput::Function { input, .. } = &mut args[0] else {
+        panic!("expected function")
+    };
+    input[0] = etas_frontend::ProjectExternalTypeInput::Primitive("bool".into());
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input);
+    assert!(
+        output.checked.is_none(),
+        "tampered transitive callable signature was accepted"
+    );
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic.message.contains("parameter type")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(
+        source.text[span.start.0 as usize..span.end.0 as usize].contains("middle.relay.api.invoke")
+    );
+}
+
+#[test]
 fn malformed_transitive_binary_metadata_is_anchored_to_the_introducing_import() {
     let workspace = origin_metadata::workspace_with_source(BASE);
     relay(
