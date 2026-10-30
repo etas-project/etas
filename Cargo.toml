@@ -17,19 +17,19 @@ repository = "https://github.com/etas-project/etas"
 etas_cli = { path = "crates/etas_cli" }
 etas_driver = { path = "crates/etas_driver" }
 etas_package = { path = "crates/etas_package" }
-etas_package_metadata = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_package_metadata" }
-etas_core = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_core" }
-etas_code = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_code" }
-etas_cache = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_cache" }
-etas_host = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_host" }
-etas_std = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_std" }
-etas_effects = { git = "https://github.com/etas-project/etas-frontend.git", rev = "c7b076814f238b9e5ef4e7cf4553dd590f5ab996", package = "etas_effects" }
-etas_frontend = { git = "https://github.com/etas-project/etas-frontend.git", rev = "c7b076814f238b9e5ef4e7cf4553dd590f5ab996", package = "etas_frontend" }
-etas_hir = { git = "https://github.com/etas-project/etas-frontend.git", rev = "c7b076814f238b9e5ef4e7cf4553dd590f5ab996", package = "etas_hir" }
-etas_types = { git = "https://github.com/etas-project/etas-frontend.git", rev = "c7b076814f238b9e5ef4e7cf4553dd590f5ab996", package = "etas_types" }
-etas_interpreter = { git = "https://github.com/etas-project/etas-interpreter.git", rev = "cadd1b7137c678ebad01b2aa526de8ef1acd4bbd", package = "etas_interpreter" }
-etas_syntax = { git = "https://github.com/etas-project/etas-frontend.git", rev = "c7b076814f238b9e5ef4e7cf4553dd590f5ab996", package = "etas_syntax" }
-etas_utils = { git = "https://github.com/etas-project/etas-core.git", rev = "cd17215f92e63c883b59d30d32f5d15ef9af1f47", package = "etas_utils" }
+etas_package_metadata = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_package_metadata" }
+etas_core = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_core" }
+etas_code = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_code" }
+etas_cache = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_cache" }
+etas_host = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_host" }
+etas_std = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_std" }
+etas_effects = { git = "https://github.com/etas-project/etas-frontend.git", rev = "9ccca03342151172d2a27c06b2afe9570ccb042c", package = "etas_effects" }
+etas_frontend = { git = "https://github.com/etas-project/etas-frontend.git", rev = "9ccca03342151172d2a27c06b2afe9570ccb042c", package = "etas_frontend" }
+etas_hir = { git = "https://github.com/etas-project/etas-frontend.git", rev = "9ccca03342151172d2a27c06b2afe9570ccb042c", package = "etas_hir" }
+etas_types = { git = "https://github.com/etas-project/etas-frontend.git", rev = "9ccca03342151172d2a27c06b2afe9570ccb042c", package = "etas_types" }
+etas_interpreter = { git = "https://github.com/etas-project/etas-interpreter.git", rev = "4ea7cd207addb18210e5de7f0ba28fcc0a119ebf", package = "etas_interpreter" }
+etas_syntax = { git = "https://github.com/etas-project/etas-frontend.git", rev = "9ccca03342151172d2a27c06b2afe9570ccb042c", package = "etas_syntax" }
+etas_utils = { git = "https://github.com/etas-project/etas-core.git", rev = "03bd48d2b39a5752a2b790be07af65757bf538a9", package = "etas_utils" }
 
 ariadne = "0.5"
 blake3 = "1.8.5"

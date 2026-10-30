@@ -825,7 +825,7 @@ flow main() -> string ![Error<CompileError>] {
     assert_eq!(
         result.value(),
         Some(&InterpValue::String(
-            "code::MissingOutcomeSensitiveSummary".into()
+            "code::UnprovenParametricDeterminism".into()
         ))
     );
 }
