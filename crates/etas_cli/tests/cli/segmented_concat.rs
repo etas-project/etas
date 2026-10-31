@@ -87,7 +87,7 @@ flow main(args: Array<string>) -> i32 {
     assert_eq!(report["value"]["value"], "0", "{report}");
     let saved = checkpoints.join("checkpoint-0.json");
     let before = fs::read(&saved).unwrap();
-    let artifact = read_checkpoint_file(&saved);
+    let artifact = read_checkpoint_file_with_keys(&saved, Some(&key_dir));
     assert!(!artifact.to_string().contains("Concat"));
     for id in ["0", "1"] {
         let resumed_trace = temp_path("binary-text-resumed-trace", "json");

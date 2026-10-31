@@ -1,4 +1,5 @@
 mod checkpoint;
+pub mod checkpoint_file;
 mod compile;
 mod compiler;
 mod diagnostics;
@@ -9,7 +10,7 @@ pub(crate) mod lifecycle;
 mod replay_keys;
 
 pub use checkpoint::checkpoint_path;
-pub(crate) use checkpoint::{CLI_CHECKPOINT_SCHEMA, write_checkpoint_files};
+pub(crate) use checkpoint::{CLI_CHECKPOINT_SCHEMA, CheckpointFiles};
 pub use compile::{CompiledRunInput, compile_project};
 pub use diagnostics::{diagnostic_json, diagnostics_json, has_error, render_diagnostics};
 pub(crate) use host::{ResumeRequest, RunBudgetOverrides, RunRequest, resume_checked, run_checked};

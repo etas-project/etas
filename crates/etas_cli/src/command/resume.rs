@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::Write;
 
 use etas_core::{Diagnostic, DiagnosticCode, EffectDiagnosticCode};
 use etas_interpreter::api::codec;
@@ -26,19 +26,10 @@ pub(crate) fn run(
         .parse::<u32>()
         .map_err(|_| CliError::InvalidUsage("checkpoint id must be a numeric id".to_owned()))?;
     let checkpoint_path = super::interpreter::checkpoint_path(&checkpoint_dir, checkpoint_id);
-    let file_limits = codec::CheckpointFileLimits::default();
-    let mut bytes = Vec::new();
-    std::fs::File::open(&checkpoint_path)
-        .and_then(|file| {
-            file.take(file_limits.max_bytes as u64 + 1)
-                .read_to_end(&mut bytes)
-        })
-        .map_err(|source| CliError::Io {
-            path: checkpoint_path.clone(),
-            source,
-        })?;
-    let checkpoint_json = codec::checkpoint_file_from_bytes(&bytes, file_limits)
-        .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+    let (checkpoint_json, replay_keys) = super::interpreter::checkpoint_file::read(
+        &checkpoint_path,
+        args.checkpoint_key_dir.as_deref(),
+    )?;
     if checkpoint_json
         .get("cli_schema")
         .and_then(serde_json::Value::as_str)
@@ -128,10 +119,7 @@ pub(crate) fn run(
             checkpoint: &checkpoint,
             definitions: compiled.definitions.clone(),
             compiler: compiled.compiler.clone(),
-            replay_key_provider: super::interpreter::replay_key_provider(
-                args.checkpoint_key_dir.as_deref(),
-                true,
-            )?,
+            replay_key_provider: replay_keys,
         },
         host_config,
         profile,
