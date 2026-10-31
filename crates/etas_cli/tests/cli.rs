@@ -49,6 +49,8 @@ mod record_values;
 mod replay_keys;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/secret_checkpoint.rs"]
+mod secret_checkpoint;
 #[path = "cli/segmented_concat.rs"]
 mod segmented_concat;
 #[path = "cli/source_reexports.rs"]
@@ -59,11 +61,11 @@ mod text_values;
 mod typed_output;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
-    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &fs::read(path).unwrap(),
-        etas_interpreter::api::codec::CheckpointFileLimits::default(),
-    )
-    .unwrap();
+    read_checkpoint_file_with_keys(path, None)
+}
+
+fn read_checkpoint_file_with_keys(path: &Path, keys: Option<&Path>) -> serde_json::Value {
+    let (document, _) = etas_cli::command::interpreter::checkpoint_file::read(path, keys).unwrap();
     // These shallow metadata assertions use the logical artifact, not its file encoding.
     (*document).clone()
 }
@@ -287,10 +289,7 @@ allow_compile = true
     ]);
     assert_eq!(code, 0, "{stderr}\n{stdout}");
     assert!(stdout.contains("\"value\":\"19\""), "{stdout}");
-    let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
-    let artifact =
-        etas_interpreter::api::codec::checkpoint_file_from_bytes(&bytes, Default::default())
-            .unwrap();
+    let artifact = read_checkpoint_file(&checkpoints.join("checkpoint-0.json"));
     let sources = artifact["code_sources"].as_array().unwrap();
     assert_eq!(sources.len(), 1);
     let source: etas_interpreter::api::code::SavedAgentRevision =
@@ -4900,9 +4899,9 @@ flow main(args: Array<string>) -> i32 {
     assert!(!text.contains("\"machine\":"));
     assert!(text.len() < 512 * 1000);
     let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
-    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &bytes,
-        etas_interpreter::api::codec::CheckpointFileLimits::default(),
+    let (document, _) = etas_cli::command::interpreter::checkpoint_file::read(
+        &checkpoints.join("checkpoint-0.json"),
+        None,
     )
     .unwrap();
     let mut pending = vec![&*document];
