@@ -395,11 +395,8 @@ fn cli_resume_continues_multi_source_project_checkpoint() {
     assert_eq!(run_code, 0, "{run_stderr}");
 
     let checkpoint = checkpoints.join("checkpoint-0.json");
-    let checkpoint = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &fs::read(checkpoint).unwrap(),
-        Default::default(),
-    )
-    .unwrap();
+    let (checkpoint, _) =
+        etas_cli::command::interpreter::checkpoint_file::read(&checkpoint, None).unwrap();
     assert_eq!(
         checkpoint["sources"],
         serde_json::json!([fs::canonicalize(&root).unwrap()])

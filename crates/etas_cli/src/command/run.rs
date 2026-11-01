@@ -85,13 +85,14 @@ pub(crate) fn run(
         return Ok(CliExit::Diagnostics);
     };
 
+    let replay_keys = super::interpreter::replay_key_provider(
+        args.checkpoint_key_dir.as_deref(),
+        args.checkpoint_dir.is_some(),
+    )?;
     let result = super::interpreter::run_checked(
         checked,
         super::interpreter::RunRequest {
-            replay_key_provider: super::interpreter::replay_key_provider(
-                args.checkpoint_key_dir.as_deref(),
-                args.checkpoint_dir.is_some(),
-            )?,
+            replay_key_provider: replay_keys.clone(),
             dry_run: args.dry_run,
             allow_effects: args.allow_effects,
             budget_overrides: run_budget_overrides(&args)?,
@@ -124,15 +125,12 @@ pub(crate) fn run(
     }
     if let Some(dir) = &args.checkpoint_dir {
         let runtime_profile = host_config.runtime_profile_json();
-        super::interpreter::write_checkpoint_files(
-            dir,
-            &project_inputs,
-            args.all,
-            &flow,
-            &result,
-            &runtime_profile,
+        super::interpreter::CheckpointFiles {
+            directory: dir,
+            keys: replay_keys.as_ref(),
             lifecycle,
-        )?;
+        }
+        .write(&project_inputs, args.all, &flow, &result, &runtime_profile)?;
     }
 
     super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;
