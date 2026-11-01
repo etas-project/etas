@@ -69,7 +69,7 @@ fn command() -> Command {
     command
 }
 
-fn server(responses: Vec<Value>) -> (String, thread::JoinHandle<Vec<Value>>) {
+pub(super) fn server(responses: Vec<Value>) -> (String, thread::JoinHandle<Vec<Value>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let base_url = mock_server_base_url(listener.local_addr().unwrap(), "/v1");

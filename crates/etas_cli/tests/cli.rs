@@ -30,6 +30,8 @@ mod compiler_service;
 mod index_inference;
 #[path = "cli/message_cast.rs"]
 mod message_cast;
+#[path = "cli/native_tool_handlers.rs"]
+mod native_tool_handlers;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
