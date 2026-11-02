@@ -23,10 +23,10 @@ fn native_tool_json_numbers_follow_checked_parameter_types() {
     ] {
         let arguments = format!(r#"{{"value":{literal}}}"#);
         let (url, server) = typed_output::server(vec![
-            serde_json::json!({"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{
+            serde_json::json!({"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
                 "id":"echo-1","type":"function","function":{"name":"echo","arguments":arguments}
             }]}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}),
-            serde_json::json!({"choices":[{"message":{"role":"assistant","content":"finished"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}),
+            serde_json::json!({"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"finished"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}),
         ]);
         let root = package_fixture(
             "native-tool-json-number",

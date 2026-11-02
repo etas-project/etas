@@ -120,7 +120,12 @@ fn response(encoding: &str, payload: Value) -> Value {
     } else {
         json!({"role":"assistant", "content":payload.to_string()})
     };
-    json!({"choices":[{"message":message}], "usage":{"prompt_tokens":1,"completion_tokens":1}})
+    let finish_reason = if encoding == "output-tool" {
+        "tool_calls"
+    } else {
+        "stop"
+    };
+    json!({"choices":[{"finish_reason":finish_reason,"message":message}], "usage":{"prompt_tokens":1,"completion_tokens":1}})
 }
 
 fn assert_encoding(request: &Value, encoding: &str) {

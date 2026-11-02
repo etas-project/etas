@@ -34,6 +34,8 @@ mod compiler_service;
 mod index_inference;
 #[path = "cli/message_cast.rs"]
 mod message_cast;
+#[path = "cli/model_completion.rs"]
+mod model_completion;
 #[path = "cli/native_tool_handlers.rs"]
 mod native_tool_handlers;
 #[path = "cli/native_tool_numbers.rs"]
@@ -7596,6 +7598,7 @@ fn spawn_openai_external_tool_loop_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7616,6 +7619,7 @@ fn spawn_openai_external_tool_loop_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": final_answer,
@@ -7684,6 +7688,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "planner output for runtime",
@@ -7696,6 +7701,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7716,6 +7722,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": final_answer,
@@ -7837,6 +7844,7 @@ fn spawn_openai_tool_loop_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "runtime plan from planner",
@@ -7849,6 +7857,7 @@ fn spawn_openai_tool_loop_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7869,6 +7878,7 @@ fn spawn_openai_tool_loop_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -7938,6 +7948,7 @@ fn spawn_openai_tool_arg_repair_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "runtime plan from planner",
@@ -7950,6 +7961,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7970,6 +7982,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             2 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7990,6 +8003,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -8081,6 +8095,7 @@ fn multi_agent_runtime_response_for_request(
     if request.contains("\"role\":\"tool\"") {
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "stop",
                 "message": {
                     "role": "assistant",
                     "content": format!(r#"{{"evidence":"{}"}}"#, multi_agent_runtime_evidence(topic)),
@@ -8096,6 +8111,7 @@ fn multi_agent_runtime_response_for_request(
         let (summary, score) = multi_agent_runtime_review(topic);
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "stop",
                 "message": {
                     "role": "assistant",
                     "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -8110,6 +8126,7 @@ fn multi_agent_runtime_response_for_request(
     if request.contains("\"name\":\"EvidenceLookup\"") {
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "tool_calls",
                 "message": {
                     "role": "assistant",
                     "content": null,
@@ -8131,6 +8148,7 @@ fn multi_agent_runtime_response_for_request(
     }
     serde_json::json!({
         "choices": [{
+            "finish_reason": "stop",
             "message": {
                 "role": "assistant",
                 "content": multi_agent_runtime_plan(topic),
@@ -8221,6 +8239,7 @@ fn spawn_delayed_openai_completion_server(
                     thread::sleep(response_delay);
                     let body = serde_json::json!({
                         "choices": [{
+                            "finish_reason": "stop",
                             "message": {
                                 "role": "assistant",
                                 "content": response_text,
@@ -8294,6 +8313,7 @@ fn spawn_openai_completion_sequence_server(
                         }
                         let body = serde_json::json!({
                             "choices": [{
+                                "finish_reason": "stop",
                                 "message": {
                                     "role": "assistant",
                                     "content": response_text,
