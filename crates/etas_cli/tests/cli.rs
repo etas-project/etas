@@ -32,6 +32,8 @@ mod index_inference;
 mod message_cast;
 #[path = "cli/native_tool_handlers.rs"]
 mod native_tool_handlers;
+#[path = "cli/native_tool_numbers.rs"]
+mod native_tool_numbers;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
