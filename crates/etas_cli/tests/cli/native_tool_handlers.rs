@@ -4,10 +4,10 @@ use super::*;
 fn native_tool_outer_effect_handler_completes_both_openai_model_rounds() {
     let _guard = lock_model_cli_e2e();
     let (url, server) = typed_output::server(vec![
-        serde_json::json!({"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{
+        serde_json::json!({"choices":[{"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
             "id":"lookup-1","type":"function","function":{"name":"lookup","arguments":"{}"}
         }]}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}),
-        serde_json::json!({"choices":[{"message":{"role":"assistant","content":"finished"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}),
+        serde_json::json!({"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"finished"}}],"usage":{"prompt_tokens":2,"completion_tokens":1}}),
     ]);
     let root = package_fixture(
         "native-tool-handler",
