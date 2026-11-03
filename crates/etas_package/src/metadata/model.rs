@@ -191,6 +191,8 @@ pub struct PackagePublicMetadata {
     #[serde(default)]
     pub spec_impls: Vec<PackageSpecImplMetadata>,
     #[serde(default)]
+    pub methods: Vec<etas_package_metadata::PublishedMethod>,
+    #[serde(default)]
     pub type_spec_satisfactions: Vec<PackageTypeSpecSatisfactionMetadata>,
     #[serde(default)]
     pub callable_spec_satisfactions: Vec<PackageCallableSpecSatisfactionMetadata>,
@@ -230,6 +232,7 @@ impl PackagePublicMetadata {
             && self.trace_specs.is_empty()
             && self.spec_signatures.is_empty()
             && self.spec_impls.is_empty()
+            && self.methods.is_empty()
             && self.type_spec_satisfactions.is_empty()
             && self.callable_spec_satisfactions.is_empty()
             && self.trace_spec_conformances.is_empty()
@@ -707,7 +710,7 @@ pub struct PackageSpecImplMetadata {
     #[serde(default)]
     pub args: Vec<PackageTypeMetadata>,
     #[serde(default)]
-    pub methods: Vec<etas_package_metadata::SpecImplMethod>,
+    pub methods: Vec<etas_code::MethodId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

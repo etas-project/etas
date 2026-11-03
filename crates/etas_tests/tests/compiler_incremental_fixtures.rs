@@ -704,6 +704,7 @@ fn external_environment() -> ProjectEnvironmentInput {
             trace_specs: Vec::new(),
             spec_signatures: Vec::new(),
             spec_impls: Vec::new(),
+            methods: Vec::new(),
             type_spec_satisfactions: Vec::new(),
             callable_spec_satisfactions: Vec::new(),
             trace_spec_conformances: Vec::new(),

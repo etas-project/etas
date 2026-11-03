@@ -65,7 +65,13 @@ public flow lookup() -> i32 ![] { return 7; }
     let package = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
         .unwrap()
         .unwrap();
-    let root = package.public_metadata.spec_impls[0].methods[0]
+    let identity = &package.public_metadata.spec_impls[0].methods[0];
+    let root = package
+        .public_metadata
+        .methods
+        .iter()
+        .find(|method| &method.identity == identity)
+        .unwrap()
         .root()
         .unwrap();
     assert_eq!(root.public_effects.tail.as_deref(), Some("F"), "{root:?}");
@@ -229,11 +235,10 @@ flow main() -> i32 ![] { let value = Packet { number = 21 }; return value::First
 "#
     .into();
     let checked = origin_metadata::check(&loaded);
-    assert_eq!(checked.types.external_specs.methods.len(), 1);
+    assert_eq!(checked.types.external_methods.len(), 1);
     let identities = checked
         .types
-        .external_specs
-        .methods
+        .external_methods
         .iter()
         .map(|method| &method.identity)
         .collect::<std::collections::BTreeSet<_>>();

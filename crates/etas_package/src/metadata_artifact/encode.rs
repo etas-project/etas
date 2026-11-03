@@ -229,6 +229,7 @@ fn public_metadata_to_metadata(
             .iter()
             .map(spec_impl_to_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+        methods: metadata.methods.clone(),
         type_spec_satisfactions: metadata
             .type_spec_satisfactions
             .iter()

@@ -124,6 +124,7 @@ fn public_metadata_from_metadata(
             .into_iter()
             .map(spec_impl_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+        methods: metadata.methods,
         type_spec_satisfactions: metadata
             .type_spec_satisfactions
             .into_iter()

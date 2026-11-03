@@ -8,6 +8,10 @@ public type Container<T> = { value: T };
 public alias Packet = Container<string>;
 public spec Encoder { flow encode(self) -> i32 ![]; }
 public spec Safe: trace = +Console.stdout_write;
+impl Packet {
+    public flow new(value: string) -> Packet ![] { return Container<string> { value }; }
+    public flow copy(self) -> Packet ![] { return self; }
+}
 impl Packet ~ Encoder {
     flow encode(self) -> i32 ![] ~ Safe { println("encoded")?; return 42; }
 }
@@ -19,11 +23,15 @@ fn environment() -> ProjectEnvironmentInput {
 }
 
 fn environment_with_root(import_root: &str) -> ProjectEnvironmentInput {
-    let mut input = ProjectInput::single_source(SourceInput::anonymous(SOURCE));
+    environment_from_source(SOURCE, import_root)
+}
+
+fn environment_from_source(source: &str, import_root: &str) -> ProjectEnvironmentInput {
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(source));
     input.options.entry_policy = EntryPolicy::Optional;
     let checked = Frontend.check_project(input);
     assert!(checked.diagnostics.is_empty(), "{:?}", checked.diagnostics);
-    let fixture = super::callback_replay_tests::PackageFixture::named("library", SOURCE);
+    let fixture = super::callback_replay_tests::PackageFixture::named("library", source);
     let source_hash = etas_package::package_source_payload_hash(&fixture.0).unwrap();
     let artifact = etas_frontend::build_package_metadata_artifact_from_checked(
         etas_frontend::PackageMetadataBuildInput {
@@ -68,6 +76,42 @@ fn environment_with_root(import_root: &str) -> ProjectEnvironmentInput {
     .unwrap()
 }
 
+#[test]
+fn binary_spec_method_labels_bind_declared_names_not_implementation_locals() {
+    let environment = environment_from_source(
+        r#"module library;
+import std.io.println;
+public type Packet = { value: i32 };
+public spec Offset { flow offset(self, amount: i32) -> i32 ![]; }
+impl Packet ~ Offset {
+    flow offset(self, input: i32) -> i32 ![] {
+        println("offset")?;
+        return self.value + input;
+    }
+}
+public flow make() -> Packet { return Packet { value = 4 }; }
+"#,
+        "alternate",
+    );
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"module consumer;
+import alternate.library.{Offset as Add, make};
+flow bounded<T ~ Add>(value: T) -> i32 { return value.offset(amount = 2); }
+flow selected<T ~ Add>(value: T) -> i32 { return value::Add.offset(amount = 3); }
+flow main() -> i32 { return bounded(make()) + selected(make()) + make().offset(amount = 5); }
+"#,
+    ));
+    input.environment = environment;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(checked.sources.sources.len(), 1);
+    assert_eq!(checked.types.checked_method_calls.len(), 3);
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    assert!(summary.escaping_effects.is_empty());
+    assert_eq!(summary.requested_actions.effects.iter().count(), 1);
+}
+
 fn consumer(environment: ProjectEnvironmentInput) -> etas_frontend::ProjectOutput {
     let mut source = SourceInput::anonymous(
         r#"module consumer;
@@ -88,7 +132,7 @@ fn method_trace_contract_survives_source_binary_driver_and_aliased_consumer() {
     let CallableContractTarget::Method(identity) = &metadata.trace_spec_conformances[0].item else {
         panic!("method contract must retain MethodId");
     };
-    assert_eq!(identity, &metadata.spec_impls[0].methods[0].identity);
+    assert_eq!(identity, &metadata.spec_impls[0].methods[0]);
     assert_eq!(
         identity.implementation().subject().declaration(),
         ["Container"]
@@ -111,6 +155,59 @@ fn method_trace_contract_survives_source_binary_driver_and_aliased_consumer() {
         ),
         "{summary:?}"
     );
+}
+
+#[test]
+fn binary_method_table_replays_associated_inherent_and_default_spec_chain_without_source() {
+    for root in ["library", "alternate"] {
+        let environment = environment_with_root(root);
+        let path = if root == "library" {
+            "library"
+        } else {
+            "alternate.library"
+        };
+        let mut input = ProjectInput::single_source(SourceInput::anonymous(format!(
+            "module consumer; import {path}.Packet; flow main() -> i32 {{ return Packet.new(value = \"input\").copy().encode(); }}"
+        )));
+        input.environment = environment;
+        let output = Frontend.check_project(input);
+        assert!(
+            output.diagnostics.is_empty(),
+            "{root}: {:?}",
+            output.diagnostics
+        );
+        let checked = output.checked.unwrap();
+        assert_eq!(
+            checked.sources.sources.len(),
+            1,
+            "metadata-only checking must not read dependency bodies"
+        );
+        assert_eq!(checked.types.checked_method_calls.len(), 3);
+        assert!(
+            checked
+                .types
+                .checked_method_calls
+                .values()
+                .all(|fact| matches!(
+                    fact.target,
+                    etas_types::method::MethodTarget::External { .. }
+                ))
+        );
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        assert!(summary.escaping_effects.is_empty());
+        assert_eq!(
+            summary.requested_actions.effects.iter().count(),
+            1,
+            "{summary:?}"
+        );
+        assert!(
+            matches!(
+                summary.action_trace,
+                etas_effects::ActionTraceDomain::Event(_)
+            ),
+            "{summary:?}"
+        );
+    }
 }
 
 #[test]

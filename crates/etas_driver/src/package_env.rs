@@ -494,14 +494,26 @@ fn external_public_metadata_input(
                     .iter()
                     .map(|arg| dependency_type_input_with_graph(package, packages, arg))
                     .collect(),
-                methods: implementation
-                    .methods
-                    .iter()
-                    .map(|method| etas_package_metadata::SpecImplMethod {
-                        identity: method.identity.clone(),
-                        callable: dependency_callable_values(package, packages, &method.callable),
-                    })
-                    .collect(),
+                methods: implementation.methods.clone(),
+            })
+            .collect(),
+        methods: metadata
+            .methods
+            .iter()
+            .map(|method| {
+                let mut method = method.clone();
+                method.remap_paths(|kind, path| match kind {
+                    etas_package_metadata::CallableValuePathKind::Type => {
+                        dependency_type_path(package, packages, path)
+                    }
+                    etas_package_metadata::CallableValuePathKind::Effect
+                        if is_standard_effect_path(path) =>
+                    {
+                        path.to_vec()
+                    }
+                    _ => dependency_path_with_graph(package, packages, path),
+                });
+                method
             })
             .collect(),
         type_spec_satisfactions: metadata
