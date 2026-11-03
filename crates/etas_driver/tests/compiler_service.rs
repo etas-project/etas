@@ -52,6 +52,8 @@ mod loaded_origins;
 mod no_host;
 #[path = "compiler_service/origin_metadata.rs"]
 mod origin_metadata;
+#[path = "compiler_service/residual_generics.rs"]
+mod residual_generics;
 #[path = "compiler_service/resources.rs"]
 mod resources;
 #[path = "compiler_service/retained_metadata.rs"]
