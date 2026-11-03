@@ -6,22 +6,23 @@ fn bound_generic_guarded_flow_compiles_and_executes_its_residual_plan() {
     let source = r#"
 module app;
 import std.compiler.{compile, parse_body, CompileError};
+type Label = string;
 effect Gate { action check<T>(value: T) -> unit; action send<T>(value: T) -> unit; }
-spec Safe<T>: trace = Gate.check<T> >> Gate.send<T>;
+spec Safe<T>: trace = Gate.check<Array<T>> >> Gate.send<Array<T>>;
 flow guarded<T>(value: T) -> i32 ![] ~ Safe<T> {
-    handle { perform Gate.check<T>(value); perform Gate.send<T>(value); } with {
-        Gate.check<T>(_) => { resume (); }
-        Gate.send<T>(_) => { resume (); }
+    handle { perform Gate.check<Array<T>>([value]); perform Gate.send<Array<T>>([value]); } with {
+        Gate.check<Array<T>>(_) => { resume (); }
+        Gate.send<Array<T>>(_) => { resume (); }
     };
     return 7;
 }
 flow main() -> i32 ![Error<CompileError>] {
-    let original: (i32) -> i32 ![] = guarded;
-    let body = match parse_body("handle { perform Gate.check<i32>(value); perform Gate.send<i32>(value); } with { Gate.check<i32>(_) => { resume (); } Gate.send<i32>(_) => { resume (); } }; return 9;") {
+    let original: (Label) -> i32 ![] = guarded;
+    let body = match parse_body("handle { perform Gate.check<Array<Label>>([value]); perform Gate.send<Array<Label>>([value]); } with { Gate.check<Array<Label>>(_) => { resume (); } Gate.send<Array<Label>>(_) => { resume (); } }; return 9;") {
         Ok(body) => body, Err(_) => { return -1; },
     };
     let current = compile((^original).with_body(body));
-    return current(42);
+    return current(Label("checked"));
 }
 "#;
     let mut input = ProjectInput::single_source(SourceInput::anonymous(source));
