@@ -57,6 +57,8 @@ mod priority_queue;
 mod record_values;
 #[path = "cli/replay_keys.rs"]
 mod replay_keys;
+#[path = "cli/residual_checks.rs"]
+mod residual_checks;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
 #[path = "cli/secret_checkpoint.rs"]
@@ -302,7 +304,7 @@ allow_compile = true
     let artifact = read_checkpoint_file(&checkpoints.join("checkpoint-0.json"));
     let sources = artifact["code_sources"].as_array().unwrap();
     assert_eq!(sources.len(), 1);
-    let source: etas_interpreter::api::code::SavedAgentRevision =
+    let source: etas_interpreter::api::code::SavedCodeRevision =
         serde_json::from_value(sources[0].clone()).unwrap();
     source.validate(Default::default()).unwrap();
     assert!(source.source.source.text.contains("return 19;"));
@@ -1957,6 +1959,7 @@ public flow code() -> i32 {
         "requested_actions": [],
         "handled_requested_actions": [],
         "latent_flows": [],
+        "residual_checks": [],
         "action_trace": { "kind": "empty" }
       }
     ]

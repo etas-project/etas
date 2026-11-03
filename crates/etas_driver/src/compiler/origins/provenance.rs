@@ -18,6 +18,8 @@ use crate::{DriverError, DriverProjectMode};
 #[derive(Clone, Debug)]
 pub(crate) struct SourceDefinitionProvenance {
     local_package: Option<PackageKey>,
+    #[cfg(test)]
+    single_file_root: Option<PathBuf>,
     single_files: HashMap<SourceId, (PathBuf, PackageKey)>,
     dependencies: HashMap<ExternalPackageId, DependencyOrigin>,
 }
@@ -29,8 +31,31 @@ struct DependencyOrigin {
 }
 
 impl SourceDefinitionProvenance {
+    #[cfg(test)]
+    pub(crate) fn single_file_root(&self) -> Option<&Path> {
+        self.single_file_root.as_deref()
+    }
     pub(crate) fn local_package_key(&self) -> Option<PackageKey> {
         self.local_package
+    }
+    pub(crate) fn dependency_source_packages(
+        &self,
+    ) -> Vec<etas_frontend::ProjectDependencySourcePackage> {
+        let mut packages: Vec<_> = self
+            .dependencies
+            .iter()
+            .filter_map(|(package, origin)| {
+                origin.package.map(|definition_package| {
+                    etas_frontend::ProjectDependencySourcePackage {
+                        package: *package,
+                        import_root: origin.import_root.clone(),
+                        definition_package,
+                    }
+                })
+            })
+            .collect();
+        packages.sort_by_key(|entry| entry.package);
+        packages
     }
     pub(crate) fn validate_external_definition_origins(
         &self,
@@ -50,7 +75,7 @@ impl SourceDefinitionProvenance {
         }
         Ok(())
     }
-    pub(super) fn local_package_for(
+    pub(crate) fn local_package_for(
         &self,
         source: &SourceInput,
     ) -> Result<PackageKey, DriverError> {
@@ -69,7 +94,7 @@ impl SourceDefinitionProvenance {
         Ok(*package)
     }
 
-    pub(super) fn dependency_package_for(
+    pub(crate) fn dependency_package_for(
         &self,
         package: ExternalPackageId,
         import_root: &str,
@@ -92,6 +117,7 @@ impl SourceDefinitionProvenance {
 pub(crate) fn capture_source_definition_provenance(
     mode: DriverProjectMode,
     root: Option<&Path>,
+    single_file_root: Option<&Path>,
     environment: Option<&PackageEnvironmentMetadata>,
     input: &ProjectInput,
 ) -> Result<SourceDefinitionProvenance, DriverError> {
@@ -110,8 +136,20 @@ pub(crate) fn capture_source_definition_provenance(
         )?),
         DriverProjectMode::SingleFile => None,
     };
+    let single_file_root = if mode == DriverProjectMode::SingleFile {
+        Some(canonical_path(single_file_root.ok_or_else(|| {
+            invalid("single-file entry origin is missing")
+        })?)?)
+    } else {
+        None
+    };
     let mut single_files = HashMap::new();
     if local_package.is_none() {
+        let entry = single_file_root
+            .as_ref()
+            .ok_or_else(|| invalid("single-file entry origin is missing"))?;
+        let package = local_source_key("etas.code.single-file-origin.v1", entry)?;
+        let mut found_entry = false;
         for source in &input.sources {
             if !matches!(
                 source.kind,
@@ -123,13 +161,18 @@ pub(crate) fn capture_source_definition_provenance(
                 .path
                 .as_ref()
                 .ok_or_else(|| invalid("single-file definition has no canonical source origin"))?;
-            let package = local_source_key("etas.code.single-file-origin.v1", path)?;
+            found_entry |= path == entry;
             if single_files
                 .insert(source.id, (path.clone(), package))
                 .is_some()
             {
                 return Err(invalid("loaded source identity is duplicated"));
             }
+        }
+        if !found_entry {
+            return Err(invalid(
+                "single-file entry does not belong to the loaded source graph",
+            ));
         }
     }
     let mut dependencies = HashMap::new();
@@ -138,6 +181,8 @@ pub(crate) fn capture_source_definition_provenance(
     }
     Ok(SourceDefinitionProvenance {
         local_package,
+        #[cfg(test)]
+        single_file_root,
         single_files,
         dependencies,
     })
@@ -163,44 +208,48 @@ fn dependency_origins(
             }
             _ => None,
         };
-        let package = match &dependency.source {
-            ResolvedDependencySource::Builtin { .. } => continue,
-            ResolvedDependencySource::Path { .. } => original_path
-                .as_deref()
-                .map(|path| local_package_key(path, &dependency.identity))
-                .transpose()?,
-            ResolvedDependencySource::Vendor {
-                definition_origin, ..
-            } => *definition_origin,
-            ResolvedDependencySource::Registry {
-                registry, checksum, ..
-            } => Some(locked_package_key(
-                &dependency.identity,
-                "etas.code.registry-package-origin.v1",
-                &[registry, checksum],
-            )?),
-            ResolvedDependencySource::Git { url, rev, .. } => Some(locked_package_key(
-                &dependency.identity,
-                "etas.code.git-package-origin.v1",
-                &[url, rev],
-            )?),
-            ResolvedDependencySource::GitHubClone { repo, rev, .. } => Some(locked_package_key(
-                &dependency.identity,
-                "etas.code.github-package-origin.v1",
-                &[repo, rev],
-            )?),
-            ResolvedDependencySource::GitHubRelease {
-                repo,
-                release,
-                asset,
-                payload_checksum,
-                ..
-            } => Some(locked_package_key(
-                &dependency.identity,
-                "etas.code.github-release-package-origin.v1",
-                &[repo, release, asset, payload_checksum],
-            )?),
-        };
+        let package =
+            match &dependency.source {
+                ResolvedDependencySource::Builtin { .. } => continue,
+                ResolvedDependencySource::Path { .. } => {
+                    Some(local_package_key(root, &dependency.identity)?)
+                }
+                ResolvedDependencySource::Vendor {
+                    definition_origin, ..
+                } => {
+                    let expected = local_package_key(root, &dependency.identity)?;
+                    if definition_origin.is_some_and(|origin| origin != expected) {
+                        return Err(invalid(
+                            "vendored definition origin disagrees with package name and version",
+                        ));
+                    }
+                    *definition_origin
+                }
+                ResolvedDependencySource::Registry {
+                    registry, checksum, ..
+                } => Some(locked_package_key(
+                    root,
+                    &dependency.identity,
+                    &[registry, checksum],
+                )?),
+                ResolvedDependencySource::Git { url, rev, .. } => {
+                    Some(locked_package_key(root, &dependency.identity, &[url, rev])?)
+                }
+                ResolvedDependencySource::GitHubClone { repo, rev, .. } => Some(
+                    locked_package_key(root, &dependency.identity, &[repo, rev])?,
+                ),
+                ResolvedDependencySource::GitHubRelease {
+                    repo,
+                    release,
+                    asset,
+                    payload_checksum,
+                    ..
+                } => Some(locked_package_key(
+                    root,
+                    &dependency.identity,
+                    &[repo, release, asset, payload_checksum],
+                )?),
+            };
         pending.extend(
             dependency
                 .dependencies
@@ -237,12 +286,11 @@ fn local_package_key(root: &Path, identity: &PackageIdentity) -> Result<PackageK
 }
 
 fn locked_package_key(
+    root: &Path,
     identity: &PackageIdentity,
-    domain: &'static str,
     origin: &[&str],
 ) -> Result<PackageKey, DriverError> {
-    let identity = [&identity.name, &identity.version, &identity.edition];
-    if identity
+    if [&identity.name, &identity.version, &identity.edition]
         .iter()
         .any(|part| part.is_empty() || part.contains('\0'))
         || origin
@@ -251,15 +299,7 @@ fn locked_package_key(
     {
         return Err(invalid("locked source package identity is invalid"));
     }
-    Ok(PackageKey::from_canonical_fingerprint(
-        CodeFingerprint::of_parts(
-            domain,
-            origin
-                .iter()
-                .map(|part| part.as_bytes())
-                .chain(identity.iter().map(|part| part.as_bytes())),
-        ),
-    ))
+    local_package_key(root, identity)
 }
 
 fn local_source_key(domain: &'static str, path: &Path) -> Result<PackageKey, DriverError> {

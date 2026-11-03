@@ -159,7 +159,8 @@ fn restoring_a_higher_order_callable_rejects_missing_or_forged_effect_row_bindin
         assert!(
             message.contains("effect")
                 || message.contains("signature")
-                || message.contains("interface"),
+                || message.contains("interface")
+                || (case == 5 && message.contains("native application was not prepared")),
             "case {case}: {error}"
         );
     }

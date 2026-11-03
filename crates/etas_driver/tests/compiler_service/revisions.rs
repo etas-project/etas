@@ -110,6 +110,7 @@ flow main() -> string ![Error<CompileError>] {
     let revised = compile((^Worker).with_body(body));
     return revised();
 }
+
 "#,
         Some(300),
     );
@@ -118,6 +119,102 @@ flow main() -> string ![Error<CompileError>] {
         result.value(),
         Some(&InterpValue::String("original".into()))
     );
+}
+
+#[test]
+fn diff_reports_a_changed_agent_draft_without_inventing_analysis() {
+    let result = execute(
+        r#"module app;
+import std.compiler.{diff, parse_body};
+agent Worker() -> string ![] { return "original"; }
+flow main() -> bool ![] {
+    let original = ^Worker;
+    let body = match parse_body("return \"edited\";") {
+        Ok(body) => body,
+        Err(_) => { return false; },
+    };
+    let edited = original.with_body(body);
+    let changes = diff(original, edited);
+    return changes.old_body_available && changes.new_body_available
+        && changes.body_changed == Some(true)
+        && changes.old_revision == original.revision
+        && changes.new_revision == edited.revision
+        && changes.old_revision != changes.new_revision
+        && !changes.signature_changed && !changes.dependencies_changed
+        && changes.escaping_changed == None
+        && changes.requested_changed == None
+        && changes.determinism_changed == None
+        && changes.trace_changed == None;
+}
+"#,
+        Some(1000),
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn diff_reports_the_analysis_of_a_compiled_agent_revision() {
+    let result = execute(
+        r#"module app;
+import std.compiler.{compile, diff, parse_body, CompileError};
+agent Worker() -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let original = ^Worker;
+    let body = match parse_body("return \"edited\";") {
+        Ok(body) => body,
+        Err(_) => { return false; },
+    };
+    let candidate = compile(original.with_body(body));
+    let current = ^candidate;
+    let changes = diff(original, current);
+    return candidate() == "edited"
+        && changes.body_changed == Some(true)
+        && changes.escaping_changed == Some(false)
+        && changes.requested_changed == Some(false)
+        && changes.determinism_changed == Some(false)
+        && changes.old_revision != changes.new_revision
+        && changes.new_revision == current.revision;
+}
+"#,
+        Some(5000),
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn diff_tracks_flow_draft_and_compiled_revision_separately() {
+    let prepared = source::prepared_with_bodies(
+        r#"module app;
+import std.compiler.{compile, diff, parse_body, CompileError};
+flow normalize(value: string) -> string ![] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original = ^normalize;
+    let body = match parse_body("return \"edited\";") {
+        Ok(body) => body,
+        Err(_) => { return false; },
+    };
+    let draft = original.with_body(body);
+    let before = diff(original, draft);
+    let candidate = compile(draft);
+    let current = ^candidate;
+    let after = diff(original, current);
+    return before.body_changed == Some(true)
+        && before.requested_changed == None
+        && before.new_revision == draft.revision
+        && after.body_changed == Some(true)
+        && after.requested_changed == Some(false)
+        && after.escaping_changed == Some(false)
+        && after.new_revision == current.revision
+        && candidate("input") == "edited";
+}
+"#,
+        &["app.normalize"],
+    );
+    let result = execute_prepared(prepared, Some(5000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
 }
 
 #[test]

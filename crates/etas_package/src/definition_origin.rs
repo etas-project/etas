@@ -1,5 +1,5 @@
 use crate::{PackageError, PackageIdentity};
-use etas_code::{CodeFingerprint, PackageKey};
+use etas_code::PackageKey;
 use std::path::Path;
 
 /// Capture a local package's original owner before vendoring or compilation.
@@ -8,28 +8,58 @@ pub fn local_definition_package_key(
     root: &Path,
     identity: &PackageIdentity,
 ) -> Result<PackageKey, PackageError> {
-    if [&identity.name, &identity.version, &identity.edition]
-        .iter()
-        .any(|part| part.is_empty() || part.contains('\0'))
-    {
-        return Err(PackageError::Manifest {
+    PackageKey::from_name_and_version(&identity.name, &identity.version).map_err(|_| {
+        PackageError::Manifest {
             path: root.join("etas.toml"),
             message: "invalid definition package identity".into(),
-        });
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn identity(name: &str, version: &str, edition: &str) -> PackageIdentity {
+        PackageIdentity {
+            name: name.into(),
+            version: version.into(),
+            edition: edition.into(),
+        }
     }
-    let root = root.canonicalize().map_err(|source| PackageError::Io {
-        path: root.to_owned(),
-        source,
-    })?;
-    Ok(PackageKey::from_canonical_fingerprint(
-        CodeFingerprint::of_parts(
-            "etas.code.local-package-origin.v1",
-            [
-                root.as_os_str().as_encoded_bytes(),
-                identity.name.as_bytes(),
-                identity.version.as_bytes(),
-                identity.edition.as_bytes(),
-            ],
-        ),
-    ))
+
+    #[test]
+    fn local_identity_depends_only_on_name_and_version() {
+        let first = local_definition_package_key(
+            Path::new("/checkout/one"),
+            &identity("app", "1.0.0", "2025"),
+        )
+        .unwrap();
+        let second = local_definition_package_key(
+            Path::new("/checkout/two"),
+            &identity("app", "1.0.0", "2026"),
+        )
+        .unwrap();
+        assert_eq!(first, second);
+        for other in [
+            identity("other", "1.0.0", "2025"),
+            identity("app", "1.0.1", "2025"),
+        ] {
+            assert_ne!(
+                first,
+                local_definition_package_key(Path::new("/checkout/one"), &other).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn local_identity_rejects_invalid_name_or_version() {
+        for invalid in [
+            identity("", "1.0.0", "2026"),
+            identity("app", "", "2026"),
+            identity("app\0other", "1.0.0", "2026"),
+        ] {
+            assert!(local_definition_package_key(Path::new("/checkout"), &invalid).is_err());
+        }
+    }
 }

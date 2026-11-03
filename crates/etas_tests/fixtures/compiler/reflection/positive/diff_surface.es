@@ -12,8 +12,8 @@ flow main(args: Array<string>) -> i32 {
     let edited = original.with_body(body);
     let changes: ChangeReport = diff(original, edited);
     let unchanged = diff(original, original);
-    if changes.schema == "etas.code.change-report.v1"
-        && changes.identity == original.identity
+    if changes.schema == "etas.code.change-report.v2"
+        && changes.identity == original.dependencies.lexical_owner
         && changes.old_revision == original.revision
         && changes.new_revision == edited.revision
         && changes.old_body_available && changes.new_body_available

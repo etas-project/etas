@@ -110,6 +110,24 @@ fn malformed_body_source_is_rejected_after_binary_decode_at_the_real_import_span
         body.source.source_length = unit.len() as u64;
         body.source.source_unit =
             etas_code::CodeFingerprint::of_bytes("etas.code.source-unit.v1", unit.as_bytes());
+        let callable = body.callable.clone();
+        let content = body.source.content;
+        let snapshot = metadata
+            .public_metadata
+            .definition_descriptors
+            .as_mut()
+            .unwrap()
+            .headers
+            .as_mut()
+            .unwrap()
+            .snapshots
+            .as_mut()
+            .unwrap()
+            .flows
+            .iter_mut()
+            .find(|snapshot| snapshot.revision.definition == callable)
+            .unwrap();
+        snapshot.revision.content = content;
         let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
         let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
         etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
