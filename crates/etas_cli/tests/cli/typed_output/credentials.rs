@@ -232,9 +232,9 @@ fn model_profile_credentials_are_reassembled_on_resume_and_never_saved() {
     );
     assert_eq!(code, 0, "{stdout}\n{stderr}");
     assert!(stdout.contains("initial response"));
-    let saved = fs::read_to_string(checkpoints.join("checkpoint-0.json")).unwrap();
+    let saved = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
     for key in [PROFILE_KEY, rotated] {
-        assert!(!saved.contains(key));
+        assert!(!saved.windows(key.len()).any(|part| part == key.as_bytes()));
         assert!(!stdout.contains(key));
         assert!(!stderr.contains(key));
     }
@@ -263,6 +263,6 @@ fn model_profile_credentials_are_reassembled_on_resume_and_never_saved() {
     }
     assert_eq!(
         saved,
-        fs::read_to_string(checkpoints.join("checkpoint-0.json")).unwrap()
+        fs::read(checkpoints.join("checkpoint-0.json")).unwrap()
     );
 }

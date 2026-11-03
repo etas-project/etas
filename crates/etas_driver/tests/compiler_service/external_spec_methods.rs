@@ -2,6 +2,21 @@ use super::*;
 use etas_driver::compiler::prepare_native_definitions;
 use etas_frontend::code::definition::StaticReflectionView;
 
+#[path = "external_spec_methods/control_self.rs"]
+mod control_self;
+#[path = "external_spec_methods/frozen_self.rs"]
+mod frozen_self;
+#[path = "external_spec_methods/implementation_replay.rs"]
+mod implementation_replay;
+#[path = "external_spec_methods/implicit_self.rs"]
+mod implicit_self;
+#[path = "external_spec_methods/invalid_self_metadata.rs"]
+mod invalid_self_metadata;
+#[path = "external_spec_methods/runtime_self.rs"]
+mod runtime_self;
+#[path = "external_spec_methods/type_method_identity.rs"]
+mod type_method_identity;
+
 #[test]
 fn runnable_project_loads_external_spec_implementation_module() {
     let workspace = origin_metadata::workspace_with_sources(
@@ -135,14 +150,24 @@ impl Token ~ Identity<Token> {
         .external_public_metadata
         .iter()
         .flat_map(|metadata| &metadata.spec_impls)
-        .filter(|implementation| implementation.methods.iter().any(|name| name == "id"))
-        .map(|implementation| implementation.implementation_module.clone())
+        .filter(|implementation| {
+            implementation
+                .methods
+                .iter()
+                .any(|method| method.identity.name() == "id")
+        })
+        .flat_map(|implementation| {
+            implementation
+                .methods
+                .iter()
+                .map(|method| method.identity.implementation().module().to_vec())
+        })
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
         implementation_modules,
         [
-            vec!["dep".into(), "library".into(), "impls".into()],
-            vec!["dep".into(), "library".into(), "other_impls".into()]
+            vec!["library".into(), "impls".into()],
+            vec!["library".into(), "other_impls".into()]
         ]
         .into_iter()
         .collect()

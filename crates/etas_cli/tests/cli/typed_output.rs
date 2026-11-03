@@ -69,7 +69,7 @@ fn command() -> Command {
     command
 }
 
-fn server(responses: Vec<Value>) -> (String, thread::JoinHandle<Vec<Value>>) {
+pub(super) fn server(responses: Vec<Value>) -> (String, thread::JoinHandle<Vec<Value>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
     let base_url = mock_server_base_url(listener.local_addr().unwrap(), "/v1");
@@ -120,7 +120,12 @@ fn response(encoding: &str, payload: Value) -> Value {
     } else {
         json!({"role":"assistant", "content":payload.to_string()})
     };
-    json!({"choices":[{"message":message}], "usage":{"prompt_tokens":1,"completion_tokens":1}})
+    let finish_reason = if encoding == "output-tool" {
+        "tool_calls"
+    } else {
+        "stop"
+    };
+    json!({"choices":[{"finish_reason":finish_reason,"message":message}], "usage":{"prompt_tokens":1,"completion_tokens":1}})
 }
 
 fn assert_encoding(request: &Value, encoding: &str) {

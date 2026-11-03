@@ -22,6 +22,10 @@ use etas_frontend::{
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
 #[cfg(unix)]
+#[path = "cli/atomic_replace.rs"]
+mod atomic_replace;
+
+#[cfg(unix)]
 #[path = "cli/command_result.rs"]
 mod command_result;
 #[path = "cli/compiler_service.rs"]
@@ -30,19 +34,37 @@ mod compiler_service;
 mod index_inference;
 #[path = "cli/message_cast.rs"]
 mod message_cast;
+#[path = "cli/model_completion.rs"]
+mod model_completion;
+#[path = "cli/native_tool_handlers.rs"]
+mod native_tool_handlers;
+#[path = "cli/native_tool_numbers.rs"]
+mod native_tool_numbers;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;
+#[path = "cli/control_regressions.rs"]
+mod control_regressions;
+#[path = "cli/filesystem_errors.rs"]
+mod filesystem_errors;
 #[path = "cli/ordered_collections.rs"]
 mod ordered_collections;
+#[path = "cli/prelude_namespaces.rs"]
+mod prelude_namespaces;
 #[path = "cli/priority_queue.rs"]
 mod priority_queue;
 #[path = "cli/record_values.rs"]
 mod record_values;
+#[path = "cli/replay_keys.rs"]
+mod replay_keys;
 #[path = "cli/residual_checks.rs"]
 mod residual_checks;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
+#[path = "cli/secret_checkpoint.rs"]
+mod secret_checkpoint;
+#[path = "cli/segmented_concat.rs"]
+mod segmented_concat;
 #[path = "cli/source_reexports.rs"]
 mod source_reexports;
 #[path = "cli/text_values.rs"]
@@ -51,11 +73,11 @@ mod text_values;
 mod typed_output;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
-    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &fs::read(path).unwrap(),
-        etas_interpreter::api::codec::CheckpointFileLimits::default(),
-    )
-    .unwrap();
+    read_checkpoint_file_with_keys(path, None)
+}
+
+fn read_checkpoint_file_with_keys(path: &Path, keys: Option<&Path>) -> serde_json::Value {
+    let (document, _) = etas_cli::command::interpreter::checkpoint_file::read(path, keys).unwrap();
     // These shallow metadata assertions use the logical artifact, not its file encoding.
     (*document).clone()
 }
@@ -279,10 +301,7 @@ allow_compile = true
     ]);
     assert_eq!(code, 0, "{stderr}\n{stdout}");
     assert!(stdout.contains("\"value\":\"19\""), "{stdout}");
-    let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
-    let artifact =
-        etas_interpreter::api::codec::checkpoint_file_from_bytes(&bytes, Default::default())
-            .unwrap();
+    let artifact = read_checkpoint_file(&checkpoints.join("checkpoint-0.json"));
     let sources = artifact["code_sources"].as_array().unwrap();
     assert_eq!(sources.len(), 1);
     let source: etas_interpreter::api::code::SavedCodeRevision =
@@ -4888,12 +4907,14 @@ flow main(args: Array<string>) -> i32 {
     assert!(stdout.contains("checkpoints: 1"), "{stdout}");
     assert!(stdout.contains("\"value\":\"0\""), "{stdout}");
     let text = fs::read_to_string(&trace).unwrap();
-    assert!(text.matches("\"kind\":\"variant\"").count() >= 1000);
+    assert!(text.contains("\"kind\":\"checkpoint_summary\""));
+    assert!(text.contains("\"resumable\":false"));
+    assert!(!text.contains("\"machine\":"));
     assert!(text.len() < 512 * 1000);
     let bytes = fs::read(checkpoints.join("checkpoint-0.json")).unwrap();
-    let document = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &bytes,
-        etas_interpreter::api::codec::CheckpointFileLimits::default(),
+    let (document, _) = etas_cli::command::interpreter::checkpoint_file::read(
+        &checkpoints.join("checkpoint-0.json"),
+        None,
     )
     .unwrap();
     let mut pending = vec![&*document];
@@ -5433,10 +5454,10 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
     assert!(
         completed_boundaries
             .iter()
-            .any(|boundary| boundary["kind"] == "tool"
-                && boundary["key"]
-                    .as_str()
-                    .is_some_and(|key| key.contains("tool:app.runtime.tools.EvidenceLookup"))),
+            .any(
+                |boundary| replay_keys::is_checked_source_tool_boundary(boundary)
+                    && boundary["occurrence"]["call_id"] == "tool-call-1"
+            ),
         "full runtime checkpoint must record completed source/tool boundary ledger: {checkpoint_json}"
     );
 
@@ -5995,6 +6016,118 @@ public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Fs.list<Pro
     assert_eq!(code, 0, "stderr={stderr:?}\nstdout={stdout:?}");
     assert!(stdout.contains(r#""value":"0""#), "{stdout}");
     assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn runtime_profile_bounded_file_reads_preserve_errors_and_never_return_prefixes() {
+    let project = package_fixture(
+        "bounded-file-read",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "bounded-file-read"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "bounded-file-read"
+module = "app.workspace"
+flow = "main"
+profile = "local"
+[runtime.profiles.local.filesystem.regions."app.workspace.ProjectRoot"]
+root = "."
+read = true
+"#,
+            ),
+            (
+                "src/app/workspace.es",
+                r#"module app.workspace;
+import std.fs.{Region, IOError, ReadLimitError, path, read_bytes_limited};
+import std.effects.Fs;
+import std.codec.text.utf8_encode;
+type ProjectRoot;
+impl ProjectRoot ~ Region;
+
+flow load(name: string, limit: usize) -> bytes ![Fs.read<ProjectRoot>, Error<IOError>, Error<ReadLimitError>] {
+    let target = match path<ProjectRoot>(name) {
+        Ok(target) => target,
+        Err(_) => abort("invalid test path"),
+    };
+    return read_bytes_limited(target, limit);
+}
+
+public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>, Error<ReadLimitError>] {
+    let exact = load("input.txt", 4);
+    let empty = load("empty.txt", 0);
+    return if exact == utf8_encode("abcd") && empty == utf8_encode("") { 0 } else { 2 };
+}
+
+public flow overflow(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("input.txt", 3); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 3 { 3 } else { 99 }; }
+    };
+}
+
+public flow zero(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("input.txt", 0); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 0 { 0 } else { 99 }; }
+    };
+}
+
+public flow missing(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<ReadLimitError>] {
+    return handle { let unexpected = load("missing.txt", 2048); 999 } with {
+        Error<IOError>.raise(_) => { finish 7; }
+    };
+}
+
+public flow large(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOError>] {
+    return handle { let unexpected = load("large.bin", 2048); 999 } with {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(maximum)) => { finish if maximum == 2048 { 0 } else { 99 }; }
+    };
+}
+"#,
+            ),
+            ("input.txt", "abcd"),
+            ("empty.txt", ""),
+        ],
+    );
+    let large_path = project.join("large.bin");
+    std::fs::File::create(&large_path)
+        .unwrap()
+        .set_len(1 << 30)
+        .unwrap();
+    for (flow, expected) in [
+        ("main", "0"),
+        ("overflow", "3"),
+        ("zero", "0"),
+        ("missing", "7"),
+        ("large", "0"),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        remove_legacy_runtime_host_env(&mut command);
+        let (code, stdout, stderr) = run_process_with_command(
+            command,
+            [
+                "run",
+                path(&project),
+                "--profile",
+                "local",
+                "--flow",
+                flow,
+                "--allow-effects",
+            ],
+            "",
+        );
+        assert_eq!(code, 0, "{flow}: stderr={stderr:?}, stdout={stdout:?}");
+        assert!(
+            stdout.contains(&format!(r#""value":"{expected}""#)),
+            "{flow}: {stdout}"
+        );
+        assert!(stderr.is_empty(), "{flow}: {stderr}");
+    }
+    std::fs::remove_file(large_path).unwrap();
 }
 
 #[test]
@@ -6727,10 +6860,7 @@ fn full_phase1_agent_runtime_runs_with_live_omlx_openai() {
     assert!(
         completed_boundaries
             .iter()
-            .any(|boundary| boundary["kind"] == "tool"
-                && boundary["key"]
-                    .as_str()
-                    .is_some_and(|key| key.contains("tool:app.runtime.tools.EvidenceLookup"))),
+            .any(replay_keys::is_checked_source_tool_boundary),
         "live full runtime checkpoint must record the source tool-call boundary: {checkpoint_json}"
     );
     assert!(
@@ -6816,12 +6946,9 @@ fn multi_agent_system_runs_with_live_omlx_openai() {
     assert!(
         checkpoint_json["checkpoint"]["completed_host_boundaries"]
             .as_array()
-            .is_some_and(|boundaries| boundaries.iter().any(|boundary| {
-                boundary["kind"] == "tool"
-                    && boundary["key"].as_str().is_some_and(|key| {
-                        key.contains("tool:app.agent.runtime_variants.EvidenceLookup")
-                    })
-            })),
+            .is_some_and(|boundaries| boundaries
+                .iter()
+                .any(replay_keys::is_checked_source_tool_boundary)),
         "live multi-agent checkpoint must record the source tool-call boundary: {checkpoint_json}"
     );
 }
@@ -6990,7 +7117,7 @@ fn top_level_examples_check_and_run_from_cli() {
     assert!(
         fs::read_to_string(&trace)
             .unwrap()
-            .contains("etas.cli.interpreter-report.v1")
+            .contains("etas.cli.interpreter-report.v2")
     );
 
     let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");
@@ -7474,6 +7601,7 @@ fn spawn_openai_external_tool_loop_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7494,6 +7622,7 @@ fn spawn_openai_external_tool_loop_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": final_answer,
@@ -7562,6 +7691,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "planner output for runtime",
@@ -7574,6 +7704,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7594,6 +7725,7 @@ fn spawn_openai_edk_like_multi_agent_tool_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": final_answer,
@@ -7715,6 +7847,7 @@ fn spawn_openai_tool_loop_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "runtime plan from planner",
@@ -7727,6 +7860,7 @@ fn spawn_openai_tool_loop_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7747,6 +7881,7 @@ fn spawn_openai_tool_loop_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -7816,6 +7951,7 @@ fn spawn_openai_tool_arg_repair_server(
                         let body = match round {
                             0 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": "runtime plan from planner",
@@ -7828,6 +7964,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             1 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7848,6 +7985,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             2 => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "tool_calls",
                                     "message": {
                                         "role": "assistant",
                                         "content": null,
@@ -7868,6 +8006,7 @@ fn spawn_openai_tool_arg_repair_server(
                             }),
                             _ => serde_json::json!({
                                 "choices": [{
+                                    "finish_reason": "stop",
                                     "message": {
                                         "role": "assistant",
                                         "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -7959,6 +8098,7 @@ fn multi_agent_runtime_response_for_request(
     if request.contains("\"role\":\"tool\"") {
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "stop",
                 "message": {
                     "role": "assistant",
                     "content": format!(r#"{{"evidence":"{}"}}"#, multi_agent_runtime_evidence(topic)),
@@ -7974,6 +8114,7 @@ fn multi_agent_runtime_response_for_request(
         let (summary, score) = multi_agent_runtime_review(topic);
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "stop",
                 "message": {
                     "role": "assistant",
                     "content": format!(r#"{{"summary":"{}","score":{}}}"#, summary, score),
@@ -7988,6 +8129,7 @@ fn multi_agent_runtime_response_for_request(
     if request.contains("\"name\":\"EvidenceLookup\"") {
         return serde_json::json!({
             "choices": [{
+                "finish_reason": "tool_calls",
                 "message": {
                     "role": "assistant",
                     "content": null,
@@ -8009,6 +8151,7 @@ fn multi_agent_runtime_response_for_request(
     }
     serde_json::json!({
         "choices": [{
+            "finish_reason": "stop",
             "message": {
                 "role": "assistant",
                 "content": multi_agent_runtime_plan(topic),
@@ -8099,6 +8242,7 @@ fn spawn_delayed_openai_completion_server(
                     thread::sleep(response_delay);
                     let body = serde_json::json!({
                         "choices": [{
+                            "finish_reason": "stop",
                             "message": {
                                 "role": "assistant",
                                 "content": response_text,
@@ -8172,6 +8316,7 @@ fn spawn_openai_completion_sequence_server(
                         }
                         let body = serde_json::json!({
                             "choices": [{
+                                "finish_reason": "stop",
                                 "message": {
                                     "role": "assistant",
                                     "content": response_text,
@@ -8406,7 +8551,10 @@ fn package_action_trace_parameter_calls(
 ) -> usize {
     match trace {
         etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
-            usize::from(parameter == expected)
+            usize::from(matches!(
+                parameter,
+                etas_package_metadata::CallableRequestTarget::Parameter(name) if name == expected
+            ))
         }
         etas_package::PackageActionTraceMetadata::Seq { children }
         | etas_package::PackageActionTraceMetadata::Choice { children } => children
@@ -8420,7 +8568,10 @@ fn package_action_trace_parameter_calls(
             parameter_calls, ..
         } => parameter_calls
             .iter()
-            .filter(|parameter| parameter.as_str() == expected)
+            .filter(|parameter| matches!(
+                parameter,
+                etas_package_metadata::CallableRequestTarget::Parameter(name) if name == expected
+            ))
             .count(),
         etas_package::PackageActionTraceMetadata::Empty
         | etas_package::PackageActionTraceMetadata::Event { .. }

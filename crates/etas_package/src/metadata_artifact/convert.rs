@@ -529,6 +529,7 @@ fn spec_method_from_metadata(
 ) -> Result<PackageSpecMethodMetadata, PackageError> {
     Ok(PackageSpecMethodMetadata {
         name: method.name,
+        receiver_param: method.receiver_param,
         path: method.path,
         signature: method
             .signature
@@ -562,7 +563,6 @@ fn spec_impl_from_metadata(
             .map(type_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
         methods: implementation.methods,
-        implementation_module: implementation.implementation_module,
     })
 }
 

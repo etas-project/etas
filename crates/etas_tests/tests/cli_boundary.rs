@@ -351,7 +351,7 @@ fn cli_run_writes_interpreter_trace_and_replay_reads_it() {
     );
     assert!(run_stderr.is_empty());
     let trace_text = fs::read_to_string(&trace).unwrap();
-    assert!(trace_text.contains("etas.cli.interpreter-report.v1"));
+    assert!(trace_text.contains("etas.cli.interpreter-report.v2"));
 
     let (replay_code, replay_stdout, replay_stderr) = run_cli(["etas", "replay", path_str(&trace)]);
 
@@ -395,11 +395,8 @@ fn cli_resume_continues_multi_source_project_checkpoint() {
     assert_eq!(run_code, 0, "{run_stderr}");
 
     let checkpoint = checkpoints.join("checkpoint-0.json");
-    let checkpoint = etas_interpreter::api::codec::checkpoint_file_from_bytes(
-        &fs::read(checkpoint).unwrap(),
-        Default::default(),
-    )
-    .unwrap();
+    let (checkpoint, _) =
+        etas_cli::command::interpreter::checkpoint_file::read(&checkpoint, None).unwrap();
     assert_eq!(
         checkpoint["sources"],
         serde_json::json!([fs::canonicalize(&root).unwrap()])
@@ -458,7 +455,7 @@ fn cli_replay_rejects_until_without_cursor_addressable_trace() {
     let trace = root.join("trace.json");
     fs::write(
         &trace,
-        r#"{"schema":"etas.cli.interpreter-report.v1","events":[],"checkpoints":[]}"#,
+        r#"{"schema":"etas.cli.interpreter-report.v2","events":[],"checkpoints":[]}"#,
     )
     .unwrap();
 

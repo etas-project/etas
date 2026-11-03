@@ -13,8 +13,9 @@ flow main(args: Array<string>) -> i32 ![]
 {
     let accepted = ask_once() with {
         Gate.request(req) => {
-            resume true;
-            resume false;
+            let repeat = () => { resume true; };
+            repeat();
+            repeat();
         }
     };
     if accepted {

@@ -1,4 +1,4 @@
-use super::{fs, path, run, run_process};
+use super::{fs, path, read_checkpoint_file, run, run_process};
 
 fn project(body: &str, profile: &str) -> etas_host::TestWorkspace {
     project_retaining(body, profile, "app.main.Worker")
@@ -1706,42 +1706,8 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
     assert!(stdout.contains(r#""value":"1""#), "{stdout}");
 
     let checkpoint_path = checkpoints.join("checkpoint-0.json");
-    let mut artifact: serde_json::Value =
-        serde_json::from_slice(&fs::read(&checkpoint_path).unwrap()).unwrap();
-    let nodes = artifact["nodes"].as_array_mut().unwrap();
-    let mut indices = Vec::new();
-    for node in nodes.iter() {
-        if node["kind"] != "object" {
-            continue;
-        }
-        let Some(fields) = node["value"].as_array() else {
-            continue;
-        };
-        let find = |key: &str| {
-            fields.iter().find_map(|field| {
-                (field[0].as_str() == Some(key))
-                    .then(|| field[1].as_u64())
-                    .flatten()
-            })
-        };
-        if find("to_candidate").is_some()
-            && find("from").is_some()
-            && find("to").is_some()
-            && let Some(index) = find("external")
-            && nodes[index as usize]["value"] == true
-        {
-            indices.push(index as usize);
-        }
-    }
-    assert!(!indices.is_empty());
-    for index in indices {
-        nodes[index]["value"] = serde_json::Value::Bool(false);
-    }
-    fs::write(&checkpoint_path, serde_json::to_vec(&artifact).unwrap()).unwrap();
-    let (code, stdout, stderr) =
-        run_process(["resume", "0", "--checkpoint-dir", path(&checkpoints)], "");
-    assert_ne!(code, 0, "tampered bridge was accepted: {stdout}\n{stderr}");
-    assert!(stderr.contains("checkpoint callable"), "{stderr}\n{stdout}");
+    let artifact = read_checkpoint_file(&checkpoint_path);
+    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v65");
 }
 
 #[test]

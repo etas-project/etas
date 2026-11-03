@@ -47,6 +47,24 @@ fn hir_dump_for_phase0_fixture_matches_golden_output() {
     let hir = lower_source(read_source(&fixture("hir/positive/phase0_minimal.es")));
     assert!(hir.diagnostics.is_empty(), "{:#?}", hir.diagnostics);
 
+    let array = hir
+        .symbols
+        .iter()
+        .find(|symbol| symbol.name == "Array" && symbol.kind == SymbolKind::StdPreludeAlias)
+        .expect("Array must resolve through the context-sensitive std prelude");
+    let module = &hir.modules_arena[hir.modules[0]];
+    assert!(
+        !hir.scopes
+            .get(module.scope)
+            .unwrap()
+            .symbols
+            .contains(&array.id),
+        "context-specific prelude candidates must not become unqualified lexical declarations"
+    );
+    assert!(hir.types.iter().any(|(_, ty)| matches!(ty,
+        etas_hir::HirType::Path { path, .. } if path.resolution == ResolveResult::Resolved(array.id))),
+        "omitting the lexical binding must not lose the checked type reference");
+
     let actual = etas_hir::dump_hir(
         &hir,
         HirDumpOptions {

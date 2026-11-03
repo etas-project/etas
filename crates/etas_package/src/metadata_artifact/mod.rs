@@ -34,12 +34,14 @@ mod tests {
 
     #[test]
     fn selector_bound_metadata_survives_binary_and_package_conversion() {
-        let mut metadata = etas_package_metadata::PackageMetadata::default();
-        metadata.version = 1;
-        metadata.package = etas_package_metadata::PackageIdentity {
-            name: "dependency".into(),
-            version: "1.0.0".into(),
-            edition: "2026".into(),
+        let mut metadata = etas_package_metadata::PackageMetadata {
+            version: 1,
+            package: etas_package_metadata::PackageIdentity {
+                name: "dependency".into(),
+                version: "1.0.0".into(),
+                edition: "2026".into(),
+            },
+            ..Default::default()
         };
         metadata.public_metadata.trace_spec_summaries =
             vec![etas_package_metadata::TraceSpecSummary {

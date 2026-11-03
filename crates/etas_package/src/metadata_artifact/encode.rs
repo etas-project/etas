@@ -527,6 +527,7 @@ fn spec_method_to_metadata(
 ) -> Result<etas_package_metadata::SpecMethod, PackageError> {
     Ok(etas_package_metadata::SpecMethod {
         name: method.name.clone(),
+        receiver_param: method.receiver_param,
         path: method.path.clone(),
         signature: method
             .signature
@@ -561,7 +562,6 @@ fn spec_impl_to_metadata(
             .map(type_to_metadata)
             .collect::<Result<Vec<_>, _>>()?,
         methods: implementation.methods.clone(),
-        implementation_module: implementation.implementation_module.clone(),
     })
 }
 

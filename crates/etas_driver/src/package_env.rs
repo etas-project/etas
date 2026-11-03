@@ -29,6 +29,8 @@ mod callback_replay_tests;
 #[cfg(test)]
 mod default_handlers_tests;
 #[cfg(test)]
+mod method_contracts_tests;
+#[cfg(test)]
 mod request_instantiation_tests;
 
 pub fn frontend_environment(
@@ -492,16 +494,14 @@ fn external_public_metadata_input(
                     .iter()
                     .map(|arg| dependency_type_input_with_graph(package, packages, arg))
                     .collect(),
-                methods: implementation.methods.clone(),
-                implementation_module: if implementation.implementation_module.is_empty() {
-                    vec![]
-                } else {
-                    dependency_path_with_graph(
-                        package,
-                        packages,
-                        &implementation.implementation_module,
-                    )
-                },
+                methods: implementation
+                    .methods
+                    .iter()
+                    .map(|method| etas_package_metadata::SpecImplMethod {
+                        identity: method.identity.clone(),
+                        callable: dependency_callable_values(package, packages, &method.callable),
+                    })
+                    .collect(),
             })
             .collect(),
         type_spec_satisfactions: metadata
@@ -521,7 +521,7 @@ fn external_public_metadata_input(
             .callable_spec_satisfactions
             .iter()
             .map(|fact| ProjectExternalCallableSpecSatisfactionInput {
-                item: dependency_path_with_graph(package, packages, &fact.item),
+                item: dependency_contract_target(package, packages, &fact.item),
                 spec: dependency_path_with_graph(package, packages, &fact.spec),
                 args: fact
                     .args
@@ -534,7 +534,7 @@ fn external_public_metadata_input(
             .trace_spec_conformances
             .iter()
             .map(|fact| ProjectExternalTraceSpecConformanceInput {
-                item: dependency_path_with_graph(package, packages, &fact.item),
+                item: dependency_contract_target(package, packages, &fact.item),
                 target: match &fact.target {
                     etas_package::PackageTraceSpecConformanceTargetMetadata::Inline => {
                         ProjectExternalTraceSpecConformanceTargetInput::Inline
@@ -647,7 +647,11 @@ fn external_public_metadata_input(
                             .iter()
                             .map(
                                 |parameter| etas_frontend::ProjectExternalParameterRequestInput {
-                                    parameter: parameter.parameter.clone(),
+                                    parameter: dependency_callable_request_target(
+                                        package,
+                                        packages,
+                                        &parameter.parameter,
+                                    ),
                                     excluded: parameter
                                         .excluded
                                         .iter()
@@ -836,6 +840,7 @@ fn spec_signature_input(
             .iter()
             .map(|method| ProjectExternalSpecMethodInput {
                 name: method.name.clone(),
+                receiver_param: method.receiver_param,
                 path: dependency_path_with_graph(package, packages, &method.path),
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
@@ -934,6 +939,23 @@ fn dependency_path(package: &ProjectExternalPackageInput, path: &[String]) -> Ve
         .collect()
 }
 
+fn dependency_contract_target(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    target: &etas_package_metadata::CallableContractTarget,
+) -> etas_package_metadata::CallableContractTarget {
+    match target {
+        etas_package_metadata::CallableContractTarget::Item(path) => {
+            etas_package_metadata::CallableContractTarget::Item(dependency_path_with_graph(
+                package, packages, path,
+            ))
+        }
+        etas_package_metadata::CallableContractTarget::Method(identity) => {
+            etas_package_metadata::CallableContractTarget::Method(identity.clone())
+        }
+    }
+}
+
 fn dependency_path_with_graph(
     package: &ProjectExternalPackageInput,
     packages: &[ProjectExternalPackageInput],
@@ -1014,6 +1036,21 @@ fn dependency_callable_values(
     graph
 }
 
+fn dependency_callable_request_target(
+    package: &ProjectExternalPackageInput,
+    packages: &[ProjectExternalPackageInput],
+    target: &etas_package_metadata::CallableRequestTarget,
+) -> etas_package_metadata::CallableRequestTarget {
+    use etas_package_metadata::CallableValuePathKind;
+    let mut target = target.clone();
+    target.remap_paths(|kind, path| match kind {
+        CallableValuePathKind::Type => dependency_type_path(package, packages, path),
+        CallableValuePathKind::Effect if is_standard_effect_path(path) => path.to_vec(),
+        _ => dependency_path_with_graph(package, packages, path),
+    });
+    target
+}
+
 fn dependency_effect_row_input(
     package: &ProjectExternalPackageInput,
     packages: &[ProjectExternalPackageInput],
@@ -1063,7 +1100,7 @@ fn dependency_action_trace_input(
         }
         etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
             ProjectExternalActionTraceInput::ParameterCall {
-                parameter: parameter.clone(),
+                parameter: dependency_callable_request_target(package, packages, parameter),
             }
         }
         etas_package::PackageActionTraceMetadata::Seq { children } => {
@@ -1103,7 +1140,10 @@ fn dependency_action_trace_input(
                 .iter()
                 .map(|action| dependency_effect_ref_input(package, packages, action))
                 .collect(),
-            parameter_calls: parameter_calls.clone(),
+            parameter_calls: parameter_calls
+                .iter()
+                .map(|target| dependency_callable_request_target(package, packages, target))
+                .collect(),
         },
     }
 }
@@ -1471,7 +1511,7 @@ fn is_standard_type_path(path: &[String]) -> bool {
     }
     path.len() == 1
         && registry
-            .lookup_prelude(&path[0])
+            .lookup_prelude_in_namespace(&path[0], etas_std::StdNamespace::Type)
             .is_some_and(|symbol| matches!(symbol.kind, StdSymbolKind::Type))
 }
 

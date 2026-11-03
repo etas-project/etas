@@ -908,6 +908,7 @@ fn unavailable(id: etas_host::HostRequestId, message: &'static str) -> HostError
 }
 
 pub(crate) struct RunRequest {
+    pub replay_key_provider: std::sync::Arc<dyn etas_host::replay::ReplayKeyProvider>,
     pub dry_run: bool,
     pub allow_effects: bool,
     pub budget_overrides: RunBudgetOverrides,
@@ -924,6 +925,7 @@ pub(crate) fn run_checked(
     lifecycle: Option<&super::lifecycle::CommandLifecycle>,
 ) -> Result<super::lifecycle::ControlledRun, CliError> {
     let RunRequest {
+        replay_key_provider,
         dry_run,
         allow_effects,
         budget_overrides,
@@ -967,6 +969,7 @@ pub(crate) fn run_checked(
     let entry = EntryPoint { item };
     let entry_args = entry_args_from_strings(checked, program_args);
     let mut options = config.run_options();
+    options.replay_key_provider = replay_key_provider;
     options.code_definitions = definitions.map(|definitions| {
         std::sync::Arc::new(etas_interpreter::api::code::PreparedCodeDefinitions::new(
             definitions,
@@ -992,15 +995,26 @@ pub(crate) fn run_checked(
     )
 }
 
+pub(crate) struct ResumeRequest<'a> {
+    pub checkpoint: &'a etas_interpreter::api::codec::SourceCheckpoint,
+    pub definitions: Option<std::sync::Arc<etas_frontend::code::definition::NativeDefinitionStore>>,
+    pub compiler: Option<etas_driver::compiler::NativeCompilerService>,
+    pub replay_key_provider: std::sync::Arc<dyn etas_host::replay::ReplayKeyProvider>,
+}
+
 pub(crate) fn resume_checked(
     checked: &CheckedProject,
-    checkpoint: &etas_interpreter::api::codec::SourceCheckpoint,
-    definitions: Option<std::sync::Arc<etas_frontend::code::definition::NativeDefinitionStore>>,
-    compiler: Option<etas_driver::compiler::NativeCompilerService>,
+    request: ResumeRequest<'_>,
     config: CliHostConfig,
     profile: &ProfileHandle,
     lifecycle: Option<&super::lifecycle::CommandLifecycle>,
 ) -> Result<super::lifecycle::ControlledRun, CliError> {
+    let ResumeRequest {
+        checkpoint,
+        definitions,
+        compiler,
+        replay_key_provider,
+    } = request;
     let active_trace_specs = active_trace_specs_for_entry(checked, checkpoint.entry_item());
     let trace_spec_facts = trace_spec_facts_for_entry(checked, checkpoint.entry_item());
     let host = CliHost::console(
@@ -1011,6 +1025,7 @@ pub(crate) fn resume_checked(
     )?;
     let host = super::compiler::compose_host(host, compiler, config.compiler.is_some())?;
     let mut options = config.run_options();
+    options.replay_key_provider = replay_key_provider;
     options.code_definitions = definitions.map(|definitions| {
         std::sync::Arc::new(etas_interpreter::api::code::PreparedCodeDefinitions::new(
             definitions,

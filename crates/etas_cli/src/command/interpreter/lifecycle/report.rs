@@ -26,7 +26,7 @@ impl ForcedShutdown {
             "completed_units": op.completed_units(), "external_outcome": external_outcome(op.outcome()),
         })).collect();
         let mut report = JsonDocument::from(serde_json::json!({
-            "schema": "etas.cli.interpreter-report.v1", "incomplete": true,
+            "schema": "etas.cli.interpreter-report.v2", "incomplete": true,
             "outcome": {"kind": "cancelled"}, "termination": null, "shutdown": "pending",
             "trigger": self.trigger, "exit_code": self.exit.code(), "events": null,
             "pending_scopes": self.pending.scopes().len(), "pending_operations": operations,
