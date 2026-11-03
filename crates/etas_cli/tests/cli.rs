@@ -71,6 +71,8 @@ mod source_reexports;
 mod text_values;
 #[path = "cli/typed_output.rs"]
 mod typed_output;
+#[path = "cli/workspace_discovery.rs"]
+mod workspace_discovery;
 
 fn read_checkpoint_file(path: &Path) -> serde_json::Value {
     read_checkpoint_file_with_keys(path, None)
