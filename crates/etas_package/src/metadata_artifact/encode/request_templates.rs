@@ -10,6 +10,20 @@ pub(super) fn to_metadata(
             .map(|instance| {
                 Ok(etas_package_metadata::ActionRequestTemplate {
                     action: effect_ref_to_metadata(&instance.action)?,
+                    signature: instance
+                        .signature
+                        .as_ref()
+                        .map(|signature| {
+                            Ok::<_, PackageError>(etas_package_metadata::ActionRequestSignature {
+                                params: signature
+                                    .params
+                                    .iter()
+                                    .map(type_to_metadata)
+                                    .collect::<Result<_, _>>()?,
+                                output: type_to_metadata(&signature.output)?,
+                            })
+                        })
+                        .transpose()?,
                     type_bindings: instance
                         .type_bindings
                         .as_ref()

@@ -154,6 +154,18 @@ pub(super) fn build_environment(
         return Err(PackageError::Diagnostics(diagnostics));
     }
 
+    finish_environment(package_root, manifest, lockfile, index, dependencies)
+}
+
+fn finish_environment(
+    package_root: &Path,
+    manifest: &manifest::Manifest,
+    lockfile: &Lockfile,
+    index: Option<&metadata::PackageIndex>,
+    dependencies: Vec<ResolvedDependency>,
+) -> Result<PackageEnvironmentMetadata, PackageError> {
+    let mut diagnostics = Vec::new();
+
     let tool_bindings = manifest
         .bindings
         .tools
@@ -219,17 +231,9 @@ pub(super) fn build_environment(
     let public_metadata = index
         .map(|index| index.public_metadata.clone())
         .unwrap_or_default();
-    let mut effect_metadata = index
+    let effect_metadata = index
         .map(|index| index.effect_metadata.clone())
         .unwrap_or_default();
-    for dependency in &dependencies {
-        effect_metadata
-            .tags
-            .extend(dependency.effect_metadata.tags.clone());
-        effect_metadata
-            .extensions
-            .extend(dependency.effect_metadata.extensions.clone());
-    }
 
     let metadata_fingerprint = environment_fingerprint(
         manifest,
@@ -249,6 +253,109 @@ pub(super) fn build_environment(
         tool_bindings,
         metadata_fingerprint,
     })
+}
+
+/// Rebuild a producer's package environment from immutable, checksum-verified
+/// bytes and the already locked dependency graph. This never resolves or
+/// materializes a new dependency.
+pub fn environment_from_locked_snapshot(
+    snapshot: &crate::LockedPackageSourceSnapshot,
+    owner: &ResolvedDependency,
+) -> Result<PackageEnvironmentMetadata, PackageError> {
+    let root = snapshot.package_root();
+    let manifest = snapshot.manifest();
+    let invalid = |message: String| {
+        PackageError::diagnostic(
+            "package.snapshot.environment_mismatch",
+            message,
+            Some(root.to_owned()),
+        )
+    };
+    if PackageIdentity::current(manifest) != owner.identity
+        || owner.source.payload_checksum() != Some(snapshot.checksum())
+    {
+        return Err(invalid(
+            "locked snapshot does not identify the requested package".into(),
+        ));
+    }
+    let index_path = vendor::package_index_path(root);
+    let relative = index_path
+        .strip_prefix(root)
+        .map_err(|_| invalid("package index is outside the locked snapshot".into()))?;
+    let index: Option<metadata::PackageIndex> = snapshot
+        .file(relative)
+        .map(|bytes| {
+            serde_json::from_slice(bytes)
+                .map_err(|error| invalid(format!("locked package index is invalid: {error}")))
+        })
+        .transpose()?;
+    if index
+        .as_ref()
+        .is_some_and(|index| index.package != owner.identity)
+    {
+        return Err(invalid(
+            "locked package index has a different package identity".into(),
+        ));
+    }
+    let mut dependencies = Vec::new();
+    let mut used = BTreeSet::new();
+    for (name, spec) in &manifest.dependencies {
+        let import_root = spec.import_root(name);
+        let package_name = spec.package_name_constraint(name);
+        let mut matches = owner
+            .dependencies
+            .iter()
+            .enumerate()
+            .filter(|(_, dependency)| {
+                dependency.import_root == import_root
+                    && package_name.is_none_or(|name| dependency.identity.name == name)
+            });
+        let (position, dependency) = matches
+            .next()
+            .ok_or_else(|| invalid(format!("locked dependency `{name}` is missing")))?;
+        if matches.next().is_some() || !used.insert(position) {
+            return Err(invalid(format!("locked dependency `{name}` is ambiguous")));
+        }
+        if let Some(requirement) = spec.version()
+            && !version_satisfies(&dependency.identity.version, requirement)
+                .map_err(|error| invalid(format!("invalid dependency version: {error}")))?
+        {
+            return Err(invalid(format!(
+                "locked dependency `{name}` does not satisfy its version requirement"
+            )));
+        }
+        if !metadata::is_builtin_package(name) {
+            let from_index = index
+                .as_ref()
+                .and_then(|index| {
+                    index.dependencies.iter().find(|entry| {
+                        entry.import_root == import_root
+                            && entry.identity.name == dependency.identity.name
+                            && entry.identity.version == dependency.identity.version
+                    })
+                })
+                .ok_or_else(|| {
+                    invalid(format!("locked index does not contain dependency `{name}`"))
+                })?;
+            if from_index != dependency {
+                return Err(invalid(format!(
+                    "locked dependency `{name}` differs from the package index"
+                )));
+            }
+        }
+        dependencies.push(dependency.clone());
+    }
+    if used.len() != owner.dependencies.len() {
+        return Err(invalid(
+            "locked package graph contains undeclared dependencies".into(),
+        ));
+    }
+    let lockfile = Lockfile {
+        version: 1,
+        manifest_fingerprint: Some(lockfile::manifest_dependency_fingerprint(manifest)),
+        packages: Vec::new(),
+    };
+    finish_environment(root, manifest, &lockfile, index.as_ref(), dependencies)
 }
 
 fn validate_transitive_lock_graph(
@@ -394,7 +501,7 @@ fn environment_fingerprint(
     effect_metadata: &metadata::PackageEffectMetadata,
 ) -> String {
     let mut fingerprint_parts = vec![
-        "etas-package-env:v2".to_owned(),
+        "etas-package-env:v3".to_owned(),
         manifest.package.name.clone(),
         manifest.package.version.clone(),
         manifest.package.edition.clone(),
@@ -419,6 +526,7 @@ fn environment_fingerprint(
                 dependency.import_root
             ));
         }
+        append_dependency_effect_fingerprint(&mut fingerprint_parts, dependency, "");
     }
     for module in external_modules {
         fingerprint_parts.push(format!("module:{}:{}", module.id, module.path.join(".")));
@@ -447,6 +555,37 @@ fn environment_fingerprint(
         ));
     }
     fingerprint_parts.join("|")
+}
+
+fn append_dependency_effect_fingerprint(
+    parts: &mut Vec<String>,
+    dependency: &ResolvedDependency,
+    parent: &str,
+) {
+    let identity = format!(
+        "{parent}/{}:{}:{}:{}",
+        dependency.import_root,
+        dependency.identity.name,
+        dependency.identity.version,
+        dependency.identity.edition
+    );
+    for tag in &dependency.effect_metadata.tags {
+        parts.push(format!(
+            "dep-effect-tag:{identity}:{}:{}",
+            tag.path.join("."),
+            tag.runtime_requirement.as_deref().unwrap_or_default()
+        ));
+    }
+    for extension in &dependency.effect_metadata.extensions {
+        parts.push(format!(
+            "dep-effect-extension:{identity}:{}:{}",
+            extension.child.join("."),
+            extension.parent.join(".")
+        ));
+    }
+    for child in &dependency.dependencies {
+        append_dependency_effect_fingerprint(parts, child, &identity);
+    }
 }
 
 fn dependency_source_checksum(dependency: &ResolvedDependency) -> &str {
@@ -710,4 +849,58 @@ fn lockfile_package_for_spec<'a>(
         .packages
         .iter()
         .find(|package| package.import_root == import_root)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dependency(name: &str, children: Vec<ResolvedDependency>) -> ResolvedDependency {
+        ResolvedDependency {
+            identity: metadata::PackageIdentity {
+                name: name.into(),
+                version: "1.0.0".into(),
+                edition: "2026".into(),
+            },
+            import_root: name.into(),
+            source: metadata::ResolvedDependencySource::Builtin {
+                checksum: "unchanged".into(),
+            },
+            dependencies: children,
+            public_metadata: Default::default(),
+            effect_metadata: Default::default(),
+            tool_bindings: vec![],
+        }
+    }
+
+    fn fingerprint(dependency: &ResolvedDependency) -> Vec<String> {
+        let mut parts = Vec::new();
+        append_dependency_effect_fingerprint(&mut parts, dependency, "");
+        parts
+    }
+
+    #[test]
+    fn transitive_effect_metadata_changes_environment_fingerprint() {
+        let mut root = dependency("parent", vec![dependency("child", vec![])]);
+        let before = fingerprint(&root);
+        root.dependencies[0]
+            .effect_metadata
+            .tags
+            .push(metadata::PackageEffectTagMetadata {
+                path: vec!["child".into(), "Effect".into()],
+                runtime_requirement: Some("network".into()),
+            });
+        let with_tag = fingerprint(&root);
+        assert_ne!(before, with_tag);
+        root.dependencies[0].effect_metadata.extensions.push(
+            metadata::PackageEffectExtensionMetadata {
+                child: vec!["child".into(), "Effect".into()],
+                parent: vec!["parent".into(), "Effect".into()],
+            },
+        );
+        assert_ne!(with_tag, fingerprint(&root));
+        let before_rename = fingerprint(&root);
+        root.import_root = "other_alias".into();
+        assert_ne!(before_rename, fingerprint(&root));
+    }
 }

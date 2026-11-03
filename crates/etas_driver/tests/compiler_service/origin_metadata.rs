@@ -153,7 +153,7 @@ fn published_definition_origins_replay_through_binary_driver_and_reflection_with
         let expression = *checked.types.reflections.keys().next().unwrap();
         let reference = definitions.reflect_agent(expression).unwrap();
         let view = definitions.resolve(&reference).unwrap();
-        let annotation = &view.annotations()[0];
+        let annotation = &view.annotations().unwrap()[0];
         assert!(
             matches!(annotation.arguments[0].value.as_ref(), StaticValueInfo::Reference(AnnotationReferenceInfo::Module { package, path }) if *package == expected.package && path == &["library", "api"])
         );
@@ -188,6 +188,90 @@ fn published_definition_origins_replay_through_binary_driver_and_reflection_with
             )
         )));
     }
+}
+
+#[test]
+fn git_metadata_replays_the_publishers_definition_origin() {
+    let workspace = workspace();
+    let library = workspace.0.join("library");
+    let expected = etas_package::read_package_metadata_artifact(&library)
+        .unwrap()
+        .unwrap()
+        .public_metadata
+        .definition_origins
+        .unwrap()
+        .package;
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&library)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["add", "-f", "."]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "metadata",
+    ]);
+    let revision = git(&["rev-parse", "HEAD"]);
+    let root = workspace.0.join("git-consumer");
+    std::fs::create_dir_all(root.join("src/app")).unwrap();
+    std::fs::write(
+        root.join("etas.toml"),
+        format!(
+            "[package]\nname = \"git-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[dependencies]\nlib = {{ package = \"origin-library\", version = \"0.1.0\", import = \"first\", git = \"file://{}\", rev = \"{}\" }}\n[[bin]]\nname = \"app\"\nmodule = \"app.main\"\nflow = \"main\"\n",
+            library.display(), revision
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/app/main.es"),
+        "module app.main; import first.library.api.lookup as chosen; @custom(symbol = chosen) agent Worker() -> i32 { return abort(\"not executed\"); } flow main() -> i32 { let definition = ^Worker; return 1; }",
+    )
+    .unwrap();
+    etas_driver::update_package(
+        &options(&root),
+        PackageUpdateRequest {
+            package_root: root.clone(),
+        },
+    )
+    .unwrap();
+    let loaded = etas_driver::load_project(
+        &options(&root),
+        LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    let checked = check(&loaded);
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    let reference = definitions.reflect_agent(expression).unwrap();
+    let view = definitions.resolve(&reference).unwrap();
+    assert!(matches!(
+        view.annotations().unwrap()[0].arguments[0].value.as_ref(),
+        StaticValueInfo::Reference(AnnotationReferenceInfo::Declaration(key))
+            if key.package() == expected && key.declaration() == ["lookup"]
+    ));
 }
 
 #[test]
@@ -236,14 +320,65 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
         )
         .unwrap();
     }
-    let checked = check(&loaded);
-    let error = prepare_native_definitions(&loaded, &checked, Default::default())
-        .err()
-        .expect("forged owner must be rejected");
-    assert!(
-        error.to_string().contains("prepared source origin"),
-        "{error}"
-    );
+    for snapshot in &mut input
+        .descriptors
+        .as_mut()
+        .unwrap()
+        .headers
+        .as_mut()
+        .unwrap()
+        .snapshots
+        .as_mut()
+        .unwrap()
+        .flows
+    {
+        let original = snapshot.identity.package();
+        snapshot.identity = DefinitionKey::new(
+            forged,
+            snapshot.identity.module().to_vec(),
+            snapshot.identity.declaration().to_vec(),
+            snapshot.identity.kind(),
+        )
+        .unwrap();
+        snapshot.revision.definition =
+            etas_code::CallableId::declaration(snapshot.identity.clone()).unwrap();
+        snapshot.dependencies.lexical_owner = snapshot.identity.clone();
+        for module in &mut snapshot.dependencies.modules {
+            if module.package == original {
+                module.package = forged;
+            }
+        }
+        for binding in &mut snapshot.dependencies.bindings {
+            if binding.definition.package() == original {
+                binding.definition = DefinitionKey::new(
+                    forged,
+                    binding.definition.module().to_vec(),
+                    binding.definition.declaration().to_vec(),
+                    binding.definition.kind(),
+                )
+                .unwrap();
+            }
+        }
+    }
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(output.checked.is_none(), "forged owner must be rejected");
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic
+                    .message
+                    .contains("dependency source origin conflicts")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api"));
 }
 
 #[test]
@@ -286,6 +421,21 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .callables[0]
         .id = etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
+    // This forged Tool no longer claims a Flow snapshot. Keep the graph
+    // internally coherent so the frontend can reject the export-kind mismatch.
+    metadata
+        .public_metadata
+        .definition_descriptors
+        .as_mut()
+        .unwrap()
+        .headers
+        .as_mut()
+        .unwrap()
+        .snapshots
+        .as_mut()
+        .unwrap()
+        .flows
+        .clear();
     let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
     let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
     etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
@@ -410,6 +560,264 @@ public flow lookup() -> i32 { return 7; }
         etas_package_metadata::definition_descriptors_fingerprint(replayed),
         etas_package_metadata::definition_descriptors_fingerprint(&descriptors)
     );
+}
+
+#[test]
+fn external_callable_contract_rejects_effect_signature_arity_mismatch() {
+    let workspace = workspace_with_source(
+        r#"
+module library.api;
+public flow relay(f: () -> unit ![]) -> unit ![] { return; }
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let mut loaded = consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+flow main() -> unit { relay(() => { return; }); return; }
+"#
+    .into();
+    let relay = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "relay"))
+        .unwrap();
+    relay.param_names.clear();
+    relay.params.clear();
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .contains("callable descriptor and public signature disagree on parameter count")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    let source = &loaded.loaded.input.sources[0];
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let range = diagnostic.primary.span.range;
+    assert!(
+        source.text[range.start.0 as usize..range.end.0 as usize].contains("first.library.api")
+    );
+    assert!(output.checked.is_none());
+}
+
+#[test]
+fn callback_handler_scope_survives_published_metadata_and_consumer_loading() {
+    use etas_code::descriptor::{EffectTargetInfo, ParameterHandlerScopeInfo, TraceInfo};
+
+    let workspace = workspace_with_source(
+        r#"
+module library.api;
+import std.io.{println, eprintln};
+public effect Choice { action decide() -> bool; }
+public flow relay(f: () -> unit ![]) -> unit ![] {
+    handle { f(); } with { Console.stdout_write(_) => { resume; } };
+    return;
+}
+
+public flow choose(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { resume true; } };
+    return;
+}
+public flow stop(f: () -> unit ![]) -> unit ![] {
+    handle { f(); } with { Console.stdout_write(_) => { finish (); } };
+    return;
+}
+public flow logged(f: () -> unit ![Choice.decide]) -> unit ![] {
+    handle { f(); } with { Choice.decide() => { println("handled")?; eprintln("after")?; resume true; } };
+    return;
+}
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+        .unwrap()
+        .unwrap();
+    let descriptors = metadata.public_metadata.definition_descriptors.unwrap();
+    let mut scopes = descriptors
+        .graph
+        .traces
+        .iter()
+        .filter_map(|trace| match trace {
+            TraceInfo::ParameterCall(call)
+                if call
+                    .callable
+                    .as_declaration()
+                    .is_some_and(|id| id.declaration() == ["relay"]) =>
+            {
+                call.handlers.as_ref()
+            }
+            _ => None,
+        });
+    let handlers = scopes
+        .next()
+        .expect("checked callback scope in published trace");
+    let [ParameterHandlerScopeInfo::Handle { arms }] = handlers.as_slice() else {
+        panic!("expected one checked resuming handler: {handlers:?}");
+    };
+    assert!(
+        matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "stdout_write") && arm.completion.value() == &etas_code::descriptor::ReturnObservationInfo::Unit)
+    );
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["choose"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
+                if matches!(arms.as_slice(), [arm] if matches!(&arm.action.target, EffectTargetInfo::Action { name, .. } if name == "decide")
+                    && arm.completion.value() == &etas_code::descriptor::ReturnObservationInfo::Bool(true)))
+    )), "boolean handler must survive metadata projection");
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["stop"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
+                if matches!(arms.as_slice(), [arm] if matches!(&arm.completion, etas_code::descriptor::ParameterHandlerCompletionInfo::Finish { .. })))
+    )), "finish handler must survive metadata projection");
+    assert!(descriptors.graph.traces.iter().any(|trace| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["logged"])
+            && matches!(call.handlers.as_deref(), Some([ParameterHandlerScopeInfo::Handle { arms }])
+                if matches!(arms.as_slice(), [arm] if !matches!(descriptors.graph.traces[arm.trace.0 as usize], TraceInfo::Empty)))
+    )), "effectful handler trace must survive metadata projection");
+
+    let mut loaded = consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import first.library.api.choose;
+import first.library.api.stop;
+import first.library.api.logged;
+flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped = ^stop; let logging = ^logged; return; }
+"#
+    .into();
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    let checked = check(&loaded);
+    let replayed = checked.external_definition_origins()[0]
+        .descriptors
+        .as_ref()
+        .unwrap();
+    assert_eq!(replayed, &descriptors);
+    let fingerprint = etas_package_metadata::definition_descriptors_fingerprint(&descriptors);
+    let (call_index, _) = replayed.graph.traces.iter().enumerate().find(|(_, trace)| matches!(trace,
+        TraceInfo::ParameterCall(call) if call.callable.as_declaration().is_some_and(|id| id.declaration() == ["logged"])
+            && call.handlers.as_ref().is_some_and(|handlers| !handlers.is_empty())
+    )).expect("checked handler call must be present in the descriptor");
+    let reference = etas_effects::ParameterHandlerScopeRef::External {
+        graph: fingerprint,
+        parameter_call: call_index as u32,
+        call_index: 0,
+        scope: 0,
+    };
+    let (graph, _) = checked
+        .effects
+        .external_handler_scope(reference)
+        .expect("checked effect facts must retain the exact published graph");
+    assert_eq!(graph, &replayed.graph);
+    let invalid = etas_effects::ParameterHandlerScopeRef::External {
+        graph: fingerprint,
+        parameter_call: call_index as u32,
+        call_index: 1,
+        scope: 0,
+    };
+    assert!(checked.effects.external_handler_scope(invalid).is_none());
+    let logged = replayed
+        .graph
+        .traces
+        .iter()
+        .find_map(|trace| match trace {
+            TraceInfo::ParameterCall(call)
+                if call
+                    .callable
+                    .as_declaration()
+                    .is_some_and(|id| id.declaration() == ["logged"]) =>
+            {
+                call.handlers.as_deref()
+            }
+            _ => None,
+        })
+        .expect("published callback handler must survive consumer loading");
+    let [ParameterHandlerScopeInfo::Handle { arms }] = logged else {
+        panic!("expected a single handler scope");
+    };
+    let [arm] = arms.as_slice() else {
+        panic!("expected a single handler arm");
+    };
+    let mut pending = vec![arm.trace];
+    let mut actions = Vec::new();
+    while let Some(reference) = pending.pop() {
+        match &replayed.graph.traces[reference.0 as usize] {
+            TraceInfo::Empty => {}
+            TraceInfo::Event(effect) => {
+                let EffectTargetInfo::Action { name, .. } = &effect.target else {
+                    panic!("handler trace event must retain action identity");
+                };
+                actions.push(name.as_str());
+            }
+            TraceInfo::Seq(parts) => pending.extend(parts.iter().rev().copied()),
+            other => panic!("expected exact ordered handler trace, got {other:?}"),
+        }
+    }
+    assert_eq!(actions, ["stdout_write", "stderr_write"]);
+
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+flow write() -> unit ![] { println("hello")?; return; }
+flow main() -> unit ![] { relay(write); return; }
+"#
+    .into();
+    let checked = check(&loaded);
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    let console = etas_effects::Effect::Action(etas_effects::ActionRef {
+        tag: etas_effects::CONSOLE_TAG,
+        action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+    });
+    assert!(
+        summary.requested_actions.effects.contains(&console),
+        "{summary:?}"
+    );
+    assert!(
+        !summary.default_actions.effects.contains(&console),
+        "{summary:?}"
+    );
+}
+
+#[test]
+fn callback_default_actions_remain_possible_for_partial_or_mixed_external_scopes() {
+    for body in [
+        r#"handle { f(); } with { Console.stdout_write("other") => { resume; } };"#,
+        r#"handle { f(); } with { Console.stdout_write(_) => { resume; } }; f();"#,
+    ] {
+        let workspace = workspace_with_source(&format!(
+            "module library.api; public flow relay(f: () -> unit ![]) -> unit ![] {{ {body} return; }} public flow lookup() -> i32 {{ return 7; }}"
+        ));
+        let mut loaded = consumer(&workspace, "first");
+        loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+flow write() -> unit ![] { println("hello")?; return; }
+flow main() -> unit ![] { relay(write); return; }
+"#
+        .into();
+        let checked = check(&loaded);
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        let console = etas_effects::Effect::Action(etas_effects::ActionRef {
+            tag: etas_effects::CONSOLE_TAG,
+            action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+        });
+        assert!(
+            summary.requested_actions.effects.contains(&console),
+            "{body}: {summary:?}"
+        );
+        assert!(
+            summary.default_actions.effects.contains(&console),
+            "{body}: {summary:?}"
+        );
+    }
 }
 
 #[test]
@@ -547,16 +955,7 @@ flow inspect() -> unit { let definition = ^Worker; return; }
     let native = definitions.resolve(&reference).unwrap();
     assert_eq!(snapshot.revision_info(), *native.revision());
     assert_eq!(snapshot.dependencies, native.dependency_info().unwrap());
-    assert_eq!(
-        native
-            .environment()
-            .unwrap()
-            .contract()
-            .header()
-            .methods
-            .len(),
-        2
-    );
+    assert_eq!(native.environment().unwrap().contract().methods().len(), 2);
     assert_eq!(headers.agents[0].methods.len(), 1);
     for alias in ["first", "second"] {
         let consumer = consumer(&workspace, alias);

@@ -23,21 +23,23 @@ pub use manifest::{
     ToolBinding, discover_manifest, read_manifest,
 };
 pub use metadata::{
-    PackageActionRequestMetadata, PackageActionSummaryMetadata,
-    PackageActionTraceEventSourceMetadata, PackageActionTraceMetadata,
-    PackageAgentSignatureMetadata, PackageCallableSpecSatisfactionMetadata,
-    PackageDefaultHandlerContributionMetadata, PackageDefaultHandlerEffectsMetadata,
-    PackageEffectActionArgKindMetadata, PackageEffectActionSignatureMetadata,
-    PackageEffectArgMetadata, PackageEffectExtensionMetadata, PackageEffectMetadata,
-    PackageEffectRefMetadata, PackageEffectRowMetadata, PackageEffectSummaryMetadata,
-    PackageEffectTagMetadata, PackageEnvironmentMetadata, PackageExternalExportMetadata,
-    PackageExternalModuleMetadata, PackageExternalModuleOwnerMetadata,
-    PackageFlowSignatureMetadata, PackageIdentity, PackageIndex, PackageLatentFlowSummaryMetadata,
-    PackageNamedSignatureMetadata, PackageParameterRequestMetadata, PackagePublicMetadata,
-    PackageReExportMetadata, PackageRecordFieldMetadata, PackageRequestInstantiationMetadata,
-    PackageSpecBoundMetadata, PackageSpecImplMetadata, PackageSpecKindMetadata,
-    PackageSpecMethodMetadata, PackageSpecSignatureMetadata, PackageToolBindingMetadata,
-    PackageToolSchemaMetadata, PackageToolSignatureMetadata, PackageTraceSpecClauseKindMetadata,
+    PackageActionRequestMetadata, PackageActionRequestSignatureMetadata,
+    PackageActionSummaryMetadata, PackageActionTraceEventSourceMetadata,
+    PackageActionTraceMetadata, PackageAgentSignatureMetadata,
+    PackageCallableSpecSatisfactionMetadata, PackageDefaultHandlerContributionMetadata,
+    PackageDefaultHandlerEffectsMetadata, PackageEffectActionArgKindMetadata,
+    PackageEffectActionSignatureMetadata, PackageEffectArgMetadata, PackageEffectExtensionMetadata,
+    PackageEffectMetadata, PackageEffectRefMetadata, PackageEffectRowMetadata,
+    PackageEffectSummaryMetadata, PackageEffectTagMetadata, PackageEnvironmentMetadata,
+    PackageExternalExportMetadata, PackageExternalModuleMetadata,
+    PackageExternalModuleOwnerMetadata, PackageFlowSignatureMetadata, PackageIdentity,
+    PackageIndex, PackageLatentFlowSummaryMetadata, PackageNamedSignatureMetadata,
+    PackageParameterRequestMetadata, PackagePublicMetadata, PackageReExportMetadata,
+    PackageRecordFieldMetadata, PackageRequestInstantiationMetadata, PackageSpecBoundMetadata,
+    PackageSpecImplMetadata, PackageSpecKindMetadata, PackageSpecMethodMetadata,
+    PackageSpecSignatureMetadata, PackageToolBindingMetadata, PackageToolSchemaMetadata,
+    PackageToolSignatureMetadata, PackageTraceSelectorBoundMetadata,
+    PackageTraceSelectorOperandMetadata, PackageTraceSpecClauseKindMetadata,
     PackageTraceSpecClauseMetadata, PackageTraceSpecConformanceMetadata,
     PackageTraceSpecConformanceTargetMetadata, PackageTraceSpecSummaryMetadata,
     PackageTypeMetadata, PackageTypeSpecSatisfactionMetadata, ResolvedDependency,
@@ -54,7 +56,8 @@ pub use metadata_artifact::{
 pub use pack::{PackPackageOptions, PackedPackageResult, pack_package};
 pub use resolver::{
     LockPackageOptions, LockedPackageResult, MaterializePackageOptions, MaterializedPackageResult,
-    PreparePackageOptions, PreparedPackage, lock_package, materialize_package, prepare_package,
+    PreparePackageOptions, PreparedPackage, environment_from_locked_snapshot, lock_package,
+    materialize_package, prepare_package,
 };
 pub use source::{GitHubSourceConfig, PackageSourceConfig, RegistrySourceConfig};
 pub use source_snapshot::{

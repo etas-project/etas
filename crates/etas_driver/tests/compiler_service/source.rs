@@ -15,7 +15,24 @@ pub(super) fn prepared_with_bodies(
     source: &str,
     bodies: &[&str],
 ) -> (etas_frontend::CheckedProgram, Arc<NativeDefinitionStore>) {
+    prepared_with_source_key(source, bodies, None)
+}
+
+pub(super) fn prepared_with_source_key(
+    source: &str,
+    bodies: &[&str],
+    stable_source_key: Option<etas_code::StableSourceKey>,
+) -> (etas_frontend::CheckedProgram, Arc<NativeDefinitionStore>) {
     let mut input = ProjectInput::single_source(SourceInput::anonymous(source));
+    if let Some(key) = stable_source_key {
+        input
+            .environment
+            .stable_source_keys
+            .push(etas_frontend::ProjectStableSourceKeyInput {
+                source: input.sources[0].id,
+                key,
+            });
+    }
     input.options.reflection.retain_bodies = bodies.iter().map(|body| (*body).to_owned()).collect();
     let output = Frontend.check_project(input);
     assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
@@ -39,6 +56,75 @@ pub(super) fn prepared_with_bodies(
         Default::default(),
     ));
     (checked, definitions)
+}
+
+#[test]
+fn editing_agent_checks_cancellation_during_method_snapshot_rebuild() {
+    struct CancelAt {
+        calls: AtomicUsize,
+        at: usize,
+        kind: etas_utils::PipelineInterruptionKind,
+    }
+    impl etas_utils::PipelineExecutionControl for CancelAt {
+        fn checkpoint(&self) -> Result<(), etas_utils::PipelineInterruption> {
+            if self.calls.fetch_add(1, Ordering::SeqCst) + 1 == self.at {
+                return Err(etas_utils::PipelineInterruption {
+                    kind: self.kind,
+                    reason: "cancel during edit".into(),
+                });
+            }
+            Ok(())
+        }
+    }
+    let (checked, definitions) = prepared_with_bodies(
+        r#"
+module app;
+agent Worker() -> i32 ![] { return 1; }
+impl agent Worker {
+    flow one() -> i32 ![] { return 1; }
+    flow two() -> i32 ![] { return 2; }
+}
+flow main() -> unit { let definition = ^Worker; return; }
+"#,
+        &["app.Worker"],
+    );
+    let expression = checked
+        .types
+        .reflections
+        .iter()
+        .find_map(|(expr, fact)| {
+            matches!(
+                fact.target,
+                etas_types::CheckedReflectionTarget::Agent { .. }
+            )
+            .then_some(*expr)
+        })
+        .unwrap();
+    let original = definitions.reflect_agent(expression).unwrap();
+    let body = definitions
+        .syntax_operations()
+        .parse_body("return 2;")
+        .unwrap();
+    let retained = definitions.retained_bytes().unwrap();
+    for kind in [
+        etas_utils::PipelineInterruptionKind::Cancelled,
+        etas_utils::PipelineInterruptionKind::ResourceLimit,
+    ] {
+        let control = CancelAt {
+            calls: AtomicUsize::new(0),
+            at: 3,
+            kind,
+        };
+        let result = definitions.with_body_controlled(&original, body.clone(), &control);
+        assert!(
+            matches!(result, Err(etas_code::definition::DefinitionOperationError::Syntax(
+            etas_code::syntax::SyntaxOperationError::Interrupted(interruption)
+        )) if interruption.kind == kind)
+        );
+        assert_eq!(control.calls.load(Ordering::SeqCst), 3);
+        assert_eq!(definitions.retained_bytes().unwrap(), retained);
+    }
+    assert!(definitions.with_body(&original, body).is_ok());
 }
 
 fn execute_source(body: &str, allowed: bool) -> etas_interpreter::api::RunResult {

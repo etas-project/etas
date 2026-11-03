@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use etas_frontend::{CheckedProgramData, SourceKind, code::identity::SourceModuleOrigin};
+use etas_frontend::{
+    CheckedProgramData, SourceKind,
+    code::identity::{DefinitionOrigins, SourceModuleOrigin},
+};
 use etas_hir::HirModuleId;
 
 use crate::{DriverError, LoadedDriverProject};
@@ -14,6 +17,11 @@ pub fn source_definition_origins(
     loaded: &LoadedDriverProject,
     checked: &CheckedProgramData,
 ) -> Result<HashMap<HirModuleId, SourceModuleOrigin>, DriverError> {
+    if !checked.uses_environment(&loaded.loaded.input.environment) {
+        return Err(invalid(
+            "checked environment differs from the prepared driver input",
+        ));
+    }
     let provenance = &loaded.source_definition_provenance;
     let sources = loaded
         .loaded
@@ -84,6 +92,13 @@ pub fn source_definition_origins(
         let origin = SourceModuleOrigin::declared(checked, *module, owner)
             .map_err(|error| invalid(&error.to_string()))?;
         modules.insert(*module, origin);
+    }
+    let checked_origins = DefinitionOrigins::checked_source_modules(checked)
+        .map_err(|error| invalid(&error.to_string()))?;
+    if modules != checked_origins {
+        return Err(invalid(
+            "checked source module identities differ from prepared package origins",
+        ));
     }
     Ok(modules)
 }

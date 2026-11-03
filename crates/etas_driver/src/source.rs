@@ -19,8 +19,10 @@ use crate::{
     runtime_source::RuntimeSourcePlan,
 };
 
+mod locked;
 #[cfg(test)]
 mod tests;
+pub(crate) use locked::load_locked_source_project;
 
 #[derive(Clone, Debug)]
 pub struct LoadProjectRequest {
@@ -74,11 +76,11 @@ pub fn load_project(
         ProjectSourceLoadScope::FullSourceTree
     };
     let source_load_span = options.profile.span("driver.source_load", "driver");
-    let mut loaded = ProjectSourceLoader::default()
+    let loaded = ProjectSourceLoader::default()
         .load(ProjectSourceLoadOptions {
             project_root: local_project.project_root.clone(),
-            roots: local_project.roots,
-            entry: local_project.entry,
+            roots: local_project.roots.clone(),
+            entry: local_project.entry.clone(),
             scope,
             source_kind,
             import_search_roots,
@@ -92,13 +94,25 @@ pub fn load_project(
     options
         .profile
         .counter("frontend.loaded_source_files", loaded.sources.len() as u64);
+    finish_loaded_project(options, loaded, local_project, request.entry_policy)
+}
+
+fn finish_loaded_project(
+    options: &DriverOptions,
+    mut loaded: LoadedProjectInput,
+    local_project: LocalSourceProject,
+    entry_policy: EntryPolicy,
+) -> Result<LoadedDriverProject, DriverError> {
     let environment_span = options
         .profile
         .span("driver.frontend_environment", "driver");
     loaded.input.environment = local_project.environment;
     drop(environment_span);
-    loaded.input.options.entry_policy = request.entry_policy;
+    loaded.input.options.entry_policy = entry_policy;
     loaded.input.options.reflection = local_project.reflection;
+    if let Some(target) = &options.residual_target {
+        loaded.input.options.residual_target = target.clone();
+    }
     append_source_dependency_sources(&mut loaded, &local_project.source_dependencies)?;
     options
         .profile
@@ -106,15 +120,126 @@ pub fn load_project(
     let source_definition_provenance = crate::compiler::capture_source_definition_provenance(
         local_project.mode,
         local_project.package_root.as_deref(),
+        (local_project.mode == DriverProjectMode::SingleFile)
+            .then(|| local_project.roots.first())
+            .flatten()
+            .map(PathBuf::as_path),
         local_project.package_environment.as_ref(),
         &loaded.input,
     )?;
+    loaded.input.environment.local_source_package =
+        source_definition_provenance.local_package_key();
+    loaded.input.environment.dependency_source_packages = source_definition_provenance
+        .dependency_source_packages()
+        .into_iter()
+        .filter(|origin| {
+            loaded
+                .input
+                .environment
+                .external_packages
+                .iter()
+                .any(|package| package.id == origin.package)
+        })
+        .collect();
+    if let Some(package_root) = local_project.package_root.as_deref() {
+        let package = source_definition_provenance
+            .local_package_key()
+            .ok_or_else(|| {
+                DriverError::InvalidInput("package source has no checked package identity".into())
+            })?;
+        for source in &loaded.input.sources {
+            let (owner, root) = match &source.kind {
+                SourceKind::SourceProjectFile | SourceKind::SingleFileInput => {
+                    (package, package_root)
+                }
+                SourceKind::DependencySourceOverlay {
+                    package,
+                    import_root,
+                } => {
+                    let mut matches = local_project.source_dependencies.iter().filter(|overlay| {
+                        overlay.package == *package && overlay.import_root == *import_root
+                    });
+                    let overlay = matches.next().ok_or_else(|| {
+                        DriverError::InvalidInput("dependency source has no locked snapshot".into())
+                    })?;
+                    if matches.next().is_some() {
+                        return Err(DriverError::InvalidInput(
+                            "dependency source has ambiguous locked snapshots".into(),
+                        ));
+                    }
+                    (
+                        source_definition_provenance
+                            .dependency_package_for(*package, import_root)?,
+                        overlay.snapshot.package_root(),
+                    )
+                }
+                _ => continue,
+            };
+            loaded
+                .input
+                .environment
+                .stable_source_keys
+                .push(stable_package_source_key(source, owner, root)?);
+        }
+    }
+    if loaded.input.environment.local_source_package.is_none() {
+        loaded.input.environment.standalone_source_packages = loaded
+            .input
+            .sources
+            .iter()
+            .filter(|source| {
+                matches!(
+                    source.kind,
+                    SourceKind::SourceProjectFile | SourceKind::SingleFileInput
+                )
+            })
+            .map(|source| {
+                Ok(etas_frontend::ProjectStandaloneSourcePackage {
+                    source: source.id,
+                    package: source_definition_provenance.local_package_for(source)?,
+                })
+            })
+            .collect::<Result<Vec<_>, DriverError>>()?;
+    }
     Ok(LoadedDriverProject {
         loaded,
         package_root: local_project.package_root,
         package_environment: local_project.package_environment,
         mode: local_project.mode,
         source_definition_provenance,
+    })
+}
+
+pub(crate) fn stable_package_source_key(
+    source: &etas_frontend::SourceInput,
+    package: etas_code::PackageKey,
+    package_root: &Path,
+) -> Result<etas_frontend::ProjectStableSourceKeyInput, DriverError> {
+    let path = source
+        .path
+        .as_deref()
+        .ok_or_else(|| DriverError::InvalidInput("package source has no physical path".into()))?;
+    let relative = path.strip_prefix(package_root).map_err(|_| {
+        DriverError::InvalidInput("package source is outside its package root".into())
+    })?;
+    let segments = relative
+        .components()
+        .map(|part| match part {
+            std::path::Component::Normal(part) => part
+                .to_str()
+                .map(str::to_owned)
+                .ok_or_else(|| DriverError::InvalidInput("source path is not UTF-8".into())),
+            _ => Err(DriverError::InvalidInput(
+                "package source path is not a normalized relative path".into(),
+            )),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let key =
+        etas_code::StableSourceKey::new(etas_code::StableSourceOrigin::Package(package), &segments)
+            .map_err(|_| DriverError::InvalidInput("package source path is invalid".into()))?;
+    Ok(etas_frontend::ProjectStableSourceKeyInput {
+        source: source.id,
+        key,
     })
 }
 

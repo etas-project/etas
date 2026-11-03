@@ -542,6 +542,9 @@ pub struct PackageRecordFieldMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectSummaryMetadata {
+    pub residual_checks: Vec<etas_code::residual::identity::ResidualObligationRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub behavior: Option<etas_package_metadata::CallableValueBehavior>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handler_requests: Option<PackageRequestInstantiationMetadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -570,6 +573,13 @@ pub struct PackageRequestInstantiationMetadata {
 pub struct PackageActionRequestMetadata {
     pub action: PackageEffectRefMetadata,
     pub type_bindings: Option<Vec<(String, PackageTypeMetadata)>>,
+    pub signature: Option<PackageActionRequestSignatureMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageActionRequestSignatureMetadata {
+    pub params: Vec<PackageTypeMetadata>,
+    pub output: PackageTypeMetadata,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -635,6 +645,7 @@ pub enum PackageActionTraceEventSourceMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageLatentFlowSummaryMetadata {
+    pub residual_checks: Vec<etas_code::residual::identity::ResidualObligationRef>,
     #[serde(default)]
     pub declared_bound: PackageEffectRowMetadata,
     #[serde(default)]
@@ -656,6 +667,7 @@ pub struct PackageSpecSignatureMetadata {
     pub kind: PackageSpecKindMetadata,
     #[serde(default)]
     pub param_names: Vec<String>,
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
     #[serde(default)]
     pub callable: Option<PackageFlowSignatureMetadata>,
     #[serde(default)]
@@ -726,6 +738,7 @@ pub enum PackageTraceSpecConformanceTargetMetadata {
     Inline,
     Named {
         spec: Vec<String>,
+        definition: etas_code::DefinitionKey,
         #[serde(default)]
         args: Vec<PackageTypeMetadata>,
     },
@@ -740,8 +753,8 @@ pub struct PackageToolSchemaMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageTraceSpecSummaryMetadata {
     pub trace_spec: Vec<String>,
-    #[serde(default)]
-    pub clauses: Vec<PackageTraceSpecClauseMetadata>,
+    pub definition: etas_code::DefinitionKey,
+    pub alternatives: Vec<Vec<PackageTraceSpecClauseMetadata>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -755,6 +768,27 @@ pub struct PackageTraceSpecClauseMetadata {
     pub target: Option<PackageEffectRowMetadata>,
     #[serde(default)]
     pub obligation: Option<PackageEffectRowMetadata>,
+    #[serde(default)]
+    pub selector_bounds: Vec<PackageTraceSelectorBoundMetadata>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PackageTraceSelectorBoundMetadata {
+    pub operand: PackageTraceSelectorOperandMetadata,
+    pub effect_path: Vec<String>,
+    pub argument: u32,
+    pub binding: String,
+    pub spec_path: Vec<String>,
+    pub spec_args: Vec<PackageTypeMetadata>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PackageTraceSelectorOperandMetadata {
+    Pattern,
+    Guard,
+    Target,
+    Obligation,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

@@ -18,6 +18,287 @@ mod runtime_self;
 mod type_method_identity;
 
 #[test]
+fn runnable_project_loads_external_spec_implementation_module() {
+    let workspace = origin_metadata::workspace_with_sources(
+        &[
+            (
+                "library/api.es",
+                r#"
+module library.api;
+public spec Identity<T> { flow id(input: T) -> T; }
+public type Token = i32;
+public flow lookup() -> i32 { return 7; }
+"#,
+            ),
+            (
+                "library/impls.es",
+                r#"
+module library.impls;
+import library.api.{Identity, Token};
+impl Token ~ Identity<Token> { flow id(input: Token) -> Token { return input; } }
+"#,
+            ),
+        ],
+        "",
+    );
+    let _ = origin_metadata::consumer(&workspace, "dep");
+    let root = workspace.0.join("consumer-dep");
+    std::fs::write(
+        root.join("src/app/main.es"),
+        r#"
+module app.main;
+import dep.library.api.{Identity, Token, lookup};
+flow main(args: Array<string>) -> i32 {
+    if lookup() != 7 { return 2; }
+    let value = Token(7);
+    let result = value::Identity<Token>.id();
+    if result == value { return 0; }
+    return 1;
+}
+"#,
+    )
+    .unwrap();
+    let compiled = etas_driver::compile_runnable_project_with_loaded(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: false,
+            entry_policy: EntryPolicy::Runnable,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+        etas_frontend::SnapshotDetailLevel::Full,
+    )
+    .unwrap();
+    assert!(
+        compiled.response.output.diagnostics.is_empty(),
+        "{:?}",
+        compiled.response.output.diagnostics
+    );
+    assert!(
+        compiled
+            .loaded
+            .loaded
+            .input
+            .sources
+            .iter()
+            .any(|source| source.text.contains("module library.impls"))
+    );
+    let checked = compiled.response.output.checked.unwrap();
+    let host = no_host::NoHost::default();
+    let result = runtime()
+        .block_on(etas_interpreter::Interpreter.run_checked(
+            &checked,
+            etas_interpreter::api::EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![etas_interpreter::api::InterpValue::Array(vec![].into())],
+            &host,
+            Default::default(),
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::i32(0))
+    );
+}
+
+#[test]
+fn reflected_flow_can_use_imported_parameterized_behavioral_spec() {
+    let workspace = origin_metadata::workspace_with_sources(
+        &[
+            (
+                "library/api.es",
+                r#"
+module library.api;
+public spec Identity<T> { flow id(input: T) -> T; }
+public type Token = i32;
+public type Other = i32;
+public flow lookup() -> i32 { return 7; }
+"#,
+            ),
+            (
+                "library/other_impls.es",
+                r#"
+module library.other_impls;
+import library.api.{Identity, Other};
+impl Other ~ Identity<Other> {
+    flow id(input: Other) -> Other { return input; }
+}
+"#,
+            ),
+            (
+                "library/impls.es",
+                r#"
+module library.impls;
+import library.api.{Identity, Token};
+impl Token ~ Identity<Token> {
+    flow id(input: Token) -> Token { return input; }
+}
+"#,
+            ),
+        ],
+        "",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "dep");
+    let implementation_modules = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter()
+        .flat_map(|metadata| &metadata.spec_impls)
+        .filter(|implementation| {
+            implementation
+                .methods
+                .iter()
+                .any(|method| method.identity.name() == "id")
+        })
+        .flat_map(|implementation| {
+            implementation
+                .methods
+                .iter()
+                .map(|method| method.identity.implementation().module().to_vec())
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        implementation_modules,
+        [
+            vec!["library".into(), "impls".into()],
+            vec!["library".into(), "other_impls".into()]
+        ]
+        .into_iter()
+        .collect()
+    );
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import dep.library.api.{Identity, Token};
+import std.compiler.{check, compile, parse_body, CompileError};
+flow apply(input: Token) -> Token { return input::Identity<Token>.id(); }
+flow main() -> string ![Error<CompileError>] {
+    let good = match parse_body("return input::Identity<Token>.id();") {
+        Ok(body) => body, Err(_) => { return "good parse"; },
+    };
+    if check((^apply).with_body(good)).status != "accepted" { return "good rejected"; }
+    let candidate = compile((^apply).with_body(good));
+    if candidate(Token(7)) != Token(7) { return "candidate result"; }
+    let bad = match parse_body("return input::Identity<i32>.id();") {
+        Ok(body) => body, Err(_) => { return "bad parse"; },
+    };
+    if check((^apply).with_body(bad)).status != "rejected" { return "bad accepted"; }
+    return "ok";
+}
+"#
+    .into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.apply".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    assert!(matches!(
+        definitions.catalog().static_reflection(expression),
+        Ok(StaticReflectionView::Callable(_))
+    ));
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let result = revisions::execute_using_service(
+        checked,
+        definitions,
+        etas_interpreter::api::ExecutionLimits {
+            max_steps: std::num::NonZeroU64::new(20_000),
+            ..Default::default()
+        },
+        service,
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::String("ok".into()))
+    );
+}
+
+#[test]
+fn reflected_instantiated_generic_flow_dispatches_external_spec_method() {
+    let workspace = origin_metadata::workspace_with_sources(
+        &[
+            (
+                "library/api.es",
+                r#"
+module library.api;
+public spec Identity<T> { flow id(input: T) -> T; }
+public type Token = i32;
+"#,
+            ),
+            (
+                "library/impls.es",
+                r#"
+module library.impls;
+import library.api.{Identity, Token};
+impl Token ~ Identity<Token> { flow id(input: Token) -> Token { return input; } }
+"#,
+            ),
+        ],
+        "",
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "dep");
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import dep.library.api.{Identity, Token};
+import std.compiler.{check, compile, parse_body, CompileError};
+flow apply<T ~ Identity<T>>(input: T) -> T { return input::Identity<T>.id(); }
+flow main() -> string ![Error<CompileError>] {
+    let original: (Token) -> Token ![] = apply;
+    let body = match parse_body("return input::Identity<T>.id();") {
+        Ok(body) => body, Err(_) => { return "parse"; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return "rejected"; }
+    let candidate = compile(draft);
+    if candidate(Token(7)) != Token(7) { return "candidate"; }
+    return "ok";
+}
+"#
+    .into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.apply".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let result = revisions::execute_using_service(
+        checked,
+        definitions,
+        etas_interpreter::api::ExecutionLimits {
+            max_steps: std::num::NonZeroU64::new(20_000),
+            ..Default::default()
+        },
+        service,
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::String("ok".into()))
+    );
+}
+
+#[test]
 fn external_spec_method_reflection_retains_trace_spec_selection() {
     let workspace = origin_metadata::workspace_with_source(
         r#"

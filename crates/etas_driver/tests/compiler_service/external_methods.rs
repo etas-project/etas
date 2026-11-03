@@ -3,6 +3,297 @@ use etas_driver::compiler::prepare_native_definitions;
 use etas_frontend::code::definition::StaticReflectionView;
 
 #[test]
+fn external_erased_callable_definitions_preserve_read_only_metadata() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public flow inspect(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] { return value; }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = r#"module app.main;
+import first.library.api.inspect;
+import std.compiler.CallableDef;
+flow one(value: bool) -> bool ![] { return value; }
+flow two(value: i32) -> i32 ![] { return value; }
+flow check_external(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] {
+    return inspect(value, values);
+}
+flow inspect_local(value: CallableDef, values: Array<CallableDef>) -> CallableDef ![] { return value; }
+flow main() -> bool ![] {
+    let first: CallableDef = ^one;
+    let items: Array<CallableDef> = [^one, ^two];
+    let selected = inspect_local(first, items);
+    return selected.id == first.id;
+}
+"#.into();
+    let checked = origin_metadata::check(&loaded);
+    let mut invalid = loaded.loaded.input.clone();
+    invalid.sources[0].text = r#"module app.main;
+import first.library.api.inspect;
+import std.compiler.{CallableDef, compile};
+flow invalid(value: CallableDef, values: Array<CallableDef>) -> (bool) -> bool ![] {
+    return compile(inspect(value, values));
+}
+flow main() -> unit { return; }
+"#
+    .into();
+    let invalid = Frontend.check_project(invalid);
+    assert!(
+        invalid.checked.is_none(),
+        "erased external descriptor was compiled as a typed descriptor"
+    );
+    assert!(
+        invalid.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::TypeMismatch)
+            && diagnostic
+                .message
+                .contains("do not match any registered overload")),
+        "{:?}",
+        invalid.diagnostics
+    );
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let host = no_host::NoHost::default();
+    let result = runtime()
+        .block_on(etas_interpreter::Interpreter.run_checked(
+            &checked,
+            etas_interpreter::api::EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            etas_interpreter::api::RunOptions {
+                code_definitions: Some(Arc::new(
+                    etas_interpreter::api::code::PreparedCodeDefinitions::new(definitions),
+                )),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::Bool(true))
+    );
+
+    let root = workspace.0.join("consumer-first");
+    let source = loaded.loaded.input.sources[0]
+        .text
+        .replace("inspect_local(first, items)", "inspect(first, items)");
+    std::fs::write(root.join("src/app/main.es"), source).unwrap();
+    let compiled = etas_driver::compile_runnable_project_with_loaded(
+        &origin_metadata::options(&root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+        etas_frontend::SnapshotDetailLevel::Full,
+    )
+    .unwrap();
+    assert!(
+        compiled.response.output.diagnostics.is_empty(),
+        "{:?}",
+        compiled.response.output.diagnostics
+    );
+    let checked = compiled.response.output.checked.unwrap();
+    let definitions =
+        prepare_native_definitions(&compiled.loaded, &checked, Default::default()).unwrap();
+    let host = no_host::NoHost::default();
+    let result = runtime()
+        .block_on(etas_interpreter::Interpreter.run_checked(
+            &checked,
+            etas_interpreter::api::EntryPoint {
+                item: checked.entry.unwrap(),
+            },
+            vec![],
+            &host,
+            etas_interpreter::api::RunOptions {
+                code_definitions: Some(Arc::new(
+                    etas_interpreter::api::code::PreparedCodeDefinitions::new(definitions),
+                )),
+                ..Default::default()
+            },
+        ))
+        .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(
+        result.value(),
+        Some(&etas_interpreter::api::InterpValue::Bool(true))
+    );
+}
+
+#[test]
+fn external_explicit_agent_entry_preserves_parameter_names() {
+    let workspace = origin_metadata::workspace_with_source(
+        "module library.api; public agent Worker; impl agent Worker { public flow run(value: i32) -> i32 ![] { return value; } } public flow lookup() -> i32 { return 7; }",
+    );
+    let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+        .unwrap()
+        .unwrap();
+    let agent = metadata
+        .public_metadata
+        .agents
+        .iter()
+        .find(|agent| agent.path.last().is_some_and(|name| name == "Worker"))
+        .unwrap();
+    assert_eq!(agent.param_names, ["value"]);
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text = "module app.main; import first.library.api.Worker; flow main() -> unit { let definition = ^Worker; return; }".into();
+    let baseline = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(
+        baseline.diagnostics.is_empty(),
+        "{:?}",
+        baseline.diagnostics
+    );
+    assert!(baseline.checked.is_some());
+    for wrong_type in [false, true] {
+        let mut forged = loaded.loaded.input.clone();
+        let agent = forged
+            .environment
+            .external_public_metadata
+            .iter_mut()
+            .flat_map(|metadata| &mut metadata.agents)
+            .find(|agent| agent.path.last().is_some_and(|name| name == "Worker"))
+            .unwrap();
+        if wrong_type {
+            agent.input[0] = etas_frontend::ProjectExternalTypeInput::Primitive("bool".into());
+        } else {
+            agent.param_names[0] = "wrong".into();
+        }
+        let output = Frontend.check_project(forged);
+        assert!(output.checked.is_none());
+        assert!(
+            output.diagnostics.iter().any(|diagnostic| diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts
+                )
+                && diagnostic.message.contains(if wrong_type {
+                    "parameter type"
+                } else {
+                    "parameter names"
+                })),
+            "{:?}",
+            output.diagnostics
+        );
+    }
+}
+
+#[test]
+fn external_callable_effect_selector_preserves_agent_method_identity() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+import std.compiler.CallableDef;
+public agent Worker(value: bool) -> bool ![] { return value; }
+public agent Other(value: bool) -> bool ![] { return value; }
+public flow invoke(draft: CallableDef<() -> unit ![Agentic.infer<Worker.run, bool>]>) -> unit ![] { return; }
+"#,
+    );
+    let metadata = etas_package::read_package_metadata_artifact(&workspace.0.join("library"))
+        .unwrap()
+        .unwrap();
+    let set = metadata
+        .public_metadata
+        .definition_descriptors
+        .as_ref()
+        .unwrap();
+    let headers = set.headers.as_ref().unwrap();
+    let invoke = headers
+        .callables
+        .iter()
+        .find(|header| {
+            header
+                .id
+                .as_declaration()
+                .is_some_and(|id| id.declaration() == ["invoke"])
+        })
+        .unwrap();
+    let etas_code::descriptor::TypeInfo::Function(signature) =
+        &set.graph.types[invoke.signature.0 as usize]
+    else {
+        panic!("expected callable signature")
+    };
+    let etas_code::descriptor::TypeInfo::Builtin {
+        constructor: etas_code::descriptor::BuiltinTypeInfo::CallableDefinition,
+        arguments,
+    } = &set.graph.types[signature.parameters[0].ty.0 as usize]
+    else {
+        panic!("expected CallableDef")
+    };
+    let etas_code::descriptor::TypeInfo::Function(callback) =
+        &set.graph.types[arguments[0].0 as usize]
+    else {
+        panic!("expected callback signature")
+    };
+    let row = &set.graph.rows[callback.effects.unwrap().0 as usize];
+    let [
+        etas_code::descriptor::StaticEffectArgInfo::Callable(method),
+        _,
+    ] = row.effects[0].arguments.as_slice()
+    else {
+        panic!("expected callable selector: {row:?}")
+    };
+    let worker = headers
+        .agents
+        .iter()
+        .find(|agent| agent.identity.declaration() == ["Worker"])
+        .unwrap();
+    assert_eq!(method, worker.default_entry.as_ref().unwrap());
+    for alias in ["first", "second"] {
+        let mut loaded = origin_metadata::consumer(&workspace, alias);
+        loaded.loaded.input.sources[0].text = format!(
+            "module app.main; import {alias}.library.api.invoke; flow main() -> unit {{ return; }}"
+        );
+        let checked = Frontend.check_project(loaded.loaded.input);
+        assert!(checked.diagnostics.is_empty(), "{:?}", checked.diagnostics);
+        assert!(checked.checked.is_some());
+    }
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    loaded.loaded.input.sources[0].text =
+        "module app.main; import first.library.api.invoke; flow main() -> unit { return; }".into();
+    let checked = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(checked.diagnostics.is_empty(), "{:?}", checked.diagnostics);
+    assert!(checked.checked.is_some());
+
+    let invoke = loaded
+        .loaded
+        .input
+        .environment
+        .external_public_metadata
+        .iter_mut()
+        .flat_map(|metadata| &mut metadata.flows)
+        .find(|flow| flow.path.last().is_some_and(|name| name == "invoke"))
+        .unwrap();
+    let etas_frontend::ProjectExternalTypeInput::Applied { args, .. } = &mut invoke.params[0]
+    else {
+        panic!("expected CallableDef")
+    };
+    let etas_frontend::ProjectExternalTypeInput::Function {
+        effects: Some(row), ..
+    } = &mut args[0]
+    else {
+        panic!("expected callback")
+    };
+    let etas_frontend::ProjectExternalEffectArgInput::Path(path) = &mut row.effects[0].args[0]
+    else {
+        panic!("expected static path")
+    };
+    let subject = path.len() - 2;
+    path[subject] = "Other".into();
+    let checked = Frontend.check_project(loaded.loaded.input);
+    assert!(checked.checked.is_none());
+    assert!(
+        checked.diagnostics.iter().any(|diagnostic| diagnostic.code
+            == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)),
+        "{:?}",
+        checked.diagnostics
+    );
+}
+
+#[test]
 fn external_default_and_additional_method_reflection_uses_published_identities() {
     let workspace = origin_metadata::workspace_with_source_config(
         "module library.api; public agent Worker(value: bool) -> bool ![] { return value; } impl agent Worker { public flow explain(value: bool) -> bool { return !value; } private flow hidden() -> bool { return false; } } public flow lookup() -> i32 { return 7; }",

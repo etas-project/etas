@@ -1,7 +1,7 @@
 use etas_code::{
     CodeFingerprint, DefinitionKey, PackageKey, RevisionInfo,
     artifact::{CheckedCodeLease, CheckedCodeRef},
-    definition::{AgentDefinitionRef, CodeDefinitionOperations},
+    definition::{CodeDefinitionOperations, DefinitionRef},
     report::CheckStatus,
     syntax::CodeSyntaxOperations,
 };
@@ -44,6 +44,8 @@ mod external_reflection;
 mod external_returned_callables;
 #[path = "compiler_service/external_spec_methods.rs"]
 mod external_spec_methods;
+#[path = "compiler_service/flow_revisions.rs"]
+mod flow_revisions;
 #[path = "compiler_service/loaded_origins.rs"]
 mod loaded_origins;
 #[path = "compiler_service/no_host.rs"]
@@ -109,21 +111,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn fixture() -> (Arc<NativeDefinitionStore>, AgentDefinitionRef) {
+fn fixture() -> (Arc<NativeDefinitionStore>, DefinitionRef) {
     fixture_with_retention(true)
 }
 
-fn fixture_with_retention(retain: bool) -> (Arc<NativeDefinitionStore>, AgentDefinitionRef) {
+fn fixture_with_retention(retain: bool) -> (Arc<NativeDefinitionStore>, DefinitionRef) {
     fixture_from_source(
         "module app; agent Worker() -> i32 { return 1; } flow inspect() -> unit { let d = ^Worker; return; }",
         retain,
     )
 }
 
-fn fixture_from_source(
-    source: &str,
-    retain: bool,
-) -> (Arc<NativeDefinitionStore>, AgentDefinitionRef) {
+fn fixture_from_source(source: &str, retain: bool) -> (Arc<NativeDefinitionStore>, DefinitionRef) {
     let mut input = ProjectInput::single_source(SourceInput::anonymous(source));
     input.options.entry_policy = EntryPolicy::Optional;
     input.options.reflection = ReflectionOptions {
@@ -162,7 +161,7 @@ fn fixture_from_source(
     (definitions, definition)
 }
 
-fn request(definition: AgentDefinitionRef, operation: CompilerOperation) -> CompilerRequest {
+fn request(definition: DefinitionRef, operation: CompilerOperation) -> CompilerRequest {
     let mut authority = AuthorityContext::deny_all();
     authority
         .grants

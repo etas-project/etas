@@ -27,12 +27,9 @@ fn environment_with_root(import_root: &str) -> ProjectEnvironmentInput {
     let source_hash = etas_package::package_source_payload_hash(&fixture.0).unwrap();
     let artifact = etas_frontend::build_package_metadata_artifact_from_checked(
         etas_frontend::PackageMetadataBuildInput {
-            definition_origin: Some(etas_code::PackageKey::from_canonical_fingerprint(
-                etas_code::CodeFingerprint::of_bytes(
-                    "etas.test.method-contract-package",
-                    b"library",
-                ),
-            )),
+            definition_origin: Some(
+                etas_code::PackageKey::from_name_and_version("library", "0.1.0").unwrap(),
+            ),
             package_id: "library".into(),
             package_version: "0.1.0".into(),
             package_edition: "2026".into(),
@@ -120,7 +117,7 @@ fn method_trace_contract_survives_source_binary_driver_and_aliased_consumer() {
 fn replay_checks_method_trace_contract_against_owned_behavior_not_just_public_row() {
     let mut environment = environment();
     let summary = &mut environment.external_public_metadata[0].trace_spec_summaries[0];
-    summary.clauses[0].kind = etas_frontend::ProjectExternalTraceSpecClauseKindInput::Deny;
+    summary.alternatives[0][0].kind = etas_frontend::ProjectExternalTraceSpecClauseKindInput::Deny;
     let output = consumer(environment);
     assert!(
         output.diagnostics.iter().any(|diagnostic| diagnostic.code
