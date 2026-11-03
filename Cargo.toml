@@ -27,7 +27,7 @@ etas_effects = { git = "https://github.com/etas-project/etas-frontend.git", rev 
 etas_frontend = { git = "https://github.com/etas-project/etas-frontend.git", rev = "283ff172582dfe6590e7709c682685d5c8946423", package = "etas_frontend" }
 etas_hir = { git = "https://github.com/etas-project/etas-frontend.git", rev = "283ff172582dfe6590e7709c682685d5c8946423", package = "etas_hir" }
 etas_types = { git = "https://github.com/etas-project/etas-frontend.git", rev = "283ff172582dfe6590e7709c682685d5c8946423", package = "etas_types" }
-etas_interpreter = { git = "https://github.com/etas-project/etas-interpreter.git", rev = "9ad332f9ebd3cffa2d9478ed1045020885f9766e", package = "etas_interpreter" }
+etas_interpreter = { git = "https://github.com/etas-project/etas-interpreter.git", rev = "af47b0eb3fe062310dd7fb1c6e2f7f41692618d6", package = "etas_interpreter" }
 etas_syntax = { git = "https://github.com/etas-project/etas-frontend.git", rev = "283ff172582dfe6590e7709c682685d5c8946423", package = "etas_syntax" }
 etas_utils = { git = "https://github.com/etas-project/etas-core.git", rev = "350677915d8e4a9d88e042e4faa89566ffc8ad25", package = "etas_utils" }
 
