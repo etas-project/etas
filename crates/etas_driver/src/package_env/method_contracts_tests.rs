@@ -112,6 +112,43 @@ flow main() -> i32 { return bounded(make()) + selected(make()) + make().offset(a
     assert_eq!(summary.requested_actions.effects.iter().count(), 1);
 }
 
+#[test]
+fn binary_closed_owner_does_not_capture_a_methods_same_named_generic() {
+    let environment = environment_from_source(
+        r#"module library;
+public spec Allowed;
+impl string ~ Allowed;
+public type Container<T ~ Allowed> = { value: T };
+public alias Packet = Container<string>;
+impl Packet {
+    public flow copy(self) -> Packet { return self; }
+    public flow choose<T>(self, input: T) -> T { return input; }
+}
+public flow make() -> Packet { return Container<string> { value = "closed" }; }
+"#,
+        "alternate",
+    );
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"module consumer;
+import alternate.library.make;
+flow main() -> i32 { return make().copy().choose<i32>(8); }
+"#,
+    ));
+    input.environment = environment;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(checked.sources.sources.len(), 1);
+    assert_eq!(checked.types.checked_method_calls.len(), 2);
+    for call in checked.types.checked_method_calls.values() {
+        assert!(call.owner_bindings.is_empty());
+        assert!(matches!(
+            call.target,
+            etas_types::method::MethodTarget::External { .. }
+        ));
+    }
+}
+
 fn consumer(environment: ProjectEnvironmentInput) -> etas_frontend::ProjectOutput {
     let mut source = SourceInput::anonymous(
         r#"module consumer;
