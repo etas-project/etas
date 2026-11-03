@@ -34,6 +34,12 @@ pub(super) fn prepared_with_source_key(
             });
     }
     input.options.reflection.retain_bodies = bodies.iter().map(|body| (*body).to_owned()).collect();
+    prepared_input(input)
+}
+
+pub(super) fn prepared_input(
+    input: ProjectInput,
+) -> (etas_frontend::CheckedProgram, Arc<NativeDefinitionStore>) {
     let output = Frontend.check_project(input);
     assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
     let checked = output.checked.unwrap();
