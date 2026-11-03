@@ -37,7 +37,7 @@ positive_fixtures! {
     bound_callback_input_identity_rejected, 1, true;
     bound_callback_integer_literal_compile, 2, true;
     bound_callback_signed_boundary_compile, 1, true;
-    conditional_callback_rejected, 1, true;
+    conditional_callback_inclusion, 1, true;
     bound_flow_revision_checkpoint, 1, true;
     pure_syntax_operations, 0, true;
     compile_and_adopt, 1, true;

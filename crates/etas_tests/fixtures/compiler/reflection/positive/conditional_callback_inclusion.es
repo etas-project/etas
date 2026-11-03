@@ -12,7 +12,7 @@ flow main(args: Array<string>) -> i32 {
         Err(_) => { return 1; },
     };
     let report = check((^Worker).with_body(body));
-    if report.status != "rejected" { return 2; }
-    if report.diagnostics.len() == 0 { return 3; }
+    if report.status != "accepted" { return 2; }
+    if report.diagnostics.len() != 0 { return 3; }
     return 0;
 }
