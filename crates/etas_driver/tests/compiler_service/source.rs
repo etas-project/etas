@@ -15,7 +15,24 @@ pub(super) fn prepared_with_bodies(
     source: &str,
     bodies: &[&str],
 ) -> (etas_frontend::CheckedProgram, Arc<NativeDefinitionStore>) {
+    prepared_with_source_key(source, bodies, None)
+}
+
+pub(super) fn prepared_with_source_key(
+    source: &str,
+    bodies: &[&str],
+    stable_source_key: Option<etas_code::StableSourceKey>,
+) -> (etas_frontend::CheckedProgram, Arc<NativeDefinitionStore>) {
     let mut input = ProjectInput::single_source(SourceInput::anonymous(source));
+    if let Some(key) = stable_source_key {
+        input
+            .environment
+            .stable_source_keys
+            .push(etas_frontend::ProjectStableSourceKeyInput {
+                source: input.sources[0].id,
+                key,
+            });
+    }
     input.options.reflection.retain_bodies = bodies.iter().map(|body| (*body).to_owned()).collect();
     let output = Frontend.check_project(input);
     assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);

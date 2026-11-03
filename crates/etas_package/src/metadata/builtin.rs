@@ -308,6 +308,7 @@ fn flow_effect_summary(
     forwarder: bool,
 ) -> PackageEffectSummaryMetadata {
     PackageEffectSummaryMetadata {
+        residual_checks: vec![],
         behavior: None,
         handler_requests: None,
         returned_callables: None,

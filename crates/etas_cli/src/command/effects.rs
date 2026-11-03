@@ -146,7 +146,14 @@ fn effect_item_report(
         escaping_effects: effect_row_text(&summary.escaping_effects, registry, types),
         requested_actions: effect_row_text(&summary.requested_actions, registry, types),
         default_actions: effect_row_text(&summary.default_actions, registry, types),
-        residual_checks: summary.residual_checks.checks.iter().cloned().collect(),
+        residual_checks: summary
+            .residual_checks
+            .iter()
+            .map(serde_json::to_string)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                CliError::InvalidUsage(format!("residual check report is not JSON: {error}"))
+            })?,
         trace_spec_obligations: summary
             .trace_spec_obligations
             .iter()
@@ -457,6 +464,35 @@ fn stdout_error(source: std::io::Error) -> CliError {
 mod tests {
     use etas_effects::{CoreEffect, Effect, EffectRegistry};
     use etas_types::{NamedTypeRef, Type, TypeInterner};
+
+    #[test]
+    fn effects_report_preserves_generic_residual_identity_in_json() {
+        let checks = serde_json::json!({
+            "schema_version": 1,
+            "checks": [{
+                "obligation": vec![1_u8; 32],
+                "substitutions": [[vec![2_u8; 32], {"Type": vec![3_u8; 32]}]]
+            }]
+        });
+        let summary = etas_effects::EffectSummary {
+            residual_checks: serde_json::from_value(checks.clone()).unwrap(),
+            ..Default::default()
+        };
+        let report = super::effect_item_report(
+            0_u32.into(),
+            "flow",
+            "test".to_owned(),
+            &summary,
+            &EffectRegistry::with_standard_effects(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(report.summary["residual_checks"], checks);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&report.residual_checks[0]).unwrap(),
+            checks["checks"][0]
+        );
+    }
 
     #[test]
     fn effect_text_prints_named_error_type_instead_of_type_id() {

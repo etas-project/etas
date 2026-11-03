@@ -14,7 +14,8 @@ use etas_frontend::{
     ProjectExternalRecordFieldInput, ProjectExternalSpecBoundInput, ProjectExternalSpecImplInput,
     ProjectExternalSpecKindInput, ProjectExternalSpecMethodInput,
     ProjectExternalSpecSignatureInput, ProjectExternalToolSchemaInput,
-    ProjectExternalToolSignatureInput, ProjectExternalTraceSpecClauseInput,
+    ProjectExternalToolSignatureInput, ProjectExternalTraceSelectorBoundInput,
+    ProjectExternalTraceSelectorOperandInput, ProjectExternalTraceSpecClauseInput,
     ProjectExternalTraceSpecClauseKindInput, ProjectExternalTraceSpecConformanceInput,
     ProjectExternalTraceSpecConformanceTargetInput, ProjectExternalTraceSpecSummaryInput,
     ProjectExternalTypeInput, ProjectExternalTypeSpecSatisfactionInput, ProjectToolBindingInput,
@@ -39,6 +40,10 @@ pub fn frontend_environment(
     let external_public_metadata = external_public_metadata(&metadata, &external_packages)?;
     let tool_bindings = project_tool_bindings(&metadata, &external_packages)?;
     Ok(ProjectEnvironmentInput {
+        stable_source_keys: Vec::new(),
+        local_source_package: None,
+        standalone_source_packages: Vec::new(),
+        dependency_source_packages: Vec::new(),
         external_package_dependencies: external_package_dependencies(
             &metadata,
             &external_packages,
@@ -488,6 +493,15 @@ fn external_public_metadata_input(
                     .map(|arg| dependency_type_input_with_graph(package, packages, arg))
                     .collect(),
                 methods: implementation.methods.clone(),
+                implementation_module: if implementation.implementation_module.is_empty() {
+                    vec![]
+                } else {
+                    dependency_path_with_graph(
+                        package,
+                        packages,
+                        &implementation.implementation_module,
+                    )
+                },
             })
             .collect(),
         type_spec_satisfactions: metadata
@@ -527,9 +541,11 @@ fn external_public_metadata_input(
                     }
                     etas_package::PackageTraceSpecConformanceTargetMetadata::Named {
                         spec,
+                        definition,
                         args,
                     } => ProjectExternalTraceSpecConformanceTargetInput::Named {
                         spec: dependency_path_with_graph(package, packages, spec),
+                        definition: definition.clone(),
                         args: args
                             .iter()
                             .map(|arg| dependency_type_input_with_graph(package, packages, arg))
@@ -576,6 +592,7 @@ fn external_public_metadata_input(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                residual_checks: summary.residual_checks.clone(),
                 behavior: summary.behavior.clone(),
                 handler_requests: summary.handler_requests.as_ref().map(|template| {
                     etas_frontend::ProjectExternalRequestInstantiationInput {
@@ -699,6 +716,7 @@ fn external_public_metadata_input(
                     .latent_flows
                     .iter()
                     .map(|latent| ProjectExternalLatentFlowSummaryInput {
+                        residual_checks: latent.residual_checks.clone(),
                         declared_bound: dependency_effect_row_input(
                             package,
                             packages,
@@ -731,10 +749,18 @@ fn external_public_metadata_input(
             .iter()
             .map(|summary| ProjectExternalTraceSpecSummaryInput {
                 trace_spec: dependency_path_with_graph(package, packages, &summary.trace_spec),
-                clauses: summary
-                    .clauses
+                definition: summary.definition.clone(),
+                alternatives: summary
+                    .alternatives
                     .iter()
-                    .map(|clause| dependency_trace_spec_clause_input(package, packages, clause))
+                    .map(|clauses| {
+                        clauses
+                            .iter()
+                            .map(|clause| {
+                                dependency_trace_spec_clause_input(package, packages, clause)
+                            })
+                            .collect()
+                    })
                     .collect(),
             })
             .collect(),
@@ -781,6 +807,7 @@ fn spec_signature_input(
             etas_package::PackageSpecKindMetadata::Trace => ProjectExternalSpecKindInput::Trace,
         },
         param_names: signature.param_names.clone(),
+        generic_params: callable_generic_params_input(package, packages, &signature.generic_params),
         callable: signature
             .callable
             .as_ref()
@@ -1088,6 +1115,39 @@ fn dependency_trace_spec_clause_input(
 ) -> ProjectExternalTraceSpecClauseInput {
     ProjectExternalTraceSpecClauseInput {
         kind: dependency_trace_spec_clause_kind_input(clause.kind.clone()),
+        selector_bounds: clause
+            .selector_bounds
+            .iter()
+            .map(|bound| ProjectExternalTraceSelectorBoundInput {
+                operand: match bound.operand {
+                    etas_package::PackageTraceSelectorOperandMetadata::Pattern => {
+                        ProjectExternalTraceSelectorOperandInput::Pattern
+                    }
+                    etas_package::PackageTraceSelectorOperandMetadata::Guard => {
+                        ProjectExternalTraceSelectorOperandInput::Guard
+                    }
+                    etas_package::PackageTraceSelectorOperandMetadata::Target => {
+                        ProjectExternalTraceSelectorOperandInput::Target
+                    }
+                    etas_package::PackageTraceSelectorOperandMetadata::Obligation => {
+                        ProjectExternalTraceSelectorOperandInput::Obligation
+                    }
+                },
+                effect_path: if is_standard_effect_path(&bound.effect_path) {
+                    bound.effect_path.clone()
+                } else {
+                    dependency_path_with_graph(package, packages, &bound.effect_path)
+                },
+                argument: bound.argument,
+                binding: bound.binding.clone(),
+                spec_path: dependency_path_with_graph(package, packages, &bound.spec_path),
+                spec_args: bound
+                    .spec_args
+                    .iter()
+                    .map(|ty| dependency_type_input_with_graph(package, packages, ty))
+                    .collect(),
+            })
+            .collect(),
         pattern: clause
             .pattern
             .as_ref()
@@ -1743,6 +1803,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn trace_selector_bounds_keep_identity_and_rewrite_dependency_paths() {
+        let package = ProjectExternalPackageInput {
+            id: ExternalPackageId(7),
+            name: "example".into(),
+            version: "1".into(),
+            edition: "2026".into(),
+            import_root: "dep.library".into(),
+        };
+        let clause = etas_package::PackageTraceSpecClauseMetadata {
+            kind: etas_package::PackageTraceSpecClauseKindMetadata::Allow,
+            pattern: None,
+            guard: None,
+            target: None,
+            obligation: None,
+            selector_bounds: vec![etas_package::PackageTraceSelectorBoundMetadata {
+                operand: etas_package::PackageTraceSelectorOperandMetadata::Pattern,
+                effect_path: vec!["Fs".into(), "read".into()],
+                argument: 0,
+                binding: "R".into(),
+                spec_path: vec!["Within".into()],
+                spec_args: vec![etas_package::PackageTypeMetadata::Named {
+                    path: vec!["ReportsRoot".into()],
+                }],
+            }],
+        };
+        let projected =
+            dependency_trace_spec_clause_input(&package, std::slice::from_ref(&package), &clause);
+        let [bound] = projected.selector_bounds.as_slice() else {
+            panic!("selector bound was lost");
+        };
+        assert_eq!(
+            bound.operand,
+            ProjectExternalTraceSelectorOperandInput::Pattern
+        );
+        assert_eq!(bound.effect_path, ["Fs", "read"]);
+        assert_eq!(bound.spec_path, ["dep", "library", "Within"]);
+        assert_eq!(
+            bound.spec_args,
+            [ProjectExternalTypeInput::Named(vec![
+                "dep".into(),
+                "library".into(),
+                "ReportsRoot".into()
+            ])]
+        );
+    }
+
+    #[test]
     fn dependency_type_input_preserves_std_prelude_types_without_package_prefix() {
         let package = ProjectExternalPackageInput {
             id: ExternalPackageId(7),
@@ -1916,6 +2023,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,
                         returned_callables: None,
@@ -2062,6 +2170,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,
                         returned_callables: None,
@@ -2106,6 +2215,7 @@ mod tests {
                             Vec::new(),
                         )]),
                         latent_flows: vec![etas_package::PackageLatentFlowSummaryMetadata {
+                            residual_checks: vec![],
                             declared_bound: row(vec![effect(
                                 &["effects", "EdkHttp", "request"],
                                 vec![etas_package::PackageEffectArgMetadata::Path {

@@ -38,7 +38,8 @@ pub use metadata::{
     PackageRecordFieldMetadata, PackageRequestInstantiationMetadata, PackageSpecBoundMetadata,
     PackageSpecImplMetadata, PackageSpecKindMetadata, PackageSpecMethodMetadata,
     PackageSpecSignatureMetadata, PackageToolBindingMetadata, PackageToolSchemaMetadata,
-    PackageToolSignatureMetadata, PackageTraceSpecClauseKindMetadata,
+    PackageToolSignatureMetadata, PackageTraceSelectorBoundMetadata,
+    PackageTraceSelectorOperandMetadata, PackageTraceSpecClauseKindMetadata,
     PackageTraceSpecClauseMetadata, PackageTraceSpecConformanceMetadata,
     PackageTraceSpecConformanceTargetMetadata, PackageTraceSpecSummaryMetadata,
     PackageTypeMetadata, PackageTypeSpecSatisfactionMetadata, ResolvedDependency,
@@ -55,7 +56,8 @@ pub use metadata_artifact::{
 pub use pack::{PackPackageOptions, PackedPackageResult, pack_package};
 pub use resolver::{
     LockPackageOptions, LockedPackageResult, MaterializePackageOptions, MaterializedPackageResult,
-    PreparePackageOptions, PreparedPackage, lock_package, materialize_package, prepare_package,
+    PreparePackageOptions, PreparedPackage, environment_from_locked_snapshot, lock_package,
+    materialize_package, prepare_package,
 };
 pub use source::{GitHubSourceConfig, PackageSourceConfig, RegistrySourceConfig};
 pub use source_snapshot::{

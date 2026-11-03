@@ -86,6 +86,7 @@ fn capture(loaded: &LoadedDriverProject) -> Result<SourceDefinitionProvenance, D
     capture_source_definition_provenance(
         loaded.mode,
         loaded.package_root.as_deref(),
+        loaded.source_definition_provenance.single_file_root(),
         loaded.package_environment.as_ref(),
         &loaded.loaded.input,
     )
@@ -93,6 +94,22 @@ fn capture(loaded: &LoadedDriverProject) -> Result<SourceDefinitionProvenance, D
 
 fn refresh(loaded: &mut LoadedDriverProject) {
     loaded.source_definition_provenance = capture(loaded).unwrap();
+    loaded.loaded.input.environment.local_source_package =
+        loaded.source_definition_provenance.local_package_key();
+    loaded.loaded.input.environment.dependency_source_packages = loaded
+        .source_definition_provenance
+        .dependency_source_packages()
+        .into_iter()
+        .filter(|origin| {
+            loaded
+                .loaded
+                .input
+                .environment
+                .external_packages
+                .iter()
+                .any(|package| package.id == origin.package)
+        })
+        .collect();
 }
 
 fn check(loaded: &LoadedDriverProject) -> etas_frontend::CheckedProgram {
@@ -209,12 +226,20 @@ fn dependency_source_identity_matches_its_owner_and_does_not_depend_on_import_al
 }
 
 #[test]
-fn package_origin_is_neither_a_display_name_nor_a_source_content_hash() {
+fn local_package_origin_uses_name_and_version_not_checkout_or_content() {
     let workspace = Workspace::new();
     let mut first = workspace.package("first", "same-name", "app.main");
     let second = workspace.package("second", "same-name", "app.main");
     let before = module_origin(&first, &["app", "main"]);
-    assert_ne!(
+    assert_eq!(
+        first
+            .loaded
+            .input
+            .environment
+            .source_package(&first.loaded.input.sources[0]),
+        Ok(before.package())
+    );
+    assert_eq!(
         before.package(),
         module_origin(&second, &["app", "main"]).package()
     );
@@ -235,6 +260,69 @@ fn package_origin_is_neither_a_display_name_nor_a_source_content_hash() {
         before.package(),
         module_origin(&first, &["app", "main"]).package()
     );
+}
+
+#[test]
+fn package_sources_get_checkout_independent_stable_keys_before_analysis() {
+    let workspace = Workspace::new();
+    let first = workspace.package("first", "same-name", "app.main");
+    let second = workspace.package("second", "same-name", "app.main");
+    let first_source = &first.loaded.input.sources[0];
+    let second_source = &second.loaded.input.sources[0];
+    let first_key = first
+        .loaded
+        .input
+        .environment
+        .stable_source_key(first_source.id)
+        .unwrap();
+    let second_key = second
+        .loaded
+        .input
+        .environment
+        .stable_source_key(second_source.id)
+        .unwrap();
+    assert_eq!(first_key, second_key);
+    assert_eq!(
+        etas_code::SourceRevisionKey::new(first_key, first_source.text.as_bytes()),
+        etas_code::SourceRevisionKey::new(second_key, second_source.text.as_bytes())
+    );
+    let other = workspace.package("other", "another-name", "app.main");
+    assert_ne!(
+        first_key,
+        other
+            .loaded
+            .input
+            .environment
+            .stable_source_key(other.loaded.input.sources[0].id)
+            .unwrap()
+    );
+}
+
+#[test]
+fn checked_trace_clause_identity_is_stable_across_package_checkouts() {
+    let workspace = Workspace::new();
+    let first = workspace.package("first", "same-name", "app.main");
+    let second = workspace.package("second", "same-name", "app.main");
+    let source = r#"module app.main;
+spec Safe: trace = -Console.stdout_write;
+flow run() -> unit ![] ~ Safe { return; }
+"#;
+    let identity = |loaded: LoadedDriverProject| {
+        let root = loaded.package_root.unwrap();
+        std::fs::write(root.join("src/app/main.es"), source).unwrap();
+        let checked = check(&load(&root));
+        let conformance = checked
+            .effects
+            .trace_specs
+            .conformances
+            .values()
+            .flatten()
+            .next()
+            .unwrap();
+        let clause = conformance.alternatives[0][0].source_clause().unwrap();
+        (clause, conformance.source_spec_instance.clone().unwrap())
+    };
+    assert_eq!(identity(first), identity(second));
 }
 
 #[test]
@@ -261,7 +349,7 @@ fn missing_or_ambiguous_locked_dependency_origins_are_rejected() {
         source_definition_origins(&consumer, &checked)
             .unwrap_err()
             .to_string()
-            .contains("no matching locked package origin")
+            .contains("checked environment differs")
     );
     consumer.package_environment = Some(saved);
     let other = workspace.package("other", "workers", "library.workers");
@@ -271,12 +359,118 @@ fn missing_or_ambiguous_locked_dependency_origins_are_rejected() {
         path: other.package_root.unwrap().to_str().unwrap().into(),
         checksum: "another-locked-revision".into(),
     };
-    dependencies.push(duplicate);
+    dependencies.push(duplicate.clone());
+    assert!(capture(&consumer).is_ok());
+    duplicate.source = ResolvedDependencySource::Vendor {
+        path: "vendor/other".into(),
+        checksum: "vendor-checksum".into(),
+        store: None,
+        definition_origin: Some(etas_code::PackageKey::from_canonical_fingerprint(
+            etas_code::CodeFingerprint::from_bytes([0x42; 32]),
+        )),
+    };
+    *consumer
+        .package_environment
+        .as_mut()
+        .unwrap()
+        .dependencies
+        .last_mut()
+        .unwrap() = duplicate;
     assert!(
         capture(&consumer)
             .unwrap_err()
             .to_string()
-            .contains("binding is ambiguous")
+            .contains("vendored definition origin disagrees")
+    );
+}
+
+#[test]
+fn dependency_identity_is_name_and_version_for_all_package_sources() {
+    let workspace = Workspace::new();
+    let library = workspace.package("library", "workers", "library.workers");
+    let mut consumer = workspace.package("consumer", "app", "app.main");
+    overlay(&mut consumer, &library, "workers");
+    let expected = module_origin(&library, &["library", "workers"]).package();
+    let sources = [
+        ResolvedDependencySource::Path {
+            path: "relative/workers".into(),
+            checksum: "source-checksum".into(),
+        },
+        ResolvedDependencySource::Registry {
+            registry: "https://registry.example".into(),
+            checksum: "registry-checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::Git {
+            url: "https://git.example/workers".into(),
+            rev: "revision".into(),
+            checksum: "git-checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::GitHubClone {
+            repo: "example/workers".into(),
+            rev: "revision".into(),
+            checksum: "clone-checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::GitHubRelease {
+            repo: "example/workers".into(),
+            release: "release".into(),
+            asset: "archive".into(),
+            asset_checksum: "asset-checksum".into(),
+            payload_checksum: "payload-checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::Vendor {
+            path: "vendor/workers".into(),
+            checksum: "vendor-checksum".into(),
+            store: None,
+            definition_origin: Some(expected),
+        },
+    ];
+    for source in sources {
+        let dependency = &mut consumer.package_environment.as_mut().unwrap().dependencies[0];
+        dependency.source = source;
+        let id = dependency_id(dependency);
+        let provenance = capture(&consumer).unwrap();
+        assert_eq!(
+            provenance.dependency_package_for(id, "workers").unwrap(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn relative_path_dependency_under_remote_package_keeps_its_package_identity() {
+    let workspace = Workspace::new();
+    let library = workspace.package("library", "workers", "library.workers");
+    let mut consumer = workspace.package("consumer", "app", "app.main");
+    overlay(&mut consumer, &library, "workers");
+    let dependency = &mut consumer.package_environment.as_mut().unwrap().dependencies[0];
+    let mut child = dependency.clone();
+    child.identity.name = "helpers".into();
+    child.import_root = "helpers".into();
+    child.source = ResolvedDependencySource::Path {
+        path: "../helpers".into(),
+        checksum: "child-checksum".into(),
+    };
+    let expected =
+        etas_code::PackageKey::from_name_and_version(&child.identity.name, &child.identity.version)
+            .unwrap();
+    let child_id = dependency_id(&child);
+    dependency.source = ResolvedDependencySource::Git {
+        url: "https://git.example/workers".into(),
+        rev: "revision".into(),
+        checksum: "git-checksum".into(),
+        store: None,
+    };
+    dependency.dependencies.push(child);
+    let provenance = capture(&consumer).unwrap();
+    assert_eq!(
+        provenance
+            .dependency_package_for(child_id, "helpers")
+            .unwrap(),
+        expected
     );
 }
 
@@ -293,6 +487,24 @@ fn checked_programs_cannot_borrow_another_loaded_sources_package_identity() {
             .unwrap_err()
             .to_string()
             .contains("differs from the prepared driver input")
+    );
+}
+
+#[test]
+fn checked_programs_cannot_borrow_another_loaded_environment() {
+    let workspace = Workspace::new();
+    let mut loaded = workspace.package("source", "app", "app.main");
+    let checked = check(&loaded);
+    assert!(source_definition_origins(&loaded, &checked).is_ok());
+    loaded.loaded.input.environment.local_source_package =
+        Some(etas_code::PackageKey::from_canonical_fingerprint(
+            etas_code::CodeFingerprint::from_bytes([0x42; 32]),
+        ));
+    assert!(
+        source_definition_origins(&loaded, &checked)
+            .unwrap_err()
+            .to_string()
+            .contains("checked environment differs from the prepared driver input")
     );
 }
 
@@ -341,9 +553,25 @@ fn source_project_and_single_file_origins_are_explicit_filesystem_origins() {
     let loaded = load(&root);
     assert_eq!(loaded.mode, DriverProjectMode::SourceProject);
     let source = module_origin(&loaded, &["main"]);
+    assert_eq!(
+        loaded
+            .loaded
+            .input
+            .environment
+            .source_package(&loaded.loaded.input.sources[0]),
+        Ok(source.package())
+    );
     let single = load(&root.join("main.es"));
     assert_eq!(single.mode, DriverProjectMode::SingleFile);
     let first = module_origin(&single, &["main"]);
+    assert_eq!(
+        single
+            .loaded
+            .input
+            .environment
+            .source_package(&single.loaded.input.sources[0]),
+        Ok(first.package())
+    );
     assert_ne!(first.package(), source.package());
     let other = root.join("other.es");
     std::fs::write(&other, &loaded.loaded.input.sources[0].text).unwrap();
@@ -431,10 +659,11 @@ fn vendor_aliases_use_the_recorded_owner_not_the_mirror_or_store_directory() {
 }
 
 #[test]
-fn locked_remote_origins_do_not_depend_on_import_alias_or_local_cache() {
+fn locked_remote_origins_match_the_publisher_and_ignore_revision_or_cache() {
     let workspace = Workspace::new();
     let library = workspace.package("library", "workers", "library.workers");
     let consumer = workspace.package("consumer", "app", "app.main");
+    let publisher = module_origin(&library, &["library", "workers"]);
     let mut expected = None;
     for alias in ["one", "two"] {
         let mut input = consumer.clone();
@@ -454,6 +683,7 @@ fn locked_remote_origins_do_not_depend_on_import_alias_or_local_cache() {
         };
         refresh(&mut input);
         let origin = module_origin(&input, &["library", "workers"]);
+        assert_eq!(origin.package(), publisher.package());
         if let Some(expected) = &expected {
             assert_eq!(&origin, expected);
         }
@@ -471,9 +701,71 @@ fn locked_remote_origins_do_not_depend_on_import_alias_or_local_cache() {
         };
         *rev = "different-locked-commit".into();
         refresh(&mut input);
-        assert_ne!(
+        assert_eq!(
             module_origin(&input, &["library", "workers"]).package(),
             origin.package()
         );
     }
+}
+
+#[test]
+fn all_remote_sources_share_the_published_name_version_origin() {
+    let workspace = Workspace::new();
+    let library = workspace.package("library", "workers", "library.workers");
+    let consumer = workspace.package("consumer", "app", "app.main");
+    let publisher = module_origin(&library, &["library", "workers"]);
+    let sources = [
+        ResolvedDependencySource::Registry {
+            registry: "https://registry.example".into(),
+            checksum: "checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::GitHubClone {
+            repo: "owner/workers".into(),
+            rev: "commit".into(),
+            checksum: "checksum".into(),
+            store: None,
+        },
+        ResolvedDependencySource::GitHubRelease {
+            repo: "owner/workers".into(),
+            release: "v1".into(),
+            asset: "package.tar".into(),
+            asset_checksum: "asset-checksum".into(),
+            payload_checksum: "payload-checksum".into(),
+            store: None,
+        },
+    ];
+    for source in sources {
+        let mut input = consumer.clone();
+        overlay(&mut input, &library, "workers");
+        input
+            .package_environment
+            .as_mut()
+            .unwrap()
+            .dependencies
+            .last_mut()
+            .unwrap()
+            .source = source;
+        refresh(&mut input);
+        assert_eq!(
+            module_origin(&input, &["library", "workers"]).package(),
+            publisher.package()
+        );
+    }
+    let mut invalid = consumer;
+    overlay(&mut invalid, &library, "workers");
+    invalid
+        .package_environment
+        .as_mut()
+        .unwrap()
+        .dependencies
+        .last_mut()
+        .unwrap()
+        .source = ResolvedDependencySource::Git {
+        url: String::new(),
+        rev: "commit".into(),
+        checksum: "checksum".into(),
+        store: None,
+    };
+    assert!(capture(&invalid).is_err());
 }

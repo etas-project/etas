@@ -2,6 +2,38 @@ use super::*;
 
 struct PackageFixture(PathBuf);
 
+#[test]
+fn source_key_is_identical_for_publisher_and_dependency_overlay() {
+    let package = etas_code::PackageKey::from_name_and_version("library", "1.0.0").unwrap();
+    let source = |id, path: &str, kind| etas_frontend::SourceInput {
+        id: etas_core::SourceId(id),
+        path: Some(PathBuf::from(path)),
+        text: "module library;".into(),
+        kind,
+    };
+    let owner = source(
+        1,
+        "/checkout/library/src/library.es",
+        SourceKind::SourceProjectFile,
+    );
+    let overlay = source(
+        2,
+        "/cache/dependency/src/library.es",
+        SourceKind::DependencySourceOverlay {
+            package: etas_frontend::ExternalPackageId(9),
+            import_root: "alias".into(),
+        },
+    );
+    let owner_key = stable_package_source_key(&owner, package, Path::new("/checkout/library"))
+        .unwrap()
+        .key;
+    let overlay_key = stable_package_source_key(&overlay, package, Path::new("/cache/dependency"))
+        .unwrap()
+        .key;
+    assert_eq!(owner_key, overlay_key);
+    assert!(stable_package_source_key(&owner, package, Path::new("/unrelated")).is_err());
+}
+
 impl PackageFixture {
     fn new() -> Self {
         let nonce = std::time::SystemTime::now()

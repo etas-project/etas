@@ -6,9 +6,10 @@ use std::{
 use etas_core::Severity;
 use etas_frontend::{
     CheckRequest, CheckResponse, CheckScope, DependencyOverlayChange, DiskCacheAccess,
-    ExternalPackageId, FrontendSession, FrontendSessionOptions, FrontendSessionStore, ModulePath,
-    ProjectChangeSet, ProjectInput, ProjectRevision, RuntimeSourceRequirement,
-    RuntimeSourceRequirements, SnapshotDetailLevel, SourceInput, SourceKind,
+    EnvironmentChange, ExternalPackageId, FrontendSession, FrontendSessionOptions,
+    FrontendSessionStore, ModulePath, ProjectChangeSet, ProjectInput, ProjectRevision,
+    RuntimeSourceRequirement, RuntimeSourceRequirements, SnapshotDetailLevel, SourceInput,
+    SourceKind,
 };
 use etas_utils::ProfileHandle;
 
@@ -24,6 +25,7 @@ pub struct DriverOptions {
     pub cache_mode: DriverCacheMode,
     pub cache_root: Option<PathBuf>,
     pub profile: ProfileHandle,
+    pub residual_target: Option<etas_code::residual::target::ResidualTargetCapabilities>,
 }
 
 impl Default for DriverOptions {
@@ -33,6 +35,7 @@ impl Default for DriverOptions {
             cache_mode: DriverCacheMode::Auto,
             cache_root: None,
             profile: ProfileHandle::disabled(),
+            residual_target: None,
         }
     }
 }
@@ -65,8 +68,11 @@ pub struct CompileRunnableProjectResponse {
 
 pub fn check_project_once(
     options: &DriverOptions,
-    request: CompileProjectRequest,
+    mut request: CompileProjectRequest,
 ) -> Result<CompileProjectResponse, DriverError> {
+    if let Some(target) = &options.residual_target {
+        request.input.options.residual_target = target.clone();
+    }
     let _span = options.profile.span("frontend.check", "frontend");
     let mut session = frontend_session(options)?;
     let project = session
@@ -178,6 +184,42 @@ pub fn compile_runnable_project_with_loaded(
                 "runtime source overlay made no progress".to_owned(),
             ));
         }
+        let mut added_keys = Vec::with_capacity(added_sources.len());
+        for source in &added_sources {
+            let SourceKind::DependencySourceOverlay {
+                package,
+                import_root,
+            } = &source.kind
+            else {
+                return Err(DriverError::InvalidInput(
+                    "runtime source patch contains a non-dependency source".into(),
+                ));
+            };
+            let path = source.path.as_ref().ok_or_else(|| {
+                DriverError::InvalidInput("runtime source has no locked path".into())
+            })?;
+            let mut dependencies = runtime_plan.dependencies.values().filter(|dependency| {
+                dependency.package == *package
+                    && dependency.import_root == *import_root
+                    && dependency.source_files.contains(path)
+            });
+            let dependency = dependencies.next().ok_or_else(|| {
+                DriverError::InvalidInput("runtime source has no locked dependency plan".into())
+            })?;
+            if dependencies.next().is_some() {
+                return Err(DriverError::InvalidInput(
+                    "runtime source has ambiguous locked dependency plans".into(),
+                ));
+            }
+            let owner = runtime_loaded
+                .source_definition_provenance
+                .dependency_package_for(*package, import_root)?;
+            added_keys.push(crate::source::stable_package_source_key(
+                source,
+                owner,
+                &dependency.package_root,
+            )?);
+        }
         options
             .profile
             .counter("runtime_overlay.added_sources", added_sources.len() as u64);
@@ -195,11 +237,19 @@ pub fn compile_runnable_project_with_loaded(
                     dependency_overlay_changes: dependency_overlay_changes_from_sources(
                         added_sources,
                     )?,
-                    environment_change: None,
+                    environment_change: Some(EnvironmentChange::AddOverlaySourceKeys(
+                        added_keys.clone(),
+                    )),
                     option_changes: Vec::new(),
                 },
             )
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
+        runtime_loaded
+            .loaded
+            .input
+            .environment
+            .stable_source_keys
+            .extend(added_keys);
         iterations += 1;
         revision += 1;
         response = {

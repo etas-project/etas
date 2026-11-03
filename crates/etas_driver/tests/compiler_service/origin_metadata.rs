@@ -191,6 +191,90 @@ fn published_definition_origins_replay_through_binary_driver_and_reflection_with
 }
 
 #[test]
+fn git_metadata_replays_the_publishers_definition_origin() {
+    let workspace = workspace();
+    let library = workspace.0.join("library");
+    let expected = etas_package::read_package_metadata_artifact(&library)
+        .unwrap()
+        .unwrap()
+        .public_metadata
+        .definition_origins
+        .unwrap()
+        .package;
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&library)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["add", "-f", "."]);
+    git(&[
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-qm",
+        "metadata",
+    ]);
+    let revision = git(&["rev-parse", "HEAD"]);
+    let root = workspace.0.join("git-consumer");
+    std::fs::create_dir_all(root.join("src/app")).unwrap();
+    std::fs::write(
+        root.join("etas.toml"),
+        format!(
+            "[package]\nname = \"git-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[dependencies]\nlib = {{ package = \"origin-library\", version = \"0.1.0\", import = \"first\", git = \"file://{}\", rev = \"{}\" }}\n[[bin]]\nname = \"app\"\nmodule = \"app.main\"\nflow = \"main\"\n",
+            library.display(), revision
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/app/main.es"),
+        "module app.main; import first.library.api.lookup as chosen; @custom(symbol = chosen) agent Worker() -> i32 { return abort(\"not executed\"); } flow main() -> i32 { let definition = ^Worker; return 1; }",
+    )
+    .unwrap();
+    etas_driver::update_package(
+        &options(&root),
+        PackageUpdateRequest {
+            package_root: root.clone(),
+        },
+    )
+    .unwrap();
+    let loaded = etas_driver::load_project(
+        &options(&root),
+        LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    let checked = check(&loaded);
+    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+    let expression = *checked.types.reflections.keys().next().unwrap();
+    let reference = definitions.reflect_agent(expression).unwrap();
+    let view = definitions.resolve(&reference).unwrap();
+    assert!(matches!(
+        view.annotations().unwrap()[0].arguments[0].value.as_ref(),
+        StaticValueInfo::Reference(AnnotationReferenceInfo::Declaration(key))
+            if key.package() == expected && key.declaration() == ["lookup"]
+    ));
+}
+
+#[test]
 fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
     let workspace = workspace();
     let mut loaded = consumer(&workspace, "first");
@@ -276,14 +360,25 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
             }
         }
     }
-    let checked = check(&loaded);
-    let error = prepare_native_definitions(&loaded, &checked, Default::default())
-        .err()
-        .expect("forged owner must be rejected");
-    assert!(
-        error.to_string().contains("prepared source origin"),
-        "{error}"
-    );
+    let source = loaded.loaded.input.sources[0].clone();
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(output.checked.is_none(), "forged owner must be rejected");
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic.code
+                == etas_core::DiagnosticCode::Type(
+                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts,
+                )
+                && diagnostic
+                    .message
+                    .contains("dependency source origin conflicts")
+        })
+        .unwrap_or_else(|| panic!("{:?}", output.diagnostics));
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api"));
 }
 
 #[test]

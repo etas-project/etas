@@ -25,16 +25,30 @@ impl RuntimeSourcePlan {
 
     pub(crate) fn source_inputs(
         &self,
-        mut next: u32,
+        next: u32,
     ) -> Result<Vec<etas_frontend::SourceInput>, DriverError> {
+        self.source_inputs_controlled(next, &|| Ok::<(), std::convert::Infallible>(()))
+            .map_err(|error| match error {
+                SourceInputError::Driver(error) => error,
+                SourceInputError::Interrupted(never) => match never {},
+            })
+    }
+
+    pub(crate) fn source_inputs_controlled<E>(
+        &self,
+        mut next: u32,
+        checkpoint: &impl Fn() -> Result<(), E>,
+    ) -> Result<Vec<etas_frontend::SourceInput>, SourceInputError<E>> {
         let mut sources = Vec::new();
         let mut paths = BTreeSet::new();
         for dependency in self.dependencies.values() {
             for path in &dependency.source_files {
+                checkpoint().map_err(SourceInputError::Interrupted)?;
                 if !path.starts_with(&dependency.source_root) || !paths.insert(path.clone()) {
                     return Err(DriverError::InvalidInput(
                         "runtime source path is duplicated or outside its source root".into(),
-                    ));
+                    )
+                    .into());
                 }
                 let relative = path
                     .strip_prefix(dependency.snapshot.package_root())
@@ -48,11 +62,10 @@ impl RuntimeSourcePlan {
                         "runtime source is absent from its locked snapshot".into(),
                     )
                 })?;
-                let text = std::str::from_utf8(bytes)
-                    .map_err(|_| {
-                        DriverError::InvalidInput("locked runtime source is not UTF-8".into())
-                    })?
-                    .to_owned();
+                let text = std::str::from_utf8(bytes).map_err(|_| {
+                    DriverError::InvalidInput("locked runtime source is not UTF-8".into())
+                })?;
+                let text = copy_source_controlled(text, checkpoint)?;
                 sources.push(etas_frontend::SourceInput {
                     id: SourceId(next),
                     path: Some(path.clone()),
@@ -68,6 +81,39 @@ impl RuntimeSourcePlan {
             }
         }
         Ok(sources)
+    }
+}
+
+fn copy_source_controlled<E>(
+    source: &str,
+    checkpoint: &impl Fn() -> Result<(), E>,
+) -> Result<String, SourceInputError<E>> {
+    const CHUNK_BYTES: usize = 64 * 1024;
+    checkpoint().map_err(SourceInputError::Interrupted)?;
+    let mut result = String::with_capacity(source.len());
+    let mut start = 0;
+    while start < source.len() {
+        checkpoint().map_err(SourceInputError::Interrupted)?;
+        let mut end = start.saturating_add(CHUNK_BYTES).min(source.len());
+        while !source.is_char_boundary(end) {
+            end -= 1;
+        }
+        result.push_str(&source[start..end]);
+        start = end;
+    }
+    checkpoint().map_err(SourceInputError::Interrupted)?;
+    Ok(result)
+}
+
+#[derive(Debug)]
+pub(crate) enum SourceInputError<E> {
+    Driver(DriverError),
+    Interrupted(E),
+}
+
+impl<E> From<DriverError> for SourceInputError<E> {
+    fn from(error: DriverError) -> Self {
+        Self::Driver(error)
     }
 }
 
@@ -165,6 +211,14 @@ impl<'a> RuntimeSourceMaterializer<'a> {
         }))
     }
 
+    pub(crate) fn locked_snapshot<E>(
+        &mut self,
+        package: etas_frontend::ExternalPackageId,
+        checkpoint: &impl Fn() -> Result<(), E>,
+    ) -> Result<Arc<etas_package::LockedPackageSourceSnapshot>, RuntimeSourceError<E>> {
+        Ok(self.snapshot(package, checkpoint)?.snapshot.clone())
+    }
+
     pub(crate) fn plan(
         &mut self,
         requirements: &etas_frontend::RuntimeSourceRequirements,
@@ -228,7 +282,7 @@ impl<'a> RuntimeSourceMaterializer<'a> {
     }
 }
 
-fn dependency_source_location<'a>(
+pub(crate) fn dependency_source_location<'a>(
     root: &Path,
     dependencies: &'a [ResolvedDependency],
     target: etas_frontend::ExternalPackageId,
@@ -470,6 +524,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn controlled_source_copy_checks_cancellation_and_preserves_utf8_boundaries() {
+        use std::cell::Cell;
+
+        let source = format!("{}\u{1f600}{}", "a".repeat(65_535), "b".repeat(65_536));
+        let copied = copy_source_controlled(&source, &|| Ok::<(), ()>(())).unwrap();
+        assert_eq!(copied, source);
+
+        let checks = Cell::new(0);
+        let result = copy_source_controlled(&source, &|| {
+            checks.set(checks.get() + 1);
+            if checks.get() == 3 {
+                Err("cancelled")
+            } else {
+                Ok(())
+            }
+        });
+        assert!(matches!(
+            result,
+            Err(SourceInputError::Interrupted("cancelled"))
+        ));
+        assert_eq!(checks.get(), 3);
+    }
+
+    #[test]
     fn runtime_source_plan_materializes_only_explicitly_required_modules_and_parts() {
         let root = unique_temp_dir("runtime-source-plan");
         let dependency_root = root.join("dep");
@@ -566,6 +644,19 @@ flow extra() -> unit { return; }
         let plan = materializer
             .plan(&requirements)
             .expect("runtime source plan");
+        let checks = std::cell::Cell::new(0);
+        let interrupted = plan.source_inputs_controlled(0, &|| {
+            checks.set(checks.get() + 1);
+            if checks.get() == 2 {
+                Err("cancelled")
+            } else {
+                Ok(())
+            }
+        });
+        assert!(matches!(
+            interrupted,
+            Err(SourceInputError::Interrupted("cancelled"))
+        ));
         let dependency_plan = plan.dependencies.get("dep").expect("dependency plan");
         assert_eq!(
             dependency_plan.source_modules,

@@ -10,6 +10,7 @@ mod version;
 
 use entry::select_bin;
 use environment::build_environment;
+pub use environment::environment_from_locked_snapshot;
 use lock_policy::resolve_lockfile;
 
 pub use lock::{LockPackageOptions, LockedPackageResult, lock_package};

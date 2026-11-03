@@ -554,6 +554,203 @@ fn binary_return_sources_are_validated_against_the_imported_interface_and_keep_t
 }
 
 #[test]
+fn binary_returned_callable_residual_requires_a_validated_plan_at_the_import() {
+    use etas_code::{
+        CodeFingerprint,
+        residual::identity::{ObligationId, ResidualObligationRef},
+    };
+
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+private flow hidden(value: i32) -> i32 ![] { return value; }
+public flow make() -> ((i32) -> i32 ![]) ![] { return hidden; }
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let initial = origin_metadata::consumer(&workspace, "first");
+    let consumer_root = initial.package_root.unwrap();
+    let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
+    let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
+        &artifact,
+        &std::fs::read(&artifact).unwrap(),
+    )
+    .unwrap();
+    let graph = metadata
+        .public_metadata
+        .effect_summaries
+        .iter_mut()
+        .find(|summary| summary.item == ["library", "api", "make"])
+        .unwrap()
+        .returned_callables
+        .as_mut()
+        .unwrap();
+    graph.values[0].residual_checks.push(
+        ResidualObligationRef::new(
+            ObligationId::from_canonical_fingerprint(CodeFingerprint::from_bytes([39; 32])),
+            Default::default(),
+        )
+        .unwrap(),
+    );
+    let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
+    let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
+    etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+    etas_package::materialize_package(etas_package::MaterializePackageOptions {
+        package_root: consumer_root.clone(),
+        source_config: Some(
+            etas_package::PackageSourceConfig::read_project(&consumer_root).unwrap(),
+        ),
+    })
+    .unwrap();
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: consumer_root.clone(),
+    })
+    .unwrap();
+    let loaded = etas_driver::load_project(
+        &origin_metadata::options(&consumer_root),
+        etas_driver::LoadProjectRequest {
+            paths: vec![consumer_root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    assert!(
+        loaded
+            .loaded
+            .input
+            .environment
+            .external_public_metadata
+            .iter()
+            .flat_map(|metadata| &metadata.effect_summaries)
+            .filter_map(|summary| summary.returned_callables.as_ref())
+            .flat_map(|graph| &graph.values)
+            .any(|value| !value.residual_checks.is_empty())
+    );
+    let output = Frontend.check_project(loaded.loaded.input.clone());
+    assert!(output.checked.is_none());
+    let diagnostic = output
+        .diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .contains("external callable residual references require validated residual plans")
+        })
+        .expect("unchecked residual references require an import diagnostic");
+    assert_eq!(
+        diagnostic.code,
+        etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)
+    );
+    let source = &loaded.loaded.input.sources[0];
+    assert_eq!(diagnostic.primary.span.source, source.id);
+    let span = diagnostic.primary.span.range;
+    assert!(source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api"));
+}
+
+#[test]
+fn binary_effect_and_latent_residuals_are_preserved_and_rejected_at_import() {
+    use etas_code::{
+        CodeFingerprint,
+        residual::identity::{ObligationId, ResidualObligationRef},
+    };
+    for latent in [false, true] {
+        let workspace = origin_metadata::workspace_with_source(
+            "module library.api; public flow make() -> ((i32) -> i32 ![]) ![] { return (x: i32) => { return x; }; } public flow lookup() -> i32 { return 7; }",
+        );
+        let consumer_root = origin_metadata::consumer(&workspace, "first")
+            .package_root
+            .unwrap();
+        let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
+        let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
+            &artifact,
+            &std::fs::read(&artifact).unwrap(),
+        )
+        .unwrap();
+        let summary = metadata
+            .public_metadata
+            .effect_summaries
+            .iter_mut()
+            .find(|summary| summary.item == ["library", "api", "make"])
+            .unwrap();
+        let reference = ResidualObligationRef::new(
+            ObligationId::from_canonical_fingerprint(CodeFingerprint::from_bytes([40; 32])),
+            Default::default(),
+        )
+        .unwrap();
+        if latent {
+            summary
+                .latent_flows
+                .first_mut()
+                .unwrap()
+                .residual_checks
+                .push(reference);
+        } else {
+            summary.residual_checks.push(reference);
+        }
+        let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
+        let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
+        etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
+        etas_package::materialize_package(etas_package::MaterializePackageOptions {
+            package_root: consumer_root.clone(),
+            source_config: Some(
+                etas_package::PackageSourceConfig::read_project(&consumer_root).unwrap(),
+            ),
+        })
+        .unwrap();
+        etas_package::lock_package(etas_package::LockPackageOptions {
+            package_root: consumer_root.clone(),
+        })
+        .unwrap();
+        let loaded = etas_driver::load_project(
+            &origin_metadata::options(&consumer_root),
+            etas_driver::LoadProjectRequest {
+                paths: vec![consumer_root],
+                all: true,
+                entry_policy: EntryPolicy::Optional,
+                flow: None,
+                bin: None,
+                source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+            },
+        )
+        .unwrap();
+        let summary = loaded
+            .loaded
+            .input
+            .environment
+            .external_public_metadata
+            .iter()
+            .flat_map(|metadata| &metadata.effect_summaries)
+            .find(|summary| summary.item.last().is_some_and(|name| name == "make"))
+            .unwrap();
+        assert!(if latent {
+            !summary.latent_flows[0].residual_checks.is_empty()
+        } else {
+            !summary.residual_checks.is_empty()
+        });
+        let output = Frontend.check_project(loaded.loaded.input.clone());
+        assert!(output.checked.is_none());
+        let diagnostic = output
+            .diagnostics
+            .iter()
+            .find(|diagnostic| {
+                diagnostic.message.contains(
+                    "external effect residual references require validated residual plans",
+                )
+            })
+            .unwrap();
+        let source = &loaded.loaded.input.sources[0];
+        assert_eq!(diagnostic.primary.span.source, source.id);
+        let span = diagnostic.primary.span.range;
+        assert!(
+            source.text[span.start.0 as usize..span.end.0 as usize].contains("first.library.api")
+        );
+    }
+}
+
+#[test]
 fn metadata_return_source_unions_preserve_every_possible_callback() {
     let workspace = origin_metadata::workspace_with_source(
         r#"

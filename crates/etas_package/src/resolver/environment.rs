@@ -154,6 +154,18 @@ pub(super) fn build_environment(
         return Err(PackageError::Diagnostics(diagnostics));
     }
 
+    finish_environment(package_root, manifest, lockfile, index, dependencies)
+}
+
+fn finish_environment(
+    package_root: &Path,
+    manifest: &manifest::Manifest,
+    lockfile: &Lockfile,
+    index: Option<&metadata::PackageIndex>,
+    dependencies: Vec<ResolvedDependency>,
+) -> Result<PackageEnvironmentMetadata, PackageError> {
+    let mut diagnostics = Vec::new();
+
     let tool_bindings = manifest
         .bindings
         .tools
@@ -241,6 +253,109 @@ pub(super) fn build_environment(
         tool_bindings,
         metadata_fingerprint,
     })
+}
+
+/// Rebuild a producer's package environment from immutable, checksum-verified
+/// bytes and the already locked dependency graph. This never resolves or
+/// materializes a new dependency.
+pub fn environment_from_locked_snapshot(
+    snapshot: &crate::LockedPackageSourceSnapshot,
+    owner: &ResolvedDependency,
+) -> Result<PackageEnvironmentMetadata, PackageError> {
+    let root = snapshot.package_root();
+    let manifest = snapshot.manifest();
+    let invalid = |message: String| {
+        PackageError::diagnostic(
+            "package.snapshot.environment_mismatch",
+            message,
+            Some(root.to_owned()),
+        )
+    };
+    if PackageIdentity::current(manifest) != owner.identity
+        || owner.source.payload_checksum() != Some(snapshot.checksum())
+    {
+        return Err(invalid(
+            "locked snapshot does not identify the requested package".into(),
+        ));
+    }
+    let index_path = vendor::package_index_path(root);
+    let relative = index_path
+        .strip_prefix(root)
+        .map_err(|_| invalid("package index is outside the locked snapshot".into()))?;
+    let index: Option<metadata::PackageIndex> = snapshot
+        .file(relative)
+        .map(|bytes| {
+            serde_json::from_slice(bytes)
+                .map_err(|error| invalid(format!("locked package index is invalid: {error}")))
+        })
+        .transpose()?;
+    if index
+        .as_ref()
+        .is_some_and(|index| index.package != owner.identity)
+    {
+        return Err(invalid(
+            "locked package index has a different package identity".into(),
+        ));
+    }
+    let mut dependencies = Vec::new();
+    let mut used = BTreeSet::new();
+    for (name, spec) in &manifest.dependencies {
+        let import_root = spec.import_root(name);
+        let package_name = spec.package_name_constraint(name);
+        let mut matches = owner
+            .dependencies
+            .iter()
+            .enumerate()
+            .filter(|(_, dependency)| {
+                dependency.import_root == import_root
+                    && package_name.is_none_or(|name| dependency.identity.name == name)
+            });
+        let (position, dependency) = matches
+            .next()
+            .ok_or_else(|| invalid(format!("locked dependency `{name}` is missing")))?;
+        if matches.next().is_some() || !used.insert(position) {
+            return Err(invalid(format!("locked dependency `{name}` is ambiguous")));
+        }
+        if let Some(requirement) = spec.version()
+            && !version_satisfies(&dependency.identity.version, requirement)
+                .map_err(|error| invalid(format!("invalid dependency version: {error}")))?
+        {
+            return Err(invalid(format!(
+                "locked dependency `{name}` does not satisfy its version requirement"
+            )));
+        }
+        if !metadata::is_builtin_package(name) {
+            let from_index = index
+                .as_ref()
+                .and_then(|index| {
+                    index.dependencies.iter().find(|entry| {
+                        entry.import_root == import_root
+                            && entry.identity.name == dependency.identity.name
+                            && entry.identity.version == dependency.identity.version
+                    })
+                })
+                .ok_or_else(|| {
+                    invalid(format!("locked index does not contain dependency `{name}`"))
+                })?;
+            if from_index != dependency {
+                return Err(invalid(format!(
+                    "locked dependency `{name}` differs from the package index"
+                )));
+            }
+        }
+        dependencies.push(dependency.clone());
+    }
+    if used.len() != owner.dependencies.len() {
+        return Err(invalid(
+            "locked package graph contains undeclared dependencies".into(),
+        ));
+    }
+    let lockfile = Lockfile {
+        version: 1,
+        manifest_fingerprint: Some(lockfile::manifest_dependency_fingerprint(manifest)),
+        packages: Vec::new(),
+    };
+    finish_environment(root, manifest, &lockfile, index.as_ref(), dependencies)
 }
 
 fn validate_transitive_lock_graph(

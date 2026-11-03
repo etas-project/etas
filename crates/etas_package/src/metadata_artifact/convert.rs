@@ -18,6 +18,7 @@ use crate::{
         PackageReExportMetadata, PackageRecordFieldMetadata, PackageSpecBoundMetadata,
         PackageSpecImplMetadata, PackageSpecKindMetadata, PackageSpecMethodMetadata,
         PackageSpecSignatureMetadata, PackageToolBindingMetadata, PackageToolSchemaMetadata,
+        PackageTraceSelectorBoundMetadata, PackageTraceSelectorOperandMetadata,
         PackageTraceSpecClauseKindMetadata, PackageTraceSpecClauseMetadata,
         PackageTraceSpecConformanceMetadata, PackageTraceSpecConformanceTargetMetadata,
         PackageTraceSpecSummaryMetadata, PackageTypeMetadata, PackageTypeSpecSatisfactionMetadata,
@@ -504,6 +505,7 @@ fn spec_signature_from_metadata(
         visibility: visibility_from_metadata(signature.visibility),
         kind: spec_kind_from_metadata(signature.kind),
         param_names: signature.param_names,
+        generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         callable: signature
             .callable
             .map(|callable| flow_signature_from_metadata(callable, path))
@@ -560,6 +562,7 @@ fn spec_impl_from_metadata(
             .map(type_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
         methods: implementation.methods,
+        implementation_module: implementation.implementation_module,
     })
 }
 
@@ -600,15 +603,18 @@ fn trace_spec_conformance_from_metadata(
             etas_package_metadata::TraceSpecConformanceTarget::Inline => {
                 PackageTraceSpecConformanceTargetMetadata::Inline
             }
-            etas_package_metadata::TraceSpecConformanceTarget::Named { spec, args } => {
-                PackageTraceSpecConformanceTargetMetadata::Named {
-                    spec,
-                    args: args
-                        .into_iter()
-                        .map(type_from_metadata)
-                        .collect::<Result<Vec<_>, _>>()?,
-                }
-            }
+            etas_package_metadata::TraceSpecConformanceTarget::Named {
+                spec,
+                definition,
+                args,
+            } => PackageTraceSpecConformanceTargetMetadata::Named {
+                spec,
+                definition,
+                args: args
+                    .into_iter()
+                    .map(type_from_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
         },
     })
 }
@@ -1030,6 +1036,7 @@ fn effect_summary_from_metadata(
     summary: etas_package_metadata::EffectSummary,
 ) -> Result<PackageEffectSummaryMetadata, PackageError> {
     Ok(PackageEffectSummaryMetadata {
+        residual_checks: summary.residual_checks.clone(),
         behavior: summary.behavior,
         handler_requests: summary
             .handler_requests
@@ -1141,6 +1148,7 @@ fn latent_flow_summary_from_metadata(
     summary: etas_package_metadata::LatentFlowSummary,
 ) -> Result<PackageLatentFlowSummaryMetadata, PackageError> {
     Ok(PackageLatentFlowSummaryMetadata {
+        residual_checks: summary.residual_checks.clone(),
         declared_bound: effect_row_from_metadata(summary.declared_bound)?,
         inferred_effects: effect_row_from_metadata(summary.inferred_effects)?,
     })
@@ -1160,10 +1168,16 @@ fn trace_spec_summary_from_metadata(
 ) -> Result<PackageTraceSpecSummaryMetadata, PackageError> {
     Ok(PackageTraceSpecSummaryMetadata {
         trace_spec: summary.trace_spec,
-        clauses: summary
-            .clauses
+        definition: summary.definition,
+        alternatives: summary
+            .alternatives
             .into_iter()
-            .map(trace_spec_clause_from_metadata)
+            .map(|clauses| {
+                clauses
+                    .into_iter()
+                    .map(trace_spec_clause_from_metadata)
+                    .collect::<Result<Vec<_>, _>>()
+            })
             .collect::<Result<Vec<_>, _>>()?,
     })
 }
@@ -1180,6 +1194,37 @@ fn trace_spec_clause_from_metadata(
             .obligation
             .map(effect_row_from_metadata)
             .transpose()?,
+        selector_bounds: clause
+            .selector_bounds
+            .into_iter()
+            .map(|bound| {
+                Ok(PackageTraceSelectorBoundMetadata {
+                    operand: match bound.operand {
+                        etas_package_metadata::TraceSelectorOperand::Pattern => {
+                            PackageTraceSelectorOperandMetadata::Pattern
+                        }
+                        etas_package_metadata::TraceSelectorOperand::Guard => {
+                            PackageTraceSelectorOperandMetadata::Guard
+                        }
+                        etas_package_metadata::TraceSelectorOperand::Target => {
+                            PackageTraceSelectorOperandMetadata::Target
+                        }
+                        etas_package_metadata::TraceSelectorOperand::Obligation => {
+                            PackageTraceSelectorOperandMetadata::Obligation
+                        }
+                    },
+                    effect_path: bound.effect_path,
+                    argument: bound.argument,
+                    binding: bound.binding,
+                    spec_path: bound.spec_path,
+                    spec_args: bound
+                        .spec_args
+                        .into_iter()
+                        .map(type_from_metadata)
+                        .collect::<Result<Vec<_>, _>>()?,
+                })
+            })
+            .collect::<Result<Vec<_>, PackageError>>()?,
     })
 }
 

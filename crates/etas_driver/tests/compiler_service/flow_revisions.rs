@@ -1,6 +1,180 @@
 use super::*;
 
 #[test]
+fn metadata_only_reflected_flow_check_and_compile_respect_callback_trace() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+public flow relay(callback: () -> unit ![]) -> unit ![] { callback(); }
+"#,
+    );
+    let mut loaded = origin_metadata::consumer(&workspace, "first");
+    assert_eq!(loaded.loaded.input.sources.len(), 1);
+    loaded.loaded.input.sources[0].text = r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+import std.compiler.{check, compile, parse_body, CompileError};
+spec Safe: trace = -Console.stdout_write;
+flow quiet() -> unit ![] { return; }
+flow noisy() -> unit ![] { println("forbidden")?; return; }
+flow normalize() -> i32 ![] ~ Safe { relay(quiet); return 7; }
+flow main() -> string ![Error<CompileError>] {
+    let good = match parse_body("relay(quiet); return 8;") {
+        Ok(body) => body, Err(_) => { return "parse good"; },
+    };
+    let draft = (^normalize).with_body(good);
+    if check(draft).status != "accepted" { return "good rejected"; }
+    let candidate = compile(draft);
+    if candidate() != 8 { return "wrong result"; }
+    let bad = match parse_body("relay(noisy); return 8;") {
+        Ok(body) => body, Err(_) => { return "parse bad"; },
+    };
+    let report = check((^normalize).with_body(bad));
+    if report.status != "rejected" { return "bad accepted"; }
+    for diagnostic in report.diagnostics limit Iterations(64) {
+        if diagnostic.code == "effect::TraceSpecDenied" { return "ok"; }
+    }
+    return "missing trace denial";
+}
+"#
+    .into();
+    loaded
+        .loaded
+        .input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.main.normalize".into());
+    let checked = origin_metadata::check(&loaded);
+    let definitions =
+        etas_driver::compiler::prepare_native_definitions(&loaded, &checked, Default::default())
+            .unwrap();
+    let service = NativeCompilerService::new(definitions.clone(), Default::default())
+        .with_project_sources(&loaded)
+        .unwrap();
+    let result = revisions::execute_using_service(
+        checked,
+        definitions,
+        etas_interpreter::api::ExecutionLimits {
+            max_steps: std::num::NonZeroU64::new(20_000),
+            ..Default::default()
+        },
+        service,
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::String("ok".into())));
+}
+
+#[test]
+fn metadata_only_reflected_flow_specializes_callback_trace_actions() {
+    let workspace = origin_metadata::workspace_with_source(
+        r#"module library.api;
+public flow relay(callback: () -> unit ![]) -> unit ![] { callback(); }
+"#,
+    );
+    for (callback, denied) in [("quiet", false), ("noisy", true)] {
+        let mut loaded = origin_metadata::consumer(&workspace, "first");
+        assert_eq!(loaded.loaded.input.sources.len(), 1);
+        loaded.loaded.input.sources[0].text = format!(
+            r#"
+module app.main;
+import first.library.api.relay;
+import std.io.println;
+spec Safe: trace = -Console.stdout_write;
+flow quiet() -> unit ![] {{ return; }}
+flow noisy() -> unit ![] {{ println("called")?; return; }}
+flow normalize() -> unit ![] ~ Safe {{ relay({callback}); }}
+flow main() -> unit {{ let definition = ^normalize; return; }}
+"#
+        );
+        let output = etas_frontend::Frontend.check_project(loaded.loaded.input.clone());
+        if denied {
+            assert!(
+                output.diagnostics.iter().any(|diagnostic| {
+                    diagnostic.code
+                        == etas_core::DiagnosticCode::Effect(
+                            etas_core::EffectDiagnosticCode::TraceSpecDenied,
+                        )
+                }),
+                "known noisy callback must be denied: {:#?}",
+                output.diagnostics
+            );
+        } else {
+            assert!(
+                output.diagnostics.is_empty(),
+                "known quiet callback must be accepted: {:#?}",
+                output.diagnostics
+            );
+            assert!(output.checked.is_some());
+        }
+    }
+}
+
+#[test]
+fn standalone_source_package_survives_candidate_body_compilation() {
+    use etas_interpreter::api::InterpValue;
+
+    let source = SourceInput::anonymous(
+        r#"
+module app;
+import std.compiler.{compile, parse_body, CompileError};
+flow target(value: i32) -> i32 { return value; }
+flow main() -> i32 ![Error<CompileError>] {
+    let body = match parse_body("return value;") {
+        Ok(body) => body,
+        Err(_) => { return -1; },
+    };
+    let candidate = compile((^target).with_body(body));
+    return candidate(42);
+}
+"#,
+    );
+    let package = PackageKey::from_canonical_fingerprint(CodeFingerprint::of_bytes(
+        "etas.test.standalone-source",
+        b"app",
+    ));
+    let mut input = ProjectInput::single_source(source.clone());
+    input
+        .options
+        .reflection
+        .retain_bodies
+        .push("app.target".into());
+    input.environment.standalone_source_packages.push(
+        etas_frontend::ProjectStandaloneSourcePackage {
+            source: source.id,
+            package,
+        },
+    );
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    let origins = DefinitionOrigins {
+        source_modules: DefinitionOrigins::declared_source_modules(&checked, package).unwrap(),
+        standard_package: PackageKey::from_canonical_fingerprint(CodeFingerprint::of_bytes(
+            "etas.test.standalone-source",
+            b"std",
+        )),
+        external_definitions: BTreeMap::new(),
+    };
+    let catalog =
+        Arc::new(DefinitionCatalog::build(checked.clone(), &origins, Default::default()).unwrap());
+    let definitions = Arc::new(NativeDefinitionStore::new(
+        catalog,
+        Arc::new(NativeCodeSyntaxOperations::default()),
+        Default::default(),
+    ));
+    let result = revisions::execute_prepared(
+        (checked, definitions),
+        Some(20000),
+        Default::default(),
+        true,
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::i32(42)));
+}
+
+#[test]
 fn metadata_only_callback_loop_preserves_origin_and_rejects_unproved_outcomes() {
     let workspace = origin_metadata::workspace_with_source(
         r#"
@@ -3169,6 +3343,391 @@ flow main() -> bool ![Error<CompileError>] {
 }
 
 #[test]
+fn candidate_self_reflection_of_a_local_flow_value_preserves_its_revision_body() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow describe() -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("let selected: () -> string ![] = describe; let definition = ^selected; return match definition.body { Some(body) => body.text, None => \"missing\", };") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = body.text;
+    let draft = (^describe).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate() == expected && describe() == "original";
+}
+"#,
+        &["app.describe"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn candidate_reflection_of_a_different_local_flow_keeps_its_frozen_body() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow helper() -> string ![] { return "helper"; }
+flow describe() -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("let selected: () -> string ![] = helper; let definition = ^selected; return match definition.body { Some(body) => body.text, None => \"missing\", };") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = match (^helper).body { Some(body) => body.text, None => { return false; }, };
+    let draft = (^describe).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate() == expected && describe() == "original";
+}
+"#,
+        &["app.describe", "app.helper"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn generic_candidate_reflects_its_own_specialized_flow_value() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow normalize<U>(value: U) -> U ![] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = normalize;
+    let body = match parse_body("let selected: (U) -> U ![] = normalize; let definition = ^selected; return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return !candidate(true) && candidate(false) && original(true);
+}
+"#,
+        &["app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn candidate_check_rejects_an_underconstrained_generic_flow_value() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, parse_body};
+flow inspect<T>(selected: (T) -> string ![]) -> string ![] { return "checked"; }
+flow describe<U>(value: U) -> string ![] { return "original"; }
+flow main() -> bool {
+    let original: (bool) -> string ![] = describe;
+    let body = match parse_body("return inspect(describe);") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    return check((^original).with_body(body)).status == "rejected";
+}
+"#,
+        &["app.describe"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn generic_helper_reflects_the_callers_pinned_flow_revision() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow inspect<T>(selected: (T) -> string ![]) -> string ![] {
+    let definition = ^selected;
+    return match definition.body { Some(body) => body.text, None => "missing", };
+}
+flow describe<U>(value: U) -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> string ![] = describe;
+    let body = match parse_body("let selected: (U) -> string ![] = describe; return inspect(selected);") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = body.text;
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true) == expected && original(true) == "original";
+}
+"#,
+        &["app.describe", "app.inspect"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn generic_helper_reflection_preserves_distinct_checked_instances() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow inspect<T>(selected: (T) -> string ![]) -> string ![] {
+    let definition = ^selected;
+    return match definition.body { Some(body) => body.text, None => "missing", };
+}
+flow other(value: i32) -> string ![] { return "other"; }
+flow describe<U>(value: U) -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> string ![] = describe;
+    let body = match parse_body("let selected: (U) -> string ![] = describe; let other_body = inspect(other); if other_body == \"missing\" { return \"wrong\"; } return inspect(selected);") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = body.text;
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true) == expected && original(true) == "original";
+}
+"#,
+        &["app.describe", "app.inspect", "app.other"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn effect_generic_helper_reflection_preserves_distinct_checked_rows() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow inspect<effect E>(selected: (bool) -> string ![E]) -> string ![] {
+    let definition = ^selected;
+    return match definition.body { Some(body) => body.text, None => "missing", };
+}
+flow noisy(value: bool) -> string ![Console.stdout_write] {
+    perform Console.stdout_write("not called");
+    return "other";
+}
+flow describe(value: bool) -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let body = match parse_body("let selected: (bool) -> string ![] = describe; let other_body = inspect(noisy); if other_body == \"missing\" { return \"wrong\"; } return inspect(selected);") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = body.text;
+    let draft = (^describe).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true) == expected && describe(true) == "original";
+}
+"#,
+        &["app.describe", "app.inspect", "app.noisy"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn generic_candidate_self_reflection_returns_its_pinned_revision_body() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow describe<U>(value: U) -> string ![] { return "original"; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> string ![] = describe;
+    let body = match parse_body("let selected: (U) -> string ![] = describe; let definition = ^selected; return match definition.body { Some(body) => body.text, None => \"missing\", };") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let expected = body.text;
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true) == expected && original(true) == "original";
+}
+"#,
+        &["app.describe"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn effect_generic_candidate_reflects_its_own_specialized_flow_value() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow normalize<effect E>(value: bool) -> bool ![E] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = normalize;
+    let body = match parse_body("let selected: (bool) -> bool ![E] = normalize; let definition = ^selected; return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return !candidate(true) && candidate(false) && original(true);
+}
+"#,
+        &["app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn effect_generic_candidate_cannot_reflect_a_different_effect_binding_as_its_own_revision() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow normalize<effect E>(value: bool) -> bool ![E] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = normalize;
+    let body = match parse_body("let selected: (bool) -> bool ![Console.stdout_write] = normalize; let definition = ^selected; return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true);
+}
+"#,
+        &["app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(
+        result.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("compiled flow arguments differ from its frozen environment")),
+        "different effect instantiation was not rejected: {:?}",
+        result.diagnostics
+    );
+}
+
+#[test]
+fn generic_candidate_cannot_reflect_a_different_specialization_as_its_own_revision() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow normalize<U>(value: U) -> U ![] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = normalize;
+    let body = match parse_body("let selected: (i32) -> i32 ![] = normalize; let definition = ^selected; return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return candidate(true);
+}
+"#,
+        &["app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(
+        result.diagnostics.iter().any(|diagnostic| diagnostic
+            .message
+            .contains("compiled flow arguments differ from its frozen environment")),
+        "different type instantiation was not rejected: {:?}",
+        result.diagnostics
+    );
+}
+
+#[test]
+fn generic_candidate_reflects_a_specialized_flow_value() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow identity<T>(value: T) -> T ![] { return value; }
+flow normalize<U>(value: U) -> U ![] { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let original: (bool) -> bool ![] = normalize;
+    let body = match parse_body("let selected: (U) -> U ![] = identity; let definition = ^selected; return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^original).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    let candidate = compile(draft);
+    return !candidate(true) && candidate(false) && original(true);
+}
+"#,
+        &["app.identity", "app.normalize"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn generic_scope_reflects_a_specialized_flow_value() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+flow identity<T>(value: T) -> T ![] { return value; }
+flow inspect<U>(value: U) -> bool ![] {
+    let selected: (U) -> U ![] = identity;
+    let definition = ^selected;
+    return selected(value) == value;
+}
+flow main() -> bool { return inspect<bool>(true) && inspect<i32>(7); }
+"#,
+        &["app.identity"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn unannotated_generic_flow_keeps_distinct_checked_effect_interfaces() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+import std.io.println;
+flow identity<T>(value: T) -> T { return value; }
+flow main() -> bool ![Error<CompileError>] {
+    let pure: (bool) -> bool ![] = identity;
+    let permissive: (bool) -> bool ![Console.stdout_write] = identity;
+    let body = match parse_body("return !value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let pure_draft = (^pure).with_body(body);
+    let permissive_draft = (^permissive).with_body(body);
+    if check(pure_draft).status != "accepted" { return false; }
+    if check(permissive_draft).status != "accepted" { return false; }
+    let changed = match parse_body("println(\"changed\")?; return value;") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    if check((^pure).with_body(changed)).status != "rejected" { return false; }
+    if check((^permissive).with_body(changed)).status != "rejected" { return false; }
+    let first = compile(pure_draft);
+    let second = compile(permissive_draft);
+    return !first(true) && !second(true) && pure(true) && permissive(true);
+}
+"#,
+        &["app.identity"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(30000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
 fn instantiated_generic_flow_revision_uses_bound_type_environment() {
     let prepared = source::prepared_with_bodies(
         r#"
@@ -3186,6 +3745,33 @@ flow main() -> bool ![Error<CompileError>] {
     if check((^integer).with_body(body)).status != "rejected" { return false; }
     let candidate = compile(draft);
     return !candidate(true) && candidate(false) && original(true) && integer(42) == 42;
+}
+"#,
+        &["app.identity"],
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
+}
+
+#[test]
+fn instantiated_nested_generic_flow_revision_uses_bound_type_environment() {
+    let prepared = source::prepared_with_bodies(
+        r#"
+module app;
+import std.compiler.{check, compile, parse_body, CompileError};
+flow identity<T>(values: Array<T>) -> Array<T> ![] { return values; }
+flow main() -> bool ![Error<CompileError>] {
+    let integer: (Array<i32>) -> Array<i32> ![] = identity;
+    let boolean: (Array<bool>) -> Array<bool> ![] = identity;
+    let body = match parse_body("return [1, 2];") {
+        Ok(body) => body, Err(_) => { return false; },
+    };
+    let draft = (^integer).with_body(body);
+    if check(draft).status != "accepted" { return false; }
+    if check((^boolean).with_body(body)).status != "rejected" { return false; }
+    let candidate = compile(draft);
+    return candidate([4]).len() == 2 && integer([4]).len() == 1;
 }
 "#,
         &["app.identity"],
@@ -3301,6 +3887,34 @@ flow main() -> bool ![Error<CompileError>] {{ let candidate = {expression}; retu
         );
         assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
     }
+}
+
+#[test]
+fn successive_flow_revisions_preserve_explicit_generated_source_identity() {
+    let source_key = etas_code::StableSourceKey::new(
+        etas_code::StableSourceOrigin::Project(etas_code::CodeFingerprint::from_bytes([76; 32])),
+        &["src".into(), "main.es".into()],
+    )
+    .unwrap();
+    let prepared = source::prepared_with_source_key(
+        r#"module app;
+import std.compiler.{compile, parse_body, CompileError};
+flow target(flag: bool) -> bool ![] { return flag; }
+flow main() -> bool ![Error<CompileError>] {
+    var current = target;
+    let first = match parse_body("return false;") { Ok(body) => body, Err(_) => { return false; }, };
+    current = compile((^current).with_body(first));
+    let before = current;
+    let second = match parse_body("return true;") { Ok(body) => body, Err(_) => { return false; }, };
+    current = compile((^current).with_body(second));
+    return !before(true) && current(false);
+}"#,
+        &["app.target"],
+        Some(source_key),
+    );
+    let result = revisions::execute_prepared(prepared, Some(20000), Default::default(), true);
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    assert_eq!(result.value(), Some(&InterpValue::Bool(true)));
 }
 
 #[test]

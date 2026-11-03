@@ -39,6 +39,8 @@ mod ordered_collections;
 mod priority_queue;
 #[path = "cli/record_values.rs"]
 mod record_values;
+#[path = "cli/residual_checks.rs"]
+mod residual_checks;
 #[path = "cli/runtime_report.rs"]
 mod runtime_report;
 #[path = "cli/source_reexports.rs"]
@@ -1938,6 +1940,7 @@ public flow code() -> i32 {
         "requested_actions": [],
         "handled_requested_actions": [],
         "latent_flows": [],
+        "residual_checks": [],
         "action_trace": { "kind": "empty" }
       }
     ]

@@ -503,6 +503,7 @@ fn spec_signature_to_metadata(
         visibility: visibility_to_metadata(&signature.visibility)?,
         kind: spec_kind_to_metadata(signature.kind),
         param_names: signature.param_names.clone(),
+        generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         callable: signature
             .callable
             .as_ref()
@@ -560,6 +561,7 @@ fn spec_impl_to_metadata(
             .map(type_to_metadata)
             .collect::<Result<Vec<_>, _>>()?,
         methods: implementation.methods.clone(),
+        implementation_module: implementation.implementation_module.clone(),
     })
 }
 
@@ -600,15 +602,18 @@ fn trace_spec_conformance_to_metadata(
             PackageTraceSpecConformanceTargetMetadata::Inline => {
                 etas_package_metadata::TraceSpecConformanceTarget::Inline
             }
-            PackageTraceSpecConformanceTargetMetadata::Named { spec, args } => {
-                etas_package_metadata::TraceSpecConformanceTarget::Named {
-                    spec: spec.clone(),
-                    args: args
-                        .iter()
-                        .map(type_to_metadata)
-                        .collect::<Result<Vec<_>, _>>()?,
-                }
-            }
+            PackageTraceSpecConformanceTargetMetadata::Named {
+                spec,
+                definition,
+                args,
+            } => etas_package_metadata::TraceSpecConformanceTarget::Named {
+                spec: spec.clone(),
+                definition: definition.clone(),
+                args: args
+                    .iter()
+                    .map(type_to_metadata)
+                    .collect::<Result<Vec<_>, _>>()?,
+            },
         },
     })
 }
@@ -1031,6 +1036,7 @@ fn effect_summary_to_metadata(
     summary: &PackageEffectSummaryMetadata,
 ) -> Result<etas_package_metadata::EffectSummary, PackageError> {
     Ok(etas_package_metadata::EffectSummary {
+        residual_checks: summary.residual_checks.clone(),
         handler_requests: summary
             .handler_requests
             .as_ref()
@@ -1148,6 +1154,7 @@ fn latent_flow_summary_to_metadata(
     summary: &PackageLatentFlowSummaryMetadata,
 ) -> Result<etas_package_metadata::LatentFlowSummary, PackageError> {
     Ok(etas_package_metadata::LatentFlowSummary {
+        residual_checks: summary.residual_checks.clone(),
         declared_bound: effect_row_to_metadata(&summary.declared_bound)?,
         inferred_effects: effect_row_to_metadata(&summary.inferred_effects)?,
     })
@@ -1167,10 +1174,16 @@ fn trace_spec_summary_to_metadata(
 ) -> Result<etas_package_metadata::TraceSpecSummary, PackageError> {
     Ok(etas_package_metadata::TraceSpecSummary {
         trace_spec: summary.trace_spec.clone(),
-        clauses: summary
-            .clauses
+        definition: summary.definition.clone(),
+        alternatives: summary
+            .alternatives
             .iter()
-            .map(trace_spec_clause_to_metadata)
+            .map(|clauses| {
+                clauses
+                    .iter()
+                    .map(trace_spec_clause_to_metadata)
+                    .collect::<Result<Vec<_>, _>>()
+            })
             .collect::<Result<Vec<_>, _>>()?,
     })
 }
@@ -1179,6 +1192,37 @@ fn trace_spec_clause_to_metadata(
     clause: &PackageTraceSpecClauseMetadata,
 ) -> Result<etas_package_metadata::TraceSpecClause, PackageError> {
     Ok(etas_package_metadata::TraceSpecClause {
+        selector_bounds: clause
+            .selector_bounds
+            .iter()
+            .map(|bound| {
+                Ok(etas_package_metadata::TraceSelectorBound {
+                    operand: match bound.operand {
+                        crate::PackageTraceSelectorOperandMetadata::Pattern => {
+                            etas_package_metadata::TraceSelectorOperand::Pattern
+                        }
+                        crate::PackageTraceSelectorOperandMetadata::Guard => {
+                            etas_package_metadata::TraceSelectorOperand::Guard
+                        }
+                        crate::PackageTraceSelectorOperandMetadata::Target => {
+                            etas_package_metadata::TraceSelectorOperand::Target
+                        }
+                        crate::PackageTraceSelectorOperandMetadata::Obligation => {
+                            etas_package_metadata::TraceSelectorOperand::Obligation
+                        }
+                    },
+                    effect_path: bound.effect_path.clone(),
+                    argument: bound.argument,
+                    binding: bound.binding.clone(),
+                    spec_path: bound.spec_path.clone(),
+                    spec_args: bound
+                        .spec_args
+                        .iter()
+                        .map(type_to_metadata)
+                        .collect::<Result<Vec<_>, _>>()?,
+                })
+            })
+            .collect::<Result<Vec<_>, PackageError>>()?,
         kind: trace_spec_clause_kind_to_metadata(clause.kind.clone()),
         pattern: clause
             .pattern

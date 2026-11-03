@@ -66,6 +66,10 @@ pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) ->
         },
         cache_root: global.cache_root.clone(),
         profile: profile.clone(),
+        #[cfg(feature = "component-runtime")]
+        residual_target: Some(etas_interpreter::interpreter_residual_capabilities()),
+        #[cfg(not(feature = "component-runtime"))]
+        residual_target: None,
     }
 }
 

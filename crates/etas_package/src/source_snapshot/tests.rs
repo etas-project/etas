@@ -48,6 +48,44 @@ impl Drop for Package {
 }
 
 #[test]
+fn producer_environment_is_reconstructed_from_locked_bytes_without_reopening_paths() {
+    let package = Package::new();
+    let expected = crate::prepare_package(crate::PreparePackageOptions {
+        package_root: package.0.clone(),
+        selected_bin: None,
+    })
+    .unwrap()
+    .environment;
+    let checksum = package.checksum();
+    let snapshot = package.read(&checksum, Default::default()).unwrap();
+    let owner = crate::ResolvedDependency {
+        identity: crate::PackageIdentity::current(snapshot.manifest()),
+        import_root: "dependency".into(),
+        source: crate::ResolvedDependencySource::Path {
+            path: "library".into(),
+            checksum,
+        },
+        dependencies: vec![],
+        public_metadata: Default::default(),
+        effect_metadata: Default::default(),
+        tool_bindings: vec![],
+    };
+    fs::write(package.0.join("etas.toml"), "invalid after snapshot").unwrap();
+    assert_eq!(
+        crate::environment_from_locked_snapshot(&snapshot, &owner).unwrap(),
+        expected
+    );
+    let mut forged = owner.clone();
+    forged.identity.name = "different".into();
+    assert!(crate::environment_from_locked_snapshot(&snapshot, &forged).is_err());
+    let mut forged = owner;
+    if let crate::ResolvedDependencySource::Path { checksum, .. } = &mut forged.source {
+        *checksum = format!("blake3:{}", "0".repeat(64));
+    }
+    assert!(crate::environment_from_locked_snapshot(&snapshot, &forged).is_err());
+}
+
+#[test]
 fn locked_source_snapshot_uses_the_existing_payload_checksum_and_immutable_bytes() {
     let package = Package::new();
     fs::create_dir(package.0.join(".etas")).unwrap();
