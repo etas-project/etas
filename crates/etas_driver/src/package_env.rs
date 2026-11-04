@@ -1509,6 +1509,7 @@ fn dependency_type_input_with_graph(
         }
         etas_package::PackageTypeMetadata::Primitive { .. }
         | etas_package::PackageTypeMetadata::Var { .. }
+        | etas_package::PackageTypeMetadata::Parameter { .. }
         | etas_package::PackageTypeMetadata::Prompt
         | etas_package::PackageTypeMetadata::PromptPart => type_input(ty),
     }
@@ -1572,6 +1573,12 @@ fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInpu
         }
         etas_package::PackageTypeMetadata::Var { name } => {
             ProjectExternalTypeInput::Var(name.clone())
+        }
+        etas_package::PackageTypeMetadata::Parameter { owner, position } => {
+            ProjectExternalTypeInput::Parameter {
+                owner: owner.clone(),
+                position: *position,
+            }
         }
         etas_package::PackageTypeMetadata::Named { path } => {
             ProjectExternalTypeInput::Named(path.clone())

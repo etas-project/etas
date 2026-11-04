@@ -1,5 +1,67 @@
 use super::*;
 
+#[test]
+fn binary_generic_method_closures_replay_owner_and_shadowing_effect_binders() {
+    let workspace = origin_metadata::workspace_with_source(include_str!(
+        "../../fixtures/method_resolution/owner_capture.es"
+    ));
+    for (alias, operation) in [("direct", "capture(\"other\")"), ("wrapped", "wrap()")] {
+        let mut loaded = origin_metadata::consumer(&workspace, alias);
+        loaded.loaded.input.sources[0].text = format!(
+            "module app.main; import {alias}.library.api.{{Container, Probe}}; flow main() -> unit {{ let callback = Container<i32> {{ value = 7 }}.{operation}; callback(); return; }}"
+        );
+        let checked = origin_metadata::check(&loaded);
+        assert_eq!(checked.sources.sources.len(), 1, "metadata-only consumer");
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        let expected_action = checked
+            .effect_registry
+            .action_by_name(&format!("{alias}.library.api.Probe.hit"))
+            .unwrap();
+        let expected_types = [
+            etas_types::PrimitiveType::I32,
+            etas_types::PrimitiveType::String,
+        ]
+        .map(|primitive| {
+            checked
+                .type_store
+                .iter()
+                .find_map(|(id, ty)| (*ty == etas_types::Type::Primitive(primitive)).then_some(id))
+                .unwrap()
+        });
+        for row in [&summary.escaping_effects, &summary.requested_actions] {
+            let types = row
+                .effects
+                .iter()
+                .map(|effect| {
+                    let etas_effects::Effect::AppliedAction(action) = effect else {
+                        panic!("typed action: {effect:?}");
+                    };
+                    assert_eq!(action.action, expected_action);
+                    let [etas_types::EffectArgRef::Type(ty)] = action.args.as_slice() else {
+                        panic!("typed selector: {action:?}");
+                    };
+                    *ty
+                })
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(types, expected_types.into(), "{alias}: {row:?}");
+        }
+        let etas_effects::ActionTraceDomain::Seq(events) = &summary.action_trace else {
+            panic!("ordered callback trace: {:?}", summary.action_trace);
+        };
+        assert_eq!(events.len(), 2, "{alias}: {events:?}");
+        for (event, expected) in events.iter().zip(expected_types) {
+            let etas_effects::ActionTraceDomain::Event(event) = event else {
+                panic!("concrete callback event: {event:?}");
+            };
+            let etas_effects::Effect::AppliedAction(action) = &event.action else {
+                panic!("typed callback event: {event:?}");
+            };
+            assert_eq!(action.action, expected_action);
+            assert_eq!(action.args, [etas_types::EffectArgRef::Type(expected)]);
+        }
+    }
+}
+
 const LIBRARY: &str = r#"
 module library.api;
 public spec Encoder { flow encode(self) -> i32 ![]; }
@@ -11,6 +73,82 @@ public flow first(value: First) -> i32 ![] { return value::Encoder.encode(); }
 public flow second(value: Second) -> i32 ![] { return value::Encoder.encode(); }
 public flow lookup() -> i32 ![] { return 7; }
 "#;
+
+#[test]
+fn dependency_method_closure_executes_with_owner_selectors_after_runtime_overlay() {
+    let workspace = origin_metadata::workspace_with_source(include_str!(
+        "../../fixtures/method_resolution/owner_capture.es"
+    ));
+    for (alias, operation) in [("direct", "capture(\"other\")"), ("wrapped", "wrap()")] {
+        let loaded = origin_metadata::consumer(&workspace, alias);
+        let root = loaded.package_root.unwrap();
+        std::fs::write(
+            root.join("src/app/main.es"),
+            format!(
+                r#"
+module app.main;
+import {alias}.library.api.{{Container, Probe}};
+flow main(args: Array<string>) -> i32 {{
+    return handle {{
+        let callback = Container<i32> {{ value = 7 }}.{operation};
+        callback();
+        return 7;
+    }} with {{
+        Probe.hit<i32>() => {{ resume (); }}
+        Probe.hit<string>() => {{ resume (); }}
+    }};
+}}
+"#
+            ),
+        )
+        .unwrap();
+        let compiled = etas_driver::compile_runnable_project_with_loaded(
+            &origin_metadata::options(&root),
+            etas_driver::LoadProjectRequest {
+                paths: vec![root],
+                all: false,
+                entry_policy: EntryPolicy::Runnable,
+                flow: None,
+                bin: None,
+                source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+            },
+            etas_frontend::SnapshotDetailLevel::Full,
+        )
+        .unwrap();
+        assert!(
+            compiled
+                .response
+                .output
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != etas_core::Severity::Error),
+            "{:?}",
+            compiled.response.output.diagnostics
+        );
+        let checked = compiled.response.output.checked.unwrap();
+        let host = no_host::NoHost::default();
+        let result = runtime()
+            .block_on(etas_interpreter::Interpreter.run_checked(
+                &checked,
+                etas_interpreter::api::EntryPoint {
+                    item: checked.entry.unwrap(),
+                },
+                vec![etas_interpreter::api::InterpValue::Array(vec![].into())],
+                &host,
+                Default::default(),
+            ))
+            .unwrap();
+        assert!(
+            result.diagnostics.is_empty(),
+            "{alias}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            result.value(),
+            Some(&etas_interpreter::api::InterpValue::i32(7))
+        );
+    }
+}
 
 #[test]
 fn behavioral_self_type_method_descriptors_survive_real_package_loading_with_two_import_roots() {
