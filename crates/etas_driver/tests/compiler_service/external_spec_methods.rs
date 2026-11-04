@@ -12,6 +12,8 @@ mod implementation_replay;
 mod implicit_self;
 #[path = "external_spec_methods/invalid_self_metadata.rs"]
 mod invalid_self_metadata;
+#[path = "external_spec_methods/objects.rs"]
+mod objects;
 #[path = "external_spec_methods/runtime_self.rs"]
 mod runtime_self;
 #[path = "external_spec_methods/type_method_identity.rs"]
@@ -154,13 +156,13 @@ impl Token ~ Identity<Token> {
             implementation
                 .methods
                 .iter()
-                .any(|method| method.identity.name() == "id")
+                .any(|method| method.name() == "id")
         })
         .flat_map(|implementation| {
             implementation
                 .methods
                 .iter()
-                .map(|method| method.identity.implementation().module().to_vec())
+                .map(|method| method.implementation().module().to_vec())
         })
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
@@ -250,52 +252,63 @@ impl Token ~ Identity<Token> { flow id(input: Token) -> Token { return input; } 
         ],
         "",
     );
-    let mut loaded = origin_metadata::consumer(&workspace, "dep");
-    loaded.loaded.input.sources[0].text = r#"
+    for method_call in ["input.id()", "input::Identity<T>.id()"] {
+        let mut loaded = origin_metadata::consumer(&workspace, "dep");
+        loaded.loaded.input.sources[0].text = r#"
 module app.main;
 import dep.library.api.{Identity, Token};
 import std.compiler.{check, compile, parse_body, CompileError};
-flow apply<T ~ Identity<T>>(input: T) -> T { return input::Identity<T>.id(); }
+flow apply<T ~ Identity<T>>(input: T) -> T { return $call; }
 flow main() -> string ![Error<CompileError>] {
     let original: (Token) -> Token ![] = apply;
-    let body = match parse_body("return input::Identity<T>.id();") {
+    let body = match parse_body("return $call;") {
         Ok(body) => body, Err(_) => { return "parse"; },
     };
     let draft = (^original).with_body(body);
-    if check(draft).status != "accepted" { return "rejected"; }
+    let report = check(draft);
+    if report.status != "accepted" {
+        var reason = report.status;
+        for diagnostic in report.diagnostics limit Iterations(16) {
+            reason = reason + "|" + diagnostic.code + ": " + diagnostic.message;
+        }
+        return reason;
+    }
     let candidate = compile(draft);
     if candidate(Token(7)) != Token(7) { return "candidate"; }
     return "ok";
 }
 "#
-    .into();
-    loaded
-        .loaded
-        .input
-        .options
-        .reflection
-        .retain_bodies
-        .push("app.main.apply".into());
-    let checked = origin_metadata::check(&loaded);
-    let definitions = prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
-    let service = NativeCompilerService::new(definitions.clone(), Default::default())
-        .with_project_sources(&loaded)
-        .unwrap();
-    let result = revisions::execute_using_service(
-        checked,
-        definitions,
-        etas_interpreter::api::ExecutionLimits {
-            max_steps: std::num::NonZeroU64::new(20_000),
-            ..Default::default()
-        },
-        service,
-        true,
-    );
-    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
-    assert_eq!(
-        result.value(),
-        Some(&etas_interpreter::api::InterpValue::String("ok".into()))
-    );
+        .replace("$call", method_call);
+        loaded
+            .loaded
+            .input
+            .options
+            .reflection
+            .retain_bodies
+            .push("app.main.apply".into());
+        let checked = origin_metadata::check(&loaded);
+        let definitions =
+            prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+        let service = NativeCompilerService::new(definitions.clone(), Default::default())
+            .with_project_sources(&loaded)
+            .unwrap();
+        let result = revisions::execute_using_service(
+            checked,
+            definitions,
+            etas_interpreter::api::ExecutionLimits {
+                max_steps: std::num::NonZeroU64::new(20_000),
+                ..Default::default()
+            },
+            service,
+            true,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert_eq!(
+            result.value(),
+            Some(&etas_interpreter::api::InterpValue::String("ok".into())),
+            "{method_call}"
+        );
+    }
 }
 
 #[test]

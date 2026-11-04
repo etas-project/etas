@@ -23,9 +23,8 @@ fn behavioral_self_type_method_descriptors_survive_real_package_loading_with_two
     .unwrap();
     let evidence = metadata
         .public_metadata
-        .spec_impls
+        .methods
         .iter()
-        .flat_map(|implementation| &implementation.methods)
         .map(|method| {
             method.callable.validate_references(Some((0, &[]))).unwrap();
             let root = method.root().unwrap();
@@ -60,8 +59,7 @@ flow main() -> i32 ![] {{ return first(Remote {{ value = 7 }}); }}
         assert_eq!(checked.sources.sources.len(), 1, "metadata-only consumer");
         let imported = checked
             .types
-            .external_specs
-            .methods
+            .external_methods
             .iter()
             .map(|method| method.identity.clone())
             .collect::<std::collections::BTreeSet<_>>();
@@ -101,7 +99,7 @@ public flow lookup() -> i32 ![] { return 7; }
     loaded.loaded.input.sources[0].text = "module app.main; import renamed.library.api.{Packet, Echo, lookup}; flow main() -> i32 ![] { return lookup(); }".into();
     let checked = origin_metadata::check(&loaded);
     assert_eq!(checked.sources.sources.len(), 1);
-    let methods = &checked.types.external_specs.methods;
+    let methods = &checked.types.external_methods;
     assert_eq!(methods.len(), 1);
     let method = &methods[0];
     assert_eq!(method.identity.name(), "echo");
@@ -127,11 +125,14 @@ fn behavioral_self_impl_evidence_is_rejected_by_encoder_and_at_import_span() {
             &std::fs::read(&artifact).unwrap(),
         )
         .unwrap();
-        let first = metadata.public_metadata.spec_impls[0].methods[0]
-            .identity
-            .clone();
-        let method = &mut metadata.public_metadata.spec_impls[1].methods[0];
-        let original_identity = method.identity.clone();
+        let first = metadata.public_metadata.spec_impls[0].methods[0].clone();
+        let original_identity = metadata.public_metadata.spec_impls[1].methods[0].clone();
+        let method = metadata
+            .public_metadata
+            .methods
+            .iter_mut()
+            .find(|method| method.identity == original_identity)
+            .unwrap();
         if change == 0 {
             method.identity = first.clone();
         } else {
@@ -166,7 +167,7 @@ fn behavioral_self_impl_evidence_is_rejected_by_encoder_and_at_import_span() {
             assert!(
                 error
                     .to_string()
-                    .contains("conflicting published behavior graphs"),
+                    .contains("published method identity is duplicated"),
                 "{error}"
             );
             // A public environment can also arrive from an embedding, without
@@ -178,8 +179,7 @@ fn behavioral_self_impl_evidence_is_rejected_by_encoder_and_at_import_span() {
                 .environment
                 .external_public_metadata
                 .iter_mut()
-                .flat_map(|metadata| &mut metadata.spec_impls)
-                .flat_map(|implementation| &mut implementation.methods)
+                .flat_map(|metadata| &mut metadata.methods)
                 .find(|method| method.identity == original_identity)
                 .expect("loaded binary method evidence");
             method.identity = first;

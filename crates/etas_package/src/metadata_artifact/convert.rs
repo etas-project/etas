@@ -124,6 +124,7 @@ fn public_metadata_from_metadata(
             .into_iter()
             .map(spec_impl_from_metadata)
             .collect::<Result<Vec<_>, _>>()?,
+        methods: metadata.methods,
         type_spec_satisfactions: metadata
             .type_spec_satisfactions
             .into_iter()
@@ -793,6 +794,13 @@ fn type_from_metadata(
         })
     };
     match ty.kind {
+        etas_package_metadata::TypeKind::Existential => Ok(PackageTypeMetadata::Existential {
+            bounds: ty
+                .bounds
+                .into_iter()
+                .map(spec_bound_from_metadata)
+                .collect::<Result<_, _>>()?,
+        }),
         etas_package_metadata::TypeKind::Enum => Ok(PackageTypeMetadata::Enum {
             path: ty.path,
             variants: ty

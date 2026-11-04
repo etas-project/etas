@@ -5,6 +5,7 @@ use etas_package_metadata::{
 
 fn parameter_sources(positions: &[u32]) -> CallableValueGraph {
     CallableValueGraph {
+        objects: Vec::new(),
         sources: positions
             .iter()
             .map(|position| {
