@@ -32,7 +32,12 @@ CoreEffectRoot = Agentic | Network | FileIO | Command | Memory | Secret | Time |
 EffectSet      = Set<EffectRef>
 ```
 
-The core root set should stay small. Roots are broad categories used for
+The core root set should stay small. These are standard declarations with
+specified compiler/runtime contracts, not additional keywords or a requirement
+to implement their entire API in the host. Effect declaration/extension, rows,
+inference, and handling are language mechanisms; concrete standard names and
+platform execution follow the [five-layer model](01-overview.md#53-feature-map-by-layer).
+Roots are broad categories used for
 effect-root extension, trace-spec/runtime-policy coverage, and high-level
 summaries. This is not value subtyping.
 
@@ -42,11 +47,18 @@ summaries. This is not value subtyping.
 | `Network` | Accesses external network resources |
 | `FileIO` | Reads or writes files visible to the runtime |
 | `Command` | Executes a sandboxed command or child process |
-| `Memory` | Reads, writes, migrates, or compacts typed persistent memory resources |
+| `Memory` | Reads, writes, migrates, or performs storage compaction on typed persistent memory resources |
 | `Secret` | Reads, decrypts, or reveals secret material |
 | `Time` | Reads wall-clock time, sleeps, schedules, or uses timers |
 | `Human` | Requests human input, approval, notification, or UI-mediated decisions |
 | `Error<E>` | Raises a typed recoverable failure |
+
+Session history reads and context publication are memory operations. Generating
+a summary through a model is an explicit application/EDK computation that records
+its own `Agentic.infer` requested action under the ordinary default-handler
+rules; it must not be hidden inside a memory read, publication, or retention
+operation. Selecting an existing summary does not itself request inference.
+See [Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
 
 Fine-grained authority is represented by effect actions. Some actions are
 defined by the core prelude, while most external authorities are defined by
@@ -119,9 +131,11 @@ spec ReadOnlyWeb: trace =
 
 ### 1.1 Minimal Standard Actions
 
-The core standard library should define only orthogonal actions needed by the
+The standard library should define only orthogonal actions needed by the
 language runtime and common local programs. These names are not keywords; they
-are prelude or standard-library effect/action names.
+are standard-library effect/action names, possibly re-exported by a prelude.
+Their declarations, wrappers, and expressible handler logic can be Etas source;
+host execution is needed only for the specified primitive endpoints.
 
 | Root / effect | Minimal standard actions | Typical authority |
 |---|---|---|
@@ -478,15 +492,24 @@ the runtime or standard library. A default implementation is still subject to
 the active effect boundary, trace specs, runtime policy, approval, sandbox, and
 limit checks. It is not a grant of authority by itself.
 
-Standard library APIs are thin flow wrappers over minimal standard actions:
+Effectful standard APIs can be ordinary Etas flow wrappers over minimal standard
+actions. Pure standard algorithms do not need an action solely because they
+belong to std. Under the standard default console handler:
 
 ```etas
-flow std.io.println(text: string) -> unit ![Error<IOError>]
-  requested_actions = [Console.stdout_write]
-  default_actions = [Console.stdout_write]
-{
+module std.io;
+
+flow println(text: string) -> unit ![Error<IOError>] {
     perform Console.stdout_write(text + "\n");
 }
+```
+
+Its inferred interface metadata is separate from that source declaration:
+
+```text
+escaping_effects  = [Error<IOError>]
+requested_actions = [Console.stdout_write]
+default_actions   = [Console.stdout_write]
 ```
 
 Package APIs use the same shape, but the actions are owned by the package:
@@ -635,19 +658,26 @@ flow approve<T>(title: string, content: T, risk: Risk) -> bool ![Approval.reques
 
 The public `approve(...)` flow is the ergonomic wrapper. The semantic boundary is the `Approval.request` action.
 
-Approval requirements use `>>`, a trace-spec temporal operator:
+Approval requirements use `>>`, which supplies local permissions for its two
+operands as well as their temporal prerequisite:
 
 ```etas
 Approval.request >> CompanyEmail.send<WorkAccount>;
 Approval.request >> StripePayment.charge<BillingAccount>;
 ```
 
-Internally this normalizes to a typed trace-spec term:
+For example, the email clause normalizes to these internal trace-spec components:
 
-```etas
-trace.before(Approval.request, CompanyEmail.send<WorkAccount>)
-trace.before(Approval.request, StripePayment.charge<BillingAccount>)
+```text
+Allow(Approval.request)
+Allow(CompanyEmail.send<WorkAccount>)
+Before(guard = Approval.request, target = CompanyEmail.send<WorkAccount>)
 ```
+
+The guard requires matching accepted approval evidence, not merely an attempted
+request. Repeated `+` permissions are optional; denials, enclosing specs, and
+runtime authority checks still apply. This expansion preserves each `|`
+alternative and does not contribute actions to a flow's inferred may-effects.
 
 The same operator can express non-approval guards:
 
@@ -748,11 +778,7 @@ effect AcademicSearch extends Network {
 }
 
 tool safe_search(q: string) -> Array<Trusted<Snippet>> ![AcademicSearch.search]
-    ~ (
-        +AcademicSearch.search
-        & +Sanitized
-        & (AcademicSearch.search >> Sanitized)
-    )
+    ~ (AcademicSearch.search >> Sanitized)
 {
     let pages = perform AcademicSearch.search(q);
     return sanitize(extract_snippets(pages));
@@ -1648,11 +1674,7 @@ or bind an inline trace spec:
 
 ```etas
 tool safe_search(q: string) -> Array<Trusted<Snippet>>
-    ~ (
-        +AcademicSearch.search
-        & +Sanitized
-        & (AcademicSearch.search >> Sanitized)
-    )
+    ~ (AcademicSearch.search >> Sanitized)
 {
     let pages = perform AcademicSearch.search(q);
     return sanitize(extract_snippets(pages));
@@ -1796,10 +1818,8 @@ Trace specs can impose additional constraints:
 ```etas
 spec Production: trace =
     +AcademicSearch.search
-    & +CompanyEmail.send<WorkAccount>
     & -StripePayment.charge<_>
     & -Command.run<_>
-    & +Approval.request
     & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
@@ -1992,9 +2012,7 @@ sent:
 
 ```etas
 spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
 The runtime may then perform an approval action:

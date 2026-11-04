@@ -47,6 +47,12 @@ let (summary, risks, citations) = join((
 support. The compiler can still lower independent branches to AIR regions that
 the runtime may schedule concurrently.
 
+These are distinct responsibilities in the [five-layer model](01-overview.md#53-feature-map-by-layer):
+Etas can implement combinator logic, the compiler recognizes the resolved
+standard contract, and the runtime provides structured task execution. A
+user-defined same-named `join` does not acquire scheduling or analysis rules
+merely from its spelling.
+
 ## 3. Structured Concurrency
 
 Etas concurrency is structured:
@@ -213,9 +219,7 @@ Policies can impose ordering constraints. For example:
 
 ```etas
 spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
 This concurrent expression is invalid:
@@ -227,7 +231,8 @@ join((
 ));
 ```
 
-The `join` scope does not establish that approval happens before sending.
+The implicit permissions in `>>` do not establish ordering. The `join` scope
+does not establish that matching accepted approval happens before sending.
 Correct code must express the order:
 
 ```etas

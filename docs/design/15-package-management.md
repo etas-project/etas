@@ -104,6 +104,14 @@ Manifest fields:
 | `[source].root` | Source root for the current package. Defaults to `src`. |
 | `[dependencies]` | Package dependencies from registry, local path, Git, or built-in source. |
 | `[[bin]]` | Runnable entry points. Each entry names a module and a flow. |
+| `[reflection].retain_bodies` | Optional list of fully qualified items in this package whose source bodies are retained; defaults to `[]`. |
+| `[reflection].export_bodies` | Optional list of public items in this package whose bodies may be reflected across packages; implies retention and defaults to `[]`. |
+
+Reflection lists contain logical item names, not paths. Entries must resolve to
+items owned by the package; `export_bodies` cannot expose a private item or a
+dependency's unexported source. `public` visibility alone does not export a body.
+See [reflection configuration](18-reflection-and-checked-code-generation.md#33-code-representation-and-visibility)
+for the configuration example and runtime-revision rules.
 
 A dependency key is a local manifest name. It does not need to match the
 registry package name or import root:
@@ -144,6 +152,13 @@ Rules:
 - built-in packages such as `std` may be compiler-known, but they still expose
   normal package metadata;
 - source code only sees logical import roots, not dependency source forms.
+
+The [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts)
+bind to resolved standard package/item identities, not local import roots or
+unqualified names. Aliases and re-exports preserve recognition; a different
+package or local declaration with the same spelling does not acquire it.
+Standard declarations and algorithms may be Etas source. Compiler recognition
+does not require a bodyless host implementation for every std export.
 
 ## 6. Version Requirements
 
@@ -238,6 +253,24 @@ Public metadata should include:
 - trace-spec summaries that affect exported APIs;
 - re-export expansion for wildcard public imports;
 - fingerprints for incremental compilation and LSP invalidation.
+- resolved body-retention/export entries, body availability, and source
+  fingerprints for reflection; unexported retained bodies remain private.
+
+The std-contract section identifies the resolved standard symbols, their
+contract versions, and required backend bindings for primitives. The toolchain
+must validate these against the selected standard library and target; arbitrary
+package metadata cannot self-assign a compiler-recognized role or runtime
+authority. Ordinary Etas bodies remain checked code, while a primitive without
+a source body must expose its type, effects/actions, failures, and runtime
+contract. Missing or incompatible required contracts/bindings are diagnostics,
+not permission to substitute an unchecked same-named implementation. Merely
+belonging to std or appearing in a prelude does not authorize external actions.
+
+Effect summaries such as `requested_actions` and `default_actions` belong to
+this generated metadata, not to source declaration syntax. Etas implementations
+and contract-preserving backend optimizations expose the same public semantic
+contract; standard-library self-implementation does not require changing
+callers' imports.
 
 ## 9. Import Resolution
 
