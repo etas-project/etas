@@ -182,8 +182,8 @@ fn effect_project_import_fixtures_run_in_directory_mode() {
 
 #[test]
 fn policy_fixtures_are_real_compiler_regressions() {
-    assert_source_file_count(POLICY_POSITIVE, 15);
-    assert_source_file_count(POLICY_NEGATIVE, 15);
+    assert_source_file_count(POLICY_POSITIVE, 17);
+    assert_source_file_count(POLICY_NEGATIVE, 13);
     assert_no_obsolete_effect_or_policy_syntax(POLICY_POSITIVE);
     assert_no_obsolete_effect_or_policy_syntax(POLICY_NEGATIVE);
 
@@ -1047,12 +1047,12 @@ fn effect_and_policy_fixture_corpora_have_expected_total_size() {
         "Effect/Handler negative corpus must stay at 115 fixtures"
     );
     assert_eq!(
-        policy_positive, 15,
-        "Policy positive corpus must stay at 15 fixtures"
+        policy_positive, 17,
+        "Policy positive corpus must stay at 17 fixtures"
     );
     assert_eq!(
-        policy_negative, 15,
-        "Policy negative corpus must stay at 15 fixtures"
+        policy_negative, 13,
+        "Policy negative corpus must stay at 13 fixtures"
     );
     assert!(fixture(EFFECT_POSITIVE).is_dir());
     assert!(fixture(POLICY_POSITIVE).is_dir());
