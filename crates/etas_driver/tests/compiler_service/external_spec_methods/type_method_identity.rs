@@ -1,6 +1,91 @@
 use super::*;
 
 #[test]
+fn generic_spec_owner_witness_replays_through_binary_metadata_and_runtime_overlay() {
+    let workspace = origin_metadata::workspace_with_source(include_str!(
+        "../../fixtures/method_resolution/generic_spec_owner.es"
+    ));
+    for (alias, operation) in [("direct", "value.read()"), ("wrapped", "load(value)")] {
+        let mut loaded = origin_metadata::consumer(&workspace, alias);
+        loaded.loaded.input.sources[0].text = format!(
+            "module app.main; import {alias}.library.api.{{Container, Read, Probe, load}}; flow main() -> i32 {{ let value = Container<i32> {{ value = 7 }}; return {operation}; }}"
+        );
+        let checked = origin_metadata::check(&loaded);
+        assert_eq!(checked.sources.sources.len(), 1, "metadata-only consumer");
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        assert_eq!(summary.escaping_effects, summary.requested_actions);
+        assert_eq!(summary.requested_actions.effects.iter().count(), 1);
+        let etas_effects::ActionTraceDomain::Event(event) = &summary.action_trace else {
+            panic!("one instantiated method event: {:?}", summary.action_trace);
+        };
+        let etas_effects::Effect::AppliedAction(action) = &event.action else {
+            panic!("typed action");
+        };
+        assert_eq!(
+            action.action,
+            checked
+                .effect_registry
+                .action_by_name(&format!("{alias}.library.api.Probe.hit"))
+                .unwrap()
+        );
+        let [etas_types::EffectArgRef::Type(ty)] = action.args.as_slice() else {
+            panic!("typed selector");
+        };
+        assert_eq!(
+            checked.type_store.get(*ty),
+            Some(&etas_types::Type::Primitive(etas_types::PrimitiveType::I32))
+        );
+
+        let root = loaded.package_root.unwrap();
+        std::fs::write(root.join("src/app/main.es"), format!("module app.main; import {alias}.library.api.{{Container, Read, Probe, load}}; flow main(args: Array<string>) -> i32 {{ return handle {{ let value = Container<i32> {{ value = 7 }}; return {operation}; }} with {{ Probe.hit<i32>() => {{ resume (); }} }}; }}")).unwrap();
+        let compiled = etas_driver::compile_runnable_project_with_loaded(
+            &origin_metadata::options(&root),
+            etas_driver::LoadProjectRequest {
+                paths: vec![root],
+                all: false,
+                entry_policy: EntryPolicy::Runnable,
+                flow: None,
+                bin: None,
+                source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
+            },
+            etas_frontend::SnapshotDetailLevel::Full,
+        )
+        .unwrap();
+        assert!(
+            compiled
+                .response
+                .output
+                .diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.severity != etas_core::Severity::Error),
+            "{:?}",
+            compiled.response.output.diagnostics
+        );
+        let checked = compiled.response.output.checked.unwrap();
+        let result = runtime()
+            .block_on(etas_interpreter::Interpreter.run_checked(
+                &checked,
+                etas_interpreter::api::EntryPoint {
+                    item: checked.entry.unwrap(),
+                },
+                vec![etas_interpreter::api::InterpValue::Array(vec![].into())],
+                &no_host::NoHost::default(),
+                Default::default(),
+            ))
+            .unwrap();
+        assert!(
+            result.diagnostics.is_empty(),
+            "{alias}: {:?}",
+            result.diagnostics
+        );
+        assert_eq!(
+            result.value(),
+            Some(&etas_interpreter::api::InterpValue::i32(7))
+        );
+    }
+}
+
+#[test]
 fn binary_generic_method_closures_replay_owner_and_shadowing_effect_binders() {
     let workspace = origin_metadata::workspace_with_source(include_str!(
         "../../fixtures/method_resolution/owner_capture.es"
