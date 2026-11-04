@@ -67,6 +67,8 @@ mod secret_checkpoint;
 mod segmented_concat;
 #[path = "cli/source_reexports.rs"]
 mod source_reexports;
+#[path = "cli/spec_method_imports.rs"]
+mod spec_method_imports;
 #[path = "cli/text_values.rs"]
 mod text_values;
 #[path = "cli/typed_output.rs"]
