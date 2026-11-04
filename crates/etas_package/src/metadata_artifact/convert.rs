@@ -794,6 +794,13 @@ fn type_from_metadata(
         })
     };
     match ty.kind {
+        etas_package_metadata::TypeKind::Existential => Ok(PackageTypeMetadata::Existential {
+            bounds: ty
+                .bounds
+                .into_iter()
+                .map(spec_bound_from_metadata)
+                .collect::<Result<_, _>>()?,
+        }),
         etas_package_metadata::TypeKind::Enum => Ok(PackageTypeMetadata::Enum {
             path: ty.path,
             variants: ty

@@ -1347,6 +1347,21 @@ fn dependency_type_input_with_graph(
     ty: &etas_package::PackageTypeMetadata,
 ) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::Existential { bounds } => {
+            ProjectExternalTypeInput::Existential {
+                bounds: bounds
+                    .iter()
+                    .map(|bound| ProjectExternalSpecBoundInput {
+                        spec: dependency_type_path(package, packages, &bound.spec),
+                        args: bound
+                            .args
+                            .iter()
+                            .map(|arg| dependency_type_input_with_graph(package, packages, arg))
+                            .collect(),
+                    })
+                    .collect(),
+            }
+        }
         etas_package::PackageTypeMetadata::Enum { path, variants } => {
             ProjectExternalTypeInput::Enum {
                 path: dependency_type_path(package, packages, path),
@@ -1529,6 +1544,17 @@ fn is_standard_type_path(path: &[String]) -> bool {
 
 fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::Existential { bounds } => {
+            ProjectExternalTypeInput::Existential {
+                bounds: bounds
+                    .iter()
+                    .map(|bound| ProjectExternalSpecBoundInput {
+                        spec: bound.spec.clone(),
+                        args: bound.args.iter().map(type_input).collect(),
+                    })
+                    .collect(),
+            }
+        }
         etas_package::PackageTypeMetadata::Enum { path, variants } => {
             ProjectExternalTypeInput::Enum {
                 path: path.clone(),

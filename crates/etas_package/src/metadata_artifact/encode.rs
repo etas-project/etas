@@ -778,6 +778,13 @@ fn action_arg_kind_to_metadata(
 fn type_to_metadata(ty: &PackageTypeMetadata) -> Result<etas_package_metadata::Type, PackageError> {
     let mut metadata = etas_package_metadata::Type::default();
     match ty {
+        PackageTypeMetadata::Existential { bounds } => {
+            metadata.kind = etas_package_metadata::TypeKind::Existential;
+            metadata.bounds = bounds
+                .iter()
+                .map(spec_bound_to_metadata)
+                .collect::<Result<_, _>>()?;
+        }
         PackageTypeMetadata::Enum { path, variants } => {
             metadata.kind = etas_package_metadata::TypeKind::Enum;
             metadata.path = path.clone();

@@ -440,6 +440,9 @@ pub enum PackageEffectArgMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PackageTypeMetadata {
+    Existential {
+        bounds: Vec<PackageSpecBoundMetadata>,
+    },
     Enum {
         path: Vec<String>,
         variants: Vec<PackageRecordFieldMetadata>,

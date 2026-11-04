@@ -12,6 +12,8 @@ mod implementation_replay;
 mod implicit_self;
 #[path = "external_spec_methods/invalid_self_metadata.rs"]
 mod invalid_self_metadata;
+#[path = "external_spec_methods/objects.rs"]
+mod objects;
 #[path = "external_spec_methods/runtime_self.rs"]
 mod runtime_self;
 #[path = "external_spec_methods/type_method_identity.rs"]
