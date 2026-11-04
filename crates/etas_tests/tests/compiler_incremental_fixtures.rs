@@ -644,6 +644,9 @@ fn external_environment() -> ProjectEnvironmentInput {
             version: "1.0.0".into(),
             edition: "2026".into(),
             import_root: "dep".into(),
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
         }],
         external_modules: vec![ProjectExternalModuleInput {
             package: Some(ExternalPackageId(0)),

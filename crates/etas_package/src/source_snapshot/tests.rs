@@ -60,6 +60,9 @@ fn producer_environment_is_reconstructed_from_locked_bytes_without_reopening_pat
     let snapshot = package.read(&checksum, Default::default()).unwrap();
     let owner = crate::ResolvedDependency {
         identity: crate::PackageIdentity::current(snapshot.manifest()),
+        std_compatibility: etas_std::standard_registry()
+            .version()
+            .compatibility_identity(),
         import_root: "dependency".into(),
         source: crate::ResolvedDependencySource::Path {
             path: "library".into(),

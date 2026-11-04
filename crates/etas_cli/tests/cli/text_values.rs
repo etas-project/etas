@@ -229,7 +229,9 @@ fn checked_text_queries_and_parse_errors_survive_cli_checkpoint_resume() {
         "checked-text-queries",
         r#"
 module tests.cli.checked_text_queries;
-import std.text.{parse_i32, contains, starts_with, ends_with, len, trim, lines, split, join};
+import std.collections.Array;
+import std.option.unwrap;
+import std.text.{char_count, char_get, parse_i32, contains, starts_with, ends_with, trim, lines, split, join};
 import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {
     var text = "start";
@@ -243,7 +245,10 @@ flow main(args: Array<string>) -> i32 {
     let error = parse_i32("not-an-integer");
     let number = parse_i32("000" + "42");
     let line_prefix = "  A\r";
-    let line_parts = lines(trim(line_prefix + "\n中😀\n\ré  "));
+    var line_parts: Array<string> = [];
+    for line in lines(trim(line_prefix + "\n中😀\n\ré  ")) limit Iterations(8) {
+        line_parts = line_parts.push(line);
+    }
     let split_prefix = "中😀:";
     let separator_prefix = ":";
     let separated = split(split_prefix + ":tail::", separator_prefix + ":");
@@ -251,10 +256,10 @@ flow main(args: Array<string>) -> i32 {
     checkpoint("checked-text-queries");
     let invalid = match error { Ok(_) => false, Err(_) => true };
     let valid = match number { Ok(value) => value == 42, Err(_) => false };
-    if invalid && valid && len(alias) == 517 && len(text) == 520
+    if invalid && valid && char_count(alias) == 517 && char_count(text) == 520
         && starts_with(text, "start中") && ends_with(text, "😀end")
         && contains(text, "😀end") && !contains(text, "missing")
-        && text[5] == '中' && text[6] == '😀'
+        && unwrap(char_get(text, 5)) == '中' && unwrap(char_get(text, 6)) == '😀'
         && line_parts == ["A", "中😀", "\ré"]
         && separated == ["中😀", "tail", ""] && combined == "中😀-:tail-:" { return 0; }
     return 1;
@@ -291,7 +296,7 @@ fn shared_text_reassignment_survives_real_cli_checkpoint_resume_and_report() {
         "shared-text-reassignment",
         r#"
 module tests.cli.shared_text;
-import std.text.len;
+import std.text.char_count;
 import std.runtime.checkpoint;
 effect Append { action suffix() -> string; }
 flow main(args: Array<string>) -> i32 {
@@ -305,7 +310,7 @@ flow main(args: Array<string>) -> i32 {
     handle { text = text + perform Append.suffix(); } with {
         Append.suffix() => { checkpoint("pending-text-append"); resume "!"; }
     };
-    if len(text) == 513 && len(alias) == 512 { return 0; }
+    if char_count(text) == 513 && char_count(alias) == 512 { return 0; }
     return 1;
 }
 "#,

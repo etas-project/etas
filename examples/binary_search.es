@@ -2,7 +2,7 @@ module examples.binary_search;
 
 import std.effects.Console;
 import std.io.println;
-import std.text.to_string_i32;
+import std.text.from_i32;
 
 flow binary_search(values: Array<i32>, target: i32) -> i32 {
     var low: i32 = 0;
@@ -29,6 +29,6 @@ flow binary_search(values: Array<i32>, target: i32) -> i32 {
 flow main(args: Array<string>) -> i32 ![Console, Error<IOError>, Error<IndexError>]
 {
     let values: Array<i32> = [3, 6, 9, 12, 15];
-    println(to_string_i32(binary_search(values, 15)));
+    println(from_i32(binary_search(values, 15)));
     return 0;
 }

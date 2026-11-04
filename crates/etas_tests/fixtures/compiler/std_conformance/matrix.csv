@@ -9,6 +9,9 @@ Stack,implemented,implemented,covered-positive,implemented,partial,covered-posit
 PriorityQueue,implemented,implemented,covered-positive,implemented,partial,covered-positive
 OrderedMap,implemented,implemented,covered-positive,implemented,partial,covered-positive
 OrderedSet,implemented,implemented,covered-positive,implemented,partial,covered-positive
+Iter,implemented,implemented,covered-positive,implemented,covered-positive,covered-positive
+TextError,implemented,implemented,covered-positive,covered-positive,covered-positive,covered-positive
+Normalization,implemented,implemented,covered-positive,implemented,covered-positive,covered-positive
 Prompt,implemented,implemented,covered-positive,covered-positive,partial,covered-positive
 PromptEncode,implemented,implemented,covered-positive,covered-positive,partial,covered-positive
 Schema,implemented,implemented,covered-positive,implemented,partial,covered-positive

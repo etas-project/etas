@@ -61,6 +61,7 @@ fn environment_from_source(source: &str, import_root: &str) -> ProjectEnvironmen
     super::frontend_environment(PackageEnvironmentMetadata {
         dependencies: vec![ResolvedDependency {
             identity: metadata.package,
+            std_compatibility: metadata.std_compatibility,
             import_root: import_root.into(),
             source: ResolvedDependencySource::Path {
                 path: "/no-dependency-source".into(),

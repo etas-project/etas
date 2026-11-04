@@ -2,7 +2,7 @@ module tests.compiler.algorithms.valid_anagram;
 
 import std.collections.{Array, len};
 import std.io.{read_all, println};
-import tests.compiler.support.algorithms.{abs, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
+import tests.compiler.support.algorithms.{abs, char_at, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
 
 flow is_anagram(left: string, right: string) -> bool {
     if string_len(left) != string_len(right) {
@@ -15,7 +15,7 @@ flow is_anagram(left: string, right: string) -> bool {
         var matched = false;
         var j = 0;
         while j < string_len(right) limit Iterations(1024) {
-            if !used[j] && left[i] == right[j] {
+            if !used[j] && char_at(left, i) == char_at(right, j) {
                 used[j] = true;
                 matched = true;
                 break;

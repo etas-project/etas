@@ -3,7 +3,7 @@ module tests.compiler.support.algorithms;
 import std.collections.Array;
 import std.collections.{len as list_len};
 import std.option.unwrap;
-import std.text.{join, len as text_len, lines, parse_i32 as std_parse_i32, split, to_string_i32, to_string_usize, trim as text_trim};
+import std.text.{char_count as text_char_count, char_get, from_i32, from_usize, join, lines, parse_i32 as std_parse_i32, split, trim as text_trim};
 
 public flow abs(value: i32) -> i32 {
     if value < 0 {
@@ -13,12 +13,16 @@ public flow abs(value: i32) -> i32 {
     return value;
 }
 
+public flow char_at(value: string, index: i32) -> char {
+    return unwrap(char_get(value, index));
+}
+
 public flow join_i32_list(values: Array<i32>, separator: string) -> string {
     var parts: Array<string> = [];
     var index: usize = 0;
 
     while index < list_len(values) limit Iterations(4096) {
-        parts = parts.push(to_string_i32(values[index]));
+        parts = parts.push(from_i32(values[index]));
         index = index + 1;
     }
 
@@ -116,15 +120,19 @@ public flow slice(values: Array<i32>, start: usize, end: usize) -> Array<i32> {
 }
 
 public flow split_lines(input: string) -> Array<string> {
-    return lines(input);
+    var output: Array<string> = [];
+    for line in lines(input) limit Iterations(4096) {
+        output = output.push(line);
+    }
+    return output;
 }
 
 public flow string_len(value: string) -> i32 {
-    return parse_i32(to_string_usize(text_len(value)));
+    return parse_i32(from_usize(text_char_count(value)));
 }
 
 public flow to_string(value: i32) -> string {
-    return to_string_i32(value);
+    return from_i32(value);
 }
 
 public flow trim(input: string) -> string {

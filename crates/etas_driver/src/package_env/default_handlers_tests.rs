@@ -67,6 +67,7 @@ agent Worker() -> unit {{ return; }}
             .unwrap();
         ResolvedDependency {
             identity: index.package,
+            std_compatibility: index.std_compatibility,
             import_root: "compiler_api".into(),
             source: ResolvedDependencySource::Path {
                 path: self.0.to_string_lossy().into_owned(),

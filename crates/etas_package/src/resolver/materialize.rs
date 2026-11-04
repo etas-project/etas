@@ -251,6 +251,7 @@ fn dependency_from_source_index(
 
     let dependency = ResolvedDependency {
         identity: dependency_index.package,
+        std_compatibility: dependency_index.std_compatibility,
         import_root: spec.import_root(dependency_name),
         source,
         dependencies: dependency_index.dependencies,
@@ -264,6 +265,9 @@ fn dependency_from_source_index(
 fn empty_package_index(manifest: &manifest::Manifest) -> metadata::PackageIndex {
     metadata::PackageIndex {
         version: 1,
+        std_compatibility: etas_std::standard_registry()
+            .version()
+            .compatibility_identity(),
         package: PackageIdentity::current(manifest),
         dependencies: Vec::new(),
         external_modules: Vec::new(),

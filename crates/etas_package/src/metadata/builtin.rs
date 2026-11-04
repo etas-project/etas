@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use etas_std::{
     EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdGenericParam, StdPrimitiveType, StdStaticArg,
-    StdSupportConstraint, StdSymbolKind, StdType, ToolDecl, TypeDeclKind, standard_registry,
+    StdSupportConstraint, StdSymbolKind, StdType, ToolDecl, TypeDecl, TypeDeclKind,
+    standard_registry,
 };
 
 use super::{
@@ -27,6 +28,7 @@ pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDepen
             version,
             edition,
         },
+        std_compatibility: standard_registry().version().compatibility_identity(),
         import_root: "std".to_owned(),
         source: ResolvedDependencySource::Builtin {
             checksum: "builtin:std".to_owned(),
@@ -91,7 +93,7 @@ pub fn builtin_std_public_metadata() -> PackagePublicMetadata {
     for symbol in registry.symbols() {
         match &symbol.decl {
             StdDecl::Type(decl) => {
-                let metadata = named_signature(symbol.qualified_path.clone());
+                let metadata = type_signature(symbol.qualified_path.clone(), decl);
                 if decl.kind == TypeDeclKind::Enum {
                     enums.push(metadata);
                 } else {
@@ -200,6 +202,15 @@ fn named_signature(path: Vec<String>) -> PackageNamedSignatureMetadata {
     PackageNamedSignatureMetadata {
         path,
         generic_params: Vec::new(),
+        visibility: public_visibility(),
+        ty: None,
+    }
+}
+
+fn type_signature(path: Vec<String>, decl: &TypeDecl) -> PackageNamedSignatureMetadata {
+    PackageNamedSignatureMetadata {
+        path,
+        generic_params: callable_generic_params(&decl.params),
         visibility: public_visibility(),
         ty: None,
     }
