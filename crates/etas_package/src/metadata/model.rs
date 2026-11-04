@@ -453,6 +453,10 @@ pub enum PackageTypeMetadata {
     Var {
         name: String,
     },
+    Parameter {
+        owner: etas_code::descriptor::GenericOwner,
+        position: u32,
+    },
     Named {
         path: Vec<String>,
     },

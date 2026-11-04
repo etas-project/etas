@@ -818,6 +818,18 @@ fn type_from_metadata(
             Ok(PackageTypeMetadata::Primitive { name: ty.name })
         }
         etas_package_metadata::TypeKind::Var => Ok(PackageTypeMetadata::Var { name: ty.name }),
+        etas_package_metadata::TypeKind::Parameter => {
+            let parameter = ty.parameter.ok_or_else(|| {
+                missing(
+                    Path::new(etas_package_metadata::PACKAGE_METADATA_FILE),
+                    "scoped type parameter is missing its checked binder identity",
+                )
+            })?;
+            Ok(PackageTypeMetadata::Parameter {
+                owner: parameter.owner,
+                position: parameter.position,
+            })
+        }
         etas_package_metadata::TypeKind::Named if ty.children.is_empty() => {
             Ok(PackageTypeMetadata::Named { path: ty.path })
         }

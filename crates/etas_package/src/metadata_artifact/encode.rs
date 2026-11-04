@@ -806,6 +806,13 @@ fn type_to_metadata(ty: &PackageTypeMetadata) -> Result<etas_package_metadata::T
             metadata.kind = etas_package_metadata::TypeKind::Var;
             metadata.name = name.clone();
         }
+        PackageTypeMetadata::Parameter { owner, position } => {
+            metadata.kind = etas_package_metadata::TypeKind::Parameter;
+            metadata.parameter = Some(etas_package_metadata::GenericTypeParameter {
+                owner: owner.clone(),
+                position: *position,
+            });
+        }
         PackageTypeMetadata::Named { path } => {
             metadata.kind = etas_package_metadata::TypeKind::Named;
             metadata.path = path.clone();
