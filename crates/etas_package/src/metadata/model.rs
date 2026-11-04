@@ -33,6 +33,8 @@ pub struct PackageEnvironmentMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ResolvedDependency {
     pub identity: PackageIdentity,
+    #[serde(default)]
+    pub std_compatibility: String,
     pub import_root: String,
     pub source: ResolvedDependencySource,
     #[serde(default)]
@@ -145,6 +147,8 @@ pub struct PackageToolBindingMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageIndex {
     pub version: u32,
+    #[serde(default)]
+    pub std_compatibility: String,
     pub package: PackageIdentity,
     #[serde(default)]
     pub dependencies: Vec<ResolvedDependency>,

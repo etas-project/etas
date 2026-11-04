@@ -3,7 +3,7 @@ module tests.compiler.algorithms.valid_parentheses;
 import std.collections.{Array, len};
 import std.io.{read_line, println};
 import std.option.unwrap;
-import tests.compiler.support.algorithms.{abs, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
+import tests.compiler.support.algorithms.{abs, char_at, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
 
 flow matches(open: char, close: char) -> bool {
     return (open == '(' && close == ')')
@@ -16,7 +16,7 @@ flow is_valid(text: string) -> bool {
     var i = 0;
 
     while i < string_len(text) limit Iterations(4096) {
-        let ch = text[i];
+        let ch = char_at(text, i);
         if ch == '(' || ch == '[' || ch == '{' {
             stack = stack.push(ch);
         } else {

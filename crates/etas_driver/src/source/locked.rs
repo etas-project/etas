@@ -263,6 +263,9 @@ mod tests {
         .unwrap();
         let owner = etas_package::ResolvedDependency {
             identity: etas_package::PackageIdentity::current(snapshot.manifest()),
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
             import_root: "dependency".into(),
             source: etas_package::ResolvedDependencySource::Path {
                 path: "library".into(),

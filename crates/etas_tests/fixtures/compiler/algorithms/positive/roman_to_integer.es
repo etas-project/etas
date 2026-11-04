@@ -3,7 +3,7 @@ module tests.compiler.algorithms.roman_to_integer;
 import std.collections.{Array, len};
 import std.io.{read_line, println};
 import std.option.unwrap;
-import tests.compiler.support.algorithms.{abs, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
+import tests.compiler.support.algorithms.{abs, char_at, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
 
 flow roman_value(ch: char) -> i32 {
     if ch == 'I' {
@@ -32,8 +32,8 @@ flow roman_to_integer(text: string) -> i32 {
     var i = 0;
 
     while i < string_len(text) limit Iterations(128) {
-        let current = roman_value(text[i]);
-        if i + 1 < string_len(text) && current < roman_value(text[i + 1]) {
+        let current = roman_value(char_at(text, i));
+        if i + 1 < string_len(text) && current < roman_value(char_at(text, i + 1)) {
             total = total - current;
         } else {
             total = total + current;

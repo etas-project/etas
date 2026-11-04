@@ -2,7 +2,7 @@ module tests.compiler.algorithms.longest_common_subsequence;
 
 import std.collections.{Array, len};
 import std.io.{read_all, println};
-import tests.compiler.support.algorithms.{abs, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
+import tests.compiler.support.algorithms.{abs, char_at, join_i32_list, matrix_i32, parse_i32, parse_i32_list, repeat_bool, repeat_i32, slice, split_lines, string_len, to_string, trim};
 
 flow lcs(a: string, b: string) -> i32 {
     let rows = string_len(a) + 1;
@@ -13,7 +13,7 @@ flow lcs(a: string, b: string) -> i32 {
     while i <= string_len(a) limit Iterations(1024) {
         var j = 1;
         while j <= string_len(b) limit Iterations(1024) {
-            if a[i - 1] == b[j - 1] {
+            if char_at(a, i - 1) == char_at(b, j - 1) {
                 dp[i][j] = dp[i - 1][j - 1] + 1;
             } else if dp[i - 1][j] > dp[i][j - 1] {
                 dp[i][j] = dp[i - 1][j];

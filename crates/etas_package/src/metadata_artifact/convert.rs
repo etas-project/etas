@@ -31,6 +31,7 @@ pub(super) fn package_index_from_metadata(
 ) -> Result<PackageIndex, PackageError> {
     Ok(PackageIndex {
         version: metadata.version,
+        std_compatibility: metadata.std_compatibility,
         package: package_identity_from_metadata(metadata.package),
         dependencies: metadata
             .dependencies
@@ -292,6 +293,7 @@ fn resolved_dependency_from_metadata(
 ) -> Result<crate::metadata::ResolvedDependency, PackageError> {
     Ok(crate::metadata::ResolvedDependency {
         identity: package_identity_from_metadata(dependency.identity),
+        std_compatibility: dependency.std_compatibility,
         import_root: dependency.import_root,
         source: resolved_source_from_metadata(dependency.source),
         dependencies: dependency
