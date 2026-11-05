@@ -15,6 +15,7 @@ etas_driver.workspace = true
 etas_frontend.workspace = true
 etas_hir.workspace = true
 etas_interpreter.workspace = true
+etas_std.workspace = true
 etas_syntax.workspace = true
 etas_utils.workspace = true
 serde_json.workspace = true

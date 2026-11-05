@@ -2113,6 +2113,9 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
                 version: "0.2.0".to_owned(),
                 edition: "2026".to_owned(),
             },
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
             import_root: "helper".to_owned(),
             source: metadata::ResolvedDependencySource::Registry {
                 registry: "https://packages.etas.dev".to_owned(),
@@ -2135,6 +2138,9 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
                 version: "0.1.0".to_owned(),
                 edition: "2026".to_owned(),
             },
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
             import_root: "tools".to_owned(),
             source: metadata::ResolvedDependencySource::Path {
                 path: ".etas/payloads/agent-tools".to_owned(),
@@ -2148,6 +2154,9 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
         let parent_checksum_document = vendor::dependency_content_checksum(&parent_dependency);
         let index = metadata::PackageIndex {
             version: 1,
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
             package: metadata::PackageIdentity {
                 name: "metadata-only-transitive-root".to_owned(),
                 version: "0.1.0".to_owned(),
@@ -2793,7 +2802,10 @@ tools = { package = "agent-tools", version = "0.1", github = "owner/agent-tools"
     fn seal_package_metadata(package_root: &Path) {
         let text =
             fs::read_to_string(package_root.join(".etas").join("package-index.json")).unwrap();
-        let index = serde_json::from_str::<metadata::PackageIndex>(&text).unwrap();
+        let mut index = serde_json::from_str::<metadata::PackageIndex>(&text).unwrap();
+        index.std_compatibility = etas_std::standard_registry()
+            .version()
+            .compatibility_identity();
         metadata_artifact::write_fixture_package_metadata_artifact(package_root, &index).unwrap();
     }
 

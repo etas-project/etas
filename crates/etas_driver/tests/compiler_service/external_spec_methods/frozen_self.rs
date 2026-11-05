@@ -145,5 +145,6 @@ flow main() -> string ![Error<CompileError>] {
     };
     assert!(report.starts_with("rejected|"), "{report}");
     assert!(report.contains("effect::TraceSpecDenied"), "{report}");
+    assert!(!report.contains("IncompleteEffectFacts"), "{report}");
     assert!(!report.contains("CompilerServiceFailure"), "{report}");
 }

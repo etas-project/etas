@@ -168,9 +168,15 @@ mod tests {
             &payload,
             &crate::PackageIndex {
                 version: 1,
+                std_compatibility: etas_std::standard_registry()
+                    .version()
+                    .compatibility_identity(),
                 package: identity(&payload),
                 dependencies: vec![crate::ResolvedDependency {
                     identity: identity(&child),
+                    std_compatibility: etas_std::standard_registry()
+                        .version()
+                        .compatibility_identity(),
                     import_root: "child".into(),
                     source: crate::ResolvedDependencySource::Vendor {
                         path: ".etas/vendor/child".into(),

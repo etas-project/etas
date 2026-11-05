@@ -86,6 +86,7 @@ public flow ignore(unused: () -> unit ![]) -> unit { return; }
     let environment = frontend_environment(PackageEnvironmentMetadata {
         dependencies: vec![ResolvedDependency {
             identity: metadata.package,
+            std_compatibility: metadata.std_compatibility,
             import_root: "callbacks".into(),
             source: ResolvedDependencySource::Path {
                 path: package.0.to_string_lossy().into_owned(),

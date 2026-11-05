@@ -2,7 +2,7 @@ module examples.max_subarray;
 
 import std.effects.Console;
 import std.io.println;
-import std.text.to_string_i32;
+import std.text.from_i32;
 
 flow max_subarray_sum(values: Array<i32>) -> i32 {
     var index: i32 = 1;
@@ -29,6 +29,6 @@ flow max_subarray_sum(values: Array<i32>) -> i32 {
 flow main(args: Array<string>) -> i32 ![Console, Error<IOError>, Error<IndexError>]
 {
     let values: Array<i32> = [-2, 1, -3, 4, -1, 2];
-    println(to_string_i32(max_subarray_sum(values)));
+    println(from_i32(max_subarray_sum(values)));
     return 0;
 }

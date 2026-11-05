@@ -505,6 +505,9 @@ mod tests {
                 version: "1.0.0".into(),
                 edition: "2026".into(),
             },
+            std_compatibility: etas_std::standard_registry()
+                .version()
+                .compatibility_identity(),
             import_root: "alias".into(),
             source: ResolvedDependencySource::Vendor {
                 path: ".etas/vendor/alias".into(),

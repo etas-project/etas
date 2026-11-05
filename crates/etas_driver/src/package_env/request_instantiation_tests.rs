@@ -91,6 +91,7 @@ public flow build<A>(definition: AgentDef<A>) -> A ![Error<CompileError>] { retu
     let environment = frontend_environment(PackageEnvironmentMetadata {
         dependencies: vec![ResolvedDependency {
             identity: package.package,
+            std_compatibility: package.std_compatibility,
             import_root: "requests".into(),
             source: ResolvedDependencySource::Path {
                 path: root.0.to_string_lossy().into_owned(),

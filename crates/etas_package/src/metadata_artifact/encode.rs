@@ -28,6 +28,7 @@ pub(super) fn package_index_to_metadata(
 ) -> Result<etas_package_metadata::PackageMetadata, PackageError> {
     Ok(etas_package_metadata::PackageMetadata {
         version: index.version,
+        std_compatibility: index.std_compatibility.clone(),
         package: package_identity_to_metadata(&index.package),
         dependencies: index
             .dependencies
@@ -71,6 +72,7 @@ fn resolved_dependency_to_metadata(
 ) -> Result<etas_package_metadata::ResolvedDependency, PackageError> {
     Ok(etas_package_metadata::ResolvedDependency {
         identity: package_identity_to_metadata(&dependency.identity),
+        std_compatibility: dependency.std_compatibility.clone(),
         import_root: dependency.import_root.clone(),
         source: resolved_source_to_metadata(&dependency.source),
         dependencies: dependency

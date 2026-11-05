@@ -2241,6 +2241,219 @@ public flow main(args: Array<string>) -> i32 {
 }
 
 #[test]
+fn package_metadata_replays_the_complete_text_contract_through_import_aliases() {
+    let dependency = package_fixture(
+        "text-contract-library",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "text-contract-library"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[dependencies]
+std = { version = "0.1" }
+"#,
+            ),
+            (
+                "src/repro/textlib.es",
+                r#"module repro.textlib;
+import std.collections.Iter;
+import std.text.{lines, parse_i32, TextError};
+import std.text.unicode.{normalize, Normalization};
+
+public flow line_stream(text: string) -> Iter<string> ![] {
+    return lines(text);
+}
+
+public flow parse_number(text: string) -> Result<i32, TextError> ![] {
+    return parse_i32(text);
+}
+
+public flow normalize_text(text: string, form: Normalization) -> string ![] {
+    return normalize(text, form);
+}
+"#,
+            ),
+        ],
+    );
+
+    let (code, stdout, stderr) = run(["etas", "pkg", "lock", path(&dependency)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let (code, stdout, stderr) = run(["etas", "pkg", "metadata", path(&dependency)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+
+    let metadata = etas_package::read_package_metadata_artifact(&dependency)
+        .unwrap()
+        .expect("text library metadata should decode");
+    let flow = |name: &str| {
+        metadata
+            .public_metadata
+            .flows
+            .iter()
+            .find(|flow| flow.path == ["repro", "textlib", name])
+            .unwrap_or_else(|| panic!("missing published text flow `{name}`"))
+    };
+
+    let line_stream = flow("line_stream");
+    assert!(matches!(
+        &line_stream.output,
+        etas_package::PackageTypeMetadata::Applied { path, args }
+            if path == &["std", "collections", "Iter"]
+                && matches!(args.as_slice(), [etas_package::PackageTypeMetadata::Primitive { name }] if name == "string")
+    ));
+
+    let parse_number = flow("parse_number");
+    assert!(
+        matches!(
+            &parse_number.output,
+            etas_package::PackageTypeMetadata::Result { ok, err }
+                if matches!(ok.as_ref(), etas_package::PackageTypeMetadata::Primitive { name } if name == "i32")
+                    && matches!(err.as_ref(), etas_package::PackageTypeMetadata::Named { path }
+                        if path == &["std", "text", "TextError"])
+        ),
+        "{:?}",
+        parse_number.output
+    );
+
+    let normalize_text = flow("normalize_text");
+    assert!(
+        matches!(
+            normalize_text.params.get(1),
+            Some(etas_package::PackageTypeMetadata::Named { path })
+                if path == &["std", "text", "unicode", "Normalization"]
+        ),
+        "{:?}",
+        normalize_text.params
+    );
+
+    let std_metadata = etas_package::metadata::builtin_std_public_metadata();
+    let iter = std_metadata
+        .types
+        .iter()
+        .find(|ty| ty.path == ["std", "collections", "Iter"])
+        .expect("builtin metadata should publish Iter<T>");
+    assert!(matches!(
+        iter.generic_params.as_slice(),
+        [etas_package::metadata::PackageCallableGenericParamMetadata { name, kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type, bounds }]
+            if name == "T" && bounds.is_empty()
+    ));
+    assert!(
+        std_metadata
+            .enums
+            .iter()
+            .any(|ty| ty.path == ["std", "text", "TextError"])
+    );
+    assert!(
+        std_metadata
+            .enums
+            .iter()
+            .any(|ty| ty.path == ["std", "text", "unicode", "Normalization"])
+    );
+    for constructor in [
+        "InvalidIndex",
+        "InvalidRange",
+        "NotCharBoundary",
+        "ParseFailure",
+        "NumericOverflow",
+        "LengthOverflow",
+        "InvalidFormat",
+    ] {
+        assert!(std_metadata.flows.iter().any(|flow| {
+            flow.path == ["std", "text", "TextError", constructor]
+                && matches!(&flow.output, etas_package::PackageTypeMetadata::Named { path }
+                    if path == &["std", "text", "TextError"])
+        }));
+    }
+    for constructor in ["NFC", "NFD", "NFKC", "NFKD"] {
+        assert!(std_metadata.flows.iter().any(|flow| {
+            flow.path == ["std", "text", "unicode", "Normalization", constructor]
+                && matches!(&flow.output, etas_package::PackageTypeMetadata::Named { path }
+                    if path == &["std", "text", "unicode", "Normalization"])
+        }));
+    }
+    assert_eq!(
+        metadata
+            .dependencies
+            .iter()
+            .find(|dependency| dependency.identity.name == "std")
+            .expect("text library should bind the builtin std package")
+            .std_compatibility,
+        etas_package::metadata::builtin_std_dependency("0.1".into(), "2026".into())
+            .std_compatibility
+    );
+    for name in ["line_stream", "parse_number", "normalize_text"] {
+        let summary = metadata
+            .public_metadata
+            .effect_summaries
+            .iter()
+            .find(|summary| summary.item == ["repro", "textlib", name])
+            .unwrap_or_else(|| panic!("missing solved effect summary for `{name}`"));
+        assert!(summary.public_effects.is_empty(), "{summary:?}");
+        assert!(summary.requested_actions.is_empty(), "{summary:?}");
+    }
+
+    let consumer = package_fixture(
+        "text-contract-consumer",
+        &[
+            (
+                "etas.toml",
+                &format!(
+                    r#"[package]
+name = "text-contract-consumer"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[dependencies]
+std = {{ version = "0.1" }}
+text_contract = {{ path = "{}", import = "repro.textlib" }}
+
+[[bin]]
+name = "main"
+module = "app.main"
+flow = "main"
+"#,
+                    dependency.display()
+                ),
+            ),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+import repro.textlib.{line_stream as scan_lines, parse_number as parse, normalize_text as normalize};
+import std.text.unicode.NFKC;
+
+flow main() -> i32 ![] {
+    let normalized: string = normalize("ﬃ", NFKC);
+    for line in scan_lines("a\nb") limit Iterations(2) {
+        let observed: string = line;
+    }
+    return match parse("40") {
+        Ok(value) => value,
+        Err(_) => -1,
+    };
+}
+"#,
+            ),
+        ],
+    );
+
+    let (code, stdout, stderr) = run(["etas", "pkg", "lock", path(&consumer)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    let (code, stdout, stderr) = run(["etas", "check", "--all", path(&consumer)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+
+    fs::remove_dir_all(consumer).unwrap();
+    fs::remove_dir_all(dependency).unwrap();
+}
+
+#[test]
 fn package_metadata_replays_dependency_std_spec_evidence() {
     for implementation in ["", "impl MaterialRoot ~ Region;"] {
         let dependency = package_fixture(
@@ -8649,7 +8862,12 @@ fn copy_dir_contents(source: &Path, destination: &Path) {
 
 fn seal_package_metadata(package_root: &Path) {
     let text = fs::read_to_string(package_root.join(".etas/package-index.json")).unwrap();
-    let index = serde_json::from_str::<etas_package::PackageIndex>(&text).unwrap();
+    let mut index = serde_json::from_str::<etas_package::PackageIndex>(&text).unwrap();
+    index.std_compatibility = etas_package::metadata::builtin_std_dependency(
+        etas_package::metadata::BUILTIN_STD_VERSION.to_owned(),
+        index.package.edition.clone(),
+    )
+    .std_compatibility;
     etas_package::write_fixture_package_metadata_artifact(package_root, &index).unwrap();
 }
 
