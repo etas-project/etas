@@ -34,6 +34,7 @@ pub fn source_definition_origins(
         return Err(invalid("loaded source identity is duplicated"));
     }
     let mut modules = HashMap::new();
+    let mut virtual_modules = Vec::new();
     for module in &checked.hir.modules {
         let hir_module = checked
             .modules_arena
@@ -45,6 +46,10 @@ pub fn source_definition_origins(
             .get(&hir_module.span.source)
             .and_then(|id| checked.module_index.modules.get(*id))
             .ok_or_else(|| invalid("checked source module has no project origin"))?;
+        if matches!(index.origin, etas_frontend::ModuleOrigin::VirtualStd { .. }) {
+            virtual_modules.push(*module);
+            continue;
+        }
         let mut owner = None;
         for part in &index.parts {
             let part = checked
@@ -95,6 +100,13 @@ pub fn source_definition_origins(
     }
     let checked_origins = DefinitionOrigins::checked_source_modules(checked)
         .map_err(|error| invalid(&error.to_string()))?;
+    for module in virtual_modules {
+        let origin = checked_origins
+            .get(&module)
+            .cloned()
+            .ok_or_else(|| invalid("checked virtual standard module has no origin"))?;
+        modules.insert(module, origin);
+    }
     if modules != checked_origins {
         return Err(invalid(
             "checked source module identities differ from prepared package origins",
