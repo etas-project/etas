@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
+#[cfg(any(feature = "cli-dump-hir", feature = "cli-dump-air"))]
+use super::optimization::OptimizationArgs;
+
 #[derive(Args, Clone, Debug)]
 pub struct DumpArgs {
     #[command(subcommand)]
@@ -37,6 +40,9 @@ pub struct DumpAstArgs {
 #[cfg(feature = "cli-dump-hir")]
 #[derive(Args, Clone, Debug)]
 pub struct DumpHirArgs {
+    #[command(flatten)]
+    pub optimization: OptimizationArgs,
+
     #[arg(value_name = "INPUT")]
     pub input: Vec<PathBuf>,
 
@@ -62,6 +68,9 @@ pub struct DumpHirArgs {
 #[cfg(feature = "cli-dump-air")]
 #[derive(Args, Clone, Debug)]
 pub struct DumpAirArgs {
+    #[command(flatten)]
+    pub optimization: OptimizationArgs,
+
     #[arg(value_name = "FILE")]
     pub file: PathBuf,
 

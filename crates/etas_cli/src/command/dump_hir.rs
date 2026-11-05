@@ -19,8 +19,9 @@ pub fn run(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
+    let optimization_level = args.optimization.level().map_err(CliError::InvalidUsage)?;
     let profile = ProfileHandle::disabled();
-    let loaded = super::frontend::load_project(
+    let loaded = super::frontend::load_project_with_optimization(
         global,
         &profile,
         args.input,
@@ -28,10 +29,15 @@ pub fn run(
         EntryPolicy::CompileOnly,
         None,
         SourceDependencyMode::MetadataOnly,
+        Some(optimization_level),
     )?;
     let sources = loaded.sources;
     let output =
         super::frontend::check_project_once(global, &profile, loaded.input)?.into_check_output();
+    let effective_level = output
+        .checked
+        .as_ref()
+        .map(|checked| checked.compile_options.optimization_level.to_string());
     let options = HirDumpOptions {
         include_spans: args.spans,
         include_diagnostics: args.diagnostics,
@@ -46,6 +52,7 @@ pub fn run(
         crate::args::global::OutputFormat::Json => {
             let payload = json!({
                 "kind": "hir",
+                "optimization_level": effective_level,
                 "paths": sources.iter().map(|(path, _)| path).collect::<Vec<_>>(),
                 "artifact": artifact,
                 "diagnostics": json_output::project_diagnostics_json(&output.diagnostics, &sources),
@@ -62,6 +69,7 @@ pub fn run(
                 json!({
                     "type": "artifact",
                     "kind": "hir",
+                    "optimization_level": effective_level,
                     "paths": sources.iter().map(|(path, _)| path).collect::<Vec<_>>(),
                     "artifact": artifact
                 })

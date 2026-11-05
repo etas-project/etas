@@ -140,6 +140,30 @@ fn check_success_exits_zero() {
 }
 
 #[test]
+fn check_reports_effective_optimization_level_and_rejects_invalid_combinations() {
+    let file = fixture("optimization-level", "flow main() -> i32 { return 42; }");
+    for (flag, expected) in [("-O0", "O0"), ("-O3", "O3")] {
+        let (code, stdout, stderr) = run(["etas", "--format", "json", "check", flag, path(&file)]);
+        assert_eq!(code, 0, "{stderr}");
+        let output: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(output["optimization_level"], expected);
+    }
+
+    let (code, _, stderr) = run(["etas", "check", "-O1", "--opt-level", "2"]);
+    assert_eq!(code, 2);
+    assert!(
+        stderr.contains("conflicting optimization levels"),
+        "{stderr}"
+    );
+
+    for invalid in ["-O", "-O4"] {
+        let (code, _, stderr) = run(["etas", "check", invalid]);
+        assert_eq!(code, 2);
+        assert!(!stderr.is_empty());
+    }
+}
+
+#[test]
 fn run_pure_agent_reflection_uses_prepared_single_file_definitions_without_host_authority() {
     let file = fixture(
         "pure-agent-reflection",
@@ -297,6 +321,7 @@ allow_compile = true
     let (code, stdout, stderr) = run([
         "etas",
         "run",
+        "-O3",
         path(workspace.path()),
         "--profile",
         "local",
@@ -318,7 +343,8 @@ allow_compile = true
         path(workspace.path().canonicalize().unwrap().as_path())
     );
     assert_eq!(artifact["source_load_all"], false);
-    assert_eq!(artifact["cli_schema"], "etas.cli.checkpoint.v1");
+    assert_eq!(artifact["cli_schema"], "etas.cli.checkpoint.v2");
+    assert_eq!(artifact["optimization_level"], 3);
     let trace = workspace.path().join("resumed-trace.json");
     let (code, stdout, stderr) = run([
         "etas",

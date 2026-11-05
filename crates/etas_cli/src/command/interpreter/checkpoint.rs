@@ -5,7 +5,7 @@ use etas_interpreter::api::{RunResult, codec};
 
 use crate::error::CliError;
 
-pub(crate) const CLI_CHECKPOINT_SCHEMA: &str = "etas.cli.checkpoint.v1";
+pub(crate) const CLI_CHECKPOINT_SCHEMA: &str = "etas.cli.checkpoint.v2";
 
 pub(crate) struct CheckpointFiles<'a> {
     pub directory: &'a Path,
@@ -21,6 +21,7 @@ impl CheckpointFiles<'_> {
         flow: &str,
         result: &RunResult,
         runtime_profile: &serde_json::Value,
+        optimization_level: etas_frontend::OptimizationLevel,
     ) -> Result<(), CliError> {
         for checkpoint in &result.checkpoints {
             let mut payload = codec::checkpoint_artifact_json(sources, flow, checkpoint)
@@ -38,6 +39,10 @@ impl CheckpointFiles<'_> {
             object.insert("cli_schema".to_owned(), CLI_CHECKPOINT_SCHEMA.into());
             object.insert("source_load_all".to_owned(), all.into());
             object.insert("runtime_profile".to_owned(), runtime_profile.clone());
+            object.insert(
+                "optimization_level".to_owned(),
+                optimization_level.number().into(),
+            );
             object.insert(
                 "code_sources".to_owned(),
                 serde_json::to_value(code_sources).map_err(|error| {

@@ -20,9 +20,14 @@ pub fn compile_project(
     paths: Vec<PathBuf>,
     all: bool,
     flow: Option<String>,
+    optimization_level: u8,
     compiler_config: Option<etas_driver::compiler::NativeCompilerConfig>,
 ) -> Result<CompiledRunInput, CliError> {
-    let options = super::super::frontend::driver_options(global, profile);
+    let options = super::super::frontend::driver_options_with_optimization(
+        global,
+        profile,
+        Some(optimization_level),
+    )?;
     let response = etas_driver::compile_runnable_project_with_loaded(
         &options,
         etas_driver::LoadProjectRequest {

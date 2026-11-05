@@ -19,6 +19,7 @@ pub(crate) fn run(
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
     validate_run_args(&args)?;
+    let optimization_level = args.optimization.level().map_err(CliError::InvalidUsage)?;
     let flow = args.flow.clone().unwrap_or_else(|| "main".to_owned());
     let project_inputs = if args.input.is_empty() {
         vec![
@@ -62,6 +63,7 @@ pub(crate) fn run(
         project_inputs.clone(),
         args.all,
         Some(flow.clone()),
+        optimization_level,
         host_config.compiler_config().filter(|_| !args.dry_run),
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);
@@ -130,7 +132,14 @@ pub(crate) fn run(
             keys: replay_keys.as_ref(),
             lifecycle,
         }
-        .write(&project_inputs, args.all, &flow, &result, &runtime_profile)?;
+        .write(
+            &project_inputs,
+            args.all,
+            &flow,
+            &result,
+            &runtime_profile,
+            checked.compile_options.optimization_level,
+        )?;
     }
 
     super::interpreter::render_diagnostics(global, stderr, &compiled.sources, &result.diagnostics)?;

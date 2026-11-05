@@ -2,8 +2,13 @@ use std::path::PathBuf;
 
 use clap::Args;
 
+use super::optimization::OptimizationArgs;
+
 #[derive(Args, Clone, Debug)]
 pub struct RunArgs {
+    #[command(flatten)]
+    pub optimization: OptimizationArgs,
+
     #[arg(value_name = "INPUT")]
     pub input: Vec<PathBuf>,
 

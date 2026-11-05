@@ -110,6 +110,9 @@ fn finish_loaded_project(
     drop(environment_span);
     loaded.input.options.entry_policy = entry_policy;
     loaded.input.options.reflection = local_project.reflection;
+    if let Some(level) = options.optimization_level {
+        loaded.input.options.optimization_level = level;
+    }
     if let Some(target) = &options.residual_target {
         loaded.input.options.residual_target = target.clone();
     }

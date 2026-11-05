@@ -48,6 +48,15 @@ pub(crate) fn run(
         .ok_or_else(|| {
             CliError::InvalidUsage("checkpoint artifact is missing source-load scope".to_owned())
         })?;
+    let optimization_level = checkpoint_json
+        .get("optimization_level")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|level| u8::try_from(level).ok())
+        .ok_or_else(|| {
+            CliError::InvalidUsage(
+                "checkpoint artifact is missing a valid optimization level".to_owned(),
+            )
+        })?;
     let checkpoint_profile = checkpoint_json.get("runtime_profile").ok_or_else(|| {
         CliError::InvalidUsage("checkpoint artifact is missing runtime profile metadata".to_owned())
     })?;
@@ -90,6 +99,7 @@ pub(crate) fn run(
         source_paths.clone(),
         source_load_all,
         Some(flow.clone()),
+        optimization_level,
         host_config.compiler_config(),
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);

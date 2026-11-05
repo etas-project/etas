@@ -20,6 +20,7 @@ pub fn run(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
+    let optimization_level = args.optimization.level().map_err(CliError::InvalidUsage)?;
     if args.watch {
         return Err(CliError::Unsupported {
             command: "check --watch",
@@ -32,7 +33,7 @@ pub fn run(
     } else {
         EntryPolicy::CompileOnly
     };
-    let loaded = super::frontend::load_project(
+    let loaded = super::frontend::load_project_with_optimization(
         global,
         profile,
         args.input,
@@ -40,9 +41,14 @@ pub fn run(
         entry_policy,
         None,
         SourceDependencyMode::MetadataOnly,
+        Some(optimization_level),
     )?;
     let output = super::frontend::check_project_once(global, profile, loaded.input)?;
     let any_errors = has_blocking_check_errors(&output.diagnostics, args.phase1);
+    let effective_level = output
+        .checked
+        .as_ref()
+        .map(|checked| checked.compile_options.optimization_level.to_string());
 
     let checked = loaded
         .sources
@@ -64,7 +70,7 @@ pub fn run(
         })
         .collect::<Result<Vec<_>, CliError>>()?;
 
-    render_summary(global, stdout, &checked)?;
+    render_summary(global, stdout, &checked, effective_level.as_deref())?;
 
     if any_errors {
         Ok(CliExit::Diagnostics)
@@ -144,6 +150,7 @@ fn render_summary(
     global: &GlobalOptions,
     stdout: &mut dyn Write,
     checked: &[CheckFile],
+    optimization_level: Option<&str>,
 ) -> Result<(), CliError> {
     match global.format {
         crate::args::global::OutputFormat::Json => {
@@ -156,12 +163,19 @@ fn render_summary(
                     })
                 })
                 .collect::<Vec<_>>();
-            writeln!(stdout, "{}", json!({ "command": "check", "files": files })).map_err(
-                |source| CliError::Io {
-                    path: "<stdout>".into(),
-                    source,
-                },
-            )?;
+            writeln!(
+                stdout,
+                "{}",
+                json!({
+                    "command": "check",
+                    "optimization_level": optimization_level,
+                    "files": files,
+                })
+            )
+            .map_err(|source| CliError::Io {
+                path: "<stdout>".into(),
+                source,
+            })?;
         }
         crate::args::global::OutputFormat::Jsonl => {
             for file in checked {
@@ -184,7 +198,11 @@ fn render_summary(
             writeln!(
                 stdout,
                 "{}",
-                json!({ "type": "summary", "checked": checked.len() })
+                json!({
+                    "type": "summary",
+                    "optimization_level": optimization_level,
+                    "checked": checked.len(),
+                })
             )
             .map_err(|source| CliError::Io {
                 path: "<stdout>".into(),

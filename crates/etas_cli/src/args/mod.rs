@@ -11,6 +11,13 @@ pub mod global;
 pub mod graph;
 #[cfg(feature = "cli-lsp")]
 pub mod lsp;
+#[cfg(any(
+    feature = "cli-check",
+    feature = "cli-run",
+    feature = "cli-dump-hir",
+    feature = "cli-dump-air"
+))]
+pub mod optimization;
 #[cfg(feature = "cli-pkg")]
 pub mod pkg;
 #[cfg(feature = "cli-repl")]

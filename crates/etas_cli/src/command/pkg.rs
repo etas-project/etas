@@ -161,6 +161,7 @@ fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) -> DriverOpti
         cache_root: global.cache_root.clone(),
         profile: profile.clone(),
         residual_target: None,
+        optimization_level: None,
     }
 }
 

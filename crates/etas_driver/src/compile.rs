@@ -7,9 +7,9 @@ use etas_core::Severity;
 use etas_frontend::{
     CheckRequest, CheckResponse, CheckScope, DependencyOverlayChange, DiskCacheAccess,
     EnvironmentChange, ExternalPackageId, FrontendSession, FrontendSessionOptions,
-    FrontendSessionStore, ModulePath, ProjectChangeSet, ProjectInput, ProjectRevision,
-    RuntimeSourceRequirement, RuntimeSourceRequirements, SnapshotDetailLevel, SourceInput,
-    SourceKind,
+    FrontendSessionStore, ModulePath, OptimizationLevel, ProjectChangeSet, ProjectInput,
+    ProjectRevision, RuntimeSourceRequirement, RuntimeSourceRequirements, SnapshotDetailLevel,
+    SourceInput, SourceKind,
 };
 use etas_utils::ProfileHandle;
 
@@ -26,6 +26,7 @@ pub struct DriverOptions {
     pub cache_root: Option<PathBuf>,
     pub profile: ProfileHandle,
     pub residual_target: Option<etas_code::residual::target::ResidualTargetCapabilities>,
+    pub optimization_level: Option<OptimizationLevel>,
 }
 
 impl Default for DriverOptions {
@@ -36,7 +37,18 @@ impl Default for DriverOptions {
             cache_root: None,
             profile: ProfileHandle::disabled(),
             residual_target: None,
+            optimization_level: None,
         }
+    }
+}
+
+impl DriverOptions {
+    pub fn with_optimization_level(mut self, level: u8) -> Result<Self, DriverError> {
+        self.optimization_level = Some(
+            OptimizationLevel::try_from(level)
+                .map_err(|error| DriverError::InvalidInput(error.to_string()))?,
+        );
+        Ok(self)
     }
 }
 
@@ -70,6 +82,9 @@ pub fn check_project_once(
     options: &DriverOptions,
     mut request: CompileProjectRequest,
 ) -> Result<CompileProjectResponse, DriverError> {
+    if let Some(level) = options.optimization_level {
+        request.input.options.optimization_level = level;
+    }
     if let Some(target) = &options.residual_target {
         request.input.options.residual_target = target.clone();
     }
@@ -541,6 +556,54 @@ fn has_blocking_diagnostics(diagnostics: &[etas_core::Diagnostic]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optimization_level_override_reaches_checked_output_and_schedule() {
+        const OPTIMIZATION_PASSES: [&str; 12] = [
+            "AgentEffectLegalityPass",
+            "LowerOwnedSnapshotCowPass",
+            "FuseSerializationBoundaryPass",
+            "SuffixDemandHistoryPass",
+            "PruneUnusedQualityContextPass",
+            "PrepareVersionedRequestPass",
+            "VersionedPreparationCsePass",
+            "FuseProjectionScansPass",
+            "BatchStorageSemijoinPass",
+            "SynthesizeScopedIndexPass",
+            "ScheduleBoundedPipelinePass",
+            "LowerResourceRegionPass",
+        ];
+        let expected_counts = [0, 5, 10, 12];
+
+        for level in 0..=3 {
+            let response = check_project_once(
+                &DriverOptions::default()
+                    .with_optimization_level(level)
+                    .unwrap(),
+                CompileProjectRequest {
+                    input: ProjectInput::single_source(SourceInput::anonymous(
+                        "flow main() -> i32 { return 42; }",
+                    )),
+                    snapshot_detail: SnapshotDetailLevel::None,
+                },
+            )
+            .unwrap()
+            .response;
+            let checked = response.output.checked.as_ref().unwrap();
+            assert_eq!(checked.compile_options.optimization_level.number(), level);
+            let scheduled = response
+                .pipeline_records
+                .iter()
+                .filter(|record| OPTIMIZATION_PASSES.contains(&record.pass))
+                .map(|record| record.pass)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                scheduled,
+                OPTIMIZATION_PASSES[..expected_counts[usize::from(level)]],
+                "O{level}"
+            );
+        }
+    }
 
     #[test]
     fn cache_off_one_shot_check_does_not_retain_an_incremental_revision() {

@@ -39,8 +39,31 @@ pub fn load_project(
     flow: Option<String>,
     source_dependency_mode: SourceDependencyMode,
 ) -> Result<LoadedProjectInput, CliError> {
+    load_project_with_optimization(
+        global,
+        profile,
+        paths,
+        all,
+        entry_policy,
+        flow,
+        source_dependency_mode,
+        None,
+    )
+}
+
+pub fn load_project_with_optimization(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+    paths: Vec<PathBuf>,
+    all: bool,
+    entry_policy: EntryPolicy,
+    flow: Option<String>,
+    source_dependency_mode: SourceDependencyMode,
+    optimization_level: Option<u8>,
+) -> Result<LoadedProjectInput, CliError> {
+    let options = driver_options_with_optimization(global, profile, optimization_level)?;
     etas_driver::load_project(
-        &driver_options(global, profile),
+        &options,
         LoadProjectRequest {
             paths,
             all,
@@ -70,7 +93,19 @@ pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) ->
         residual_target: Some(etas_interpreter::interpreter_residual_capabilities()),
         #[cfg(not(feature = "component-runtime"))]
         residual_target: None,
+        optimization_level: None,
     }
+}
+
+pub(crate) fn driver_options_with_optimization(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+    optimization_level: Option<u8>,
+) -> Result<DriverOptions, CliError> {
+    let options = driver_options(global, profile);
+    optimization_level.map_or(Ok(options.clone()), |level| {
+        options.with_optimization_level(level).map_err(driver_error)
+    })
 }
 
 pub(crate) fn driver_error(error: DriverError) -> CliError {
