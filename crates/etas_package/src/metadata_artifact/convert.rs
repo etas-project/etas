@@ -824,7 +824,7 @@ fn type_from_metadata(
             let parameter = ty.parameter.ok_or_else(|| {
                 missing(
                     Path::new(etas_package_metadata::PACKAGE_METADATA_FILE),
-                    "parameter type is missing its checked owner",
+                    "scoped type parameter is missing its checked binder identity",
                 )
             })?;
             Ok(PackageTypeMetadata::Parameter {
