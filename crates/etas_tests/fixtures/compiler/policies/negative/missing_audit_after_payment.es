@@ -1,4 +1,4 @@
-module tests.compiler.policies.positive.audit_after_payment_is_optional;
+module tests.compiler.policies.negative.missing_audit_after_payment;
 
 type Page = {
     score: i32,

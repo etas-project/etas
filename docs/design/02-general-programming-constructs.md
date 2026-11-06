@@ -2,12 +2,6 @@
 
 Etas is a general-purpose programming language first, with agentic constructs added on top. Deterministic computation should use ordinary language features instead of agents.
 
-This chapter describes both language mechanisms and the standard APIs used with
-them. Primitive types, generics, literals, and indexing rules are language
-semantics; collection types and methods are std contracts and implementations.
-Their compiler-recognized integrations are distinguished from ordinary library
-logic in the [language layers](01-overview.md#53-feature-map-by-layer).
-
 ## 1. Lexical Style
 
 Etas source uses four spaces per indentation level. It supports `//` line comments and `/* ... */` block comments. Comments are ignored by the parser and cannot express trace specs, runtime policy, effect boundaries, limits, or other semantic constraints.
@@ -309,7 +303,9 @@ public spec ReportsOnly: trace =
     +Fs.read<R ~ Within<ReportsRoot>>;
 
 public spec SafeEmail: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
 Trace spec operators are compile-time spec operators:
@@ -318,16 +314,10 @@ Trace spec operators are compile-time spec operators:
 |---|---|
 | `+A` | Allow requested action pattern `A`. |
 | `-A` | Deny requested action pattern `A`. |
-| `A >> B` | Include local permissions for `A` and `B`, and require valid matching `A` evidence before every `B`. |
-| `A << B` | Include local permissions for `A` and `B`, and require valid matching `B` evidence before every `A`; equivalent to `B >> A`. It does not require `A` to occur. |
+| `A >> B` | Require `A` before `B`. |
+| `A << B` | Require `A` after `B`, equivalent to `B >> A`. |
 | `S & T` | Require both trace specs. |
 | `S | T` | Reserved for trace specs; either spec may accept in the MVP. |
-
-`>>` does not require repeated `+` declarations for its operands. Explicit `+`
-still allows independent actions. Denials and outer restrictions remain in
-force; permission and ordering checks stay within their own `|` alternative.
-See [Trace Specs](05-type-system-and-errors.md#154-trace-specs) for normalization
-and approval-evidence rules.
 
 The same type-level evidence used by ordinary values can refine action
 patterns. `+Fs.read<R ~ Within<ReportsRoot>>` means reads are allowed only for
@@ -388,9 +378,6 @@ matching.
 ## 3. Bindings and Mutation
 
 `let` creates an immutable binding. `var` creates a mutable local binding.
-`var` is a binding modifier: it is not a type, a reference, or a parameter
-passing mode. It permits the local name introduced by the declaration to be
-rebound to another value of the same type.
 
 ```etas
 let title: string = "Trace-aware agents";
@@ -398,41 +385,6 @@ var retries: u32 = 0;
 
 retries = retries + 1;
 ```
-
-Flow, agent, tool, and method parameters are ordinary immutable bindings. The
-current source grammar does not permit `var` in a parameter declaration. When
-a local `var` is passed as an argument, the call receives its current value;
-the mutability of the caller's binding is not transferred to the callee:
-
-```etas
-flow append(values: Array<i32>, value: i32) -> Array<i32> {
-    return values.push(value);
-}
-
-flow Example() {
-    var values = [1, 2];
-    let updated = append(values, 3);
-
-    // values is still [1, 2].
-    // updated is [1, 2, 3].
-}
-```
-
-Reassigning a parameter is rejected, and `var` parameters are not part of the
-current language:
-
-```etas
-flow invalid(values: Array<i32>) {
-    values = []; // rejected: parameters are immutable bindings
-}
-
-flow unsupported(var values: Array<i32>) -> unit; // rejected syntax
-```
-
-This section does not define reference parameters, mutable receivers, or
-copy-in/copy-out calls. Any future design for those features must use separate,
-explicit syntax rather than changing the meaning of `var` or of an ordinary
-parameter.
 
 Mutable state should remain local by default. Persistent state should go through compiler-known standard memory types such as `MemoryRegion<S>` and `Store<K, V>` so reads and writes remain auditable without adding dedicated persistent-state syntax.
 
@@ -802,36 +754,6 @@ enum ApprovalDecision {
 }
 ```
 
-Variants can also carry inline named fields, constructed and matched with
-braces:
-
-```etas
-enum Response {
-    Success(string),
-    Failure { code: i32, message: string },
-}
-
-let response: Response = Response.Failure { code = 503, message = "unavailable" };
-```
-
-ETAS supports recursive and mutually recursive ADTs, including generic trees
-and nested agent plans:
-
-```etas
-enum Plan {
-    Task(string),
-    Sequence(Array<Plan>),
-    Parallel(Array<Plan>),
-    Retry(Plan, u32),
-}
-```
-
-These are ordinary immutable data values. `Parallel` and `Retry` here are enum
-constructors, not execution primitives; a plan executor must explicitly
-interpret them under normal effect, trace-spec, and limit checks. See
-[Algebraic Data Types And Recursion](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion)
-for construction, exhaustive matching, recursive storage, and schema rules.
-
 Common generic container types:
 
 | Type | Meaning | Literal |
@@ -965,7 +887,7 @@ let prefix = xs[0, n);      // Slice<T>
 let middle = xs(i, j];      // Slice<T>
 ```
 
-Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. It is not positional on `Map`, `Set`, `Queue`, `Stack`, or `PriorityQueue`. Generic `string` slicing is intentionally not defined here because Unicode character offsets and byte offsets have different safety and performance properties; string slicing uses explicit APIs such as `std.text.char_slice(...)` or `std.text.byte_slice(...)`, specified in [Strings And Text APIs](19-standard-library.md#16-access-and-slicing).
+Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. It is not positional on `Map`, `Set`, `Queue`, `Stack`, or `PriorityQueue`. Generic `string` slicing is intentionally not defined here because Unicode character offsets and byte offsets have different safety and performance properties; string slicing should use explicit text APIs such as `text.char_slice(...)` or `text.byte_slice(...)`.
 
 Negative indexes and negative slice bounds are not part of the MVP:
 

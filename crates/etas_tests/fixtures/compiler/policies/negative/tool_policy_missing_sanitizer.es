@@ -1,4 +1,4 @@
-module tests.compiler.policies.positive.sanitizer_after_search_is_optional;
+module tests.compiler.policies.negative.tool_policy_missing_sanitizer;
 
 type Page = {
     score: i32,

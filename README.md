@@ -377,20 +377,7 @@ backend = "memory"
 [runtime.profiles.local-omlx.session]
 backend = "memory"
 id = "local-session"
-
-[runtime.profiles.local-omlx.storage]
-max_value_bytes = 2097152
-max_result_bytes = 4194304
-max_pending_jobs = 32
-max_pending_bytes = 67108864
 ```
-
-The optional `storage` table configures the limits shared by the interpreter
-and the selected Memory and Session backends. Unspecified fields retain the
-Host defaults. In addition to the value, result, and pending limits shown
-above, profiles can bound `max_nodes`, `max_depth`, `max_page_entries`,
-`max_scan_rows`, `max_receipts`, `max_receipt_bytes`, and
-`max_receipt_retention_seconds`.
 
 Run with the selected profile:
 

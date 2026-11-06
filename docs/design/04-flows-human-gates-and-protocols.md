@@ -323,33 +323,36 @@ if approved {
 
 Trace specs can require human approval before certain effects. `>>` is a
 trace-spec temporal operator over typed guards and targets, not a general
-expression operator. It includes local permission for both operands, so no
-separate `+` declarations are needed for them.
+expression operator.
 
 ```etas
 spec SafeAction: trace =
-    (Approval.request >> CompanyEmail.send<WorkAccount>)
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & +StripePayment.charge<BillingAccount>
+    & +WorkCalendar.write<WorkCalendar>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>)
     & (Approval.request >> StripePayment.charge<BillingAccount>)
     & (Approval.request >> WorkCalendar.write<WorkCalendar>);
 ```
 
-If a flow attempts one of these actions without matching accepted approval
-evidence before it, the compiler or runtime rejects the action. Calling
-`Approval.request` alone is insufficient: denial, failure, or approval for an
-unrelated request does not open the gate. The implicit permissions cannot
-override an outer denial or runtime authority boundary.
+If a flow attempts to perform one of these effects without an approval event dominating it in the control-flow graph, the compiler or runtime rejects the program.
 
 The same shape can express other gates:
 
 ```etas
 spec PublishingSafety: trace =
-    (HumanReview >> PublicPublish)
+    +HumanReview
+    & +PublicPublish
+    & +Sanitized
+    & +PromptSystemWrite
+    & (HumanReview >> PublicPublish)
     & (Sanitized >> PromptSystemWrite);
 ```
 
-Each clause normalizes to local permissions for its operands and a typed
-`Before` constraint, following the [Trace Specs](05-type-system-and-errors.md#154-trace-specs)
-rules. Permissions do not remove the review or sanitization prerequisite.
+These normalize to trace-spec terms such as
+`trace.before(HumanReview, PublicPublish)` and
+`trace.before(Sanitized, PromptSystemWrite)`.
 
 ### 2.3 Human as a Typed Actor
 

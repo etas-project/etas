@@ -154,7 +154,7 @@ Etas can express a harness-shaped program, but the current design is not yet a c
 | Golden trace tests | Reliability tests should compare semantic traces, not only final strings. | Tooling |
 | Policy simulation | CI should answer "would this flow be deployable under policy X?" without executing side effects. | Compiler/tooling |
 | Context slicing policy | Etas needs standard rules for selecting messages, typed memory API results, retrieval results, summaries, and prompt parts. | Stdlib/runtime |
-| Conversation retention and derived context | Apply the Session contract for history, retention, version-checked publication, receipts, and replay. Application/EDK code explicitly generates summaries; context selection never triggers inference. | Application/EDK + stdlib/runtime |
+| Conversation retention | `Message<T>`, `Conversation`, and `SessionConfig` need concrete truncation, summarization, and replay contracts. | Stdlib/runtime |
 | Retry and feedback combinators | Users should not hand-write every validation/revision loop. | Stdlib |
 | Recovery profiles | Replay, recompute, deduplicate, and resample behavior must be specified per AIR node/tool/model call class. | AIR/runtime |
 | Concurrent merge rules | `join([...])` needs clear failure, cancellation, partial result, and memory-write merge semantics. | Stdlib/runtime |

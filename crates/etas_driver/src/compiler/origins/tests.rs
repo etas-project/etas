@@ -589,40 +589,6 @@ fn source_project_and_single_file_origins_are_explicit_filesystem_origins() {
 }
 
 #[test]
-fn virtual_standard_source_modules_use_the_checked_standard_package_origin() {
-    let workspace = Workspace::new();
-    let root = workspace.0.join("source");
-    std::fs::create_dir_all(root.join("src/app")).unwrap();
-    std::fs::write(
-        root.join("etas.toml"),
-        "[package]\nname = \"virtual-std-origin\"\nversion = \"0.1.0\"\n",
-    )
-    .unwrap();
-    std::fs::write(
-        root.join("src/app/main.es"),
-        r#"module app.main;
-import std.text.join;
-public flow main(args: Array<string>) -> string {
-    return join(["a", "b"], ",");
-}
-"#,
-    )
-    .unwrap();
-
-    let loaded = load(&root);
-    let checked = check(&loaded);
-    let origins = source_definition_origins(&loaded, &checked).unwrap();
-    let standard =
-        etas_frontend::code::identity::standard_package_key(&checked.std_registry).unwrap();
-    let assembly = origins
-        .values()
-        .find(|origin| origin.module() == ["__etas_std", "text", "assembly"])
-        .expect("std.text.join must retain its virtual source module");
-
-    assert_eq!(assembly.package(), standard);
-}
-
-#[test]
 fn captured_origins_survive_removal_of_the_original_package_and_source_paths() {
     let workspace = Workspace::new();
     let library = workspace.package("library", "workers", "library.workers");

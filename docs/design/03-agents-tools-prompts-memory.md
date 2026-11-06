@@ -274,7 +274,11 @@ inferred body effects.
 
 ```etas
 tool safe_web_lookup(query: string) -> Array<Trusted<Snippet>> ![AcademicSearch.search]
-    ~ (AcademicSearch.search >> Sanitized)
+    ~ (
+        +AcademicSearch.search
+        & +Sanitized
+        & (AcademicSearch.search >> Sanitized)
+    )
 {
     let pages = perform AcademicSearch.search(query);
     let snippets = extract_snippets(pages);
@@ -396,10 +400,9 @@ Standard input/output belongs in the standard library. Its low-level authority
 is modeled as effect actions, while the user-facing API is ordinary stdlib
 flows.
 
-The user-facing API should be ordinary Etas flows exported from module `std.io`.
-Under the standard default console handler, their signatures expose the possible
-host I/O error. Console requests remain in separate analysis/interface metadata,
-not extra source declaration clauses:
+The user-facing API should be ordinary stdlib flows exported from module
+`std.io`. Their formal signatures include both the console action and the
+possible host I/O error:
 
 ```text
 std.io.print(text: string)    -> unit   ![Error<IOError>]
@@ -443,20 +446,22 @@ enum IOError {
 }
 ```
 
-For example, these are Etas implementations under the standard default console
-handler. The wrapper bodies are source code; only the final platform write/read
-requires a runtime endpoint:
+For example:
 
 ```etas
 module std.io;
 
 flow println(text: string) -> unit ![Error<IOError>]
+  requested_actions = [Console.stdout_write]
+  default_actions = [Console.stdout_write]
 {
     perform Console.stdout_write(text);
     perform Console.stdout_write("\n");
 }
 
 flow read_line() -> string ![Error<IOError>]
+  requested_actions = [Console.stdin_read_line]
+  default_actions = [Console.stdin_read_line]
 {
     return perform Console.stdin_read_line();
 }
@@ -465,21 +470,7 @@ flow read_line() -> string ![Error<IOError>]
 The public stdlib flows expose only residual effects such as possible host
 failure. The performed console action remains visible as requested/default
 action metadata for trace-spec checking, runtime-policy checking, trace, replay, and runtime mediation.
-The analysis metadata for these wrappers is:
-
-```text
-println:
-    escaping_effects  = [Error<IOError>]
-    requested_actions = [Console.stdout_write]
-    default_actions   = [Console.stdout_write]
-read_line:
-    escaping_effects  = [Error<IOError>]
-    requested_actions = [Console.stdin_read_line]
-    default_actions   = [Console.stdin_read_line]
-```
-
-These fields are compiler output, not syntax accepted after a flow signature.
-The value-level result types remain:
+For example:
 
 ```text
 std.io.read_line()  : string ![Error<IOError>]
@@ -496,13 +487,9 @@ discipline:
 | Layer | Role |
 |---|---|
 | `std.io.println` | Convenient stdlib flow used by programs |
-| `Console.stdout_write` | Standard action declaration with a runtime execution contract; remains visible as a requested action |
-| `Console` | Standard effect category, narrower than `FileIO`, not a source keyword |
-| Default handler / platform endpoint | Handles the standard action and performs the actual I/O under runtime enforcement |
-
-This follows the [five-layer model](01-overview.md#53-feature-map-by-layer).
-Neither standard-library membership nor installation of a default handler grants
-authority, and compiler recognition does not require hard-coding the wrapper.
+| `Console.stdout_write` | Runtime action and authority fact |
+| `Console` | Observable effect category, narrower than `FileIO` |
+| Host/default implementation | Platform implementation selected by the runtime |
 
 The MVP should keep these APIs string-based. Generic printing through `Display`, `Format`, or `ToString` can be added after the spec story is stable.
 
@@ -538,9 +525,6 @@ needed by the official EDK packages. The implemented surface is closer to:
 | `std.bytes`, `std.text` | Small pure helpers such as length, split, join, and integer parsing |
 | `std.security.*` | Trust, declassification, and runtime-policy support helpers |
 | Effect/action registry | Broad roots such as `Network`, `FileIO`, and `Secret`, with many low-level wrappers still missing |
-
-The full string API design, beyond this implementation snapshot, is specified
-in [Strings And Text APIs](19-standard-library.md#1-strings-and-text-apis).
 
 The SPEC should distinguish these layers:
 
@@ -773,14 +757,14 @@ The `~>` operator does not need special surface syntax for messages. When the va
 
 ### 3.3 Sessions And Conversations
 
-`SessionConfig` describes how existing conversation history and published
-context are selected and retained. It does not schedule summary generation:
+`SessionConfig` describes how conversation history is selected and retained:
 
 ```etas
 type SessionConfig = {
     id: SessionId,
     context: ContextPolicy,
     retention: RetentionPolicy,
+    compaction: CompactionPolicy,
 }
 ```
 
@@ -792,6 +776,7 @@ flow SupportTurn(msg: Message<CustomerRequest>) -> Message<CustomerReply> {
         id = msg.session.unwrap_or(current_session()),
         context = SummaryPlusRecent(recent = 8),
         retention = Days(90),
+        compaction = SummarizeWhen(ContextTokens(24_000)),
     };
 
     return Message.with_session(msg, session) ~> TriageAgent;
@@ -799,55 +784,6 @@ flow SupportTurn(msg: Message<CustomerRequest>) -> Message<CustomerReply> {
 ```
 
 The runtime uses the session to load relevant history, append new messages, deduplicate retry writes, connect traces across runs, and enforce context-window policy. This should be recognized by the compiler, AIR, and runtime, but it should not become a `session` keyword in the MVP.
-
-`SummaryPlusRecent(recent = 8)` selects an already published summary and recent
-turns; it never invokes a model or creates a summary. With no published summary,
-it selects recent turns only, with the absence of a summary visible to the
-caller. The selected context is a view, not a claim to contain the full history.
-Selecting a view does not delete the underlying messages.
-
-Applications or EDK packages explicitly read history, generate and validate a
-summary, and publish the resulting context through `std.agent.session`:
-
-| API | Contract |
-|---|---|
-| `history_page` | Read a bounded history page with a backend-issued cursor and `SessionHistoryFence`, plus any published context. |
-| `prepare_context` | Bind caller-produced `SessionContextContent` and its history fence to a `StorageOperationRef`; preparing does not publish or generate content. |
-| `publish_context` | Conditionally publish that content, checking its session generation, history fence, and context version; return a confirmed outcome or an explicitly unknown outcome. |
-| `reconcile_context` | Resolve an uncertain publication using the same operation reference and backend evidence. |
-
-The application/EDK owns the trigger, model/provider choice, model-specific
-token counting, prompt, validation, and retry strategy. Summary generation uses
-ordinary Etas flows/agents; model calls remain visible as requested inference
-actions and obey normal trace-spec, runtime-policy, cancellation, and budget
-checks. `ContextTokens(...)` remains a context budget bound, not an instruction
-to summarize. Exceeding it follows the limit failure rules; session loading or
-publication must not silently launch an inference call to make the input fit.
-
-Publication must preserve these guarantees:
-
-- Context content carries provenance for its source history and producer. A
-  summary is derived content; publication does not certify its semantic accuracy
-  or upgrade its trust level.
-- Publication atomically validates the expected history/context state and
-  installs a new context version. A conflicting append, replacement, or session
-  generation change rejects a stale publication without overwriting newer
-  context. The caller may explicitly reload and regenerate.
-- `SessionContextReceipt` identifies the operation, session generation,
-  published context version, and backend-confirmed durability. Retrying the
-  same operation must reuse its confirmed outcome rather than publish twice.
-- Failure or cancellation during generation leaves published context unchanged.
-  A confirmed publication rejection also leaves it unchanged. If publication
-  may already have committed, timeout or cancellation is not proof of rollback:
-  reconcile the operation before deciding whether to retry.
-- Publishing a summary does not remove source messages. Retention, archival,
-  deletion, and storage compaction remain separate runtime/storage operations,
-  preserving required provenance and making any loss of replay data explicit.
-
-This contract requires history access, version validation, context publication,
-and receipts from the standard substrate. It does not require a built-in
-production summarizer or a host callback that generates summaries during
-session maintenance.
 
 ### 3.4 Handoff
 

@@ -73,7 +73,7 @@ The exact choice can depend on compiler mode, deployment profile, and trace-spec
 | Explicit effect rows | Check that inferred effects are covered by the declared row. | Still enforce concrete actions against active authority and trace specs. | A declared row is a contract, not a proof that every action will happen. | `flow F() ![ProjectWorkspace.write<"reports/**">]` may write reports, but a particular run may write nothing. |
 | Tool boundaries | Check model-callable tools have declared or inferred body effects and a visible authority boundary. | Reject, retry, or route model requests for tools outside the agent's exposed tool set. | Model tool choice is a runtime event, but the tool surface is statically declared. | An agent exposed only to `Search` cannot call `Command.run`. |
 | Trace spec `+A` / `-A` | Prove definite violations and narrow allowed action sets where possible. | Match concrete action refs, paths, URLs, accounts, tenants, and arguments exactly. | Many trace-spec subjects are runtime values. | `ProjectWorkspace.write<_>` is checked exactly against `ProjectWorkspace.write<"reports/**">` at runtime. |
-| Trace spec `>>` / `<<` | Expand either temporal spelling into local allow entries plus a prerequisite; check dominance and obvious missing guards on analyzable paths. `A << B` requires `B` before `A`, without requiring `A` to occur. | Enforce the allowed patterns and verify valid outcome- and scope-matched approval, sanitization, audit, or review evidence. | Control flow and agent behavior can depend on runtime choices. | `Approval.request >> CompanyEmail.send<WorkAccount>` includes its operand permissions but still requires matching accepted approval before sending. |
+| Trace spec `>>` / `<<` | Check dominance, obvious missing guards, and required post-actions on analyzable paths. | Verify the concrete trace has the required approval, sanitization, audit, or review event. | Control flow and agent behavior can depend on runtime choices. | `Approval.request >> CompanyEmail.send<WorkAccount>` can be partially checked statically and exactly verified by trace. |
 | Handler effect elimination | Infer which handled effects are consumed and which effects escape from the handler body. | Dispatch performed actions to the nearest scoped handler or the action's default implementation. | Handler types are statically visible, but handler execution is dynamic. | A dry-run handler consumes `ProjectWorkspace.write<_>` and produces `Log.write`. |
 | Error handling | Check whether `Error<E>` is handled, transformed, returned, or allowed to escape. | Raise concrete errors and execute handler/default behavior. | Error possibilities are static; occurrence is dynamic. | `read_line()?` converts `Error<IOError>` into a value-level result at the call site. |
 | Limits and budgets | Require limits for unbounded or non-deterministic loops; check declared resource contracts. | Decrement actual step, token, cost, time, context, and custom budgets. | Resource use depends on model output, tool latency, and runtime data. | A reviewer loop needs `limit Iterations(5), Tokens(50_000)`; runtime stops when the first bound is exhausted. |
@@ -193,24 +193,15 @@ The compiled monitor itself may have cycles. Runtime traces are arbitrary-length
 
 ### 5.2 Clause Semantics
 
-First normalize `G >> A` into local `Allow(G)`, `Allow(A)`, and `Before(G, A)`
-components, and normalize `A << G` to the same components. Collect explicit and
-implicit permissions for each local conjunctive
-clause group into its allow set, deduplicating identical patterns; compile its
-authority check and temporal/deny components together. Independently composed
-specs and nested scopes retain their separate narrowing checks.
-
-Conjunctive monitors compose by product. For `S | T`, preserve alternatives:
-at least one complete branch must accept the trace. Permissions from one branch
-cannot authorize an action whose temporal check is taken from another. See
-[Trace Specs](05-type-system-and-errors.md#154-trace-specs) for the source rules.
+Each trace spec atom compiles into a small monitor. The full trace monitor is
+the product of those atom monitors.
 
 | Trace spec atom | Monitor state | Bad condition | Accepting condition |
 |---|---|---|---|
 | `-A` | No extra state needed | Current action matches `A` | Every non-Bad state |
 | `+A` | Active narrowed authority set | Current governed action is not covered by any active allow pattern | Every non-Bad state |
-| `G >> A` | Local permissions for `G` and `A`, plus whether valid `G` evidence exists for the relevant scope | Authority check fails, or current action matches `A` without valid matching `G` evidence | Every non-Bad state |
-| `A << B` | Local permissions for `A` and `B`, plus valid matching `B` evidence for the relevant scope | Authority check fails, or current action matches `A` without valid matching prior `B` evidence | Every non-Bad state |
+| `G >> A` | Whether guard `G` has been observed for the relevant scope | Current action matches `A` before matching `G` | Every non-Bad state |
+| `G << A` | Pending obligations created by `G` | Scope exits with an undischarged `A` obligation | Non-Bad state with no pending obligations |
 | Constrained action pattern | Static spec facts and residual runtime argument checks | Constraint is statically false or a residual check fails | Constraint is proven or checked |
 | `limit L` | Resource summary/counter abstraction | A hard limit may be exceeded | No exceeded hard limit |
 
@@ -220,45 +211,37 @@ residual runtime checks. Spec predicates are discharged from imported spec
 implementations during static analysis; they do not need a runtime value check
 unless the constraint also mentions runtime data.
 
-For a pure safety trace spec, all non-Bad monitor states are accepting. `A << B`
-constrains an occurrence of `A`; it does not require an `A` to occur after `B`.
-`A << B` has the same local operand permissions as `B >> A`.
+For a pure safety trace spec, all non-Bad monitor states are accepting. For
+`<<` obligations, accepting states must also have no pending obligations at the
+trace-spec boundary.
 
 Example:
 
 ```etas
 spec SafeEmail: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
-In addition to the local permission check, the compiler constructs a `Before`
-monitor for the relevant approval/target scope:
+The compiler constructs a monitor equivalent to:
 
 ```text
 state WaitingApproval
 state Approved
 state Bad
 
-WaitingApproval --Approval.request completed / matching accepted result--> Approved
-WaitingApproval --Approval.request pending, denied, failed, or unrelated--> WaitingApproval
+WaitingApproval --Approval.request--> Approved
 WaitingApproval --CompanyEmail.send<WorkAccount>--> Bad
 WaitingApproval --Other--> WaitingApproval
 
 Approved --CompanyEmail.send<WorkAccount>--> Approved
-Approved --Approval.request completed / matching accepted result--> Approved
+Approved --Approval.request--> Approved
 Approved --Other--> Approved
 ```
 
-`Other` is a self-loop for this temporal component only; the independent
-authority and denial checks may still reject the action. Each approval is
-scoped to the relevant request/resource and its validity, not a global
-"approved once" flag. The user wrote only `>>`; its permissions and `Bad`
-transition are both generated by normalization.
-
-For a fresh matching scope, the clause admits an empty trace or an approval
-request alone. It rejects sending before approval and sending after a denied
-approval. Sending after matching accepted approval passes this clause but
-remains subject to every other active restriction.
+The user wrote only the `>>` atom. `Bad` is generated from the meaning of
+`before`.
 
 ### 5.3 Abstract Domain
 
@@ -287,14 +270,16 @@ For parameterized actions, the trace monitor becomes symbolic:
 
 ```etas
 spec SameDraftApproval: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
 The monitor must remember symbolic registers such as the approved draft identity:
 
 ```text
 Waiting
-  --Approval.request completed / accepted for draft x--> Approved(x)
+  --Approval.request--> Approved(x)
 
 Approved(x)
   --CompanyEmail.send<WorkAccount> / y == x--> Approved(x)
@@ -403,7 +388,7 @@ The compiler may insert residual runtime checks when static analysis cannot prov
 |---|---|---|
 | Dynamic path, URL, account, or tenant | Concrete action argument | Check `ProjectWorkspace.write(path, body)` against `ProjectWorkspace.write<"reports/**">`. |
 | Approval scope | Concrete input hash, actor, decision, and freshness | Check that the same draft hash was approved before `CompanyEmail.send`. |
-| Prior-action obligation | Concrete action and matching earlier evidence | For `Audit.log << StripePayment.charge`, check a matching charge before each audit action. |
+| `after` obligation | Concrete scope-exit trace | Check that `Audit.log` occurred after `StripePayment.charge`. |
 | Residual action-pattern predicate | Concrete values | Check `request.tenant == resource.tenant`. |
 | Resource limit | Runtime token, step, cost, wall-time, or context debit | Stop before exceeding `Tokens(50_000)`. |
 | Model tool-call request | Actual tool requested by the model | Reject or retry if the model asks for a tool outside `@tools(...)`. |
@@ -467,9 +452,9 @@ Recommended composition rules:
 | Trace spec component | Composition rule | Example |
 |---|---|---|
 | `-A` | Union; any matching denial wins. | Outer `-Command.run<_>` still applies inside every inner scope. |
-| `+A` and implicit operand permissions from `>>` / `<<` | After local normalization, intersect independently active allowed sets for the same governed action family. | Outer `+ProjectWorkspace.write<"reports/**">` plus inner `+ProjectWorkspace.write<"reports/private/**">` yields the private reports subset. |
-| `G >> A` | Accumulate prerequisites; its local permissions cannot reopen an action excluded by another active scope. | If outer requires approval and inner requires sanitization before publish, both are required. |
-| `A << B` | Accumulate prerequisites on `A`. | Each `Audit.log` can require matching prior `StripePayment.charge` evidence. |
+| `+A` | Intersect active allowed sets for the same governed action family. | Outer `+ProjectWorkspace.write<"reports/**">` plus inner `+ProjectWorkspace.write<"reports/private/**">` yields the private reports subset. |
+| `G >> A` | Accumulate requirements. | If outer requires approval and inner requires sanitization before publish, both are required. |
+| `G << A` | Accumulate pending obligations. | A payment can require both `Audit.log` and `Receipt.store` after charge. |
 | Action-pattern constraints | Conjoin constraints. | `tenant == request.tenant` and `region == "us"` must both hold. |
 | `limit` | Conjoin limits; for the same dimension use the stricter bound. | `Tokens(10_000)` inside `Tokens(50_000)` yields `Tokens(10_000)`. |
 
@@ -489,7 +474,7 @@ These conflicts can be detected before or during static trace-spec analysis:
 | Temporal dependency cycle | `A >> B` and `B >> A` | Reject the trace spec set as unsatisfiable. |
 | Empty allow intersection | Outer `+ProjectWorkspace.write<"reports/**">`, inner `+ProjectWorkspace.write<"tmp/**">` for the same scope | Warn or reject the scope; reject if the body may require that action family. |
 | Required guard is denied | `-Approval.request` and `Approval.request >> CompanyEmail.send<WorkAccount>` | Reject any scope where `CompanyEmail.send<WorkAccount>` may occur; optionally warn that the requirement is impossible. |
-| Required prior action is denied | `-StripePayment.charge<Account>` and `Audit.log << StripePayment.charge<Account>` | Reject any scope where `Audit.log` may occur without another valid matching charge. |
+| Required after action is denied | `-Audit.log` and `Audit.log << StripePayment.charge<Account>` | Reject any scope where `StripePayment.charge<Account>` may occur. |
 | Self-dependency with no meaningful witness | `Approval.request >> Approval.request` | Reject as ill-formed or require an explicitly different scoped event. |
 | Predicate contradiction | Action constraints imply both `tenant == "a"` and `tenant == "b"` | Reject when statically decidable; otherwise insert residual runtime contradiction checks if useful. |
 | Limit contradiction | `Iterations(0)` around a body that must execute at least once | Reject if the execution requirement is statically known; otherwise runtime limit enforcement stops before the body. |

@@ -7,11 +7,6 @@ The language should not expose unrestricted threads as the first abstraction.
 Instead, concurrency is expressed through standard-library combinators and
 compiled with effect, policy, limit, and trace information.
 
-This chapter specifies a language and standard-library design, not current
-implementation coverage. Ordinary programs use default scheduling through
-combinators. Scheduler authors can use optional `as k` handler bindings and
-the scoped task APIs without adding `async`, `await`, or `suspend` keywords.
-
 The core design is:
 
 ```text
@@ -52,12 +47,6 @@ let (summary, risks, citations) = join((
 support. The compiler can still lower independent branches to AIR regions that
 the runtime may schedule concurrently.
 
-These are distinct responsibilities in the [five-layer model](01-overview.md#53-feature-map-by-layer):
-Etas can implement combinator logic, the compiler recognizes the resolved
-standard contract, and the runtime provides structured task execution. A
-user-defined same-named `join` does not acquire scheduling or analysis rules
-merely from its spelling.
-
 ## 3. Structured Concurrency
 
 Etas concurrency is structured:
@@ -69,14 +58,6 @@ Etas concurrency is structured:
   cancelled;
 - no background task is silently detached by default.
 
-The program entry and combinators provide managed execution with default async
-handling. `std.task.run(scheduler => { ... })` creates an explicit owned scope
-when code needs the scheduler handle. `std.task.start` is permitted only in a
-managed scope; it is not unrestricted process/thread creation. Tasks inherit
-the active handler environment, trace specs, runtime policy, limits, cancellation
-scope, and trace links at their start site. Owner/lifetime requirements must
-survive helper calls and package interfaces.
-
 This matches agent-system needs better than free `spawn`: side effects, model
 calls, approvals, and budget consumption must remain attributable to a source
 scope and a trace region.
@@ -87,12 +68,11 @@ The MVP should provide these standard combinators:
 
 | Combinator | Behavior | Typical use |
 |---|---|---|
-| `join` | Return all values, or fail fast by propagating the primary unhandled error | Fan-out/fan-in where all results are required |
-| `try_join` | Return `Result<Output, E>` for a common typed error, cancelling siblings on the first error | All-or-nothing work with an explicit error value |
+| `join` | Wait for all branches and return their values | Fan-out/fan-in where all results are required |
+| `try_join` | If any branch raises an error, cancel remaining branches and raise the error | All-or-nothing parallel work |
 | `collect` | Wait for all branches and return per-branch `Result` values | Batch work where partial success is useful |
 | `race` | Return the first successful branch and cancel losers | Fallback providers, redundant retrieval, latency hedging |
-| `map_concurrent` | Apply a flow with bounded concurrency and fail-fast errors | Batch work where every result is required |
-| `map_concurrent_collect` | Apply a flow with bounded concurrency and retain a `Result` for every input | Batch work where partial success is useful |
+| `map_concurrent` | Apply a flow to a collection with bounded concurrency | Batch summarization, validation, retrieval, tests |
 
 Example:
 
@@ -108,22 +88,6 @@ The exact stdlib surface can evolve, but the semantic requirement is stable:
 these combinators create structured concurrent scopes visible to type checking,
 effect inference, policy analysis, limit checking, runtime scheduling, and trace
 recording.
-
-The error surface is intentionally not selected by an option flag:
-
-```text
-map_concurrent(xs, f)         : Array<B> ![E, Error<X>]
-map_concurrent_collect(xs, f) : Array<Result<B, X>> ![E]
-```
-
-Both preserve input order in their result arrays. `map_concurrent` cancels
-unfinished items after an error; `map_concurrent_collect` waits for every item.
-
-`join` and `try_join` are both fail-fast. Their distinction is representation,
-not scheduling: `join` propagates the primary unhandled error effect, while
-`try_join` handles one common typed `Error<E>` from its branches and returns
-`Result<Output, E>`. Other unhandled effects still escape normally. `collect`
-is the wait-all per-branch-result operation.
 
 `join` should support two input shapes:
 
@@ -176,15 +140,6 @@ map_concurrent(xs, f) : Array<B> ![E]
 `join` and `map_concurrent` do not hide effects. The resulting expression keeps
 the union of branch effects unless a handler in the concurrent scope eliminates
 some of them. This preserves normal effect-boundary and policy checking.
-
-The same rule applies to `std.task.start(job)`: the enclosing scope includes
-the job's effects, requested actions, trace behavior, and determinism when work
-is started, not only when `await` is reached. Dropping a task handle neither
-detaches the job nor removes its behavior from analysis. `Task<T, E>` preserves
-the result and effect-row relationship plus its checked owner/behavior metadata.
-Handling scheduling actions cannot discharge unrelated child effects. An empty
-escaping row after default handling is not proof of determinism or absence of
-external requests.
 
 ## 6. Effect-Free Concurrency
 
@@ -258,7 +213,9 @@ Policies can impose ordering constraints. For example:
 
 ```etas
 spec SafeEmail: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
 This concurrent expression is invalid:
@@ -270,8 +227,7 @@ join((
 ));
 ```
 
-The implicit permissions in `>>` do not establish ordering. The `join` scope
-does not establish that matching accepted approval happens before sending.
+The `join` scope does not establish that approval happens before sending.
 Correct code must express the order:
 
 ```etas
@@ -304,14 +260,6 @@ let result = join((
 Rules:
 
 - `Concurrency(n)` bounds the number of simultaneously active child tasks;
-- `n` must be a positive `usize` within the runtime implementation ceiling;
-  the compiler rejects invalid constants and the runtime validates dynamic or
-  decoded values again;
-- a parked task does not occupy an active concurrency slot;
-- a runnable descendant counts against every enclosing concurrency ceiling, so
-  a nested scope has its own bound but cannot widen an ancestor bound;
-- a parent waiting for nested children is parked and releases its active slot,
-  preventing a bounded parent scope from deadlocking its descendants;
 - token, context, cost, and wall-time limits are shared by the whole concurrent
   scope;
 - child branches may have stricter nested limits;
@@ -321,36 +269,15 @@ Rules:
 
 ## 11. Error And Cancellation Semantics
 
-The default task scope and fail-fast combinators use these semantics:
+Recommended semantics:
 
 | Combinator | Error behavior | Cancellation behavior |
 |---|---|---|
-| `join` | Propagate the deterministic primary unhandled error | Cancel unfinished siblings and wait for cleanup |
-| `try_join` | Return `Err(primary)` for its common typed error | Cancel unfinished siblings and wait for cleanup |
+| `join` | Propagate first unhandled error unless the stdlib variant documents result collection | Cancel unfinished siblings |
+| `try_join` | Propagate first unhandled error | Cancel unfinished siblings immediately |
 | `collect` | Convert each branch to `Result<T, E>` | Does not cancel siblings just because one branch fails |
-| `race` | Return first success; if all fail, propagate the deterministic primary error | Cancel losing branches after success |
-| `map_concurrent` | Propagate the deterministic primary error | Cancel unfinished items and wait for cleanup |
-| `map_concurrent_collect` | Return one input-ordered `Result` per item | Does not cancel siblings just because one item fails |
-
-`std.task.run` uses the same fail-fast rule. Inherited handlers may recover
-within a child; an error that remains unhandled at the child boundary fails the
-owning scope. `join` and `try_join` have the same fail-fast behavior here;
-`collect`, not a silent `join` variation, provides per-branch results. Result
-collection requires a declared common error type or explicit error mapping;
-it does not change the single-Error rule of `?` or invent implicit error unions.
-The original typed failure is propagated after cancellation and cleanup, not
-fabricated as a normal task result. `try_join` is the explicit exception that
-converts its declared common error to `Err`. Competing failures and the selected
-primary failure are trace-visible.
-
-Fail-fast scopes choose the primary error by the lowest source branch index
-among failures that reach a terminal state before cancellation settles. Array
-operations use input index; tuple operations use tuple position. A scheduler
-turn drains ready terminal notifications before making this choice and orders
-same-turn notifications by task id. Secondary failures remain trace events and
-do not replace the primary error. This makes the selection independent of host
-completion polling order for failures already observed at the cancellation
-barrier.
+| `race` | Return first success; if all fail, raise or return collected failure depending on variant | Cancel losing branches after success |
+| `map_concurrent` | Depends on selected variant: fail-fast or collect | Bounded by `Concurrency(n)` |
 
 Cancellation is cooperative at runtime mediation points: model calls, tool calls,
 effect actions, memory APIs, waits, and loop boundaries. A purely deterministic
@@ -358,29 +285,6 @@ CPU-bound branch may be cancelled at implementation-defined safe points.
 
 Cancellation must be trace-visible when it affects non-deterministic work or
 external actions.
-
-The default scheduler uses a FIFO ready queue. Starting or waking a task appends
-it to the queue, and each dispatch runs one cooperative quantum. A task that
-repeatedly yields therefore cannot starve an older ready task. External host
-completion timing remains nondeterministic and is captured by the structured
-trace for replay.
-
-Completion, resumption, cancellation, and scope exit coordinate task and
-continuation state atomically. Each task has one terminal completion, and each
-captured continuation has one terminal resumption or disposal. A task may wait
-many times, capturing a fresh continuation at each suspension. A completion
-racing cancellation cannot resume the same continuation twice or revive a
-cancelled scope. Late completions are reconciled or discarded with trace
-evidence. Cancellation is not rollback: already executed external actions
-remain real and may require application-level reconciliation.
-
-On cooperative failure, cancellation, or `finish`, the runtime unwinds the
-affected managed frames and runs their registered resource cleanup before the
-scope releases ownership. No `finally` keyword is added by this design; the
-cleanup guarantee belongs to resource/task execution contracts. Forced process
-termination is not a guarantee that arbitrary cleanup code can run. Catching a
-local cancellation error cannot clear the parent's cancellation state or reset
-its budgets.
 
 ## 12. Handlers In Concurrent Scopes
 
@@ -403,184 +307,6 @@ arms still escape normally.
 Handler arms must not hide audit evidence: even when a branch action is handled,
 the trace records the attempted action and the handler decision.
 
-### 12.1 Handler-Based Scheduling
-
-The standard `std.task.Async` effect has `yield() -> unit` and
-`await<T, effect E>(task: Task<T, E>) -> T` actions. `yield` keeps the current
-task runnable; `await` waits for a particular task result. Both have default
-handlers in managed execution. Their public contracts are specified in
-[Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
-
-A scheduler author may bind the current continuation with `as k`:
-
-```etas
-Async.yield() as k => {
-    scheduler.requeue(k, ());
-}
-
-Async.await(task) as k => {
-    scheduler.park(task, k);
-}
-```
-
-This extends the existing handler arm syntax; it is not a new expression for
-arbitrary continuation capture. `k` is inferred from the action result, handled
-answer, remaining effects, and owner. A `never`-returning action cannot bind it.
-Without `as k`, existing immediate `resume value;` remains unchanged. With
-`as k`, immediate resume and deferred transfer use the same one-shot handle.
-
-### 12.2 Ownership And Transfer
-
-Continuations are affine, scope-bound handles, not ordinary copyable values.
-Passing one to an owner-preserving helper or scheduler queue consumes/transfers
-ownership. They cannot be cloned, stored globally or persistently, returned
-beyond their owner, sent to a model, or placed in a copying container. Closures
-and aggregates cannot hide an escape or copy. A scheduler may hold them only
-while their task and captured handler environment remain live. Runtime checks
-also reject stale, wrong-owner, or already-consumed handles before resumption.
-
-The ownership transitions are conceptually:
-
-```text
-arm-owned -> scheduler-owned (ready or waiting) -> resumed or cancelled
-arm-owned -> immediate resume or unwound by finish/termination
-```
-
-Transfer changes the owner; it does not clone the continuation. Resumption may
-later reach another `perform`, which captures a different one-shot handle.
-
-`scheduler.requeue(k, value)` and `scheduler.park(task, k)` return `never` to the
-current arm. A successful transfer stops that arm and gives control to the
-scheduler; it does not abort the program. It cannot be followed by `resume`,
-another transfer, or ordinary work on the consumed handle. All reachable arm
-paths must still resume, finish, transfer, or take another non-returning path.
-A plain enqueue returning `unit` does not satisfy that control-flow rule.
-
-Controlled transfer may cross a child-task boundary inside the same owned
-structured group. It always restores the original task's identity, frames,
-handler environment, and constraints, rather than executing the continuation
-as the scheduler or as another task. Arbitrary cross-thread transfer and
-detachment are not source-language facilities. The owner cannot return while
-an accepted continuation is still live: it must resume or cancel and unwind it.
-
-### 12.3 Waiting And Wakeup
-
-`std.task.start(job)` schedules work without waiting for its result. Starting
-two jobs and then awaiting the first allows both to make progress; starting
-and awaiting one before starting the other does not express that concurrency.
-
-`park` requires the continuation of the matching `Async.await(task)` request,
-with the task result type and owner preserved. It handles an already-completed
-task without entering an indefinite wait. Completion registration and terminal
-state observation must be atomic enough to prevent lost wakeups. Pending
-waiters become runnable only on completion or a failure/cancellation decision;
-they must not be busy-polled by repeatedly yielding.
-
-Waiting suspends the current task, not the whole scheduler thread. Models,
-streams, and other host operations need non-blocking adapters or managed
-blocking offload. Yielding cannot turn a blocking host function into async I/O.
-Default handlers perform ordinary scheduling; a custom handler changes policy,
-not the validity of task results or the authorization of protected host work.
-
-### 12.4 Handler Lifetime And Early Finish
-
-Resuming a task reinstalls the captured handler environment (deep resumption).
-Handler arms themselves follow ordinary enclosing-handler lookup rules. A
-handler frame cannot disappear while inherited child work or a parked
-continuation still depends on it. Normal managed scope exit settles that work
-before committing the answer; task handles cannot escape a shorter-lived
-handler environment they still depend on.
-
-Each action invocation has its own arm/continuation. Arms may interleave;
-there is no implicit global lock held across an arm's wait. Capturing a handler
-value does not create shared mutable local variables. Shared resources still
-use explicit APIs and effect/resource conflict checks; a single-threaded
-scheduler does not make arbitrary reentrant mutation safe.
-
-`finish value;` targets its enclosing handled expression, not whichever child
-happens to be executing the arm. If that expression encloses a concurrent
-scope, finishing it cancels and cleans up the unfinished child work it owns
-before delivering its answer. A handler local to one child finishes only that
-child's handled region. Competing finish/error/cancellation decisions cannot
-complete the same region twice. No explicit continuation can resume a region
-after it has finished.
-
-### 12.5 Context And Analysis Preservation
-
-Parking, requeueing, and wakeup retain task/parent scope ids, handler frames,
-trace-spec state, current authorization checks, cancellation, remaining budgets,
-and source/code-revision identity. They neither grant new authority nor restore
-revoked permission from an old snapshot. Waiting time counts toward active
-wall-time limits, and restarting a scheduler or creating a child cannot reset
-parent budgets.
-
-`Async` is scheduling control, not another external-authority root. Handling
-its actions does not hide model/network/file requests, child errors, or trace
-ordering. Standard task operations are compiler-recognized contracts: type and
-effect analysis must follow the jobs they start, even through helper flows and
-package interfaces. The usual union of effects is still insufficient for
-approval happens-before; task dependencies and action order remain necessary.
-No unrestricted multi-shot continuation or general shared-reference system is
-introduced by this extension.
-
-### 12.6 Complete Example
-
-This design example uses the standard task protocol and optional `as k`. It is
-not a claim that the current interpreter implements these APIs. The two jobs
-are started before either is awaited. The handler demonstrates explicit
-scheduling; business code normally uses `join` with default handling instead.
-
-```etas
-import std.task;
-import std.task.Async;
-
-@model("gpt-5.5")
-agent Reviewer(request: string) -> string {
-    perform Async.yield();
-
-    let prompt = Prompt.new()
-        .system(Trusted("Review the request and report concrete issues."))
-        .data(request);
-
-    return perform infer(prompt);
-}
-
-flow main(args: Array<string>) -> i32 {
-    return std.task.run(scheduler => {
-        handle {
-            let correctness = std.task.start(
-                () => Reviewer.run("Check correctness")
-            );
-            let security = std.task.start(
-                () => Reviewer.run("Check security")
-            );
-
-            let a = std.task.await(correctness);
-            let b = std.task.await(security);
-
-            std.io.println(std.text.join([a, b], "\n"));
-            0
-        } with {
-            Async.yield() as k => {
-                scheduler.requeue(k, ());
-            }
-
-            Async.await(task) as k => {
-                scheduler.park(task, k);
-            }
-        }
-    });
-}
-```
-
-The unit value queued by `requeue` matches `Async.yield`'s result type. `park`
-preserves the relationship between a task result and the captured await
-continuation. Failure is propagated by the task protocol, not passed to that
-continuation as a fake string. Unhandled task or output errors fail execution
-instead of returning the normal exit code `0`; application-specific recovery
-can use ordinary outer handlers. The example does not add an aborting `?` or
-change the existing Error-to-Result semantics.
-
 ## 13. Trace And Replay
 
 A concurrent scope produces structured trace events:
@@ -601,8 +327,6 @@ Trace events must preserve:
 - source span and stable AIR node id;
 - branch/task id;
 - parent concurrent scope id;
-- park, runnable-queue, wakeup, and continuation transfer/consumption events;
-- the completion or cancellation decision that won a wakeup race;
 - action attempts, handler dispatch decisions, and default-action execution decisions;
 - concrete budget usage;
 - cancellation and failure events;
@@ -610,14 +334,6 @@ Trace events must preserve:
 
 This allows replay to restore the logical behavior of a concurrent run without
 depending on the original wall-clock interleaving.
-
-`Task`, `Scheduler`, and continuation handles are runtime capabilities, not user
-data. They cannot be serialized, hashed, compared, persisted, sent to a host or
-model payload, or decoded as ordinary Etas values. Runtime checkpoints use a
-separate internal scheduler snapshot that may encode task ids, owner scopes,
-ready/parked state, waiters, and continuation-arena state. That encoding is
-versioned runtime state, is valid only with its checkpoint, and is never exposed
-through source-level serialization APIs.
 
 ## 14. Automatic Scheduling
 
@@ -648,7 +364,7 @@ runtime checks.
 |---|---|---|
 | Side-effect visibility | Effects/actions are inferred and attached to branches | Callback may hide arbitrary SDK calls or global mutation |
 | Race safety | Value semantics plus effect/resource conflict checks | User must reason about shared objects, closures, and clients |
-| Policy preservation | Trace-spec `>>`/`<<` requirements become ordering constraints | Usually runtime guardrails or manual hooks |
+| Policy preservation | `before`/`after` requirements become ordering constraints | Usually runtime guardrails or manual hooks |
 | Budget control | Concurrent scope shares typed limits | Separate timeouts or per-call options can accidentally reset budgets |
 | Replay | Structured task trace with action metadata | Often logs concrete events, but lacks language-level replay semantics |
 | Optimization | Compiler can schedule, hoist, deduplicate, and serialize safely | Optimizations are manual and local |
@@ -666,23 +382,17 @@ MVP should include:
 - `join`;
 - `try_join`;
 - `collect`;
-- `race`;
 - `map_concurrent`;
-- `map_concurrent_collect`;
 - `Concurrency(n)` limit;
 - effect/action/resource conflict checks for standard effects;
 - structured trace events for concurrent scopes;
 - fail-fast and collect-style error semantics;
-- runtime cancellation at mediation points;
-- `std.task.run`, scoped `start`/`await`, and default `Async` handlers;
-- optional `as k` with single-shot ownership and scope-preserving transfer;
-- scheduler `requeue`/`park` contracts, wakeup races, and unwind/cleanup rules.
+- runtime cancellation at mediation points.
 
 MVP should not include:
 
 - unrestricted `spawn`;
 - `async` / `await` keywords;
-- a `suspend` keyword, continuation cloning, or multi-shot resume;
 - channels and `select`;
 - shared mutable state;
 - preemptive thread interruption as a source-language guarantee;

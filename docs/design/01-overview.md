@@ -75,7 +75,9 @@ Etas can reject unsafe flows before deployment:
 
 ```etas
 spec SafeEmail: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+    +Approval.request
+    & +CompanyEmail.send<WorkAccount>
+    & (Approval.request >> CompanyEmail.send<WorkAccount>);
 
 flow NotifyCustomer(req: Request) ~ SafeEmail {
     let draft = req ~> SupportAgent ~> EmailWriter;
@@ -404,11 +406,7 @@ The benefit of first-class `agent` is therefore not shorter syntax. It is that a
 
 ## 5. Language Layers And Keyword Budget
 
-Etas should stay small at the core. The five-layer classification in section 5.3
-governs the terminology used throughout this SPEC. A name being outside the
-keyword set does not imply that it is an ordinary library definition with no
-compiler or runtime contract. API ownership and implementation support are
-separate questions.
+Etas should stay small at the core. The design should separate surface syntax, type-system names, semantic effects, standard-library patterns, and implementation-only concepts. Mixing these layers makes the language look heavier than it needs to be.
 
 ### 5.1 Surface Syntax Keywords
 
@@ -425,11 +423,6 @@ The current source grammar has **36 surface syntax keywords** if primitive type 
 | Bindings and control flow | `let`, `var`, `if`, `else`, `match`, `for`, `in`, `while`, `limit`, `retry`, `return`, `break`, `continue` | 13 |
 | **Total** |  | **36** |
 
-Handler continuation binding reuses `as`, for example
-`Async.await(task) as k => { ... }`. `Async`, task APIs, and scheduler transfer operations are standard
-contracts, not additional keywords; `async`, `await`, `yield`, and `suspend`
-do not extend this keyword count.
-
 Primitive type names add another **20 reserved type names** if the lexer treats them as keywords: `bool`, signed and unsigned integer widths, `f32`, `f64`, `char`, `string`, `bytes`, `unit`, and `never`. Boolean literals `true` and `false` add 2 more literal words. Pascal-case names such as `Prompt`, `Message`, `SessionConfig`, `Conversation`, `SandboxProfile`, and `ApprovalRequest` should be Agent/runtime support names, not syntax keywords.
 
 Inside `agent` declarations, model, tools, limits, tracing, and optimization
@@ -443,26 +436,23 @@ agent provider.
 
 ### 5.2 Semantic And Type-System Names
 
-This is a representative inventory, not a fixed count of language constructs or
-an exhaustive std API catalog. Standard names may have compiler-recognized
-contracts, as listed in section 5.4; their presence in type checking does not
-make each name a core-language construct.
+The current fixed semantic/type-system vocabulary has **86 named items** if primitive type names, core library types, standard type/callable/trace spec constraints, persistent resource support types, Agent/runtime support names, internal type constructors, and core effects are counted together.
 
-| Category | Names | Ownership |
-|---|---|---|
-| Primitive types | `bool`, integer widths, `f32`, `f64`, `char`, `string`, `bytes`, `unit`, `never` | Language-defined types; representation and execution need backend support. |
-| Standard data and collection types | `Array<T>`, `List<T>`, `Map<K, V>`, `Set<T>`, `Range<I>`, `Slice<T>`, `Deque<T>`, `Queue<T>`, `Stack<T>`, `PriorityQueue<T, P>`, `OrderedMap<K, V>`, `OrderedSet<T>`, `Option<T>`, `Result<T, E>` | std definitions and APIs; literal, indexing, and error-conversion integrations have specified compiler contracts. |
-| Standard specs | `Index`, `ByteStream`, `Region`, `Within<Parent>`, `PromptEncode`, `Schema`, `ResponseDecode`, `Limit`, `Stage<I, O, effect E>`, `Pure<I, O>` | std spec declarations, using the language's spec/evidence mechanism; selected integrations are compiler-recognized. |
-| Persistent resource support | `MemoryRegion<S>`, `Store<K, V>`, `std.memory.region<S>(...)` | std API with compiler-recognized resource identities and runtime storage support. |
-| Structured-task support | `Task<T, E>`, `std.task.run/start/await`, `Async.yield/await`, and inferred scoped scheduler/continuation handles | std contracts with checked effect rows, ownership, task behavior, single-shot transfer, cancellation, and runtime scheduling. `Async` is control, not a broad external-authority root. |
-| Trust/security wrappers | `Trusted<T>`, `Untrusted<T>`, `Secret<T>`, `Public<T>`, `Sanitized<T>` | std support types with the specified trust/secret analysis and runtime enforcement contracts. |
-| Agent support types | `Prompt`, `PromptPart`, `ModelResponse`, `Message<T>`, `MessageContent`, `Role`, `SessionConfig`, `Conversation`, `SandboxProfile`, `ApprovalRequest`, `ApprovalDecision` | std definitions and APIs used by agent and runtime contracts, not independent source constructs. |
-| Standard support values | `Sandbox`, `DefaultCommandSandbox`, `Iterations`, `Tokens`, `ContextTokens`, `Cost`, `WallTime`, `Attempts`, `Concurrency` | std values and constructors; sandbox, limit, and scheduling enforcement belongs to the compiler/runtime contract. |
-| Standard support flows | `std.ui.approve`, `abort` | std APIs, with approval-action and non-returning behavior respectively. |
-| Standard effect roots | `Agentic`, `Network`, `FileIO`, `Command`, `Memory`, `Secret`, `Time`, `Human`, `Error<E>` | Standard effect declarations and registered contracts; effect declaration, extension, rows, and handling are language mechanisms. |
-| Reflection support | `AgentDef<A>`, `CallableDef<F>`, `CallableDef`, `SyntaxBlock`, `CheckReport` | std support contracts in the reflection extension; not a claim of current implementation support. |
-| Runtime event names | `Handoff` | Runtime/trace vocabulary, not a declaration keyword. |
-| Internal type constructors | `Flow<I, O, E>`, `AgentComponent<G>`, `AgentMethod<I, O, E>` | Compiler/runtime representation, not public std APIs. |
+| Layer | Names | Count |
+|---|---|---:|
+| Primitive type names | `bool`, integer widths, `f32`, `f64`, `char`, `string`, `bytes`, `unit`, `never` | 20 |
+| Core generic and collection types | `Array<T>`, `List<T>`, `Map<K, V>`, `Set<T>`, `Range<I>`, `Slice<T>`, `Deque<T>`, `Queue<T>`, `Stack<T>`, `PriorityQueue<T, P>`, `OrderedMap<K, V>`, `OrderedSet<T>`, `Option<T>`, `Result<T, E>` | 14 |
+| Standard type/callable spec constraints | `Index`, `ByteStream`, `Region`, `Within<Parent>`, `PromptEncode`, `Schema`, `ResponseDecode`, `Limit`, `Stage<I, O, effect E>`, `Pure<I, O>` | 10 |
+| Persistent resource support types | `MemoryRegion<S>`, `Store<K, V>` | 2 |
+| Persistent resource support values and constructors | `std.memory.region<S>(...)` | 1 |
+| Trust/security wrappers | `Trusted<T>`, `Untrusted<T>`, `Secret<T>`, `Public<T>`, `Sanitized<T>` | 5 |
+| Agent/runtime support types | `Prompt`, `PromptPart`, `ModelResponse`, `Message<T>`, `MessageContent`, `Role`, `SessionConfig`, `Conversation`, `SandboxProfile`, `ApprovalRequest`, `ApprovalDecision` | 11 |
+| Agent/runtime support values and constructors | `Sandbox`, `DefaultCommandSandbox`, `Iterations`, `Tokens`, `ContextTokens`, `Cost`, `WallTime`, `Attempts` | 8 |
+| Agent/runtime support flows | `approve`, `abort` | 2 |
+| AIR/trace event names | `Handoff` | 1 |
+| Internal type constructors | `Flow<I, O, E>`, `AgentComponent<G>`, `AgentMethod<I, O, E>` | 3 |
+| Core effects | `Agentic`, `Network`, `FileIO`, `Command`, `Memory`, `Secret`, `Time`, `Human`, `Error<E>` | 9 |
+| **Total** |  | **86** |
 
 `Flow<...>`, `AgentComponent<...>`, and `AgentMethod<...>` are compiler/runtime
 representations. `AgentComponent<G>` carries stable nominal agent identity and
@@ -473,22 +463,22 @@ representations.
 
 ### 5.3 Feature Map By Layer
 
-| Layer | Examples | What The SPEC Defines |
-|---|---|---|
-| Language mechanisms | Modules/imports/visibility; `type`, `alias`, `enum`, records, generics and existential spec objects; `spec`/`impl` and `~`; `flow`, `agent`, `tool`; `effect`, `action`, effect rows, `perform` and handlers with optional scope-bound `as k`; bindings/control flow, `?`, `limit`, `retry`, stage composition/application, and annotation syntax | Grammar, typing/effect rules, affine continuation ownership, evaluation, control flow, conformance, and scope propagation. `protocol` remains an advanced construct; `^` belongs to the separately specified reflection extension. |
-| Compiler-recognized std contracts | `Index`, the `Result`/`Error` integration with `?`, `Limit`, region/resource identities, `infer`, recognized annotations, structured-concurrency APIs, and typed reflection descriptors | Standard symbol identities and the checking/elaboration obligations that cannot be obtained merely by declaring an ordinary same-named type or flow. These contracts do not prescribe that the entire implementation live inside the compiler. |
-| Ordinary std APIs | Collection algorithms, text processing, HTTP/text codecs, prompt/message construction helpers, `std.io.println`, and flow wrappers over standard actions | Public types, signatures, effects, errors, and behavior implemented through ordinary Etas definitions and the specified substrate. A wrapper inherits the contracts of what it calls; its name alone adds no magic or authority. |
-| Runtime support | External I/O, model providers, host endpoints for standard actions, task/handler execution, memory/resource management, structured-output validation, session/trace events, sandboxing, cancellation, budgets, and replay | Concrete execution and enforcement of the language and standard contracts across target platforms. Default handlers may combine Etas code with these primitive endpoints. |
-| EDK / application libraries | HTTP clients, browser automation, business tools, evaluation harnesses, tenant context, domain events, outbox, and application state machines | Ordinary packages built on public std APIs, effects, tools, and specs; no extra compiler privileges or hidden host escape hatches. |
-
-These layers distinguish responsibilities, not disjoint implementation modules.
-For example, `join` is a std API with a compiler-recognized contract and runtime
-scheduling support. `Prompt` is a std type used at an agent boundary, not another
-language declaration form. A prelude is an import/export convenience for standard
-names, not a sixth semantic layer or a source of authority. Internal HIR/FIR/AIR
-representations are implementation details, not additional source constructs.
-Feature status remains defined in its own chapter; this table does not imply
-that every listed design target is implemented.
+| Layer | Construct / Feature | Purpose | MVP Status |
+|---|---|---|---|
+| Surface syntax | `module`, `import`, `public import`, grouped imports, wildcard imports | Namespacing, re-export, package dependency organization, and ergonomic stdlib use | Core |
+| Surface syntax | item annotations such as `@model`, `@tools`, `@limits`, `@derive`, `@test`, `@deprecated`, `@trace`, and user-defined metadata annotations | Static metadata, agent runtime configuration, derive/test/doc hooks, and tooling metadata without overloading effect rows | Core |
+| Surface syntax | `alias`, `type`, `enum`, `spec`, `impl`, records, methods, visibility | Transparent abbreviations, nominal data modeling, type/callable/trace spec evidence, spec-bound polymorphism, and encapsulation | Core |
+| Surface syntax | `let`, `var`, `if`, `match`, `for`, `while`, `limit` | Ordinary deterministic programming, bounded control flow inside flows, and restricted top-level immutable constants/resource handles | Core |
+| Surface syntax | `flow`, `agent`, `tool`, `spec ...: trace` | Agentic orchestration, model-callable tool boundaries, trace-level external action control, and human gates | Core |
+| Surface syntax | `action`, `perform`, `handle`, `handler`, `with`, `resume`, `finish` | Runtime-scoped effect actions, first-class handler values, and controlled recovery | Core |
+| Surface syntax | <code>&#124;</code>, `~>`, and stage `limit ...` | Stage composition and pipeline application for agents, flows, and tools with local resource contracts | Core |
+| Type system | Primitive types, generic containers, existential spec objects such as `? ~ ByteStream`, type/callable/trace spec constraints such as `Index`, `ByteStream`, `Region`, `Within<Parent>`, `PromptEncode`, `Schema`, `ResponseDecode`, `Limit`, `Stage<I, O, effect E>`, and `Pure<I, O>`, persistent resource support types such as `MemoryRegion<S>` and `Store<K, V>`, trust/provenance wrappers, support values such as `Prompt`, `PromptPart`, `Message<T>`, `SessionConfig`, `SandboxProfile`, and `ApprovalRequest` | Value shapes, checked indexing, stream-handle abstraction, heterogeneous spec-based containers, typed resource-region relations, computation-shape evidence, persistent memory schema, structured outputs, prompt encoding, response decoding, validation hooks, typed message flow, trace constraints, and first-class flow values | Core |
+| Effect system | Core effects, effect row polymorphism with kinded parameters such as `effect E`, parameterized actions such as `Memory.read<R>`, user-defined `effect X extends Y`, optional `I -> O ![E]` flow type annotations, handler transformer types such as `![Approval => Console.stdout_write]`, and `action` declarations inside effect blocks | Computation summaries, reusable effect-polymorphic combinators, static/runtime authority boundaries, region-sensitive memory access facts, and selected handleable operations | Core |
+| Runtime semantics | Structured output validation, message/session trace events, handoff events, cost and limit accounting | Audit, replay, debugging, conversation continuity, and enforcement | Core |
+| Standard library / Agent runtime support | `join([...])`, `runtime.checkpoint(...)`, `std.memory.region<...>`, `DefaultCommandSandbox`, `std.ui.approve(...)`, `std.io`, planned low-level substrate modules such as `std.net`, `std.stream`, `std.tls`, `std.fs`, `std.http.codec`, `std.codec.text`, `std.secret`, `std.crypto`, and `std.browser.protocol`, typed limit constructors | Concurrent composition, durable execution, persistent resource handles, command sandbox defaults, approval requirements, budget limits, and trace-visible low-level runtime substrate without extra syntax | Library |
+| Library pattern | Tenant context, domain events, outbox, state machines | Production architecture patterns expressible with ordinary types and flows | Pattern |
+| Implementation | `Flow<I, O, E>`, `AgentComponent<G>`, `AgentMethod<I, O, E>`, AIR | Compiler and runtime representation | Implementation |
+| Advanced syntax | `protocol` | Optional decentralized multi-agent communication constraints | Advanced |
 
 The main static classification is:
 
@@ -499,60 +489,6 @@ flow + NonDeterministic       = external state, tools, memory APIs, time, comman
 ```
 
 `flow` is the ordinary user-defined callable declaration in the source language. The compiler infers each flow's determinism class and effect row. Deterministic flows can lower to ordinary internal functions. Non-deterministic flows require runtime mediation for effects, trace, trace-spec checks, replay, and checkpointing as needed. A `tool` with a body is also implemented in Etas, but it is a model-callable boundary rather than a general helper callable. In type positions, a flow value is written with arrow syntax such as `I -> O` or `I -> O ![E]`; the compiler should infer that type in most ordinary code. The compiler normalizes flow types to the canonical internal representation `Flow<I, O, E>`. Agent communication is represented with typed Agent/runtime support values such as `Message<T>`, `SessionConfig`, and `Conversation`, not with `msg` or `message` keywords. Program execution starts when the runtime calls `main(args: Array<string>) -> i32`; the returned `i32` is the process status code.
-
-### 5.4 Compiler-Recognized Standard Contracts
-
-The following inventory identifies the integrations specified across the design
-chapters. Recognition attaches to the resolved standard declaration and its
-contract, not to an unqualified spelling. Import aliases and re-exports preserve
-that identity; unrelated same-named declarations do not acquire its special
-behavior. Adding ordinary std APIs does not automatically extend this inventory.
-
-| Standard Contract | Compiler / Runtime Obligation | What Can Remain Etas Code |
-|---|---|---|
-| `Result<T, E>`, its `Ok`/`Err` variants, and `Error<E>.raise` | `?` uses these resolved standard definitions and captures exactly one residual `Error<E>` as specified in the error chapter. `never` is the language bottom type; `abort` is a non-returning support API, not a keyword. | ADT and effect declarations, Result methods, error mapping, and handler composition. |
-| Collection literal targets, checked indexing, `Index` | Give literals their specified standard types, preserve value semantics, and enforce checked indexing without general implicit integer conversion. | Collection algorithms and methods over the defined storage primitives; not every collection method is intrinsic. |
-| `Limit` and standard limit constructors | Check the `limit` clause and enforce its scope, accounting, exhaustion, and non-resetting nested budgets. | Value definitions, budget configuration, and ordinary helper flows. |
-| `MemoryRegion<S>`, `Store<K, V>`, `std.memory.region`, and resource-indexed actions | Preserve stable resource identity, region-sensitive effect facts, and the top-level resource-initialization exception. | Schemas, storage helpers, and source-level wrappers; persistence itself uses the declared substrate. |
-| Agent contracts: `infer`/`Agentic.infer<C, O>`, schema/encoding specs, trust/secret wrappers, and recognized annotations | Elaborate agent-scoped inference with method identity and output schema; preserve tool boundaries, trust checks, requested actions, and runtime enforcement. User metadata annotations do not create these obligations or permissions. | Prompt/message construction, codecs, validators, agent bodies, and ordinary routing/handler logic. |
-| Structured-concurrency combinators, `std.task`, `Async`, and checkpoint APIs | Preserve branch effects and behavioral summaries, structured lifetimes, handler/spec/limit propagation, one-use continuation ownership, transfer/unwind behavior, and recovery metadata; do not treat them as arbitrary opaque callbacks. | Combinator and scheduler policy logic over public task transfer, execution, and checkpoint primitives; see [Concurrency](16-concurrency.md#121-handler-based-scheduling). |
-| Reflection extension: `AgentDef<A>`, `CallableDef<F>`, erased `CallableDef`, and `Code.check/compile` | Preserve static target types, descriptor-view rules, and checked frozen-contract compatibility. Runtime signature data alone cannot establish a static callable type. | Definition-processing helpers, source transformations, diagnostics, and checker/compiler algorithms, with the validated execution boundary preserved. |
-
-The relevant chapters define each contract; this inventory introduces no new
-keywords, coercions, or authority. Standard-library implementations must obey
-normal type, effect, handler, trace-spec, and runtime-policy checks. Requested
-actions do not disappear merely because their callers or handlers live in std.
-
-### 5.5 Implementing Std In Etas
-
-The design target is to implement standard-library definitions and expressible
-algorithms in Etas itself. Compiler recognition specifies identity and semantic
-contracts, not a requirement to hard-code whole APIs in the compiler or host.
-For example, `Result` can be an Etas enum recognized by `?`, and `std.io.println`
-can be an Etas flow over `Console.stdout_write`.
-
-Runtime primitives remain necessary for platform I/O, execution and allocation,
-resource handles, continuation/task machinery, and protected service boundaries.
-Their public contracts and backend bindings must be explicit in standard/package
-metadata. This uses the existing binding mechanism, not a new source keyword.
-Ordinary algorithms must not become private host calls solely to compensate for
-missing Etas expressiveness. A required primitive must be identified as such,
-with its types, observable actions, errors, and enforcement contract.
-
-Pure codecs and collection algorithms are not effectful simply because a
-backend optimizes their execution. Conversely, an I/O or secret operation must
-not lose its action visibility when its wrapper is implemented in Etas or
-optimized natively. Library default handlers can compose lower-level actions;
-only the actual platform boundary requires a platform implementation. Neither
-std membership nor compiler recognition is an authorization grant.
-
-Standard-library self-implementation and compiler self-hosting are separate
-goals. A future Etas-written compiler may implement the algorithms behind
-`std.compiler.check/compile` without changing those APIs or their validation
-obligations. This layering makes that possible; it does not establish that the
-current implementation or SPEC already covers every needed library. Writing
-and testing std and EDK in Etas is how missing language/substrate capabilities
-should be exposed and resolved.
 
 ---
 
@@ -601,12 +537,12 @@ The important point is that the agent call is not merely a function call. It is 
 
 ## 7. Core Abstractions
 
-The core language abstractions include `flow`, `agent`, `tool`, `spec`
-constraints including trace specs, effects/actions, and handlers. They operate
-with standard types such as `MemoryRegion<S>`, `Store<K, V>`, `Prompt`,
-`Message<T>`, `SessionConfig`, and `ApprovalRequest`, plus runtime trace events.
-These are cooperating layers, not a list of additional language constructs.
-`Prompt` builds model-call inputs; message and session support types carry
+The core abstractions for the first version are `flow`, `agent`, `tool`, `spec`
+constraints including trace specs, compiler-known persistent resource support
+types such as `MemoryRegion<S>` and `Store<K, V>`, `Prompt`, `Message<T>`,
+`SessionConfig`, `ApprovalRequest` values, effect actions, and runtime `trace`
+events. `Prompt` is a support type for building model-call inputs; `Message<T>`
+and session/conversation support types are the semantic units for
 agent-to-agent communication. Explicit `protocol` declarations are useful for
 advanced decentralized communication, but they are not required for the minimal
 language because typed flows and typed messages already define an analyzable

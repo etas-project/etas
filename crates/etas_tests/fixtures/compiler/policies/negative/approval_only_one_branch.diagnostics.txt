@@ -1,1 +1,1 @@
-effect::TraceSpecRequirementNotDominating
+effect::TraceSpecAllowViolation

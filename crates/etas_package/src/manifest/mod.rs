@@ -259,8 +259,6 @@ pub struct RuntimeProfile {
     #[serde(default)]
     pub session: Option<RuntimeBackendProfile>,
     #[serde(default)]
-    pub storage: Option<RuntimeStorageLimitsProfile>,
-    #[serde(default)]
     pub policy: Option<RuntimePolicyProfile>,
     #[serde(default)]
     pub approval: Option<RuntimeModeProfile>,
@@ -328,33 +326,6 @@ pub struct RuntimeBackendProfile {
     pub path: Option<PathBuf>,
     #[serde(default)]
     pub id: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct RuntimeStorageLimitsProfile {
-    #[serde(default)]
-    pub max_pending_jobs: Option<usize>,
-    #[serde(default)]
-    pub max_pending_bytes: Option<usize>,
-    #[serde(default)]
-    pub max_value_bytes: Option<usize>,
-    #[serde(default)]
-    pub max_result_bytes: Option<usize>,
-    #[serde(default)]
-    pub max_nodes: Option<usize>,
-    #[serde(default)]
-    pub max_depth: Option<usize>,
-    #[serde(default)]
-    pub max_page_entries: Option<usize>,
-    #[serde(default)]
-    pub max_scan_rows: Option<usize>,
-    #[serde(default)]
-    pub max_receipts: Option<usize>,
-    #[serde(default)]
-    pub max_receipt_bytes: Option<usize>,
-    #[serde(default)]
-    pub max_receipt_retention_seconds: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -863,12 +834,6 @@ connect_timeout_ms = 2000
 [runtime.profiles.local-omlx.memory]
 backend = "memory"
 
-[runtime.profiles.local-omlx.storage]
-max_pending_jobs = 16
-max_pending_bytes = 16777216
-max_value_bytes = 2097152
-max_result_bytes = 4194304
-
 [runtime.profiles.local-omlx.policy]
 mode = "local-static"
 rules = ["model=allow", "console=allow"]
@@ -952,11 +917,6 @@ profile = "local-omlx"
                 .and_then(|timeout| timeout.connect_timeout_ms),
             Some(2_000)
         );
-        let storage = profile.storage.as_ref().expect("storage limits exist");
-        assert_eq!(storage.max_pending_jobs, Some(16));
-        assert_eq!(storage.max_pending_bytes, Some(16_777_216));
-        assert_eq!(storage.max_value_bytes, Some(2_097_152));
-        assert_eq!(storage.max_result_bytes, Some(4_194_304));
         assert_eq!(
             profile
                 .tools

@@ -11,9 +11,9 @@ use etas_host::{
     LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryRequest, MemoryResponse, ModelRequest,
     ModelResponse, PolicyClient, PolicyDecision, PolicyEvaluationRequest, PolicyResponse,
     SecretOperation, SecretPayload, SecretRef, SecretRequest, SecretResponse, SecretValue,
-    SessionRequest, SessionResponse, SqliteMemoryClient, SqliteSessionClient, StorageLimits,
-    StreamRequest, StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpConnectRequest, TcpConnectResponse,
-    TimeBudget, TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
+    SessionRequest, SessionResponse, SqliteMemoryClient, SqliteSessionClient, StreamRequest,
+    StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpConnectRequest, TcpConnectResponse, TimeBudget,
+    TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
     TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
@@ -103,8 +103,8 @@ impl CliHost {
     ) -> Result<Self, CliError> {
         let tool =
             CliToolRouter::from_bindings(&config.tool_bindings, config.tool_private_resolution)?;
-        let memory = memory_client(&config.memory_mode, &config.storage_limits)?;
-        let session = session_client(&config.session_mode, &config.storage_limits)?;
+        let memory = memory_client(&config.memory_mode)?;
+        let session = session_client(&config.session_mode)?;
         let byte_streams =
             (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
         let mut workspace_regions = etas_host::WorkspaceRegionRegistry::default();
@@ -191,22 +191,11 @@ impl CliHost {
     }
 }
 
-fn memory_client(
-    mode: &MemoryMode,
-    limits: &StorageLimits,
-) -> Result<Option<CliMemoryClient>, CliError> {
+fn memory_client(mode: &MemoryMode) -> Result<Option<CliMemoryClient>, CliError> {
     match mode {
         MemoryMode::None => Ok(None),
-        MemoryMode::Memory => InMemoryMemoryClient::with_limits(limits.clone())
-            .map(CliMemoryClient::InMemory)
-            .map(Some)
-            .map_err(|error| {
-                CliError::InvalidUsage(format!(
-                    "failed to configure in-memory memory backend: {}",
-                    error.message
-                ))
-            }),
-        MemoryMode::Sqlite { path } => SqliteMemoryClient::open_with_limits(path, limits.clone())
+        MemoryMode::Memory => Ok(Some(CliMemoryClient::InMemory(InMemoryMemoryClient::new()))),
+        MemoryMode::Sqlite { path } => SqliteMemoryClient::open(path)
             .map(CliMemoryClient::Sqlite)
             .map(Some)
             .map_err(|error| {
@@ -219,22 +208,13 @@ fn memory_client(
     }
 }
 
-fn session_client(
-    mode: &SessionMode,
-    limits: &StorageLimits,
-) -> Result<Option<CliSessionClient>, CliError> {
+fn session_client(mode: &SessionMode) -> Result<Option<CliSessionClient>, CliError> {
     match mode {
         SessionMode::None => Ok(None),
-        SessionMode::Memory => InMemorySessionClient::with_limits(limits.clone())
-            .map(CliSessionClient::InMemory)
-            .map(Some)
-            .map_err(|error| {
-                CliError::InvalidUsage(format!(
-                    "failed to configure in-memory session backend: {}",
-                    error.message
-                ))
-            }),
-        SessionMode::Sqlite { path } => SqliteSessionClient::open_with_limits(path, limits.clone())
+        SessionMode::Memory => Ok(Some(CliSessionClient::InMemory(
+            InMemorySessionClient::new(),
+        ))),
+        SessionMode::Sqlite { path } => SqliteSessionClient::open(path)
             .map(CliSessionClient::Sqlite)
             .map(Some)
             .map_err(|error| {
@@ -957,7 +937,6 @@ pub(crate) fn run_checked(
     let config = if dry_run || !effects_enabled {
         let mut hostless = CliHostConfig::none();
         hostless.execution_limits = config.execution_limits;
-        hostless.storage_limits = config.storage_limits.clone();
         hostless.shutdown_grace_ms = config.shutdown_grace_ms;
         hostless
     } else {
