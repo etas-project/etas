@@ -3,7 +3,7 @@ use etas_host::{
     FilesystemPolicy, HostValue, HttpPolicyClient, LocalPolicyDecision, LocalPolicyRule,
     LocalStaticPolicyClient, ModelName, ModelProviderCapabilities, ModelProviderId,
     NetworkEndpoint, NetworkPolicy, OmlxRequestOptions, OpenAiProtocolAdapter,
-    OpenAiTypedOutputEncoding, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy,
+    OpenAiTypedOutputEncoding, PrivateResolutionPolicy, RetryPolicy, SandboxPolicy, StorageLimits,
     TransportTimeoutPolicy, WorkspaceRegionId, WorkspaceRoot,
 };
 use etas_interpreter::api::{
@@ -12,7 +12,8 @@ use etas_interpreter::api::{
 use etas_package::{
     RuntimeBackendProfile, RuntimeCommandProfile, RuntimeExecutionProfile, RuntimeModelProfile,
     RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile, RuntimeProfile,
-    RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, discover_manifest, read_manifest,
+    RuntimeRetryProfile, RuntimeSection, RuntimeStorageLimitsProfile, RuntimeToolsProfile,
+    discover_manifest, read_manifest,
 };
 use std::{
     collections::BTreeMap,
@@ -45,6 +46,7 @@ pub(crate) struct CliHostConfig {
     pub(super) program_network_allowlist: Vec<NetworkEndpoint>,
     pub(super) adapter_transport_allowlist: Vec<NetworkEndpoint>,
     pub(super) memory_mode: MemoryMode,
+    pub(super) storage_limits: StorageLimits,
     pub(super) approval_mode: ApprovalMode,
     pub(super) policy_mode: PolicyMode,
     pub(super) policy_local: Option<LocalStaticPolicyClient>,
@@ -240,6 +242,7 @@ impl CliHostConfig {
             program_network_allowlist: Vec::new(),
             adapter_transport_allowlist: Vec::new(),
             memory_mode: MemoryMode::None,
+            storage_limits: StorageLimits::default(),
             approval_mode: ApprovalMode::Deny,
             policy_mode: PolicyMode::DenyUnknown,
             policy_local: None,
@@ -346,6 +349,7 @@ impl CliHostConfig {
             program_network_allowlist,
             adapter_transport_allowlist,
             memory_mode,
+            storage_limits: StorageLimits::default(),
             approval_mode,
             policy_mode,
             policy_local,
@@ -427,6 +431,7 @@ impl CliHostConfig {
         config.command_allowed_programs.dedup();
         sort_dedup_network_allowlist(&mut config.program_network_allowlist);
         sort_dedup_network_allowlist(&mut config.adapter_transport_allowlist);
+        validate_storage_limits(&config.storage_limits)?;
         config.validate_command_isolation()?;
         Ok(config)
     }
@@ -449,6 +454,9 @@ impl CliHostConfig {
         if let Some(session) = &profile.session {
             self.session_id = session.id.clone().or(self.session_id.take());
             self.session_mode = session_mode_from_profile(session, self.session_id.as_ref())?;
+        }
+        if let Some(storage) = &profile.storage {
+            self.apply_storage_profile(storage);
         }
         if let Some(policy) = &profile.policy {
             self.apply_policy_profile(policy, env)?;
@@ -519,6 +527,27 @@ impl CliHostConfig {
             self.boundary_policy_ref = Some(boundary_policy.clone());
         }
         Ok(())
+    }
+
+    fn apply_storage_profile(&mut self, profile: &RuntimeStorageLimitsProfile) {
+        macro_rules! apply {
+            ($field:ident) => {
+                if let Some(value) = profile.$field {
+                    self.storage_limits.$field = value;
+                }
+            };
+        }
+        apply!(max_pending_jobs);
+        apply!(max_pending_bytes);
+        apply!(max_value_bytes);
+        apply!(max_result_bytes);
+        apply!(max_nodes);
+        apply!(max_depth);
+        apply!(max_page_entries);
+        apply!(max_scan_rows);
+        apply!(max_receipts);
+        apply!(max_receipt_bytes);
+        apply!(max_receipt_retention_seconds);
     }
 
     fn apply_execution_config(
@@ -837,6 +866,7 @@ impl CliHostConfig {
                 })
             }).collect::<Vec<_>>(),
             "memory": memory_profile_json(&self.memory_mode),
+            "storage": storage_limits_json(&self.storage_limits),
             "approval": format!("{:?}", self.approval_mode),
             "policy": format!("{:?}", self.policy_mode),
             "policy_rules": self.policy_local.as_ref().map(|_| "local-static"),
@@ -995,6 +1025,7 @@ impl CliHostConfig {
             .unwrap_or_default();
         RunOptions {
             execution_limits: self.execution_limits,
+            storage_limits: self.storage_limits.clone(),
             host_context: HostExecutionContext {
                 authority: etas_host::AuthorityContext {
                     grants,
@@ -1427,6 +1458,59 @@ fn memory_mode_from_profile(profile: &RuntimeBackendProfile) -> Result<MemoryMod
             "unsupported runtime memory backend `{other}`"
         ))),
     }
+}
+
+fn validate_storage_limits(limits: &StorageLimits) -> Result<(), CliError> {
+    for (name, value) in [
+        ("max_pending_jobs", limits.max_pending_jobs),
+        ("max_pending_bytes", limits.max_pending_bytes),
+        ("max_value_bytes", limits.max_value_bytes),
+        ("max_result_bytes", limits.max_result_bytes),
+        ("max_nodes", limits.max_nodes),
+        ("max_depth", limits.max_depth),
+        ("max_page_entries", limits.max_page_entries),
+        ("max_scan_rows", limits.max_scan_rows),
+        ("max_receipts", limits.max_receipts),
+        ("max_receipt_bytes", limits.max_receipt_bytes),
+    ] {
+        if value == 0 {
+            return Err(CliError::InvalidUsage(format!(
+                "`runtime.storage.{name}` must be greater than zero"
+            )));
+        }
+    }
+    if limits.max_receipt_retention_seconds == 0 {
+        return Err(CliError::InvalidUsage(
+            "`runtime.storage.max_receipt_retention_seconds` must be greater than zero".to_owned(),
+        ));
+    }
+    if limits.max_pending_jobs > 1024 {
+        return Err(CliError::InvalidUsage(
+            "`runtime.storage.max_pending_jobs` must not exceed 1024".to_owned(),
+        ));
+    }
+    if limits.max_depth > 64 {
+        return Err(CliError::InvalidUsage(
+            "`runtime.storage.max_depth` must not exceed 64".to_owned(),
+        ));
+    }
+    let required_pending_bytes = limits
+        .max_value_bytes
+        .checked_add(limits.max_result_bytes)
+        .ok_or_else(|| {
+            CliError::InvalidUsage(
+                "`runtime.storage.max_value_bytes` plus `max_result_bytes` overflows".to_owned(),
+            )
+        })?;
+    if required_pending_bytes > limits.max_pending_bytes {
+        return Err(CliError::InvalidUsage(
+            "`runtime.storage.max_pending_bytes` must be at least `max_value_bytes + max_result_bytes`"
+                .to_owned(),
+        ));
+    }
+    limits.validate().map_err(|error| {
+        CliError::InvalidUsage(format!("invalid runtime storage limits: {}", error.message))
+    })
 }
 
 fn session_mode_from_profile(
@@ -1899,6 +1983,22 @@ fn memory_profile_json(mode: &MemoryMode) -> serde_json::Value {
             "path": path.display().to_string(),
         }),
     }
+}
+
+fn storage_limits_json(limits: &StorageLimits) -> serde_json::Value {
+    serde_json::json!({
+        "max_pending_jobs": limits.max_pending_jobs,
+        "max_pending_bytes": limits.max_pending_bytes,
+        "max_value_bytes": limits.max_value_bytes,
+        "max_result_bytes": limits.max_result_bytes,
+        "max_nodes": limits.max_nodes,
+        "max_depth": limits.max_depth,
+        "max_page_entries": limits.max_page_entries,
+        "max_scan_rows": limits.max_scan_rows,
+        "max_receipts": limits.max_receipts,
+        "max_receipt_bytes": limits.max_receipt_bytes,
+        "max_receipt_retention_seconds": limits.max_receipt_retention_seconds,
+    })
 }
 
 fn parse_session_mode(
@@ -2485,6 +2585,92 @@ mod tests {
         assert!(authority.allows(&action("stat", "app.workspace.ProjectRoot")));
         assert!(!authority.allows(&action("write", "app.workspace.ProjectRoot")));
         assert!(!authority.allows(&action("read", "app.workspace.ArbitraryRoot")));
+    }
+
+    #[test]
+    fn runtime_storage_limits_merge_and_reach_run_options() {
+        use super::*;
+        let manifest_profile = RuntimeProfile {
+            storage: Some(RuntimeStorageLimitsProfile {
+                max_pending_jobs: Some(16),
+                max_pending_bytes: Some(16 * 1024 * 1024),
+                max_value_bytes: Some(2 * 1024 * 1024),
+                max_result_bytes: Some(4 * 1024 * 1024),
+                ..RuntimeStorageLimitsProfile::default()
+            }),
+            ..RuntimeProfile::default()
+        };
+        let local_profile = RuntimeProfile {
+            storage: Some(RuntimeStorageLimitsProfile {
+                max_result_bytes: Some(6 * 1024 * 1024),
+                max_page_entries: Some(250),
+                ..RuntimeStorageLimitsProfile::default()
+            }),
+            ..RuntimeProfile::default()
+        };
+
+        let config = CliHostConfig::from_runtime_profile(
+            "storage-limits".to_owned(),
+            Some(&manifest_profile),
+            Some(&local_profile),
+            &RuntimeEnvOverrides::default(),
+            &[],
+        )
+        .expect("valid storage limits should build");
+        let limits = config.run_options().storage_limits;
+
+        assert_eq!(limits.max_pending_jobs, 16);
+        assert_eq!(limits.max_pending_bytes, 16 * 1024 * 1024);
+        assert_eq!(limits.max_value_bytes, 2 * 1024 * 1024);
+        assert_eq!(limits.max_result_bytes, 6 * 1024 * 1024);
+        assert_eq!(limits.max_page_entries, 250);
+        assert_eq!(limits.max_nodes, StorageLimits::default().max_nodes);
+        assert_eq!(
+            config.runtime_profile_json()["storage"]["max_value_bytes"],
+            2 * 1024 * 1024
+        );
+        assert_eq!(
+            config.runtime_profile_json()["storage"]["max_result_bytes"],
+            6 * 1024 * 1024
+        );
+    }
+
+    #[test]
+    fn runtime_storage_limits_reject_invalid_dimensions() {
+        use super::*;
+        let profile = |storage| RuntimeProfile {
+            storage: Some(storage),
+            ..RuntimeProfile::default()
+        };
+        let zero = profile(RuntimeStorageLimitsProfile {
+            max_value_bytes: Some(0),
+            ..RuntimeStorageLimitsProfile::default()
+        });
+        let error = CliHostConfig::from_runtime_profile(
+            "invalid-storage".to_owned(),
+            Some(&zero),
+            None,
+            &RuntimeEnvOverrides::default(),
+            &[],
+        )
+        .err()
+        .expect("zero value limit must be rejected");
+        assert!(error.to_string().contains("max_value_bytes"), "{error}");
+
+        let undersized_pending = profile(RuntimeStorageLimitsProfile {
+            max_pending_bytes: Some(1024),
+            ..RuntimeStorageLimitsProfile::default()
+        });
+        let error = CliHostConfig::from_runtime_profile(
+            "invalid-storage".to_owned(),
+            Some(&undersized_pending),
+            None,
+            &RuntimeEnvOverrides::default(),
+            &[],
+        )
+        .err()
+        .expect("pending bytes must cover value and result limits");
+        assert!(error.to_string().contains("max_pending_bytes"), "{error}");
     }
 
     #[test]
