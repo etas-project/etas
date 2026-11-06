@@ -515,6 +515,10 @@ pub enum PackageTypeMetadata {
         #[serde(default)]
         effects: Option<PackageEffectRowMetadata>,
     },
+    Task {
+        output: Box<PackageTypeMetadata>,
+        effects: PackageEffectRowMetadata,
+    },
     Handler {
         handled: PackageEffectRowMetadata,
         #[serde(default, skip_serializing_if = "Option::is_none")]

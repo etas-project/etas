@@ -933,6 +933,19 @@ fn type_from_metadata(
                 effects: ty.effects.map(effect_row_from_metadata).transpose()?,
             })
         }
+        etas_package_metadata::TypeKind::Task => Ok(PackageTypeMetadata::Task {
+            output: Box::new(type_from_metadata(child(0, &ty.children, "output")?)?),
+            effects: ty
+                .effects
+                .map(effect_row_from_metadata)
+                .transpose()?
+                .ok_or_else(|| {
+                    missing(
+                        Path::new(etas_package_metadata::PACKAGE_METADATA_FILE),
+                        "task type is missing latent effects",
+                    )
+                })?,
+        }),
         etas_package_metadata::TypeKind::Handler => Ok(PackageTypeMetadata::Handler {
             handled: ty
                 .effects

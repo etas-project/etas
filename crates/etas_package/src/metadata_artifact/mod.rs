@@ -130,7 +130,7 @@ mod tests {
                 edition: "2026".into(),
             },
             dependencies: vec![crate::metadata::builtin_std_dependency(
-                "0.1".into(),
+                crate::metadata::BUILTIN_STD_VERSION.into(),
                 "2026".into(),
             )],
             external_modules: Vec::new(),
@@ -190,8 +190,17 @@ edition = "2026"
                             name: "string".to_owned(),
                         }),
                     }],
-                    output: PackageTypeMetadata::Primitive {
-                        name: "string".to_owned(),
+                    output: PackageTypeMetadata::Task {
+                        output: Box::new(PackageTypeMetadata::Primitive {
+                            name: "string".to_owned(),
+                        }),
+                        effects: PackageEffectRowMetadata {
+                            effects: vec![PackageEffectRefMetadata {
+                                path: vec!["Network".to_owned()],
+                                args: Vec::new(),
+                            }],
+                            tail: Some("E".to_owned()),
+                        },
                     },
                     effects: None,
                     visibility: "public".to_owned(),

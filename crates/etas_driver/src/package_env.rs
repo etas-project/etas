@@ -1461,6 +1461,12 @@ fn dependency_type_input_with_graph(
                 .as_ref()
                 .map(|row| dependency_effect_row_input(package, packages, row)),
         },
+        etas_package::PackageTypeMetadata::Task { output, effects } => {
+            ProjectExternalTypeInput::Task {
+                output: Box::new(dependency_type_input_with_graph(package, packages, output)),
+                effects: dependency_effect_row_input(package, packages, effects),
+            }
+        }
         etas_package::PackageTypeMetadata::Handler {
             handled,
             produced,
@@ -1652,6 +1658,12 @@ fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInpu
             output: Box::new(type_input(output)),
             effects: effects.as_ref().map(effect_row_input),
         },
+        etas_package::PackageTypeMetadata::Task { output, effects } => {
+            ProjectExternalTypeInput::Task {
+                output: Box::new(type_input(output)),
+                effects: effect_row_input(effects),
+            }
+        }
         etas_package::PackageTypeMetadata::Handler {
             handled,
             produced,
@@ -2170,8 +2182,10 @@ mod tests {
 
     #[test]
     fn frontend_environment_does_not_project_builtin_std_as_external_package() {
-        let std_dependency =
-            etas_package::metadata::builtin_std_dependency("0.1.0".to_owned(), "2026".to_owned());
+        let std_dependency = etas_package::metadata::builtin_std_dependency(
+            etas_package::metadata::BUILTIN_STD_VERSION.to_owned(),
+            "2026".to_owned(),
+        );
         let metadata = etas_package::PackageEnvironmentMetadata {
             external_modules: std_dependency.public_metadata.modules.clone(),
             dependencies: vec![std_dependency],

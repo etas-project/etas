@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use etas_std::{
-    EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdGenericParam, StdPrimitiveType, StdStaticArg,
-    StdSupportConstraint, StdSymbolKind, StdType, ToolDecl, TypeDecl, TypeDeclKind,
-    standard_registry,
+    EffectDecl, FlowDecl, StdDecl, StdEffectRef, StdEffectRowExpr, StdGenericParam,
+    StdPrimitiveType, StdStaticArg, StdSupportConstraint, StdSymbolKind, StdType, ToolDecl,
+    TypeDecl, TypeDeclKind, standard_registry,
 };
 
 use super::{
@@ -19,7 +19,7 @@ use super::{
     ResolvedDependencySource,
 };
 
-pub const BUILTIN_STD_VERSION: &str = "0.1.0";
+pub const BUILTIN_STD_VERSION: &str = "0.2.0";
 
 pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDependency {
     ResolvedDependency {
@@ -360,6 +360,13 @@ fn effect_row_from_std(effects: &[StdEffectRef]) -> PackageEffectRowMetadata {
     }
 }
 
+fn effect_row_expr_from_std(row: &StdEffectRowExpr) -> PackageEffectRowMetadata {
+    PackageEffectRowMetadata {
+        effects: row.effects.iter().map(effect_ref_from_std).collect(),
+        tail: row.tail.clone(),
+    }
+}
+
 fn effect_ref_from_std(effect: &StdEffectRef) -> PackageEffectRefMetadata {
     PackageEffectRefMetadata {
         path: effect.path.clone(),
@@ -486,7 +493,11 @@ fn package_type_from_std_type(ty: &StdType) -> PackageTypeMetadata {
         } => PackageTypeMetadata::Function {
             input: input.iter().map(package_type_from_std_type).collect(),
             output: Box::new(package_type_from_std_type(output)),
-            effects: Some(effect_row_from_std(effects)),
+            effects: Some(effect_row_expr_from_std(effects)),
+        },
+        StdType::Task { output, effects } => PackageTypeMetadata::Task {
+            output: Box::new(package_type_from_std_type(output)),
+            effects: effect_row_expr_from_std(effects),
         },
     }
 }

@@ -910,6 +910,11 @@ fn type_to_metadata(ty: &PackageTypeMetadata) -> Result<etas_package_metadata::T
             metadata.children.push(type_to_metadata(output)?);
             metadata.effects = effects.as_ref().map(effect_row_to_metadata).transpose()?;
         }
+        PackageTypeMetadata::Task { output, effects } => {
+            metadata.kind = etas_package_metadata::TypeKind::Task;
+            metadata.children.push(type_to_metadata(output)?);
+            metadata.effects = Some(effect_row_to_metadata(effects)?);
+        }
         PackageTypeMetadata::Handler {
             handled,
             produced,
