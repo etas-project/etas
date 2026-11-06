@@ -1030,6 +1030,39 @@ An ordinary expression arm such as `Error<E>.raise(err) => Err(err)` is not
 valid handler syntax. Use `finish Err(err);` so the control-flow boundary is
 explicit.
 
+#### 2.3.1 Scoped Continuation Handles
+
+`Action(args) as k => { ... }` binds a single-shot continuation for a resumable
+action. Its type is inferred from the action result type, the handled answer
+type, residual computation effects, and its owning task scope. These facts are
+compiler-known; runtime signature data cannot forge a continuation. No public
+continuation type annotation or new ownership keyword is required.
+
+Unlike ordinary value-semantic data, `k` is affine: it cannot be copied, and a
+transfer consumes the local binding. Aggregate or closure capture must preserve
+this non-copyability and scope bound. It may enter only scope-preserving
+scheduler storage, not an ordinary persistent/copying collection, global value,
+model payload, or return value that outlives its owner. The original task and
+handler frame must remain valid until resumption or cancellation. Merely
+abandoning the handle is not successful handler completion.
+
+Immediate `resume` uses the same handle even when `as k` was written. A path
+cannot transfer and then resume it, nor transfer it twice. `finish` and
+non-returning unwinding dispose of the affected suspended computation and run
+the required scope cleanup. Actions returning `never` cannot bind a resumable
+handle. The runtime also enforces one-use ownership and scope validity before
+executing a deferred continuation.
+
+`Task<T, E>` is a standard task-result handle; `E` is an effect-row parameter.
+Its owning scope and requested-action/trace contract remain checked metadata,
+not writable fields. Passing a task to another helper must preserve those
+facts. Task handles can be shared within their lifetime and awaited more than
+once without repeating the job; this does not make a continuation copyable.
+Task and scheduler handles cannot escape their owning structured scope.
+
+See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
+and [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
+
 ### 2.4 Declarative Retry Policy
 
 ```etas

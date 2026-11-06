@@ -978,7 +978,9 @@ HandlerValueExpr
               ::= Expr  // must type-check as a handler value; a bare block is invalid
 HandlerExpr   ::= "handler" HandlerBlock
 HandlerBlock  ::= "{" HandlerArm* "}"
-HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" ContinuationBinder? "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+ContinuationBinder
+              ::= "as" Ident
 HandlerArmBlock
               ::= "{" Stmt* FinalNeverExpr? "}"
 FinalNeverExpr
@@ -1257,7 +1259,35 @@ is rejected. Use `finish expr;` for answer completion, `resume expr;` for action
 resumption, or a `never` expression such as `abort(...)` for non-returning
 completion.
 
-These handlers are intentionally more restricted than Koka-style algebraic effect handlers. They are runtime-scoped action handlers for approval, recovery, fallback, trace, and replay; they are not an MVP mechanism for generators, arbitrary coroutines, stored continuations, or multi-shot nondeterministic search.
+An optional `as k` binds the current action's single-shot continuation. The
+action must return a type other than `never`. Without the binder, existing
+`resume value;` behavior is unchanged. With the binder, immediate `resume` and
+explicit transfer consume the same continuation; neither may be used after the
+other has consumed it.
+
+```etas
+Async.yield() as k => {
+    scheduler.requeue(k, ());
+}
+
+Async.await(task) as k => {
+    scheduler.park(task, k);
+}
+```
+
+The standard scheduler transfer operations return `never` to the current arm:
+they consume its continuation and return control to the owning scheduler. They
+do not abort the program. An ordinary queue operation returning `unit` is not
+an alternative arm completion. Continuations are scope-bound, non-copyable
+values, not ordinary callable values; they cannot escape their task scope or be
+serialized. See [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
+
+These handlers remain more restricted than unrestricted algebraic effect
+handlers. They support scoped single-shot scheduling, not unrestricted
+continuation storage, detached coroutines, or multi-shot nondeterministic
+search. `as` reuses the existing keyword; `async`, `await`, `yield`, and
+`suspend` are not added as keywords. `Async.await` and `Async.yield` are
+standard action names.
 
 ### 1.8 Names And Patterns
 

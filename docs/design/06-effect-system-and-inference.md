@@ -147,6 +147,12 @@ host execution is needed only for the specified primitive endpoints.
 | `Command` | `run<S>` | Sandboxed process execution scoped by sandbox profile |
 | `Agentic` | `infer<C, O>` | Agent-scoped model inference requested action, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
+| `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
+
+`Async` is exported by `std.task`. Default handlers support ordinary managed
+execution; custom handlers can bind `as k` and use checked scheduler transfer.
+Handling these control actions does not hide child-work effects or create a
+new broad authority root. See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
 
 The current implementation-facing `etas_std` does not yet provide every
 substrate API needed by EDK. It currently covers console I/O, typed memory
@@ -158,6 +164,7 @@ exist in the implementation:
 
 | API module | Standard effect/action owner | Intended substrate |
 |---|---|---|
+| `std.task` | `Async` and recognized task-execution contracts | Structured start/wait, scoped scheduler handles, single-shot transfer, cancellation, and cleanup |
 | `std.net.tcp` | `Net extends Network` | TCP connect, socket identity, cancellation, timeout metadata |
 | `std.stream` | `Stream` | Bounded byte-stream read, write, flush, close, EOF, timeout, and cancellation over typed stream handles |
 | `std.tls` | `Tls extends Network` | TLS client session setup, server-name binding, certificate validation, TLS errors |
@@ -884,10 +891,19 @@ does not call an ordinary flow. It performs an effect action. If an enclosing `h
 The first version intentionally restricts handlers:
 
 1. `resume` is available only inside a handler arm for an action whose return type is not `never`.
-2. A handler arm may resume at most once.
-3. A resume continuation cannot be stored, returned, copied, or passed as a value.
-4. A resume continuation cannot cross `join`, detached task, or runtime thread boundaries.
-5. Actions returning `never`, such as `Error.raise`, cannot resume and must either `finish` the handled expression, abort, or perform another effect.
+2. Each captured continuation is single-shot. Immediate resume and deferred scheduler resumption share the same one-use ownership obligation.
+3. An optional `as k` exposes a scope-bound, non-copyable continuation handle. It may be transferred to helpers and scheduler queues that preserve its owning task scope, but cannot escape, be serialized, or enter an ordinary copying container.
+4. Structured task boundaries permit controlled transfer to the owning scheduler, including for a child of `join`; they do not permit detachment, resumption as another task, or arbitrary cross-thread use. Resume restores the original task and handler context.
+5. Actions returning `never`, such as `Error.raise`, cannot use `resume` or bind a resumable `k`. They must finish the handled expression or take another non-returning path.
+
+For custom scheduling, an arm can use `Async.await(task) as k => { ... }`.
+The standard `scheduler.park(task, k)` and `scheduler.requeue(k, value)`
+operations consume the handle and return `never` to that arm while transferring
+control to the scheduler. They do not execute the rest of the arm or abort the
+program. A normal enqueue returning `unit` is insufficient. The full lifetime,
+waiting, failure, and cleanup rules are in
+[Concurrency](16-concurrency.md#121-handler-based-scheduling); the public API is
+in [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
 
 ### 2.2 Handler Scope
 
@@ -898,7 +914,7 @@ Etas borrows the surface shape of algebraic effect handlers, but it does not aim
 | Main goal | General-purpose control abstraction | Agent runtime safety, approval, recovery, trace, replay |
 | Operation/action role | A programmable semantic operation | A runtime-observable action boundary |
 | Handler role | Interprets effects and can encode many control patterns | Handles approval, fallback, recovery, pause/resume, and runtime mediation |
-| Continuation model | Can support richer delimited continuation behavior | Single-resume, scoped continuation only |
+| Continuation model | Can support richer delimited continuation behavior | Single-shot, scope-bound continuation with optional controlled scheduler transfer |
 | Multi-shot behavior | May be supported by language design | Not supported in the MVP |
 | External authority | Usually outside the core effect-handler model | Central: effect actions, sandbox, trace specs, runtime policy, approval, and limits are checked before execution |
 | Durability | Not the primary semantic target | Core target: checkpoint, replay, deduplication, and audit |
@@ -913,7 +929,7 @@ Relative to general-purpose effect-handler languages:
 | Effect shape | Tag plus optional `action` declarations | Algebraic operations | Effects and operations | Extensible effect constructors | Abilities and requests |
 | Handler form | `handler { ... }` values, `expr with h`, and `expr with { ... }` | Language-level handlers | Language-level handlers | `match ... with effect ...` style handling | Ability handlers |
 | First-class handlers | Yes: handlers can be parameters, return values, and record fields | Supported through ordinary abstraction patterns | Supported through language abstraction patterns | More limited by OCaml's surface model | Supported through ability abstraction patterns |
-| Continuation model | Scoped `resume`, single-use, not a value | General delimited-continuation model | Structured continuation model | Explicit captured continuations | Request handling with continuation semantics |
+| Continuation model | Scoped `resume`; optional `as k` binds a non-copyable, scope-bound scheduling handle | General delimited-continuation model | Structured continuation model | Explicit captured continuations | Request handling with continuation semantics |
 | Multi-shot continuation | Not supported in the MVP | Supported or expressible in richer designs | Supported or controlled by the design | Usually one-shot | More general than Etas, depending on ability use |
 | Host-provided actions | Standard authority is modeled as effect actions; non-standard host adapters use package metadata with action-based effect rows | Usually modeled as language effects or library effects | Usually modeled as effects/abilities | Usually library/runtime concern | Can be modeled as abilities |
 | Agentic inference action | `Agentic.infer<C, O>(Prompt, Schema<O>)` carries agent method identity, model profile, prompt/messages, tool surface, schema, limits, trace, replay, and runtime policy context | Can encode an operation, but the language does not know agent-runtime semantics | Can encode an operation, but agent semantics are library-level | Can encode via effects/callbacks, but agent semantics are library-level | Can encode via abilities, but agent semantics are library-level |
@@ -939,7 +955,10 @@ mock or replay them using handlers, check trace specs, runtime policy, and secre
 coordinate limits, and preserve audit semantics without treating model calls as
 opaque library callbacks.
 
-Etas treats `resume` as a scoped control statement, not as a first-class continuation value. Agent programs need predictable runtime mediation more than maximal control-flow expressiveness:
+Etas keeps `resume` as a scoped control statement. The optional `as k` exposes
+a restricted scheduling handle, not an unrestricted callable continuation.
+Agent programs need predictable runtime mediation rather than maximal
+control-flow expressiveness:
 
 ```text
 Allowed:
@@ -948,11 +967,13 @@ Allowed:
   - finish the handled expression with a fallback value
   - route an action to a default action implementation
   - record the action in trace for replay or audit
+  - transfer a single-shot continuation to its owning structured scheduler
+  - park a task awaiting completion, or requeue a runnable task
 
 Not MVP goals:
   - use handlers as generators
   - encode arbitrary coroutines
-  - store continuations
+  - store continuations outside their owning task scope or in copying data structures
   - resume a continuation multiple times
   - use handlers to grant denied effect actions
   - use handlers to bypass sandbox, trace specs, runtime policy, approval, or limit checks
@@ -970,12 +991,13 @@ effects(expr with h)
     union effects(handler_arms)
 ```
 
-Handler arms have two explicit completion forms:
+Handler arms have explicit completion and transfer forms:
 
 | Form | Target | Type requirement | Control flow |
 |---|---|---|---|
 | `resume value;` | Current effect action | `value` has the action's declared return type | Continue the handled expression at the suspended `perform` site |
 | `finish value;` | Whole handled expression | `value` has the handled expression's answer type `R` | Stop the handled expression and make `expr with h` evaluate to `value` |
+| Standard scheduler transfer returning `never` | Owning scheduler | Consumes a matching scope-bound continuation and any typed resume value | End the current arm; the original task remains parked or queued |
 | `abort(...)` or another `never` expression | Current control path | Expression type is `never`, accepted for any required arm result | Terminate the path; no value is produced |
 | `return value;` | Current `flow` | `value` has the flow's return type | Flow-level return; not a handler completion form |
 
@@ -989,6 +1011,16 @@ answer of the handled expression.
 uses a block, all reachable paths through that block must complete in one of
 those ways. This keeps handler control flow explicit and makes effect analysis
 and AIR lowering straightforward.
+
+With `as k`, `resume`, `finish`, transfer, and non-returning unwinding must
+account for the same suspended computation without duplication. A transfer
+invalidates the arm's local handle. The original handler environment is restored
+when the task resumes (deep resumption); operations performed by a handler arm
+continue to follow ordinary enclosing-handler rules. Delaying a continuation
+does not detach active trace specs, runtime authorization, cancellation, or
+budget accounting. Multiple arms may interleave; this does not authorize hidden
+shared mutation of captured values. See the concurrency chapter for `finish`
+across child tasks and cancellation/completion races.
 
 For example, if `Cache.get : string -> Option<string>`, then a
 `Cache.get(key)` arm must resume with `Option<string>`. If the handled

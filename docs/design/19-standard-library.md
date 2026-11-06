@@ -331,3 +331,109 @@ flow Prefix(input: string) -> Result<string, TextError> {
     return text.char_slice(input, [0, 3))?;
 }
 ```
+
+## 2. Task And Scheduling APIs
+
+These APIs specify structured task execution and handler-based scheduling.
+They are design contracts, not a claim of current interpreter support. Their
+scope, cancellation, and continuation semantics are defined in
+[Concurrency](16-concurrency.md#121-handler-based-scheduling).
+
+### 2.1 Standard Types And Actions
+
+`std.task` exports `Task<T, E>`, where `T` is the result type and `E` is an
+effect-row parameter declared with `effect E`. Ordinary calls infer both.
+A task also retains its owning scope, requested-action/trace contract, and
+determinism information as checked metadata. Its result type alone cannot
+erase those facts. Package interfaces and helper calls must preserve them.
+Task handles may be shared inside their valid lifetime; repeated awaits observe
+the same completed result and do not execute the job again.
+
+The callback to `std.task.run` receives an opaque, scope-bound scheduler handle.
+The handle's owner is inferred, not chosen by a runtime string. Neither tasks
+nor scheduler handles may escape their owning execution scope, including via
+returned closures or aggregate values. They are not model-schema values or
+ordinary serializable checkpoint data. Managed execution is supplied by the
+program entry and concurrency combinators; `run` creates an explicit nested
+scope for code that needs its scheduler handle.
+
+The standard control effect is owned by `std.task.Async`:
+
+```etas
+module std.task;
+
+effect Async {
+    action yield() -> unit;
+    action await<T, effect E>(task: Task<T, E>) -> T;
+}
+```
+
+`Async` is a standard scheduling effect, not a new broad external-authority
+root. Its operations require a valid managed scope, not permission to perform
+network, file, model, or secret operations. An import alias does not create a
+different action identity. Omitting explicit type arguments in a handler arm
+matches the generic action; the arm must work for its matched type parameters.
+
+### 2.2 Public Operations
+
+| API | Result | Required Contract |
+|---|---|---|
+| `std.task.run(body)` | The callback result `R` | Call `body(scheduler)` in a new structured scope with default async handlers. Wait for owned children and cleanup before returning. Neither the scheduler nor an owned task/continuation may be returned as part of `R`. |
+| `std.task.start<T, effect E>(job: () -> T ![E])` | `Task<T, E>` | Schedule a child in the active scope and return its handle without waiting for completion. Preserve the job's effects, requested actions, trace behavior, and inherited context. |
+| `std.task.await<T, effect E>(task: Task<T, E>)` | `T` | Request `Async.await(task)`. Deliver its result or propagate failure through the task protocol; waiting must not block the whole scheduler thread. |
+| `scheduler.requeue(k, value)` | `never` | Consume a live continuation owned by this scheduler, attach a value of its action's result type, queue it as runnable, and transfer control out of the current arm. |
+| `scheduler.park(task, k)` | `never` | Consume the continuation from the matching `Async.await(task)` request and register a completion dependency. Deliver success, failure, or cancellation without losing a concurrent completion event. |
+
+`run` and `start` are compiler-recognized std contracts over task-execution
+primitives. They need no new source keyword or exposed `spawn` syntax. A
+same-named user flow cannot acquire their lifetime or scheduling obligations
+by spelling alone. The scheduler is an ordinary bound value with restricted
+operations; `requeue` and `park` are registered control-transfer primitives,
+not arbitrary callbacks made special by their method names. Scheduling policy
+can be Etas code over this public substrate.
+
+`requeue` normally handles `Async.yield` with the unit value `()`. It can only
+resume the original suspended computation with a correctly typed value; it
+cannot move that computation into the calling task's identity or authority.
+`park` handles both already-completed and pending tasks, using atomic
+completion/registration semantics. A pending task is not runnable just because
+its waiter yielded. Waiting and runnable queues have different purposes.
+
+The `never` return describes the current arm's control path. Successful
+transfer returns control to the owning scheduler, not to the next statement
+in the arm; it does not abort the process. The scheduler later resumes or
+cancels the original task. A plain queue insertion returning `unit` cannot
+replace either operation. Operations must validate ownership and input types
+before accepting the transfer. A failed scheduler invariant cannot silently
+drop a live continuation; it fails and unwinds the affected managed scope.
+
+### 2.3 Effects, Errors, And Default Handling
+
+Starting work contributes its `E` and full behavioral summary to the enclosing
+task scope immediately, even if its handle is never awaited. `await` preserves
+the declared failure obligations in `E`; it cannot forge a value of `T` for a
+failed task. Handling `Async.await` or `Async.yield` removes covered control
+actions from escaping rows, not the effects or requested actions of child work.
+The default handling of these control actions remains recorded in metadata.
+No task API provides an implicit catch-all for `Error<_>` or an ad-hoc error
+union. The postfix `?` retains its existing single-Error effect-to-Result rule.
+
+The default `run` scope is fail-fast. The first unhandled failure initiates
+sibling cancellation and propagates its original typed error after cleanup;
+it is not converted into a successful task result or a default `T`. A task's
+inherited handlers may recover before failure becomes unhandled. Asynchronous
+error delivery restores the appropriate task/handler context rather than
+resuming a continuation with a value of the wrong type. Scope cancellation
+cannot be cleared by catching an incidental I/O cancellation error.
+
+Default handlers cover ordinary task use, so business code need not handle
+`Async` manually. A custom scoped handler may replace scheduling policy without
+changing child lifetime, failure propagation, authority, budgets, or trace
+requirements. Runtime adapters for models, streams, and other waiting operations
+must use non-blocking completion or managed blocking offload. Calling `start`
+or performing an action does not automatically make a blocking host function
+asynchronous. Runtime-owned waits remain tied to the same task scope; custom
+handlers do not gain permission to forge completion of protected host work.
+
+See the [complete scheduling example](16-concurrency.md#126-complete-example)
+for `as k`, `start`, `await`, and handler transfer used together.
