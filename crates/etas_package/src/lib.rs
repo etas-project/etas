@@ -19,8 +19,8 @@ pub use manifest::{
     RuntimeBackendProfile, RuntimeCommandProfile, RuntimeCompilerProfile, RuntimeExecutionProfile,
     RuntimeFilesystemProfile, RuntimeFilesystemRegionProfile, RuntimeModeProfile,
     RuntimeModelProfile, RuntimeModelTimeoutProfile, RuntimeNetworkProfile, RuntimePolicyProfile,
-    RuntimeProfile, RuntimeRetryProfile, RuntimeSection, RuntimeToolsProfile, SourceSection,
-    ToolBinding, discover_manifest, read_manifest,
+    RuntimeProfile, RuntimeRetryProfile, RuntimeSection, RuntimeStorageLimitsProfile,
+    RuntimeToolsProfile, SourceSection, ToolBinding, discover_manifest, read_manifest,
 };
 pub use metadata::{
     PackageActionRequestMetadata, PackageActionRequestSignatureMetadata,
