@@ -107,6 +107,119 @@ module" and "representation hidden across module boundaries", `opaque` can be
 added as a visibility modifier later. For now, `type` means identity by default,
 and `alias` is the explicit escape hatch for transparent abbreviations.
 
+#### 1.1.2 Algebraic Data Types And Recursion
+
+ETAS supports product types (records and tuples), sum types (`enum`), generic
+ADTs, and direct or mutual recursion through nominal type declarations. No
+additional recursion keyword is required. Type names are registered before
+their fields and variant payloads are checked, so mutually recursive
+declarations in the same module may refer forward to each other. References
+across modules remain subject to the ordinary import and visibility rules.
+
+```etas
+enum Tree<T> {
+    Leaf(T),
+    Branch(Tree<T>, Tree<T>),
+}
+
+type Directory = {
+    name: string,
+    entries: Array<Entry>,
+}
+
+enum Entry {
+    File { name: string, content: bytes },
+    Subdirectory(Directory),
+}
+```
+
+An enum variant may be nullary, carry positional payloads, or carry inline
+named fields. Inline fields belong to that variant; they do not declare a
+separate record type. Constructing a variant produces a value of its enclosing
+enum type. Variants cannot mix positional and named-field payloads in a single
+declaration. Variant names within an enum and field names within a variant
+must be unique. Named-field construction requires every declared field exactly
+once, rejects unknown fields, and supports ordinary record shorthand.
+
+```etas
+enum Response {
+    Success(string),
+    Failure { code: i32, message: string },
+}
+
+let response: Response = Response.Failure { code = 503, message = "unavailable" };
+
+flow describe(response: Response) -> string {
+    match response {
+        Response.Success(text) => text,
+        Response.Failure { code: _, message } => message,
+    }
+}
+```
+
+Recursive nominal types are checked by declaration identity and type arguments,
+not by repeatedly expanding their definitions. Constructor application introduces
+the enum value and matching eliminates it; users do not write fold/unfold
+operations or manage recursive storage. Transparent alias expansion must
+terminate at a nominal type or a nonrecursive representation. A cycle consisting
+only of aliases and structural type constructors is rejected:
+
+```etas
+alias Bad = Array<Bad>; // rejected: recursive transparent alias
+alias IntTree = Tree<i32>; // accepted: names an existing nominal ADT
+```
+
+Recursion describes the shape of values, not a facility for creating cyclic
+object references. Ordinary first-order ADT values are finite values; the
+implementation may share immutable subtrees and insert heap indirection as
+needed without exposing mutable aliases. Neither `Box` nor an `indirect`
+modifier is required in ETAS source. Type identity, value semantics, and pattern
+matching must not depend on that storage choice. This feature does not add
+GADT-style constructor-specific result types or arbitrary structural recursive
+type equivalence.
+
+`match` must be exhaustive for its scrutinee type; missing cases are a compile
+error. Coverage includes payload patterns, so a case matching only one literal
+payload does not cover every value of that variant. A wildcard or variable
+pattern can cover the remaining values. Unreachable arms should produce a
+warning. Recursive coverage checking must terminate without infinitely unfolding
+the ADT; an explicit catch-all is required if coverage cannot be established.
+These rules apply to both statement and expression forms of `match`.
+
+Recursive ADTs are valid independently of model schema support. Derivation,
+encoding, decoding, and printing must track recursive type references rather
+than infinitely expand definitions, and enforce documented depth/size limits
+when traversing values. Using such a type as model input/output still requires
+the relevant encoding/schema support; an unsupported provider schema must be
+reported before dispatch, rather than silently flattening or truncating the
+type. Validated decoding cannot create cyclic values.
+
+#### 1.1.3 Record Equality
+
+For two values of the same instantiated nominal record type, `==` compares all
+fields by name using each field type's equality semantics. The result is `true`
+exactly when every corresponding field comparison is `true`; construction field
+order does not matter. `!=` is the negation of `==`. If any field type does not
+support equality, whole-record comparison is a type error. Distinct nominal
+record types cannot be compared directly merely because their fields match;
+transparent aliases preserve the underlying type identity.
+
+```etas
+type Point = { x: i32, y: i32 }
+
+let a = Point { x = 1, y = 2 };
+let b = Point { y = 2, x = 1 };
+let equal = a == b; // true
+```
+
+When hashing is supported, equal records must have equal hashes under the same
+hashing scheme, independent of construction field order. Equality support alone
+does not imply hashing support; unequal values may have the same hash.
+
+Record field expressions are evaluated in source order. Implementations may
+then place the resulting values in a canonical layout, but must not reorder
+observable evaluation to normalize field order.
+
 ### 1.2 Structured Output Types
 
 Agent output should be schema-checked.
@@ -386,10 +499,8 @@ expressions, not runtime values and not ordinary types:
 
 ```etas
 public spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & -Secret.read<_>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    (Approval.request >> CompanyEmail.send<WorkAccount>)
+    & -Secret.read<_>;
 ```
 
 Trace-spec operators are kinded:
@@ -398,10 +509,45 @@ Trace-spec operators are kinded:
 |---|---|---|
 | `+A` | `ActionPattern -> trace` | Allow matching action pattern `A` |
 | `-A` | `ActionPattern -> trace` | Deny matching action pattern `A` |
-| `A >> B` | `ActionPattern x ActionPattern -> trace` | Every `B` must be preceded by matching `A` |
-| `A << B` | `ActionPattern x ActionPattern -> trace` | Every `A` must be preceded by matching `B` |
+| `A >> B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `A` evidence before every `B` |
+| `A << B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `B` evidence before every `A`; equivalent to `B >> A` |
 | `S & T` | `Spec<K> x Spec<K> -> Spec<K>` | Both specs must hold |
 | `S | T` | `TraceSpec x TraceSpec -> TraceSpec` | Either trace spec may accept; MVP reserves this for trace specs only |
+
+`A >> B` includes the local permissions previously written separately as `+A`
+and `+B`. It normalizes to the following internal components, not another
+source-level `>>` expression:
+
+```text
+Allow(A), Allow(B), Before(guard = A, target = B)
+```
+
+The implicit permissions use exactly the written patterns, including resource
+indices and spec constraints. They do not allow sibling actions or broader
+resource scopes. `Before` remains a prerequisite on every matching `B`, even
+if `+B` is also written explicitly. Neither action is required to occur; an
+empty trace or an `A` without a subsequent `B` can satisfy this clause.
+
+Explicit `+A` remains useful for independent actions with no ordering
+requirement. Redundant explicit permissions are accepted and deduplicated.
+Within one local conjunctive clause group, collect explicit and implicit allow
+patterns into the same allow set; conjoin its guards and denials. This local
+collection does not union the permissions of independently composed specs or
+enclosing scopes. All of those constraints still apply, and a matching denial
+wins. In particular, `-B & (A >> B)` cannot execute `B`.
+
+For `S | T`, keep each alternative's permissions and temporal checks together:
+at least one complete alternative must accept the trace. Do not union allow
+sets across alternatives or choose a fresh alternative for each action. No
+implicit permission overrides an outer restriction, effect/action boundary,
+sandbox, or runtime grant. Mentioning an action in a spec does not cause the
+program to request it or add it to inferred may-effects.
+
+Guard evidence includes its outcome and relevant resource/request identity.
+For `Approval.request >> B`, requesting approval is permitted, but only a
+matching accepted approval satisfies the prerequisite for `B`. A pending,
+denied, failed, or unrelated approval does not. The operator does not itself
+invoke either action.
 
 Applying `+`, `-`, `>>`, or `<<` to type specs or callable specs is rejected.
 Combining specs of different kinds with `&` is also rejected:
@@ -883,6 +1029,39 @@ functions.
 An ordinary expression arm such as `Error<E>.raise(err) => Err(err)` is not
 valid handler syntax. Use `finish Err(err);` so the control-flow boundary is
 explicit.
+
+#### 2.3.1 Scoped Continuation Handles
+
+`Action(args) as k => { ... }` binds a single-shot continuation for a resumable
+action. Its type is inferred from the action result type, the handled answer
+type, residual computation effects, and its owning task scope. These facts are
+compiler-known; runtime signature data cannot forge a continuation. No public
+continuation type annotation or new ownership keyword is required.
+
+Unlike ordinary value-semantic data, `k` is affine: it cannot be copied, and a
+transfer consumes the local binding. Aggregate or closure capture must preserve
+this non-copyability and scope bound. It may enter only scope-preserving
+scheduler storage, not an ordinary persistent/copying collection, global value,
+model payload, or return value that outlives its owner. The original task and
+handler frame must remain valid until resumption or cancellation. Merely
+abandoning the handle is not successful handler completion.
+
+Immediate `resume` uses the same handle even when `as k` was written. A path
+cannot transfer and then resume it, nor transfer it twice. `finish` and
+non-returning unwinding dispose of the affected suspended computation and run
+the required scope cleanup. Actions returning `never` cannot bind a resumable
+handle. The runtime also enforces one-use ownership and scope validity before
+executing a deferred continuation.
+
+`Task<T, E>` is a standard task-result handle; `E` is an effect-row parameter.
+Its owning scope and requested-action/trace contract remain checked metadata,
+not writable fields. Passing a task to another helper must preserve those
+facts. Task handles can be shared within their lifetime and awaited more than
+once without repeating the job; this does not make a continuation copyable.
+Task and scheduler handles cannot escape their owning structured scope.
+
+See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
+and [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
 
 ### 2.4 Declarative Retry Policy
 

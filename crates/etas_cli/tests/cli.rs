@@ -69,6 +69,8 @@ mod segmented_concat;
 mod source_reexports;
 #[path = "cli/spec_method_imports.rs"]
 mod spec_method_imports;
+#[path = "cli/storage_limits.rs"]
+mod storage_limits;
 #[path = "cli/text_values.rs"]
 mod text_values;
 #[path = "cli/typed_output.rs"]
