@@ -553,15 +553,17 @@ Features such as checkpoints, group chat teams, triggers, domain events, outboxe
 
 ### 7.2 Add Runtime-Level Session Semantics
 
-Existing frameworks expose strong multi-turn conversation patterns. Etas currently models this through typed memory APIs, traces, and flows, but the user-facing story is still implicit.
+Existing frameworks expose strong multi-turn conversation patterns. Etas models
+these through typed history access, explicit context publication, traces, and
+flows. The normative contract is in [Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
 
-Recommended addition:
+Session selection and retention use the existing support type:
 
 ```etas
 type SessionConfig = {
     id: SessionId,
     retention: RetentionPolicy,
-    context_policy: ContextPolicy,
+    context: ContextPolicy,
 }
 
 flow SupportConversation(input: UserMessage) {
@@ -569,8 +571,8 @@ flow SupportConversation(input: UserMessage) {
         Message.new(input),
         SessionConfig {
             id = current_session(),
-            retention = RetainSummaries,
-            context_policy = LastTurns(12),
+            retention = Days(90),
+            context = LastTurns(12),
         }
     );
 
@@ -579,6 +581,11 @@ flow SupportConversation(input: UserMessage) {
 ```
 
 This should be a runtime support type and stage option, not a `session` keyword. The compiler/runtime can still make session use visible in AIR and traces.
+
+Summary generation and retrieval orchestration belong to application/EDK code.
+`SummaryPlusRecent` only selects already published context. The runtime retains
+bounded history access, retry-safe append, version checks, context publication,
+receipts, and storage retention; it does not implicitly generate summaries.
 
 ### 7.3 Provide Group Chat Combinators
 
@@ -713,7 +720,7 @@ These are runtime/tooling features, not source-language keywords.
 
 | Gap | Layer | Suggested direction |
 |---|---|---|
-| Conversation/session semantics are specified but not implemented | Runtime support | Implement `Message<T>`, `SessionConfig`, `Conversation`, context-selection policies, retry-safe append, and trace events |
+| Conversation/session contract conformance | Runtime support | Verify bounded history access, selection of existing context, retry-safe append, version-checked publication, receipts, and trace events against the Session contract |
 | Group chat boilerplate | Standard library | Add `group.round_robin`, `group.selector`, `group.swarm` with limits |
 | Handoff visibility | AIR/trace | Implement explicit `Handoff` trace events inferred from typed message routing |
 | Durable resume rules | Runtime semantics | Formalize recompute/replay/dedup/idempotency |
@@ -721,7 +728,7 @@ These are runtime/tooling features, not source-language keywords.
 | Deployment manifest | Compiler/runtime | Emit manifest from typed AST/AIR |
 | Tool discovery and MCP | Runtime/tooling | Import MCP/OpenAPI tools into typed `tool` declarations and effect/action metadata |
 | Tool-choice behavior | Runtime support | Specify stage options for forced tool use, allowed tool subsets, and stop-on-tool behavior |
-| Context window policy | Runtime support | Add runtime policies for last-N turns, summarization, retrieval, compression, and session retention |
+| Context window management | Application/EDK + runtime support | Application/EDK explicitly retrieves and summarizes context; runtime selects existing context, enforces budgets, publishes with version checks, and manages retention/storage compaction |
 | Lifecycle hooks | Runtime support | Expose hooks as effect-governed runtime extension points |
 | Trace redaction | Runtime/security | Define `Secret<T>` redaction and export runtime policies in trace schema |
 | Trigger/schedule integration | Runtime/platform | Use manifest plus adapters, not keywords |

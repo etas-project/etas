@@ -176,9 +176,7 @@ tool support.create_ticket(title: string, body: string) -> TicketId
     ![SupportHttp.request<"support.internal">];
 
 spec ExternalEmailPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 @model("gpt-5.5")
 agent EmailWriter(input: EmailRequest) -> EmailDraft {
@@ -535,9 +533,7 @@ effect CompanyEmail extends Network {
 type CustomerNotice = { to: EmailAddress, body: string }
 
 spec CustomerContactPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 @model("gpt-5.5")
 agent NoticeWriter(input: Ticket) -> CustomerNotice {
@@ -774,9 +770,7 @@ effect Cms extends Network {
 tool cms.publish(draft: PublishDraft) -> PublishReceipt ![Cms.publish<Site>];
 
 spec PublishPolicy: trace =
-    +Approval.request
-    & +Cms.publish<Site>
-    & (Approval.request >> Cms.publish<Site>);
+    Approval.request >> Cms.publish<Site>;
 
 flow PublishDraftFlow(draft: PublishDraft) -> PublishReceipt
     ~ PublishPolicy
@@ -1619,9 +1613,7 @@ type LaunchPacket = {
 }
 
 spec PublishPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 flow StaticInstructions(cfg: LaunchConfig) -> Trusted<string> {
     if cfg.publish {
@@ -1842,9 +1834,7 @@ high-impact actions behind policy gates.
 
 ```etas
 spec EmailPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 flow SendReport(report: Report) -> EmailReceipt
     ~ EmailPolicy

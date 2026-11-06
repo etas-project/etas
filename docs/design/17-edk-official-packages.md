@@ -17,18 +17,23 @@ EDK should live as a separate official GitHub repository, for example
 checked by the same frontend, type checker, effect checker, interpreter, and
 package tooling as user code. EDK must not rely on compiler-private privileges.
 
-The intended layering is:
+The [five-layer model](01-overview.md#53-feature-map-by-layer) separates language
+mechanisms, compiler-recognized std contracts, ordinary std APIs, runtime
+support, and EDK/application libraries. Neither all of std nor all prelude names
+are core-language constructs. Within those layers, package ownership is:
 
-| Layer | Content | Core language? |
+| Package Family | Content | Special Status |
 |---|---|---|
-| Core prelude / `std` | Minimal orthogonal support: `Console`, `Error`, `Clock`, `Memory`, `Secret`, `Command`, `Approval`, `Agentic`, collections, `Result`, `Option`, package/module basics, and low-level substrate modules such as `std.net`, `std.stream`, `std.tls`, `std.fs`, codecs, crypto, secrets, and browser protocol transport | Yes |
-| EDK official packages | Common production integrations: HTTP, web search, workspace files, email, databases, vector stores, browser automation, PDF/docs, Git/GitHub, Slack/Notion, evaluation harnesses | No |
-| Third-party packages | Community packages, enterprise adapters, private business APIs, cloud-specific integrations, generated OpenAPI/MCP bindings | No |
+| `std` | Minimal orthogonal support: standard effects/actions, collections, `Result`, `Option`, resource support, and low-level modules such as streams, filesystem APIs, codecs, secrets, and browser protocol transport | Selected symbols have specified compiler/runtime contracts; ordinary algorithms and wrappers can be Etas source. Import/module syntax is language-defined, not supplied by std. |
+| EDK official packages | Common production integrations: HTTP, web search, workspace files, email, databases, vector stores, browser automation, PDF/docs, Git/GitHub, Slack/Notion, evaluation harnesses | Ordinary Etas packages over public std; no compiler-private privileges. |
+| Third-party packages | Community packages, enterprise adapters, private business APIs, cloud-specific integrations, generated OpenAPI/MCP bindings | The same public language/library boundaries as EDK. |
 
 The design rule is:
 
 ```text
-std = minimal, stable language/runtime foundation
+language = syntax, typing, effects, control flow, and spec semantics
+std = standard contracts and Etas library implementations over explicit primitives
+runtime = execution and enforcement of those contracts at platform boundaries
 EDK = official reusable integration packages written in Etas
 app/package code = domain-specific trace specs, runtime policy, orchestration, and business logic
 ```
@@ -37,6 +42,17 @@ This keeps the core language small while preserving a good user experience.
 Users should not need to define common tools from scratch, but the language
 should also avoid committing every external service to the core standard
 library.
+
+Conversation summarization is also application/EDK orchestration. A package
+chooses its trigger, model-specific token counter, model, prompt, validation,
+and retry behavior, and generates context through ordinary flows/agents.
+`std.agent.session` provides bounded history access, history fences,
+version-checked context publication, and receipts. The package reconciles
+uncertain publication outcomes and explicitly handles stale-history rejection;
+it must not use a private host summarizer callback. `SummaryPlusRecent` selects
+existing published context without generating it. Retention and storage
+compaction remain runtime/storage responsibilities. See
+[Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
 
 The design target is full Etas implementation of EDK packages. If a common EDK
 tool cannot be implemented in Etas except by adding a high-level private host
@@ -87,9 +103,7 @@ through typed effect actions and trace specs:
 
 ```etas
 spec SafeMail: trace =
-    +Approval.request
-    & +EdkEmail.send<WorkAccount>
-    & (Approval.request >> EdkEmail.send<WorkAccount>);
+    Approval.request >> EdkEmail.send<WorkAccount>;
 ```
 
 ## 3. Import And Package Model
@@ -324,24 +338,29 @@ Preferred EDK shape:
   edk.workspace    = Etas path and file helpers over std filesystem primitives
 ```
 
-The unavoidable host boundary belongs below EDK, in a minimal `std` substrate.
-Examples of substrate primitives that EDK may need are:
+The unavoidable host boundary belongs below EDK, at the specified runtime
+endpoints exposed through a minimal `std` substrate. Not every substrate API is
+itself a host primitive or an effect action. Standard-library self-implementation
+follows the [Etas-first std rules](01-overview.md#55-implementing-std-in-etas).
+Relevant substrate areas are:
 
 | Substrate area | Purpose |
 |---|---|
 | Byte streams | Read/write byte-oriented streams used by files, sockets, TLS, pipes, and protocol parsers |
 | Filesystem primitives | Open, read, write, list, stat, and atomic replace with trace/runtime-policy-visible path scopes |
 | Network sockets | TCP/UDP connection, read, write, close, and timeout primitives |
-| TLS / crypto primitives | TLS transport, hashes, HMAC/signatures, secure randomness, and certificate validation |
-| Encoding and compression | UTF-8, base64, URL encoding, JSON bytes, gzip/deflate, and similar reusable codecs |
+| TLS / crypto | TLS transport and protected key operations use specified endpoints; public deterministic hashes/codecs may be pure APIs. Secret-backed operations and any randomness require their declared action boundaries. |
+| Encoding and compression | Pure Etas APIs for UTF-8, base64, URL encoding, JSON bytes, gzip/deflate, and similar reusable codecs; processing in-memory public bytes does not by itself require an action. |
 | Clock and timers | Time reads, deadlines, sleeps, and timeout support |
 | Secrets | Host-mediated secret reads without exposing raw environment variables |
 | Command sandbox | Explicit sandboxed command execution for cases that are intentionally process-based |
 
-These substrate operations are still ordinary effect actions with trace-spec,
-runtime-policy, limits, trace, replay, and handler behavior. The difference is
-that they are low-level, orthogonal runtime primitives. EDK builds higher-level
-packages from them.
+Observable external substrate operations remain effect actions with trace-spec,
+runtime-policy, limits, trace, replay, and handler behavior. Pure standard
+algorithms and ordinary wrappers remain Etas code. A native optimization must
+preserve the same contract: it neither turns a pure codec into an authority
+action nor hides the actions of an I/O wrapper. EDK builds higher-level packages
+from these public APIs instead of acquiring a private platform escape hatch.
 
 If implementing a EDK package reveals that the substrate is missing a necessary
 primitive, the correct response is to improve the `std` substrate design, not to
@@ -638,8 +657,6 @@ Example trace spec:
 spec PublishReportPolicy: trace =
     +EdkWeb.search
     & +EdkWorkspace.write<"reports/**">
-    & +Approval.request
-    & +EdkEmail.send<WorkAccount>
     & -EdkWorkspace.write<"src/**">
     & (Approval.request >> EdkEmail.send<WorkAccount>);
 ```
@@ -655,8 +672,6 @@ import edk.email.smtp;
 spec ReportPolicy: trace =
     +EdkWeb.search
     & +EdkWorkspace.write<"reports/**">
-    & +Approval.request
-    & +EdkEmail.send<WorkAccount>
     & (Approval.request >> EdkEmail.send<WorkAccount>);
 
 @model("gpt-5.5")

@@ -129,7 +129,7 @@ This table records where current Etas features belong. The rule of thumb is:
 | Effect actions | Preserve `action` signatures and `perform` expressions | Lower `perform` to typed effect operation with result type, resume behavior, and handler requirements | Dispatch to nearest runtime-scoped handler or default runtime implementation; manage resume/abort semantics |
 | `handle` / `resume` | Preserve handler arms, patterns, and lexical scope; `resume` only inside handler arm | Build handler regions, operation-to-arm edges, result types, and legal resume points | Execute runtime-scoped handler dispatch; store resume state in checkpoints and traces |
 | Errors / `never` | Preserve `Error<E>` uses, `return`, `abort`, and non-returning operations | Represent exceptional control edges and non-resumable operation exits | Execute abort/error propagation, trace failure, and recovery behavior |
-| Trace spec operators `+A`, `-A`, `A >> B`, `A << B` | Preserve source trace spec expressions and resolved action patterns | Turn into allow/deny, dominance, and postcondition constraints over effect/action/tool nodes | Insert/check runtime trace-spec guards when dynamic state is involved; emit satisfaction or violation evidence |
+| Trace spec operators `+A`, `-A`, `A >> B`, `A << B` | Preserve source trace spec expressions and resolved action patterns | Expand `A >> B` and `B << A` into local permissions for both patterns plus a `Before` constraint; preserve alternative/scope boundaries when deriving allow/deny and dominance checks | Insert/check runtime trace-spec guards when dynamic state is involved; emit satisfaction or violation evidence |
 | `spec ...: trace` declarations | Preserve source trace spec items and references | Compile to analyzable constraints over effects and actions, agents, tools, messages, and paths | Evaluate runtime-dependent trace predicates and emit allow/deny events |
 | Persistent memory support types and resource handles | Preserve `MemoryRegion<S>`, `Store<K, V>`, top-level `std.memory.region<...>` handles, store field names, resolved import aliases, resolved std memory API calls, and source names | Track memory read/write regions, aliasing, versions, region-sensitive effects, and manifest schema requirements | Execute persistent reads/writes, version checks, retention, checkpoint, and replay integration through runtime-bound memory backends |
 | Limits / budgets | Preserve `limit` or normalized `with` options as source clauses | Attach limit dimensions to loop/stage/flow regions; prove required limits are present | Enforce token/context/cost/time/iteration counters and checkpoint active limit state |
@@ -642,16 +642,20 @@ Source trace requirements such as:
 
 ```etas
 spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
 lower to typed trace constraints such as:
 
 ```text
+Allow(Approval.request)
+Allow(CompanyEmail.send<WorkAccount>)
 Before(guard = Approval.request, target = CompanyEmail.send<WorkAccount>)
 ```
+
+The `Before` constraint requires matching accepted approval evidence. The
+local allow entries cannot override denials, outer specs, or runtime grants,
+and must remain in their original `|` alternative when compiling a union spec.
 
 The same AIR constraint shape can represent non-approval guards such as `HumanReview before PublicPublish` or `Sanitized before PromptSystemWrite`.
 

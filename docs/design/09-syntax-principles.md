@@ -6,6 +6,14 @@ This section sketches the current user-facing Etas source syntax. It is intentio
 
 String escapes and numeric literal suffixes are omitted here.
 
+This grammar defines source forms, not the std API catalog or compiler metadata
+format. Names such as `Result`, `Index`, `infer`, and `join` are not keywords;
+their specified integrations are [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts).
+Resolved symbol identity, rather than spelling alone, selects those contracts.
+The `^` reflection extension is described separately in
+[Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md);
+its std descriptor types do not turn metadata fields into source syntax.
+
 Source examples use **four spaces per indentation level**. Tabs are not used for indentation.
 
 Comments are lexical trivia. They are ignored by parsing, do not enter the typed AST or AIR, and do not affect effects, trace specs, runtime policy, limits, traces, or runtime behavior.
@@ -158,8 +166,15 @@ TypeDecl      ::= "type" Ident TypeParams? ";"
                 | "type" Ident TypeParams? "=" TypeExpr ";"
                 | "type" Ident TypeParams? "=" RecordType
 
-EnumDecl      ::= "enum" Ident TypeParams? "{" EnumVariant* "}"
-EnumVariant   ::= Ident ("(" TypeList? ")")? ";"
+EnumDecl      ::= "enum" Ident TypeParams? "{" EnumVariants? "}"
+EnumVariants  ::= EnumVariant ("," EnumVariant)* ","?
+EnumVariant   ::= Ident
+                | Ident "(" VariantParams? ")"
+                | Ident "{" VariantFields? "}"
+VariantParams ::= VariantParam ("," VariantParam)* ","?
+VariantParam  ::= (Ident ":")? TypeExpr
+VariantFields ::= VariantField ("," VariantField)* ","?
+VariantField  ::= Ident ":" TypeExpr
 
 SpecDecl     ::= "spec" Ident TypeParams? SpecKindAnn? SpecDeclTail
 SpecKindAnn  ::= ":" SpecKind
@@ -353,10 +368,8 @@ Trace specs are compile-time spec expressions over action patterns:
 
 ```etas
 public spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & -Secret.read<_>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    (Approval.request >> CompanyEmail.send<WorkAccount>)
+    & -Secret.read<_>;
 ```
 
 Spec bounds appear on type parameters with `~`:
@@ -524,6 +537,12 @@ Param         ::= Ident ":" TypeExpr
 FlowClause    ::= DeclarationConformance
 ```
 
+`requested_actions`, `default_actions`, and `escaping_effects` are analysis or
+package-interface metadata fields, not additional `FlowClause` forms. Examples
+of these fields must be shown outside Etas source blocks. Source code expresses
+the behavior through its body, optional effect row, handlers, and spec clauses;
+the compiler derives and validates the corresponding metadata.
+
 `flow` is the ordinary user-defined callable declaration in the source language. The compiler infers the return type, effect row, and determinism class: `Deterministic` or `NonDeterministic`. This applies to every flow, including `main`. Local declarations usually omit `![...]`; when a flow writes an explicit effect row, that row is checked as an upper-bound constraint on the inferred body effects. Etas-implemented `tool` declarations also have bodies, but they are model-callable boundaries with extra schema, trace-spec, effect/action, and output-safety rules. Exported APIs may write explicit effects or rely on generated package metadata.
 
 `~` is the declaration conformance operator. On declarations, the right-hand side
@@ -555,8 +574,8 @@ construct only trace specs:
 ```text
 +A      allow action pattern A
 -A      deny action pattern A
-A >> B  require A before B
-A << B  require A after B, equivalent to B >> A
+A >> B  locally allow A and B; require valid matching A evidence before every B
+A << B  locally allow A and B; require valid matching B evidence before every A
 ```
 
 If a path can name more than one conformance kind in scope, the compiler rejects
@@ -907,10 +926,13 @@ Sanitized << AcademicSearch.search;
 HumanReview >> Blog.publish<Site>;
 ```
 
-Internally, these requirements normalize to trace-spec terms such as
-`trace.before(Approval.request, CompanyEmail.send<WorkAccount>)`. This keeps
-source syntax compact while preserving a typed representation for static
-analysis, monitor generation, manifests, and diagnostics.
+For `A >> B`, normalization emits local `Allow(A)` and `Allow(B)` entries plus
+`Before(guard = A, target = B)`. Repeating `+A` and `+B` is optional and
+idempotent. This is a semantic expansion within the existing trace-spec
+grammar, not a general expression operator or an action invocation. Normalization
+preserves `|` alternatives and independently composed spec/scope boundaries;
+denials and outer authority checks remain effective. See
+[Trace Specs](05-type-system-and-errors.md#154-trace-specs) for the full rules.
 
 ### 1.7 Expressions
 
@@ -956,7 +978,9 @@ HandlerValueExpr
               ::= Expr  // must type-check as a handler value; a bare block is invalid
 HandlerExpr   ::= "handler" HandlerBlock
 HandlerBlock  ::= "{" HandlerArm* "}"
-HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" ContinuationBinder? "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+ContinuationBinder
+              ::= "as" Ident
 HandlerArmBlock
               ::= "{" Stmt* FinalNeverExpr? "}"
 FinalNeverExpr
@@ -1235,7 +1259,35 @@ is rejected. Use `finish expr;` for answer completion, `resume expr;` for action
 resumption, or a `never` expression such as `abort(...)` for non-returning
 completion.
 
-These handlers are intentionally more restricted than Koka-style algebraic effect handlers. They are runtime-scoped action handlers for approval, recovery, fallback, trace, and replay; they are not an MVP mechanism for generators, arbitrary coroutines, stored continuations, or multi-shot nondeterministic search.
+An optional `as k` binds the current action's single-shot continuation. The
+action must return a type other than `never`. Without the binder, existing
+`resume value;` behavior is unchanged. With the binder, immediate `resume` and
+explicit transfer consume the same continuation; neither may be used after the
+other has consumed it.
+
+```etas
+Async.yield() as k => {
+    scheduler.requeue(k, ());
+}
+
+Async.await(task) as k => {
+    scheduler.park(task, k);
+}
+```
+
+The standard scheduler transfer operations return `never` to the current arm:
+they consume its continuation and return control to the owning scheduler. They
+do not abort the program. An ordinary queue operation returning `unit` is not
+an alternative arm completion. Continuations are scope-bound, non-copyable
+values, not ordinary callable values; they cannot escape their task scope or be
+serialized. See [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
+
+These handlers remain more restricted than unrestricted algebraic effect
+handlers. They support scoped single-shot scheduling, not unrestricted
+continuation storage, detached coroutines, or multi-shot nondeterministic
+search. `as` reuses the existing keyword; `async`, `await`, `yield`, and
+`suspend` are not added as keywords. `Async.await` and `Async.yield` are
+standard action names.
 
 ### 1.8 Names And Patterns
 
@@ -1260,11 +1312,49 @@ LiteralPattern
 TuplePattern  ::= "(" Pattern ("," Pattern)* ","? ")"
 RecordPattern ::= Path? "{" PatternField* "}"
 PatternField  ::= Ident (":" Pattern)? ","?
-VariantPattern::= Path "(" PatternList? ")"
+VariantPattern::= Path
+                | Path "(" PatternList? ")"
+                | Path "{" VariantPatternFields? "}"
+VariantPatternFields
+              ::= PatternFieldEntry ("," PatternFieldEntry)* ","?
+PatternFieldEntry
+              ::= Ident (":" Pattern)?
 PatternList   ::= Pattern ("," Pattern)* ","?
 ```
 
 Literal patterns match by value and do not bind names. For example, `(true, x)` is a tuple pattern whose first element is the boolean literal `true` and whose second element binds `x`. Boolean literals in pattern position are never variable bindings. MVP literal patterns include booleans, integers, strings, and chars; floating-point literal patterns are intentionally omitted because equality around `NaN` and precision should not be hidden inside pattern syntax.
+
+Enum declarations use comma-separated variants with an optional trailing comma.
+Parenthesized payloads are positional; optional labels such as
+`Rejected(reason: string)` document positions and do not turn them into record
+payloads. Brace payloads are named fields:
+
+```etas
+enum Response {
+    Success(string),
+    Failure { code: i32, message: string },
+}
+
+let response: Response = Response.Failure { code = 503, message = "unavailable" };
+let description = match response {
+    Response.Success(text) => text,
+    Response.Failure { code: _, message } => message,
+};
+```
+
+Variant construction reuses `CallExpr` for positional payloads and `RecordExpr`
+for named fields. Name resolution distinguishes record types from enum
+constructors. Qualified constructor paths are always available; unqualified
+constructors require unambiguous resolution from scope and the expected enum
+type. In a pattern, a bare name resolving to a nullary constructor matches that
+constructor rather than binding a variable. Named-field patterns list every
+field exactly once, in any order; use `field: _` to ignore a field. Duplicate,
+unknown, or missing fields and a mismatch of payload form are rejected.
+
+Direct and mutually recursive nominal ADTs use ordinary `type`/`enum`
+declarations and type references. Their value semantics, alias-cycle rules,
+schema boundary, and exhaustive matching requirements are defined in
+[Algebraic Data Types And Recursion](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion).
 
 ## 2. Key Design Principles
 
