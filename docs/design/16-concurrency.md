@@ -68,11 +68,12 @@ The MVP should provide these standard combinators:
 
 | Combinator | Behavior | Typical use |
 |---|---|---|
-| `join` | Wait for all branches and return their values | Fan-out/fan-in where all results are required |
-| `try_join` | If any branch raises an error, cancel remaining branches and raise the error | All-or-nothing parallel work |
+| `join` | Return all values, or fail fast by propagating the primary unhandled error | Fan-out/fan-in where all results are required |
+| `try_join` | Return `Result<Output, E>` for a common typed error, cancelling siblings on the first error | All-or-nothing work with an explicit error value |
 | `collect` | Wait for all branches and return per-branch `Result` values | Batch work where partial success is useful |
 | `race` | Return the first successful branch and cancel losers | Fallback providers, redundant retrieval, latency hedging |
-| `map_concurrent` | Apply a flow to a collection with bounded concurrency | Batch summarization, validation, retrieval, tests |
+| `map_concurrent` | Apply a flow with bounded concurrency and fail-fast errors | Batch work where every result is required |
+| `map_concurrent_collect` | Apply a flow with bounded concurrency and retain a `Result` for every input | Batch work where partial success is useful |
 
 Example:
 
@@ -88,6 +89,22 @@ The exact stdlib surface can evolve, but the semantic requirement is stable:
 these combinators create structured concurrent scopes visible to type checking,
 effect inference, policy analysis, limit checking, runtime scheduling, and trace
 recording.
+
+The error surface is intentionally not selected by an option flag:
+
+```text
+map_concurrent(xs, f)         : Array<B> ![E, Error<X>]
+map_concurrent_collect(xs, f) : Array<Result<B, X>> ![E]
+```
+
+Both preserve input order in their result arrays. `map_concurrent` cancels
+unfinished items after an error; `map_concurrent_collect` waits for every item.
+
+`join` and `try_join` are both fail-fast. Their distinction is representation,
+not scheduling: `join` propagates the primary unhandled error effect, while
+`try_join` handles one common typed `Error<E>` from its branches and returns
+`Result<Output, E>`. Other unhandled effects still escape normally. `collect`
+is the wait-all per-branch-result operation.
 
 `join` should support two input shapes:
 
@@ -260,6 +277,14 @@ let result = join((
 Rules:
 
 - `Concurrency(n)` bounds the number of simultaneously active child tasks;
+- `n` must be a positive `usize` within the runtime implementation ceiling;
+  the compiler rejects invalid constants and the runtime validates dynamic or
+  decoded values again;
+- a parked task does not occupy an active concurrency slot;
+- a runnable descendant counts against every enclosing concurrency ceiling, so
+  a nested scope has its own bound but cannot widen an ancestor bound;
+- a parent waiting for nested children is parked and releases its active slot,
+  preventing a bounded parent scope from deadlocking its descendants;
 - token, context, cost, and wall-time limits are shared by the whole concurrent
   scope;
 - child branches may have stricter nested limits;
@@ -273,11 +298,32 @@ Recommended semantics:
 
 | Combinator | Error behavior | Cancellation behavior |
 |---|---|---|
-| `join` | Propagate first unhandled error unless the stdlib variant documents result collection | Cancel unfinished siblings |
-| `try_join` | Propagate first unhandled error | Cancel unfinished siblings immediately |
+| `join` | Propagate the deterministic primary unhandled error | Cancel unfinished siblings and wait for cleanup |
+| `try_join` | Return `Err(primary)` for its common typed error | Cancel unfinished siblings and wait for cleanup |
 | `collect` | Convert each branch to `Result<T, E>` | Does not cancel siblings just because one branch fails |
-| `race` | Return first success; if all fail, raise or return collected failure depending on variant | Cancel losing branches after success |
-| `map_concurrent` | Depends on selected variant: fail-fast or collect | Bounded by `Concurrency(n)` |
+| `race` | Return first success; if all fail, propagate the deterministic primary error | Cancel losing branches after success |
+| `map_concurrent` | Propagate the deterministic primary error | Cancel unfinished items and wait for cleanup |
+| `map_concurrent_collect` | Return one input-ordered `Result` per item | Does not cancel siblings just because one item fails |
+
+`std.task.run` uses the same fail-fast rule. Inherited handlers may recover
+within a child; an error that remains unhandled at the child boundary fails the
+owning scope. `join` and `try_join` have the same fail-fast behavior here;
+`collect`, not a silent `join` variation, provides per-branch results. Result
+collection requires a declared common error type or explicit error mapping;
+it does not change the single-Error rule of `?` or invent implicit error unions.
+The original typed failure is propagated after cancellation and cleanup, not
+fabricated as a normal task result. `try_join` is the explicit exception that
+converts its declared common error to `Err`. Competing failures and the selected
+primary failure are trace-visible.
+
+Fail-fast scopes choose the primary error by the lowest source branch index
+among failures that reach a terminal state before cancellation settles. Array
+operations use input index; tuple operations use tuple position. A scheduler
+turn drains ready terminal notifications before making this choice and orders
+same-turn notifications by task id. Secondary failures remain trace events and
+do not replace the primary error. This makes the selection independent of host
+completion polling order for failures already observed at the cancellation
+barrier.
 
 Cancellation is cooperative at runtime mediation points: model calls, tool calls,
 effect actions, memory APIs, waits, and loop boundaries. A purely deterministic
@@ -285,6 +331,29 @@ CPU-bound branch may be cancelled at implementation-defined safe points.
 
 Cancellation must be trace-visible when it affects non-deterministic work or
 external actions.
+
+The default scheduler uses a FIFO ready queue. Starting or waking a task appends
+it to the queue, and each dispatch runs one cooperative quantum. A task that
+repeatedly yields therefore cannot starve an older ready task. External host
+completion timing remains nondeterministic and is captured by the structured
+trace for replay.
+
+Completion, resumption, cancellation, and scope exit coordinate task and
+continuation state atomically. Each task has one terminal completion, and each
+captured continuation has one terminal resumption or disposal. A task may wait
+many times, capturing a fresh continuation at each suspension. A completion
+racing cancellation cannot resume the same continuation twice or revive a
+cancelled scope. Late completions are reconciled or discarded with trace
+evidence. Cancellation is not rollback: already executed external actions
+remain real and may require application-level reconciliation.
+
+On cooperative failure, cancellation, or `finish`, the runtime unwinds the
+affected managed frames and runs their registered resource cleanup before the
+scope releases ownership. No `finally` keyword is added by this design; the
+cleanup guarantee belongs to resource/task execution contracts. Forced process
+termination is not a guarantee that arbitrary cleanup code can run. Catching a
+local cancellation error cannot clear the parent's cancellation state or reset
+its budgets.
 
 ## 12. Handlers In Concurrent Scopes
 
@@ -335,6 +404,14 @@ Trace events must preserve:
 This allows replay to restore the logical behavior of a concurrent run without
 depending on the original wall-clock interleaving.
 
+`Task`, `Scheduler`, and continuation handles are runtime capabilities, not user
+data. They cannot be serialized, hashed, compared, persisted, sent to a host or
+model payload, or decoded as ordinary Etas values. Runtime checkpoints use a
+separate internal scheduler snapshot that may encode task ids, owner scopes,
+ready/parked state, waiters, and continuation-arena state. That encoding is
+versioned runtime state, is valid only with its checkpoint, and is never exposed
+through source-level serialization APIs.
+
 ## 14. Automatic Scheduling
 
 The compiler/runtime may automatically schedule independent work concurrently
@@ -382,7 +459,9 @@ MVP should include:
 - `join`;
 - `try_join`;
 - `collect`;
+- `race`;
 - `map_concurrent`;
+- `map_concurrent_collect`;
 - `Concurrency(n)` limit;
 - effect/action/resource conflict checks for standard effects;
 - structured trace events for concurrent scopes;
