@@ -7,7 +7,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 identity_types = { package = "identity-types", version = "0.1.0", import = "identity", path = "deps/identity-types" }
 
 [[bin]]

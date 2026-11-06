@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/customer-support-router"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "customer-support-router"

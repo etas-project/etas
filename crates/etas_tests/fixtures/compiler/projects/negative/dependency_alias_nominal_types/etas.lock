@@ -1,5 +1,5 @@
 version = 1
-manifest_fingerprint = "etas-lock-input:v1|package=dependency-alias-nominal-types-negative|version=0.1.0|edition=2026|dependency:identity_types:package=identity-types,version=0.1.0,import=identity,path=deps/identity-types|dependency:std:version=0.1"
+manifest_fingerprint = "etas-lock-input:v1|package=dependency-alias-nominal-types-negative|version=0.1.0|edition=2026|dependency:identity_types:package=identity-types,version=0.1.0,import=identity,path=deps/identity-types|dependency:std:version=0.2"
 
 [[package]]
 name = "identity-types"
@@ -12,7 +12,7 @@ metadata_fingerprint = "blake3:0894bbed33f949de8ad45bb1edef874562fa50a7fbfc94160
 
 [[package]]
 name = "std"
-version = "0.1.0"
+version = "0.2.0"
 source = "builtin"
 checksum = "builtin:std"
 dependencies = []

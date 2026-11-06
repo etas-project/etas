@@ -20,7 +20,7 @@ edition = "2026"
 [source]
 root = "src"
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 [[bin]]
 name = "index-inference"
 module = "app.main"

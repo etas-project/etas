@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/module-path-mismatch"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "module-path-mismatch"

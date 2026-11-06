@@ -7,7 +7,7 @@ fn ordered_comparisons_replay_generic_metadata_factories_then_run() {
         &[
             (
                 "etas.toml",
-                "[package]\nname = \"ordered-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                "[package]\nname = \"ordered-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.2\" }\n",
             ),
             (
                 "src/repro/ordered.es",
@@ -29,7 +29,7 @@ public flow set<T>(compare: (T, T) -> i32 ![]) -> OrderedSet<T> {
             (
                 "etas.toml",
                 &format!(
-                    "[package]\nname = \"ordered-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.1\" }}\nordered = {{ path = \"{}\", import = \"repro.ordered\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
+                    "[package]\nname = \"ordered-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.2\" }}\nordered = {{ path = \"{}\", import = \"repro.ordered\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
                     dependency.display()
                 ),
             ),

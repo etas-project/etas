@@ -1153,7 +1153,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 company_agents = { package = "company-agents", version = "1.2", import = "company.agents" }
 
 [[bin]]

@@ -98,7 +98,7 @@ EDK packages are imported through ordinary package dependencies.
 
 ```toml
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 edk_http = { package = "edk-http", version = "0.1", import = "edk.http" }
 edk_workspace = { package = "edk-workspace", version = "0.1", import = "edk.workspace" }
 edk_email = { package = "edk-email", version = "0.1", import = "edk.email" }
@@ -190,7 +190,7 @@ members = [
 ]
 
 [workspace.dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 ```
 
 Each package should be usable independently through normal package management.

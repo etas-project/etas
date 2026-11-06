@@ -7,7 +7,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 trace_contracts = { package = "trace-contracts", version = "0.1.0", import = "trace_contract", path = "deps/trace-contracts" }
 
 [[bin]]

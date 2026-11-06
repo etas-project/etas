@@ -473,7 +473,7 @@ fn assert_package_manifest_matches_spec(project: &Path) {
         "{name} should declare the package source root"
     );
     assert!(
-        manifest.contains("[dependencies]\nstd = { version = \"0.1\" }"),
+        manifest.contains("[dependencies]\nstd = { version = \"0.2\" }"),
         "{name} should declare std as a package dependency"
     );
     assert!(

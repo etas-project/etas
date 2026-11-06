@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/missing-module"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "missing-module"

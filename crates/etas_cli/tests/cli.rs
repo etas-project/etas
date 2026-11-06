@@ -1521,7 +1521,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 "#,
         )],
     );
@@ -1552,7 +1552,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 "#,
         )],
     );
@@ -2256,7 +2256,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 "#,
             ),
             (
@@ -2383,8 +2383,11 @@ public flow normalize_text(text: string, form: Normalization) -> string ![] {
             .find(|dependency| dependency.identity.name == "std")
             .expect("text library should bind the builtin std package")
             .std_compatibility,
-        etas_package::metadata::builtin_std_dependency("0.1".into(), "2026".into())
-            .std_compatibility
+        etas_package::metadata::builtin_std_dependency(
+            etas_package::metadata::BUILTIN_STD_VERSION.into(),
+            "2026".into(),
+        )
+        .std_compatibility
     );
     for name in ["line_stream", "parse_number", "normalize_text"] {
         let summary = metadata
@@ -2412,7 +2415,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = {{ version = "0.1" }}
+std = {{ version = "0.2" }}
 text_contract = {{ path = "{}", import = "repro.textlib" }}
 
 [[bin]]
@@ -2468,7 +2471,7 @@ edition = "2026"
 [source]
 root = "src"
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 [[bin]]
 name = "probe"
 module = "repro.library"
@@ -2504,7 +2507,7 @@ edition = "2026"
 [source]
 root = "src"
 [dependencies]
-std = {{ version = "0.1" }}
+std = {{ version = "0.2" }}
 region_library = {{ path = "{}", import = "repro.library" }}
 [[bin]]
 name = "main"
@@ -2550,7 +2553,7 @@ fn package_metadata_std_spec_evidence_is_used_by_generic_calls() {
             &[
                 (
                     "etas.toml",
-                    "[package]\nname = \"region-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                    "[package]\nname = \"region-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.2\" }\n",
                 ),
                 (
                     "src/repro/library.es",
@@ -2579,7 +2582,7 @@ edition = "2026"
 [source]
 root = "src"
 [dependencies]
-std = {{ version = "0.1" }}
+std = {{ version = "0.2" }}
 region_library = {{ path = "{}", import = "repro.library" }}
 [[bin]]
 name = "main"

@@ -1,9 +1,9 @@
 version = 1
-manifest_fingerprint = "etas-lock-input:v1|package=effect-missing-console-row-01|version=0.1.0|edition=2026|dependency:std:version=0.1"
+manifest_fingerprint = "etas-lock-input:v1|package=effect-missing-console-row-01|version=0.1.0|edition=2026|dependency:std:version=0.2"
 
 [[package]]
 name = "std"
-version = "0.1.0"
+version = "0.2.0"
 source = "builtin"
 checksum = "builtin:std"
 dependencies = []

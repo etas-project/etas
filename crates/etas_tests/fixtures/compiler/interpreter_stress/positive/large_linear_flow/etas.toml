@@ -9,7 +9,7 @@ description = "Interpreter stress regression fixture for large_linear_flow"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "large-linear-flow"

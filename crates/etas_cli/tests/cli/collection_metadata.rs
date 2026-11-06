@@ -7,7 +7,7 @@ fn collection_functions_replay_generic_bounds_and_all_collection_families() {
         &[
             (
                 "etas.toml",
-                "[package]\nname = \"collection-api\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                "[package]\nname = \"collection-api\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.2\" }\n",
             ),
             (
                 "src/repro/api.es",
@@ -38,7 +38,7 @@ public flow unique_new<T>(compare: (T, T) -> i32 ![]) -> OrderedSet<T> { return 
             (
                 "etas.toml",
                 &format!(
-                    "[package]\nname = \"collection-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.1\" }}\napi = {{ path = \"{}\", import = \"repro.api\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
+                    "[package]\nname = \"collection-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.2\" }}\napi = {{ path = \"{}\", import = \"repro.api\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
                     library.display()
                 ),
             ),
@@ -236,7 +236,7 @@ fn collection_entry_iteration_replays_generic_dependency_signatures() {
         &[
             (
                 "etas.toml",
-                "[package]\nname = \"entry-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                "[package]\nname = \"entry-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.2\" }\n",
             ),
             (
                 "src/repro/library.es",
@@ -255,7 +255,7 @@ public flow unique<T>(entries: OrderedSet<T>) -> OrderedSet<T> { return entries;
             (
                 "etas.toml",
                 &format!(
-                    "[package]\nname = \"entry-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.1\" }}\nentries = {{ path = \"{}\", import = \"repro.library\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
+                    "[package]\nname = \"entry-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.2\" }}\nentries = {{ path = \"{}\", import = \"repro.library\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
                     dependency.display(),
                 ),
             ),

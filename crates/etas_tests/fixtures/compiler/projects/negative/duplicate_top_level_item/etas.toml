@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/duplicate-top-level-item"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "duplicate-top-level-item"

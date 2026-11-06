@@ -92,7 +92,7 @@ Fixture convention:
   workspaces. Each project has an `etas.toml`, an `etas.lock`, a `src/` tree,
   an `app.main` entry module, and cross-module imports. Project manifests must
   follow the Package Management SPEC: `[package]` name/version/edition,
-  `[source] root = "src"`, `[dependencies] std = { version = "0.1" }`, and a
+  `[source] root = "src"`, `[dependencies] std = { version = "0.2" }`, and a
   `[[bin]]` entry selecting `app.main.main`. Source files import only logical
   module paths; raw URLs and filesystem paths belong in package metadata. This
   corpus must stay at exactly 25 project-level fixtures unless the test is

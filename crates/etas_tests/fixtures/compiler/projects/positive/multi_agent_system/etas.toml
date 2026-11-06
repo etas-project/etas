@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/multi-agent-system"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [runtime]
 default_profile = "local-omlx"

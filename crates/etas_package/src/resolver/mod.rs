@@ -97,7 +97,7 @@ edition = "2026"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 
 [[bin]]
 name = "std-only"
@@ -143,7 +143,7 @@ version = "0.1.0"
 edition = "2026"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 tools = { package = "agent-tools", version = "0.1", import = "tools" }
 "#,
         )
@@ -555,7 +555,7 @@ version = "0.1.0"
 edition = "2026"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 "#,
         )
         .unwrap();
@@ -1046,7 +1046,7 @@ version = "0.1.0"
 edition = "2026"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 "#,
         )
         .unwrap();

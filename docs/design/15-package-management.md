@@ -82,7 +82,7 @@ repository = "https://github.com/org/research-assistant"
 root = "src"
 
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 company_agents = { package = "company-agents", version = "1.2", import = "company.agents" }
 web_search = { package = "web-search", version = "0.4", import = "web.search" }
 local_prompts = { path = "../local-prompts", import = "prompts" }
@@ -128,7 +128,7 @@ Etas should support these dependency source forms:
 
 ```toml
 [dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 local = { path = "../local-package", import = "local" }
 tools = { git = "https://github.com/org/tools.git", rev = "abc123", import = "tools" }
 tools_tag = { git = "https://github.com/org/tools.git", tag = "v0.3.0", import = "tools" }
@@ -151,7 +151,7 @@ Etas package versions use SemVer. The package manager should support:
 
 ```toml
 [dependencies]
-std = { version = "0.1" }          # compatible with 0.1.x
+std = { version = "0.2" }          # compatible with 0.2.x
 foo = { version = "^1.2.0" }       # >=1.2.0, <2.0.0
 bar = { version = "=1.2.3" }       # exactly 1.2.3
 baz = { version = ">=1.2,<1.5" }
@@ -286,7 +286,7 @@ members = [
 ]
 
 [workspace.dependencies]
-std = { version = "0.1" }
+std = { version = "0.2" }
 ```
 
 Workspace configuration is tooling-level metadata. It does not change source

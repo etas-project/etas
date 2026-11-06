@@ -7,7 +7,7 @@ fn priority_queue_comparison_replays_a_generic_metadata_factory_then_runs() {
         &[
             (
                 "etas.toml",
-                "[package]\nname = \"priority-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.1\" }\n",
+                "[package]\nname = \"priority-library\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = { version = \"0.2\" }\n",
             ),
             (
                 "src/repro/priority.es",
@@ -26,7 +26,7 @@ public flow make<T, P>(compare: (P, P) -> i32 ![]) -> PriorityQueue<T, P> {
             (
                 "etas.toml",
                 &format!(
-                    "[package]\nname = \"priority-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.1\" }}\npriority = {{ path = \"{}\", import = \"repro.priority\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
+                    "[package]\nname = \"priority-consumer\"\nversion = \"0.1.0\"\nedition = \"2026\"\n[source]\nroot = \"src\"\n[dependencies]\nstd = {{ version = \"0.2\" }}\npriority = {{ path = \"{}\", import = \"repro.priority\" }}\n[[bin]]\nname = \"main\"\nmodule = \"repro.consumer\"\nflow = \"main\"\n",
                     dependency.display()
                 ),
             ),
