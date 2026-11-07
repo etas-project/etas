@@ -425,6 +425,19 @@ etas run examples/checkpoint_resume.es \
 etas resume 0 --checkpoint-dir /tmp/etas-checkpoints
 ```
 
+Active task scopes can also checkpoint. The coordinator drains admitted CPU
+and Host work before saving task machines, queues, resource permits and parked
+Handler continuations. Resume preserves consumed budgets and completed actions.
+
+```bash
+etas run examples/concurrent_checkpoint.es --cpu-threads 4 \
+  --checkpoint-dir /tmp/etas-concurrent-checkpoints
+etas resume 0 --checkpoint-dir /tmp/etas-concurrent-checkpoints
+```
+
+The resumed example prints `tasks completed` without repeating `starting tasks`
+or the completed CPU jobs.
+
 Inspect phase and pass timing:
 
 ```bash
