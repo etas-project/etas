@@ -214,17 +214,21 @@ export PATH="$PWD/target/release:$PATH"
 etas --version
 ```
 
-Pure named `std.task` jobs can use multiple CPU workers:
+Pure named `std.task` jobs, including generic flows and flows from dependency
+source packages, can use multiple CPU workers:
 
 ```bash
 etas run program.es --cpu-threads 4
 etas run program.es --cpu-threads auto
+etas run examples/concurrent_generic.es --cpu-threads 4
 ```
 
 The default is `1`; the CLI caps `auto` and explicit counts at 64. The language
 `Concurrency(n)` limit applies independently to each scope and its descendants.
-Effectful jobs and Handler continuations execute on the coordinator. Active
-concurrent scopes must settle before taking a checkpoint.
+Effectful jobs and Handler continuations execute on the coordinator. Generic
+jobs need concrete, freezable input and output types. Active concurrent scopes
+can checkpoint after the coordinator drains admitted CPU work; see the
+checkpoint example below.
 
 The default feature set currently includes implemented commands and explicit
 placeholder commands. A smaller frontend-oriented build is available when the
