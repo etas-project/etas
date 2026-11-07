@@ -2949,6 +2949,7 @@ edition = "2026"
     fn write_builtin_std_lockfile(root: &Path) {
         let manifest = manifest::read_manifest(root).unwrap();
         let fingerprint = lockfile::manifest_dependency_fingerprint(&manifest);
+        let std_version = metadata::BUILTIN_STD_VERSION;
         fs::write(
             root.join("etas.lock"),
             format!(
@@ -2958,7 +2959,7 @@ manifest_fingerprint = "{fingerprint}"
 
 [[package]]
 name = "std"
-version = "0.1.0"
+version = "{std_version}"
 source = "builtin"
 checksum = "builtin:std"
 import_root = "std"
