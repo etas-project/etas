@@ -59,7 +59,7 @@ fn residual_cli_check_run_and_checkpoint_resume_use_the_real_interpreter_target(
     );
     let checkpoint = checkpoints.join("checkpoint-0.json");
     let saved = read_checkpoint_file(&checkpoint);
-    assert_eq!(saved["schema"], "etas.cli.interpreter-checkpoint.v75");
+    assert_eq!(saved["schema"], "etas.cli.interpreter-checkpoint.v76");
     assert_eq!(
         saved["checkpoint"]["machine"]["residual"]["scopes"]
             .as_array()
