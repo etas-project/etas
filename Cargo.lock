@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "etas_cli"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "clap",
  "etas_core",
@@ -545,8 +545,8 @@ dependencies = [
 
 [[package]]
 name = "etas_interpreter"
-version = "0.6.0"
-source = "git+https://github.com/etas-project/etas-interpreter.git?rev=1f12790e367eb8ea588f690d0d39f92a3e1cb47e#1f12790e367eb8ea588f690d0d39f92a3e1cb47e"
+version = "0.6.1"
+source = "git+https://github.com/etas-project/etas-interpreter.git?rev=224b5df4d868f749a6b8f170f05f41e46a08f954#224b5df4d868f749a6b8f170f05f41e46a08f954"
 dependencies = [
  "blake3",
  "etas_builtin",
