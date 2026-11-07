@@ -215,12 +215,15 @@ etas --version
 ```
 
 Pure named `std.task` jobs, including generic flows and flows from dependency
-source packages, can use multiple CPU workers:
+source packages, can use multiple CPU workers. Pure bound methods defined in the
+program can also use workers when their receivers can be frozen:
 
 ```bash
 etas run program.es --cpu-threads 4
 etas run program.es --cpu-threads auto
 etas run examples/concurrent_generic.es --cpu-threads 4
+etas run examples/concurrent_methods.es --cpu-threads 4 \
+  --checkpoint-dir /tmp/etas-method-checkpoints
 ```
 
 The default is `1`; the CLI caps `auto` and explicit counts at 64. The language

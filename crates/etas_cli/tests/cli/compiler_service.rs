@@ -1707,7 +1707,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
 
     let checkpoint_path = checkpoints.join("checkpoint-0.json");
     let artifact = read_checkpoint_file(&checkpoint_path);
-    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v75");
+    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v76");
 }
 
 #[test]
