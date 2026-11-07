@@ -216,7 +216,7 @@ etas --version
 
 Pure named `std.task` jobs, including generic flows and flows from dependency
 source packages, can use multiple CPU workers. Pure bound methods defined in the
-program can also use workers when their receivers can be frozen:
+program and closures with freezable captures can also use workers:
 
 ```bash
 etas run program.es --cpu-threads 4
@@ -224,12 +224,14 @@ etas run program.es --cpu-threads auto
 etas run examples/concurrent_generic.es --cpu-threads 4
 etas run examples/concurrent_methods.es --cpu-threads 4 \
   --checkpoint-dir /tmp/etas-method-checkpoints
+etas run examples/concurrent_closures.es --cpu-threads 4 \
+  --checkpoint-dir /tmp/etas-closure-checkpoints
 ```
 
 The default is `1`; the CLI caps `auto` and explicit counts at 64. The language
 `Concurrency(n)` limit applies independently to each scope and its descendants.
 Effectful jobs and Handler continuations execute on the coordinator. Generic
-jobs need concrete, freezable input and output types. Active concurrent scopes
+jobs need concrete, freezable input, output and capture types. Active concurrent scopes
 can checkpoint after the coordinator drains admitted CPU work; see the
 checkpoint example below.
 

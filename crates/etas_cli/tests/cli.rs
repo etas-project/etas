@@ -7280,7 +7280,7 @@ fn top_level_examples_check_and_run_from_cli() {
         .collect::<Vec<_>>();
     sources.sort();
 
-    assert_eq!(sources.len(), 13);
+    assert_eq!(sources.len(), 14);
 
     for source in &sources {
         let (code, stdout, stderr) = run(["etas", "check", path(source)]);
