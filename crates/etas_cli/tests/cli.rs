@@ -7365,7 +7365,7 @@ fn top_level_examples_check_and_run_from_cli() {
     assert!(
         fs::read_to_string(&trace)
             .unwrap()
-            .contains("etas.cli.interpreter-report.v2")
+            .contains("etas.cli.interpreter-report.v3")
     );
 
     let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");

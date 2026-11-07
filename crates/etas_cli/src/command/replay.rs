@@ -24,10 +24,10 @@ pub fn run(
     let report: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|_| CliError::InvalidUsage("replay trace is not valid JSON".to_owned()))?;
     if report.get("schema").and_then(serde_json::Value::as_str)
-        != Some("etas.cli.interpreter-report.v2")
+        != Some(etas_interpreter::api::codec::INTERPRETER_REPORT_SCHEMA)
     {
         return Err(CliError::InvalidUsage(
-            "replay requires a v2 interpreter report from `etas run --trace-out`; legacy reports may contain private checkpoint data".to_owned(),
+            "replay requires a v3 interpreter report from `etas run --trace-out`; legacy reports may contain private checkpoint data".to_owned(),
         ));
     }
 
