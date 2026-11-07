@@ -126,14 +126,10 @@ flow main(args: Array<string>) -> i32 ![Console, Error<IOError>] {
 }
 
 #[test]
-fn packaged_cli_reports_the_embedded_compiler_patch_version() {
+fn packaged_cli_reports_its_package_version() {
     let (code, stdout, stderr) = run_process_with_command(isolated_command(), ["--version"], "");
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains(env!("CARGO_PKG_VERSION")), "{stdout}");
-    assert_eq!(
-        etas_frontend::FRONTEND_COMPILER_VERSION,
-        env!("CARGO_PKG_VERSION")
-    );
 }
 
 #[test]

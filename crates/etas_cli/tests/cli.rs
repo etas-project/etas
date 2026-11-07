@@ -499,6 +499,7 @@ flow main(args: Array<string>) -> i32 ![] {
 
 #[test]
 fn run_tls_failure_reports_host_error_without_panic() {
+    let _guard = lock_model_cli_e2e();
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind local listener");
     let address = listener.local_addr().expect("local addr");
     listener
@@ -7279,7 +7280,7 @@ fn top_level_examples_check_and_run_from_cli() {
         .collect::<Vec<_>>();
     sources.sort();
 
-    assert_eq!(sources.len(), 10);
+    assert_eq!(sources.len(), 11);
 
     for source in &sources {
         let (code, stdout, stderr) = run(["etas", "check", path(source)]);
