@@ -214,6 +214,18 @@ export PATH="$PWD/target/release:$PATH"
 etas --version
 ```
 
+Pure named `std.task` jobs can use multiple CPU workers:
+
+```bash
+etas run program.es --cpu-threads 4
+etas run program.es --cpu-threads auto
+```
+
+The default is `1`; the CLI caps `auto` and explicit counts at 64. The language
+`Concurrency(n)` limit applies independently to each scope and its descendants.
+Effectful jobs and Handler continuations execute on the coordinator. Active
+concurrent scopes must settle before taking a checkpoint.
+
 The default feature set currently includes implemented commands and explicit
 placeholder commands. A smaller frontend-oriented build is available when the
 interpreter is not needed:

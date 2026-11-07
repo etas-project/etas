@@ -62,6 +62,13 @@ pub struct RunArgs {
     )]
     pub max_call_depth: Option<u32>,
 
+    #[arg(
+        long,
+        value_name = "N|auto",
+        help = "CPU worker threads for eligible pure tasks (default: 1)"
+    )]
+    pub cpu_threads: Option<String>,
+
     #[arg(long)]
     pub budget_tokens: Option<u64>,
 

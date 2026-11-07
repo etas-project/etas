@@ -57,6 +57,7 @@ pub(crate) struct CliHostConfig {
     pub(super) tool_private_resolution: PrivateResolutionPolicy,
     pub(super) profile_name: Option<String>,
     pub(super) execution_limits: ExecutionLimits,
+    pub(super) cpu_threads: std::num::NonZeroUsize,
     pub(super) shutdown_grace_ms: u64,
 }
 
@@ -252,6 +253,7 @@ impl CliHostConfig {
             tool_private_resolution: PrivateResolutionPolicy::PublicOnly,
             profile_name: None,
             execution_limits: ExecutionLimits::default(),
+            cpu_threads: std::num::NonZeroUsize::MIN,
             shutdown_grace_ms: 5_000,
         }
     }
@@ -358,6 +360,7 @@ impl CliHostConfig {
             tool_private_resolution,
             profile_name: None,
             execution_limits: ExecutionLimits::default(),
+            cpu_threads: std::num::NonZeroUsize::MIN,
             shutdown_grace_ms: 5_000,
         };
         config.apply_command_profile(&RuntimeCommandProfile {
@@ -874,6 +877,7 @@ impl CliHostConfig {
             "execution": {
                 "max_call_depth": self.execution_limits.max_call_depth.get(),
                 "max_steps": self.execution_limits.max_steps.map(NonZeroU64::get),
+                "cpu_threads": self.cpu_threads.get(),
                 "shutdown_grace_ms": self.shutdown_grace_ms,
             },
         });
@@ -995,6 +999,7 @@ impl CliHostConfig {
             .unwrap_or_default();
         RunOptions {
             execution_limits: self.execution_limits,
+            cpu_threads: self.cpu_threads,
             host_context: HostExecutionContext {
                 authority: etas_host::AuthorityContext {
                     grants,
@@ -1039,6 +1044,7 @@ pub(crate) fn runtime_config_for_run(
     runtime_config: Option<&Path>,
     allow_net: &[String],
     max_call_depth: Option<u32>,
+    cpu_threads: Option<&str>,
     model_output_encoding: Option<&str>,
 ) -> Result<CliHostConfig, CliError> {
     let mut env = RuntimeEnvOverrides::from_environment()?;
@@ -1059,6 +1065,7 @@ pub(crate) fn runtime_config_for_run(
             &RuntimeExecutionProfile::default(),
             max_call_depth,
         )?;
+        config.cpu_threads = parse_cpu_threads(cpu_threads)?;
         return Ok(config);
     };
     let manifest = read_manifest(&package_root).map_err(|error| {
@@ -1098,7 +1105,28 @@ pub(crate) fn runtime_config_for_run(
         &local_runtime.runtime.execution,
         max_call_depth,
     )?;
+    config.cpu_threads = parse_cpu_threads(cpu_threads)?;
     Ok(config)
+}
+
+fn parse_cpu_threads(value: Option<&str>) -> Result<std::num::NonZeroUsize, CliError> {
+    const MAX_CPU_THREADS: usize = 64;
+    let threads = match value {
+        None => 1,
+        Some("auto") => std::thread::available_parallelism()
+            .map(std::num::NonZeroUsize::get)
+            .unwrap_or(1)
+            .min(MAX_CPU_THREADS),
+        Some(value) => value.parse::<usize>().map_err(|_| {
+            CliError::InvalidUsage("`--cpu-threads` expects a positive integer or `auto`".into())
+        })?,
+    };
+    if !(1..=MAX_CPU_THREADS).contains(&threads) {
+        return Err(CliError::InvalidUsage(format!(
+            "`--cpu-threads` must be between 1 and {MAX_CPU_THREADS}"
+        )));
+    }
+    Ok(std::num::NonZeroUsize::new(threads).expect("validated CPU thread count is non-zero"))
 }
 
 fn package_root_for_inputs(inputs: &[PathBuf]) -> Option<PathBuf> {
@@ -2516,6 +2544,7 @@ mod tests {
         assert_eq!(
             config.runtime_profile_json()["execution"],
             serde_json::json!({
+                "cpu_threads": 1,
                 "max_call_depth": 32,
                 "max_steps": 500_000,
                 "shutdown_grace_ms": 2_000,

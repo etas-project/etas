@@ -937,6 +937,7 @@ pub(crate) fn run_checked(
     let config = if dry_run || !effects_enabled {
         let mut hostless = CliHostConfig::none();
         hostless.execution_limits = config.execution_limits;
+        hostless.cpu_threads = config.cpu_threads;
         hostless.shutdown_grace_ms = config.shutdown_grace_ms;
         hostless
     } else {

@@ -30,6 +30,8 @@ mod atomic_replace;
 mod command_result;
 #[path = "cli/compiler_service.rs"]
 mod compiler_service;
+#[path = "cli/cpu_threads.rs"]
+mod cpu_threads;
 #[path = "cli/index_inference.rs"]
 mod index_inference;
 #[path = "cli/message_cast.rs"]
