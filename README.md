@@ -235,6 +235,11 @@ jobs need concrete, freezable input, output and capture types. Active concurrent
 can checkpoint after the coordinator drains admitted CPU work; see the
 checkpoint example below.
 
+Embedding applications can share a finite CPU pool across invocations through
+the interpreter API's `InterpreterRuntime` and `RunOptions::runtime`. Each run
+has its own `cpu_threads` quota and cancellation scope, and ready runs take
+turns in the dispatch queue. The CLI uses an isolated executor for each invocation.
+
 The default feature set currently includes implemented commands and explicit
 placeholder commands. A smaller frontend-oriented build is available when the
 interpreter is not needed:
