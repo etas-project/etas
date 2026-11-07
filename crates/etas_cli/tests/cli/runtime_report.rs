@@ -53,7 +53,7 @@ flow main(args: Array<string>) -> i32 {
         }
         assert!(stdout.contains("\"value\":\"0\""), "{format}");
         let text = fs::read_to_string(&trace).unwrap();
-        assert!(text.contains("etas.cli.interpreter-report.v2"));
+        assert!(text.contains("etas.cli.interpreter-report.v3"));
         assert!(text.contains("\"command\":\"run\""));
         assert!(
             text.matches("\"kind\":\"variant\"").count() >= 8002,
@@ -142,7 +142,7 @@ flow main(args: Array<string>) -> i32 {
     assert!(!stderr.contains("AUDIT_ONLY_CLI_REPORT_SECRET"));
     let bytes = fs::read(&trace).unwrap();
     let report: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(report["schema"], "etas.cli.interpreter-report.v2");
+    assert_eq!(report["schema"], "etas.cli.interpreter-report.v3");
     assert!(
         !String::from_utf8(bytes)
             .unwrap()
@@ -163,13 +163,14 @@ flow main(args: Array<string>) -> i32 {
 #[test]
 fn replay_rejects_legacy_reports_without_printing_their_payloads() {
     let trace = temp_path("legacy-secret-report", "json");
-    fs::write(
-        &trace,
-        r#"{"schema":"etas.cli.interpreter-report.v1","value":"AUDIT_ONLY_LEGACY_REPORT_SECRET"}"#,
-    )
-    .unwrap();
-    let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");
-    assert_eq!(code, 2, "{stdout}\n{stderr}");
-    assert!(stdout.is_empty(), "{stdout}");
-    assert!(!stderr.contains("AUDIT_ONLY_LEGACY_REPORT_SECRET"));
+    for version in [1, 2] {
+        fs::write(
+            &trace,
+            format!(r#"{{"schema":"etas.cli.interpreter-report.v{version}","value":"AUDIT_ONLY_LEGACY_REPORT_SECRET"}}"#),
+        ).unwrap();
+        let (code, stdout, stderr) = run_process(["replay", path(&trace)], "");
+        assert_eq!(code, 2, "{stdout}\n{stderr}");
+        assert!(stdout.is_empty(), "{stdout}");
+        assert!(!stderr.contains("AUDIT_ONLY_LEGACY_REPORT_SECRET"));
+    }
 }

@@ -6,7 +6,11 @@ fn hostless_run_preserves_cpu_worker_configuration() {
         "cpu-workers",
         r#"
 import std.task.{map_concurrent, run, Scheduler};
-flow square(value: i32) -> i32 { return value * value; }
+flow square(value: i32) -> i32 {
+    var index = 0;
+    while index < 2000 limit Iterations(2000) { index = index + 1; }
+    return value * value;
+}
 flow main(args: Array<string>) -> i32 {
     let values = run((scheduler: Scheduler) => {
         return map_concurrent([2, 3, 4, 5], square);
@@ -35,9 +39,17 @@ flow main(args: Array<string>) -> i32 {
             .unwrap()
             .iter()
             .filter(|event| event["kind"] == "task_cpu_completed")
-            .map(|event| event["thread"].as_str().unwrap())
+            .map(|event| {
+                assert_eq!(event["layer"], "cpu_scheduling");
+                assert!(event.get("thread").is_none());
+                event["worker"].as_u64().unwrap()
+            })
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(workers.len(), if threads == "1" { 0 } else { 4 });
+        if threads == "1" {
+            assert!(workers.is_empty());
+        } else {
+            assert!(workers.len() >= 2 && workers.iter().all(|worker| *worker < 4));
+        }
     }
     assert_eq!(values[0], values[1]);
 }

@@ -58,7 +58,7 @@ flow main(args: Array<string>) -> i32 { let allowed = ask(); checkpoint("saved")
     let bytes = fs::read(&file).unwrap();
     assert!(!String::from_utf8_lossy(&bytes).contains("cli-private-replay-marker-9074"));
     let artifact = read_checkpoint_file_with_keys(&file, Some(&key_dir));
-    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v73");
+    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v74");
     let id = artifact["checkpoint"]["replay_key_id"].as_str().unwrap();
     assert_eq!(id.len(), 64);
     assert!(key_dir.join(id).is_file());
