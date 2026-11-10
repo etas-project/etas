@@ -28,6 +28,9 @@ mod atomic_replace;
 #[cfg(unix)]
 #[path = "cli/command_result.rs"]
 mod command_result;
+#[cfg(unix)]
+#[path = "cli/command_root_cwd.rs"]
+mod command_root_cwd;
 #[path = "cli/compiler_service.rs"]
 mod compiler_service;
 #[path = "cli/cpu_threads.rs"]
