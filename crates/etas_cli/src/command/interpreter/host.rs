@@ -5,16 +5,17 @@ use etas_frontend::CheckedProject;
 use etas_host::console::{ConsoleRequest, ConsoleResponse, LocalStdioClient};
 use etas_host::{
     ApprovalDecision, ApprovalRequest, ApprovalResponse, BrowserProtocolRequest,
-    BrowserProtocolResponse, Budget, CommandRequest, CommandResponse, CostBudget,
-    FilesystemRequest, FilesystemResponse, HostError, HostErrorCode, HostRequestId, HostValue,
-    InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient, LocalFilesystemClient,
-    LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryRequest, MemoryResponse, ModelRequest,
-    ModelResponse, PolicyClient, PolicyDecision, PolicyEvaluationRequest, PolicyResponse,
-    SecretOperation, SecretPayload, SecretRef, SecretRequest, SecretResponse, SecretValue,
-    SessionRequest, SessionResponse, SqliteMemoryClient, SqliteSessionClient, StreamRequest,
-    StreamResponse, TRACE_SPEC_RUNTIME_REF, TcpConnectRequest, TcpConnectResponse, TimeBudget,
-    TlsConnectRequest, TlsConnectResponse, TokenBudget, ToolRequest, ToolResponse,
-    TraceSpecRuntimeClient, UnsafeAllowAllLocalPolicyClient,
+    BrowserProtocolResponse, Budget, CommandProcessRequest, CommandProcessResponse, CommandRequest,
+    CommandResponse, CostBudget, FilesystemRequest, FilesystemResponse, HostError, HostErrorCode,
+    HostRequestId, HostValue, InMemoryMemoryClient, InMemorySessionClient, LocalCommandClient,
+    LocalFilesystemClient, LocalStreamClient, LocalTcpClient, LocalTlsClient, MemoryRequest,
+    MemoryResponse, ModelRequest, ModelResponse, PolicyClient, PolicyDecision,
+    PolicyEvaluationRequest, PolicyResponse, SecretOperation, SecretPayload, SecretRef,
+    SecretRequest, SecretResponse, SecretValue, SessionRequest, SessionResponse,
+    SqliteMemoryClient, SqliteSessionClient, StreamRequest, StreamResponse, TRACE_SPEC_RUNTIME_REF,
+    TcpConnectRequest, TcpConnectResponse, TimeBudget, TlsConnectRequest, TlsConnectResponse,
+    TokenBudget, ToolRequest, ToolResponse, TraceSpecRuntimeClient,
+    UnsafeAllowAllLocalPolicyClient,
 };
 use etas_interpreter::{
     api::{EntryPoint, RunOptions, entry_args_from_strings},
@@ -549,6 +550,20 @@ impl HostServices for CliHost {
         self.profiled("host.command", future)
     }
 
+    fn command_process<'a>(
+        &'a self,
+        operation: etas_host::execution::OperationContext,
+        request: CommandProcessRequest,
+    ) -> HostFuture<'a, Result<CommandProcessResponse, HostError>> {
+        let future = match &self.command {
+            Some(adapter) => {
+                Box::pin(async move { adapter.execute_process_scoped(request, &operation).await })
+            }
+            None => self.unavailable.command_process(request),
+        };
+        self.profiled("host.command.process", future)
+    }
+
     fn tcp<'a>(
         &'a self,
         operation: etas_host::execution::OperationContext,
@@ -843,6 +858,18 @@ impl UnavailableHostServices {
             Err(unavailable(
                 request.id,
                 "command host adapter is not configured",
+            ))
+        })
+    }
+
+    fn command_process(
+        &self,
+        request: CommandProcessRequest,
+    ) -> HostFuture<'_, Result<CommandProcessResponse, HostError>> {
+        Box::pin(async move {
+            Err(unavailable(
+                request.id,
+                "command process host adapter is not configured",
             ))
         })
     }

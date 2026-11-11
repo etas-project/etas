@@ -60,6 +60,7 @@ impl HostServices for NoHost {
         session_write: etas_host::session::SessionWriteRequest => etas_host::session::SessionWriteResponse,
         filesystem: etas_host::FilesystemRequest => etas_host::FilesystemResponse,
         command: etas_host::CommandRequest => etas_host::CommandResponse,
+        command_process: etas_host::CommandProcessRequest => etas_host::CommandProcessResponse,
         tcp: etas_host::TcpConnectRequest => etas_host::TcpConnectResponse,
         stream: etas_host::StreamRequest => etas_host::StreamResponse,
         tls: etas_host::TlsConnectRequest => etas_host::TlsConnectResponse,

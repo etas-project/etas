@@ -64,6 +64,13 @@ pub struct RunArgs {
 
     #[arg(
         long,
+        value_name = "ROUNDS",
+        help = "Maximum model tool-call rounds per inference (1..=4096)"
+    )]
+    pub max_tool_rounds: Option<u32>,
+
+    #[arg(
+        long,
         value_name = "N|auto",
         help = "CPU worker threads for eligible pure tasks (default: 1)"
     )]

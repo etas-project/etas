@@ -387,6 +387,7 @@ default_profile = "local-omlx"
 [runtime.execution]
 max_call_depth = 4096
 max_steps = 1000000
+max_tool_rounds = 64
 
 [runtime.profiles.local-omlx.model]
 adapter = "omlx-openai"

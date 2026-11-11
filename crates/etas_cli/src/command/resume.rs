@@ -84,6 +84,17 @@ pub(crate) fn run(
         .and_then(serde_json::Value::as_u64)
         .unwrap_or(1)
         .to_string();
+    let checkpoint_max_tool_rounds = checkpoint_profile
+        .get("execution")
+        .and_then(|execution| execution.get("max_tool_rounds"))
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|rounds| u32::try_from(rounds).ok())
+        .ok_or_else(|| {
+            CliError::InvalidUsage(
+                "checkpoint runtime profile is missing a valid execution.max_tool_rounds"
+                    .to_owned(),
+            )
+        })?;
     let host_config = super::interpreter::runtime_config_for_run(
         &source_paths,
         Some(&flow),
@@ -91,6 +102,7 @@ pub(crate) fn run(
         args.runtime_config.as_deref(),
         &[],
         args.max_call_depth.or(Some(checkpoint_max_call_depth)),
+        args.max_tool_rounds.or(Some(checkpoint_max_tool_rounds)),
         Some(&checkpoint_cpu_threads),
         args.model_output_encoding.as_deref(),
     )?;
