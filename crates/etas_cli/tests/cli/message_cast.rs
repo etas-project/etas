@@ -86,3 +86,35 @@ flow main(args: Array<string>) -> i32 { return 0; }
     assert_eq!(code, 1, "{stdout}\n{stderr}");
     assert!(stderr.contains("type::TypeMismatch"), "{stdout}\n{stderr}");
 }
+
+#[test]
+fn escaped_backslash_n_preserves_utf8_payload_bytes() {
+    let root = message_project(
+        r#"
+module app.main;
+import std.agent.message.Message;
+import std.codec.text.utf8_encode;
+import std.json.{JsonValue, stringify};
+
+flow main(args: Array<string>) -> i32 {
+    let original = "\\n";
+    let projected: Option<Message<JsonValue>> = Message.new(utf8_encode(original)).cast<JsonValue>();
+    let value = match projected {
+        Some(value) => value.body,
+        None => { return 1; },
+    };
+    return match stringify(value) {
+        Ok(text) => if text == "[92.0,110.0]" { 0 } else { 2 },
+        Err(_) => 3,
+    };
+}
+"#,
+    );
+    let (code, stdout, stderr) = message_cli(["run", path(&root)]);
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"0"}"#),
+        "{stdout}"
+    );
+}
