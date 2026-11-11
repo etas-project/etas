@@ -324,6 +324,7 @@ fn flow_effect_summary(
         handler_requests: None,
         returned_callables: None,
         default_handler_effects: forwarder.then(|| crate::PackageDefaultHandlerEffectsMetadata {
+            behavior: None,
             direct_effects: Default::default(),
             default_actions: effect_row_from_std(&decl.requested_actions),
             handlers: decl

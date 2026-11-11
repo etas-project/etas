@@ -35,17 +35,18 @@ pub(crate) fn run(
         .into_iter()
         .map(|path| std::fs::canonicalize(&path).map_err(|source| CliError::Io { path, source }))
         .collect::<Result<Vec<_>, _>>()?;
-    let host_config = super::interpreter::runtime_config_for_run(
-        &project_inputs,
-        Some(&flow),
-        args.profile.as_deref(),
-        args.runtime_config.as_deref(),
-        &args.allow_net,
-        args.max_call_depth,
-        args.max_tool_rounds,
-        args.cpu_threads.as_deref(),
-        args.model_output_encoding.as_deref(),
-    )?;
+    let host_config =
+        super::interpreter::runtime_config_for_run(super::interpreter::RuntimeConfigRequest {
+            inputs: &project_inputs,
+            flow: Some(&flow),
+            requested_profile: args.profile.as_deref(),
+            runtime_config: args.runtime_config.as_deref(),
+            allow_net: &args.allow_net,
+            max_call_depth: args.max_call_depth,
+            max_tool_rounds: args.max_tool_rounds,
+            cpu_threads: args.cpu_threads.as_deref(),
+            model_output_encoding: args.model_output_encoding.as_deref(),
+        })?;
     if args.print_runtime_profile {
         writeln!(
             stdout,

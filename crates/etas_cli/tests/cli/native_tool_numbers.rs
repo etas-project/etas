@@ -3,7 +3,7 @@ use super::*;
 enum Expected {
     Value(f64),
     SchemaRepair,
-    TypeError,
+    InvocationRejection,
 }
 
 #[test]
@@ -18,8 +18,8 @@ fn native_tool_json_numbers_follow_checked_parameter_types() {
         ("f32", "90", Expected::Value(90.0)),
         ("f32", "90.0", Expected::Value(90.0)),
         ("i32", "90.5", Expected::SchemaRepair),
-        ("u8", "256", Expected::TypeError),
-        ("f32", "1e300", Expected::TypeError),
+        ("u8", "256", Expected::InvocationRejection),
+        ("f32", "1e300", Expected::InvocationRejection),
     ] {
         let arguments = format!(r#"{{"value":{literal}}}"#);
         let (url, server) = typed_output::server(vec![
@@ -91,7 +91,7 @@ public flow main(args: Array<string>) -> i32 ![Agentic, Error<IOError>] {{
         let (code, stdout, stderr) = run_process_with_command(command(), ["run", path(&root)], "");
         shutdown_mock_server(&url);
         let requests = server.join().unwrap();
-        if !matches!(expected, Expected::TypeError) {
+        {
             assert_eq!(code, 0, "{ty}/{literal}: {stdout}\n{stderr}");
             assert!(stderr.is_empty(), "{stderr}");
             assert_eq!(stdout, "finished\n");
@@ -101,6 +101,19 @@ public flow main(args: Array<string>) -> i32 ![Agentic, Error<IOError>] {{
                 .iter()
                 .filter(|message| message["role"] == "tool")
                 .collect();
+            if matches!(expected, Expected::SchemaRepair) {
+                assert!(
+                    results.is_empty(),
+                    "invalid generation must not invent a tool execution result"
+                );
+                assert!(
+                    messages.iter().any(|message| message["content"]
+                        .as_str()
+                        .is_some_and(|text| text.contains("tool"))),
+                    "{messages:?}"
+                );
+                continue;
+            }
             assert_eq!(results.len(), 1);
             assert_eq!(results[0]["tool_call_id"], "echo-1");
             let value: serde_json::Value =
@@ -111,17 +124,12 @@ public flow main(args: Array<string>) -> i32 ![Agentic, Error<IOError>] {{
                     expected.to_bits(),
                     "{ty}/{literal}"
                 ),
-                Expected::SchemaRepair => assert_eq!(value["kind"], "InvalidToolArguments"),
-                Expected::TypeError => unreachable!(),
+                Expected::SchemaRepair => unreachable!("schema rejection was checked above"),
+                Expected::InvocationRejection => {
+                    assert_eq!(value["name"], "Err");
+                    assert_eq!(value["fields"][0]["code"], "invalid_arguments");
+                }
             }
-        } else {
-            assert_eq!(code, 3, "{ty}/{literal}: {stdout}\n{stderr}");
-            assert!(
-                stderr.contains("did not match the source tool parameter type"),
-                "{stderr}"
-            );
-            assert!(stdout.is_empty(), "{stdout}");
-            assert_eq!(requests.len(), 1);
         }
     }
 }

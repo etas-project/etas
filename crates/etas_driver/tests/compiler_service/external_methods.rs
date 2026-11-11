@@ -229,19 +229,36 @@ public flow invoke(draft: CallableDef<() -> unit ![Agentic.infer<Worker.run, boo
         panic!("expected callback signature")
     };
     let row = &set.graph.rows[callback.effects.unwrap().0 as usize];
-    let [
-        etas_code::descriptor::StaticEffectArgInfo::Callable(method),
-        _,
-    ] = row.effects[0].arguments.as_slice()
+    let [etas_code::descriptor::StaticEffectArgInfo::Type(context), _] =
+        row.effects[0].arguments.as_slice()
     else {
-        panic!("expected callable selector: {row:?}")
+        panic!("expected agent context selector: {row:?}")
+    };
+    let etas_code::descriptor::TypeInfo::AgentContext(method) =
+        &set.graph.types[context.0 as usize]
+    else {
+        panic!("canonical context");
     };
     let worker = headers
         .agents
         .iter()
         .find(|agent| agent.identity.declaration() == ["Worker"])
         .unwrap();
-    assert_eq!(method, worker.default_entry.as_ref().unwrap());
+    assert_eq!(
+        &etas_code::CallableId::method(method.clone()),
+        worker.default_entry.as_ref().unwrap()
+    );
+    let other = headers
+        .agents
+        .iter()
+        .find(|agent| agent.identity.declaration() == ["Other"])
+        .unwrap()
+        .default_entry
+        .as_ref()
+        .unwrap()
+        .as_method()
+        .unwrap()
+        .clone();
     for alias in ["first", "second"] {
         let mut loaded = origin_metadata::consumer(&workspace, alias);
         loaded.loaded.input.sources[0].text = format!(
@@ -277,12 +294,9 @@ public flow invoke(draft: CallableDef<() -> unit ![Agentic.infer<Worker.run, boo
     else {
         panic!("expected callback")
     };
-    let etas_frontend::ProjectExternalEffectArgInput::Path(path) = &mut row.effects[0].args[0]
-    else {
-        panic!("expected static path")
-    };
-    let subject = path.len() - 2;
-    path[subject] = "Other".into();
+    row.effects[0].args[0] = etas_frontend::ProjectExternalEffectArgInput::Type(
+        etas_frontend::ProjectExternalTypeInput::AgentContext(other),
+    );
     let checked = Frontend.check_project(loaded.loaded.input);
     assert!(checked.checked.is_none());
     assert!(

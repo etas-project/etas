@@ -25,6 +25,8 @@ static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 #[path = "cli/atomic_replace.rs"]
 mod atomic_replace;
 
+#[path = "cli/agent_step.rs"]
+mod agent_step;
 #[cfg(unix)]
 #[path = "cli/command_result.rs"]
 mod command_result;
@@ -168,6 +170,63 @@ fn check_reports_effective_optimization_level_and_rejects_invalid_combinations()
         assert_eq!(code, 2);
         assert!(!stderr.is_empty());
     }
+}
+
+#[test]
+fn run_sessionless_conversation_assembly_without_runtime_services() {
+    let file = fixture(
+        "pure-conversation-assembly",
+        r#"
+module tests.cli.conversation_assembly;
+import std.agent.{AssistantTurn, MessageContent, StepDecision, StepResult};
+import std.agent.conversation;
+type Context;
+flow main(args: Array<string>) -> i32 {
+    let history = conversation.from_prompt(Prompt.new().data("input"));
+    let turn = AssistantTurn {
+        request_id = None,
+        content = [MessageContent.Text("complete")],
+        provider_data = {},
+    };
+    let step = StepResult<Context, string> {
+        turn = turn, decision = StepDecision.Final("complete"), usage = None,
+    };
+    return match conversation.append_step(history, step) {
+        Ok(next) => if next.session == None && next != history { 0 } else { 1 },
+        Err(error) => abort(error.message),
+    };
+}
+"#,
+    );
+    let (code, stdout, stderr) = run(["etas", "run", path(&file)]);
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"0"}"#),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
+}
+
+#[test]
+fn run_tool_reference_prepares_canonical_definitions_without_reflection_or_host_calls() {
+    let file = fixture(
+        "pure-tool-reference",
+        r#"
+module tests.cli.tool_reference;
+tool never_run() -> unit ![] { return abort("reference must not execute"); }
+flow main(args: Array<string>) -> i32 {
+    let description = std.tool.reference(never_run);
+    return if description.id != "" && description.revision != "" { 0 } else { 1 };
+}
+"#,
+    );
+    let (code, stdout, stderr) = run(["etas", "run", path(&file)]);
+    assert_eq!(code, 0, "{stderr}\n{stdout}");
+    assert!(
+        stdout.contains(r#"run value: {"kind":"number","type":"i32","value":"0"}"#),
+        "{stdout}"
+    );
+    assert!(stderr.is_empty(), "{stderr}");
 }
 
 #[test]
@@ -5791,11 +5850,10 @@ fn full_phase1_agent_runtime_repairs_invalid_model_tool_args() {
         "tool arg repair should add one model round before executing the source tool:\n{model_requests:#?}"
     );
     assert!(
-        model_requests
-            .iter()
-            .any(|request| request.contains("InvalidToolArguments")
-                && request.contains("model supplied invalid arguments")),
-        "invalid tool args should be returned to the model as a tool result:\n{model_requests:#?}"
+        model_requests.iter().any(|request| request
+            .contains("The previous tool request was invalid")
+            && request.contains("args is missing field")),
+        "the default controller must explicitly request corrected arguments:\n{model_requests:#?}"
     );
     assert!(
         model_requests
@@ -8605,7 +8663,13 @@ fn spawn_openai_completion_sequence_server(
 }
 
 fn read_http_request(stream: &mut std::net::TcpStream) -> String {
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    // Accepted sockets inherit O_NONBLOCK on macOS; this helper uses blocking I/O.
+    stream
+        .set_nonblocking(false)
+        .expect("blocking mock connection");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("mock request timeout");
     let mut buffer = Vec::new();
     let mut chunk = [0_u8; 4096];
     while let Ok(read) = stream.read(&mut chunk) {
@@ -8815,7 +8879,8 @@ fn package_action_trace_parameter_calls(
             .iter()
             .map(|child| package_action_trace_parameter_calls(child, expected))
             .sum(),
-        etas_package::PackageActionTraceMetadata::Repeat { child } => {
+        etas_package::PackageActionTraceMetadata::Repeat { child }
+        | etas_package::PackageActionTraceMetadata::DefaultHandler { child, .. } => {
             package_action_trace_parameter_calls(child, expected)
         }
         etas_package::PackageActionTraceMetadata::Widened {

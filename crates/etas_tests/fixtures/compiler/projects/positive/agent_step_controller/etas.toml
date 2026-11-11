@@ -1,0 +1,24 @@
+[package]
+name = "agent-step-controller"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[[bin]]
+name = "agent-step-controller"
+module = "app.main"
+flow = "main"
+
+[runtime]
+default_profile = "local"
+
+[runtime.profiles.local.model]
+adapter = "omlx-openai"
+model = "configured-model"
+base_url = "http://127.0.0.1:8848/v1"
+
+[runtime.profiles.local.policy]
+mode = "local-static"
+rules = ["model=allow", "tool=allow", "console=allow"]

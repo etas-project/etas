@@ -421,9 +421,9 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .callables[0]
         .id = etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
-    // This forged Tool no longer claims a Flow snapshot. Keep the graph
-    // internally coherent so the frontend can reject the export-kind mismatch.
-    metadata
+    // Keep the forged descriptor internally coherent; the frontend must still
+    // reject its disagreement with the public flow export.
+    let snapshots = metadata
         .public_metadata
         .definition_descriptors
         .as_mut()
@@ -433,9 +433,13 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .snapshots
         .as_mut()
-        .unwrap()
-        .flows
-        .clear();
+        .unwrap();
+    let mut snapshot = snapshots.flows.pop().unwrap();
+    snapshot.identity = binding.definition.clone();
+    snapshot.revision.definition =
+        etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
+    snapshot.dependencies.lexical_owner = binding.definition.clone();
+    snapshots.tools.push(snapshot);
     let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
     let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
     etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
@@ -916,6 +920,7 @@ impl agent Worker {
     public flow explain(value: i32) -> i32 { return value; }
     private flow secret() -> i32 { return 99; }
 }
+
 public flow lookup() -> i32 { return 7; }
 flow inspect() -> unit { let definition = ^Worker; return; }
 "#,
@@ -968,6 +973,87 @@ flow inspect() -> unit { let definition = ^Worker; return; }
             .as_ref()
             .unwrap();
         assert_eq!(replayed.snapshots.as_ref().unwrap(), snapshots);
+    }
+}
+
+#[test]
+fn native_tool_reference_keeps_producer_revision_through_binary_metadata_and_import_aliases() {
+    let workspace = workspace_with_source(
+        r#"
+module library.api;
+public tool echo(text: string) -> string ![] { return std.text.uppercase(text); }
+public flow lookup() -> i32 { return 7; }
+"#,
+    );
+    let root = workspace.0.join("library");
+    let metadata = etas_package::read_package_metadata_artifact(&root)
+        .unwrap()
+        .unwrap();
+    let snapshots = metadata
+        .public_metadata
+        .definition_descriptors
+        .as_ref()
+        .unwrap()
+        .headers
+        .as_ref()
+        .unwrap()
+        .snapshots
+        .as_ref()
+        .unwrap();
+    assert_eq!(snapshots.tools.len(), 1);
+    let expected = &snapshots.tools[0];
+    assert_eq!(expected.identity.kind(), etas_code::DefinitionKind::Tool);
+    let producer = etas_driver::load_project(
+        &options(&root),
+        LoadProjectRequest {
+            paths: vec![root],
+            all: true,
+            entry_policy: EntryPolicy::Optional,
+            flow: None,
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
+    )
+    .unwrap();
+    let producer_checked = check(&producer);
+    let symbol = producer_checked
+        .symbols
+        .iter()
+        .find(|symbol| symbol.name == "echo")
+        .unwrap()
+        .id;
+    let producer_definitions =
+        prepare_native_definitions(&producer, &producer_checked, Default::default()).unwrap();
+    let (identity, revision) = producer_definitions
+        .catalog()
+        .tool_reference_for_symbol(symbol, producer_definitions.syntax_operations())
+        .unwrap();
+    assert_eq!(identity, expected.identity);
+    assert_eq!(revision, expected.revision_info());
+    for alias in ["first", "second"] {
+        let mut loaded = consumer(&workspace, alias);
+        loaded.loaded.input.sources[0].text = format!(
+            r#"
+module app.main;
+import {alias}.library.api.echo as native;
+flow main() -> std.agent.ToolRef {{ return std.tool.reference(native); }}
+"#
+        );
+        assert_eq!(loaded.loaded.input.sources.len(), 1);
+        let checked = check(&loaded);
+        let symbol = checked
+            .symbols
+            .iter()
+            .find(|symbol| symbol.name == "native")
+            .unwrap()
+            .id;
+        let definitions =
+            prepare_native_definitions(&loaded, &checked, Default::default()).unwrap();
+        let replayed = definitions
+            .catalog()
+            .tool_reference_for_symbol(symbol, definitions.syntax_operations())
+            .unwrap();
+        assert_eq!(replayed, (identity.clone(), revision.clone()));
     }
 }
 

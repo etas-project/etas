@@ -679,6 +679,21 @@ fn external_public_metadata_input(
                 }),
                 default_handler_effects: summary.default_handler_effects.as_ref().map(|effects| {
                     etas_frontend::ProjectExternalDefaultHandlerEffectsInput {
+                        behavior: effects.behavior.as_ref().map(|behavior| {
+                            let mut behavior = behavior.clone();
+                            behavior.remap_paths(|kind, path| match kind {
+                                etas_package_metadata::CallableValuePathKind::Type => {
+                                    dependency_type_path(package, packages, path)
+                                }
+                                etas_package_metadata::CallableValuePathKind::Effect
+                                    if is_standard_effect_path(path) =>
+                                {
+                                    path.to_vec()
+                                }
+                                _ => dependency_path_with_graph(package, packages, path),
+                            });
+                            behavior
+                        }),
                         direct_effects: dependency_effect_row_input(
                             package,
                             packages,
@@ -1132,6 +1147,15 @@ fn dependency_action_trace_input(
                     .collect(),
             )
         }
+        etas_package::PackageActionTraceMetadata::DefaultHandler { guards, child } => {
+            ProjectExternalActionTraceInput::DefaultHandler {
+                guards: guards
+                    .iter()
+                    .map(|guard| dependency_effect_ref_input(package, packages, guard))
+                    .collect(),
+                body: Box::new(dependency_action_trace_input(package, packages, child)),
+            }
+        }
         etas_package::PackageActionTraceMetadata::Repeat { child } => {
             ProjectExternalActionTraceInput::Repeat(Box::new(dependency_action_trace_input(
                 package, packages, child,
@@ -1348,6 +1372,9 @@ fn dependency_type_input_with_graph(
     ty: &etas_package::PackageTypeMetadata,
 ) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::AgentContext { method } => {
+            ProjectExternalTypeInput::AgentContext(method.clone())
+        }
         etas_package::PackageTypeMetadata::Existential { bounds } => {
             ProjectExternalTypeInput::Existential {
                 bounds: bounds
@@ -1552,6 +1579,9 @@ fn is_standard_type_path(path: &[String]) -> bool {
 
 fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::AgentContext { method } => {
+            ProjectExternalTypeInput::AgentContext(method.clone())
+        }
         etas_package::PackageTypeMetadata::Existential { bounds } => {
             ProjectExternalTypeInput::Existential {
                 bounds: bounds

@@ -444,6 +444,9 @@ pub enum PackageEffectArgMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PackageTypeMetadata {
+    AgentContext {
+        method: etas_code::MethodId,
+    },
     Existential {
         bounds: Vec<PackageSpecBoundMetadata>,
     },
@@ -608,6 +611,7 @@ pub struct PackageParameterRequestMetadata {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageDefaultHandlerEffectsMetadata {
+    pub behavior: Option<etas_package_metadata::DefaultBehavior>,
     pub direct_effects: PackageEffectRowMetadata,
     pub default_actions: PackageEffectRowMetadata,
     pub handlers: Vec<PackageDefaultHandlerContributionMetadata>,
@@ -624,6 +628,10 @@ pub struct PackageDefaultHandlerContributionMetadata {
 pub enum PackageActionTraceMetadata {
     #[default]
     Empty,
+    DefaultHandler {
+        guards: Vec<PackageEffectRefMetadata>,
+        child: Box<PackageActionTraceMetadata>,
+    },
     Event {
         action: PackageEffectRefMetadata,
         source: PackageActionTraceEventSourceMetadata,

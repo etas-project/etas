@@ -78,6 +78,216 @@ fn environment_from_source(source: &str, import_root: &str) -> ProjectEnvironmen
 }
 
 #[test]
+fn binary_generic_tool_invocation_specializes_the_consumers_checked_surface() {
+    let environment = environment_from_source(
+        r#"module library;
+import std.agent.{ToolCall, ToolResult};
+public flow execute<C>(call: ToolCall<C>) -> ToolResult<C> {
+    return std.tool.invoke<C>(call);
+}
+
+
+"#,
+        "native",
+    );
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"module app.main;
+import native.library.execute;
+import std.agent.ToolCall;
+import std.json.JsonValue;
+import std.io.println;
+tool echo(text: string) -> string ![] { println(text)?; return text; }
+tool fail() -> string ![Error<i32>] { return perform Error<i32>.raise(99); }
+@tools([echo, fail])
+agent Runner() -> unit ![Error<i32>] {
+    let call = ToolCall<Runner.run> { id = "generic", tool = std.tool.reference(echo), args = JsonValue.Object({"text" => JsonValue.String("hi")}) };
+    execute(call);
+    execute(call);
+}
+flow main() -> unit {
+    handle Runner.run() with { Error<i32>.raise(_) => { finish (); } };
+}
+"#,
+    ));
+    input.environment = environment;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(checked.sources.sources.len(), 1);
+    let runner = checked
+        .hir
+        .items
+        .iter()
+        .find_map(|(item, declaration)| match declaration {
+            etas_hir::HirItem::Agent(agent)
+                if checked.hir.symbols.get(agent.symbol).unwrap().name == "Runner" =>
+            {
+                Some(item)
+            }
+            _ => None,
+        })
+        .unwrap();
+    let summary = &checked.effects.item_effects[&runner];
+    assert!(
+        summary
+            .escaping_effects
+            .effects
+            .iter()
+            .any(|effect| matches!(effect, etas_effects::Effect::Error(_))),
+        "{summary:?}"
+    );
+    let stdout = etas_effects::Effect::Action(etas_effects::ActionRef {
+        tag: etas_effects::CONSOLE_TAG,
+        action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+    });
+    assert!(
+        summary.requested_actions.effects.contains(&stdout),
+        "{summary:?}"
+    );
+    assert!(
+        summary.default_actions.effects.contains(&stdout),
+        "{summary:?}"
+    );
+    let mut pending = vec![&summary.action_trace];
+    let mut writes = 0;
+    while let Some(trace) = pending.pop() {
+        match trace {
+            etas_effects::ActionTraceDomain::Event(event) => {
+                writes += usize::from(event.action == stdout)
+            }
+            etas_effects::ActionTraceDomain::Seq(children)
+            | etas_effects::ActionTraceDomain::Choice(children) => pending.extend(children),
+            etas_effects::ActionTraceDomain::Empty => {}
+            other => panic!("tool trace was not specialized: {other:?}"),
+        }
+    }
+    assert_eq!(writes, 2, "{summary:?}");
+}
+
+#[test]
+fn binary_imported_agent_context_replays_its_exposed_tools() {
+    let environment = environment_from_source(
+        r#"module library;
+tool echo(text: string) -> string ![] { std.io.println(text)?; return text; }
+@tools([echo])
+public agent Writer() -> string { return perform infer<string>(Prompt.new()); }
+"#,
+        "native",
+    );
+    assert!(
+        environment.external_modules.iter().all(|module| module
+            .exports
+            .iter()
+            .all(|export| export.name != "echo"
+                || export.visibility == etas_hir::Visibility::Private)),
+        "publishing an agent tool contract must not make its declaration public"
+    );
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"module consumer;
+import native.library.Writer;
+import std.agent.{ToolCall, ToolRef};
+import std.json.JsonValue;
+flow main() -> string {
+    return handle Writer.run() with {
+        Agentic.infer<Writer.run, string>(_, _) => {
+            let call = ToolCall<Writer.run> {
+                id = "simulated",
+                tool = ToolRef { id = "unregistered", revision = "unregistered" },
+                args = JsonValue.Null,
+            };
+            std.tool.invoke(call);
+            resume "handled";
+        }
+    };
+}
+"#,
+    ));
+    input.environment = environment;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(checked.sources.sources.len(), 1);
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    let stdout = etas_effects::Effect::Action(etas_effects::ActionRef {
+        tag: etas_effects::CONSOLE_TAG,
+        action: etas_effects::CONSOLE_STDOUT_WRITE_ACTION,
+    });
+    assert!(summary.escaping_effects.is_empty(), "{summary:?}");
+    assert!(
+        summary.requested_actions.effects.contains(&stdout),
+        "{summary:?}"
+    );
+    assert!(
+        summary.default_actions.effects.contains(&stdout),
+        "{summary:?}"
+    );
+    assert!(
+        summary.action_trace.action_set().contains(&stdout),
+        "{summary:?}"
+    );
+}
+
+#[test]
+fn binary_agent_context_keeps_its_canonical_method_across_import_roots() {
+    let source = r#"module library;
+public agent Writer() -> string {
+    return perform infer<string>(Prompt.new());
+}
+"#;
+    let mut identities = Vec::new();
+    for root in ["native", "alternate"] {
+        let mut input = ProjectInput::single_source(SourceInput::anonymous(format!(
+            "module app.main; import {root}.library.Writer; flow main() -> string {{ return Writer.run(); }}"
+        )));
+        input.environment = environment_from_source(source, root);
+        let output = Frontend.check_project(input);
+        assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+        let checked = output.checked.unwrap();
+        assert_eq!(checked.sources.sources.len(), 1);
+        let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+        let mut contexts = Vec::new();
+        for action in summary.requested_actions.effects.iter() {
+            if let etas_effects::Effect::AppliedAction(action) = action
+                && action.action.tag == etas_effects::AGENTIC_TAG
+            {
+                let etas_types::EffectArgRef::Type(context) = action.args[0] else {
+                    panic!("agentic context is not a checked type");
+                };
+                let Some(etas_types::Type::AgentContext(etas_types::AgentContextRef::Portable(
+                    method,
+                ))) = checked.type_store.get(context)
+                else {
+                    panic!("agentic context is not a portable method");
+                };
+                contexts.push((**method).clone());
+            }
+        }
+        assert_eq!(contexts.len(), 2, "{summary:?}");
+        assert_eq!(contexts[0], contexts[1]);
+        identities.push(contexts[0].clone());
+    }
+    assert_eq!(identities[0], identities[1]);
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        "module app.main; import native.library.Writer; flow main() -> string { return Writer.run() with { Agentic.infer<_, string>(_, _) => resume \"mock\"; }; }",
+    ));
+    input.environment = environment_from_source(source, "native");
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(checked.sources.sources.len(), 1);
+    let summary = &checked.effects.item_effects[&checked.entry.unwrap()];
+    assert_eq!(summary.requested_actions.effects.len(), 1, "{summary:#?}");
+    assert!(summary.default_actions.is_empty(), "{summary:#?}");
+    assert_eq!(
+        summary.action_trace.action_set(),
+        summary.requested_actions.effects
+    );
+    assert!(
+        matches!(&summary.support, etas_effects::InterpreterSupport::RequiresInterpreterOrchestration(requirements) if requirements.host.kinds.is_empty())
+    );
+}
+
+#[test]
 fn binary_spec_method_labels_bind_declared_names_not_implementation_locals() {
     let environment = environment_from_source(
         r#"module library;

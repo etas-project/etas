@@ -42,28 +42,6 @@ pub fn load_project(
     load_project_with_optimization(
         global,
         profile,
-        paths,
-        all,
-        entry_policy,
-        flow,
-        source_dependency_mode,
-        None,
-    )
-}
-
-pub fn load_project_with_optimization(
-    global: &GlobalOptions,
-    profile: &ProfileHandle,
-    paths: Vec<PathBuf>,
-    all: bool,
-    entry_policy: EntryPolicy,
-    flow: Option<String>,
-    source_dependency_mode: SourceDependencyMode,
-    optimization_level: Option<u8>,
-) -> Result<LoadedProjectInput, CliError> {
-    let options = driver_options_with_optimization(global, profile, optimization_level)?;
-    etas_driver::load_project(
-        &options,
         LoadProjectRequest {
             paths,
             all,
@@ -72,9 +50,20 @@ pub fn load_project_with_optimization(
             bin: None,
             source_dependency_mode,
         },
+        None,
     )
-    .map(|loaded| loaded.loaded)
-    .map_err(driver_error)
+}
+
+pub fn load_project_with_optimization(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+    request: LoadProjectRequest,
+    optimization_level: Option<u8>,
+) -> Result<LoadedProjectInput, CliError> {
+    let options = driver_options_with_optimization(global, profile, optimization_level)?;
+    etas_driver::load_project(&options, request)
+        .map(|loaded| loaded.loaded)
+        .map_err(driver_error)
 }
 
 pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) -> DriverOptions {

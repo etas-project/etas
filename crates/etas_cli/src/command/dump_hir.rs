@@ -24,11 +24,14 @@ pub fn run(
     let loaded = super::frontend::load_project_with_optimization(
         global,
         &profile,
-        args.input,
-        args.all,
-        EntryPolicy::CompileOnly,
-        None,
-        SourceDependencyMode::MetadataOnly,
+        etas_driver::LoadProjectRequest {
+            paths: args.input,
+            all: args.all,
+            entry_policy: EntryPolicy::CompileOnly,
+            flow: None,
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
         Some(optimization_level),
     )?;
     let sources = loaded.sources;
