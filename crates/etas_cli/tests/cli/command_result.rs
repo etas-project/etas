@@ -136,3 +136,77 @@ flow main(args: Array<string>) -> i32 {
     assert_eq!(resumed["value"], expected);
     assert_eq!(fs::read(&checkpoint).unwrap(), original);
 }
+
+#[cfg(unix)]
+#[test]
+fn background_command_process_supports_reconnect_io_and_stop() {
+    let root = package_fixture(
+        "command-process",
+        &[
+            (
+                "etas.toml",
+                r#"
+[package]
+name = "command-process"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = { version = "0.2" }
+[[bin]]
+name = "command-process"
+module = "app.main"
+flow = "main"
+[runtime]
+default_profile = "test-command"
+[runtime.profiles.test-command.command]
+allow = ["/bin/cat", "/bin/sh"]
+isolation = "trusted-unconfined"
+[runtime.profiles.test-command.policy]
+mode = "local-static"
+rules = ["command=allow"]
+"#,
+            ),
+            (
+                "src/app/main.es",
+                r#"
+module app.main;
+import std.codec.text.utf8_encode;
+import std.host.command.{CommandEvent, close_stdin, command, id, read, reconnect, start, stop, write};
+
+flow main(args: Array<string>) -> i32 {
+    let process = start(command("/bin/cat", []), DefaultCommandSandbox);
+    let attached = reconnect(id(process), DefaultCommandSandbox);
+    write(attached, utf8_encode("ping"));
+    close_stdin(process);
+    let output_ok = match read(attached, 1024) {
+        CommandEvent.Output(stdout, stderr) => stdout == utf8_encode("ping") && stderr == utf8_encode(""),
+        CommandEvent.Exited(code, stdout, stderr) => code == 0 && stdout == utf8_encode("ping") && stderr == utf8_encode(""),
+        CommandEvent.Stopped(_, _) => false,
+    };
+    let sleeper = start(command("/bin/sh", ["-c", "sleep 30"]), DefaultCommandSandbox);
+    let stopped = match stop(sleeper) { CommandEvent.Stopped(_, _) => true, _ => false };
+    if output_ok && stopped { return 0; }
+    return 1;
+}
+"#,
+            ),
+        ],
+    );
+    let command = || {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        remove_legacy_runtime_host_env(&mut command);
+        command
+    };
+    let (code, stdout, stderr) =
+        run_process_with_command(command(), ["pkg", "lock", path(&root)], "");
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+
+    let (code, stdout, stderr) = run_process_with_command(
+        command(),
+        ["run", path(&root), "--profile", "test-command"],
+        "",
+    );
+    assert_eq!(code, 0, "{stdout}\n{stderr}");
+}

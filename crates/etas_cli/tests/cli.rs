@@ -45,6 +45,8 @@ mod model_completion;
 mod native_tool_handlers;
 #[path = "cli/native_tool_numbers.rs"]
 mod native_tool_numbers;
+#[path = "cli/tool_rounds.rs"]
+mod tool_rounds;
 
 #[path = "cli/collection_metadata.rs"]
 mod collection_metadata;

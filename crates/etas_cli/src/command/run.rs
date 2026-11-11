@@ -42,6 +42,7 @@ pub(crate) fn run(
         args.runtime_config.as_deref(),
         &args.allow_net,
         args.max_call_depth,
+        args.max_tool_rounds,
         args.cpu_threads.as_deref(),
         args.model_output_encoding.as_deref(),
     )?;

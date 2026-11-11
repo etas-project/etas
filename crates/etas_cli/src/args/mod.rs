@@ -157,4 +157,11 @@ pub struct ResumeArgs {
         help = "Maximum heap-backed interpreter call depth (1..=65536)"
     )]
     pub max_call_depth: Option<u32>,
+
+    #[arg(
+        long,
+        value_name = "ROUNDS",
+        help = "Maximum model tool-call rounds per inference (1..=4096)"
+    )]
+    pub max_tool_rounds: Option<u32>,
 }

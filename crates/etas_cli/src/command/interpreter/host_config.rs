@@ -59,6 +59,7 @@ pub(crate) struct CliHostConfig {
     pub(super) execution_limits: ExecutionLimits,
     pub(super) cpu_threads: std::num::NonZeroUsize,
     pub(super) shutdown_grace_ms: u64,
+    pub(super) max_tool_rounds: usize,
 }
 
 #[derive(Clone)]
@@ -255,6 +256,7 @@ impl CliHostConfig {
             execution_limits: ExecutionLimits::default(),
             cpu_threads: std::num::NonZeroUsize::MIN,
             shutdown_grace_ms: 5_000,
+            max_tool_rounds: ModelExecutionPolicy::phase1_default().max_tool_rounds,
         }
     }
 
@@ -362,6 +364,7 @@ impl CliHostConfig {
             execution_limits: ExecutionLimits::default(),
             cpu_threads: std::num::NonZeroUsize::MIN,
             shutdown_grace_ms: 5_000,
+            max_tool_rounds: ModelExecutionPolicy::phase1_default().max_tool_rounds,
         };
         config.apply_command_profile(&RuntimeCommandProfile {
             isolation: optional_env("ETAS_HOST_COMMAND_ISOLATION")?,
@@ -529,6 +532,7 @@ impl CliHostConfig {
         manifest: &RuntimeExecutionProfile,
         local: &RuntimeExecutionProfile,
         cli_max_call_depth: Option<u32>,
+        cli_max_tool_rounds: Option<u32>,
     ) -> Result<(), CliError> {
         let default = ExecutionLimits::default();
         let max_call_depth = cli_max_call_depth
@@ -559,6 +563,16 @@ impl CliHostConfig {
             ));
         }
         self.shutdown_grace_ms = grace;
+        let max_tool_rounds = cli_max_tool_rounds
+            .or(local.max_tool_rounds)
+            .or(manifest.max_tool_rounds)
+            .unwrap_or(ModelExecutionPolicy::phase1_default().max_tool_rounds as u32);
+        if !(1..=4096).contains(&max_tool_rounds) {
+            return Err(CliError::InvalidUsage(
+                "`max_tool_rounds` must be between 1 and 4096".to_owned(),
+            ));
+        }
+        self.max_tool_rounds = max_tool_rounds as usize;
         Ok(())
     }
 
@@ -879,6 +893,7 @@ impl CliHostConfig {
                 "max_steps": self.execution_limits.max_steps.map(NonZeroU64::get),
                 "cpu_threads": self.cpu_threads.get(),
                 "shutdown_grace_ms": self.shutdown_grace_ms,
+                "max_tool_rounds": self.max_tool_rounds,
             },
         });
         let fingerprint = runtime_profile_fingerprint(&profile);
@@ -900,7 +915,9 @@ impl CliHostConfig {
             grants.push(etas_host::HostActionGrant::allow("Agentic", "infer"));
         }
         if !self.command_allowed_programs.is_empty() {
-            grants.push(etas_host::HostActionGrant::allow("Command", "run"));
+            for action in ["run", "start", "reconnect", "read", "write", "stop"] {
+                grants.push(etas_host::HostActionGrant::allow("Command", action));
+            }
         }
         if self.filesystem_mode != FilesystemMode::None {
             grants.push(etas_host::HostActionGrant::allow("Fs", "read"));
@@ -986,7 +1003,7 @@ impl CliHostConfig {
         } else {
             SandboxPolicy::deny_all()
         };
-        let model_policy = self
+        let mut model_policy = self
             .model
             .as_ref()
             .map(|model| ModelExecutionPolicy {
@@ -997,6 +1014,7 @@ impl CliHostConfig {
                 ..ModelExecutionPolicy::phase1_default()
             })
             .unwrap_or_default();
+        model_policy.max_tool_rounds = self.max_tool_rounds;
         RunOptions {
             execution_limits: self.execution_limits,
             cpu_threads: self.cpu_threads,
@@ -1044,6 +1062,7 @@ pub(crate) fn runtime_config_for_run(
     runtime_config: Option<&Path>,
     allow_net: &[String],
     max_call_depth: Option<u32>,
+    max_tool_rounds: Option<u32>,
     cpu_threads: Option<&str>,
     model_output_encoding: Option<&str>,
 ) -> Result<CliHostConfig, CliError> {
@@ -1064,6 +1083,7 @@ pub(crate) fn runtime_config_for_run(
             &RuntimeExecutionProfile::default(),
             &RuntimeExecutionProfile::default(),
             max_call_depth,
+            max_tool_rounds,
         )?;
         config.cpu_threads = parse_cpu_threads(cpu_threads)?;
         return Ok(config);
@@ -1104,6 +1124,7 @@ pub(crate) fn runtime_config_for_run(
         &manifest.runtime.execution,
         &local_runtime.runtime.execution,
         max_call_depth,
+        max_tool_rounds,
     )?;
     config.cpu_threads = parse_cpu_threads(cpu_threads)?;
     Ok(config)
@@ -2521,15 +2542,17 @@ mod tests {
             max_call_depth: Some(120),
             max_steps: Some(1_000_000),
             shutdown_grace_ms: Some(4_000),
+            max_tool_rounds: Some(16),
         };
         let local = RuntimeExecutionProfile {
             max_call_depth: Some(96),
             max_steps: Some(500_000),
             shutdown_grace_ms: Some(2_000),
+            max_tool_rounds: Some(32),
         };
         let mut config = CliHostConfig::none();
         config
-            .apply_execution_config(&manifest, &local, Some(32))
+            .apply_execution_config(&manifest, &local, Some(32), Some(64))
             .expect("valid execution config should merge");
 
         assert_eq!(config.execution_limits.max_call_depth.get(), 32);
@@ -2548,8 +2571,10 @@ mod tests {
                 "max_call_depth": 32,
                 "max_steps": 500_000,
                 "shutdown_grace_ms": 2_000,
+                "max_tool_rounds": 64,
             })
         );
+        assert_eq!(config.run_options().model_policy.max_tool_rounds, 64);
     }
 
     #[test]
@@ -2563,7 +2588,7 @@ mod tests {
             };
             assert!(
                 config
-                    .apply_execution_config(&profile, &Default::default(), None)
+                    .apply_execution_config(&profile, &Default::default(), None, None)
                     .unwrap_err()
                     .to_string()
                     .contains("shutdown_grace_ms")
@@ -2574,10 +2599,37 @@ mod tests {
             ..Default::default()
         };
         config
-            .apply_execution_config(&profile, &Default::default(), None)
+            .apply_execution_config(&profile, &Default::default(), None, None)
             .unwrap();
         assert_eq!(config.shutdown_grace_ms, 60_000);
         assert_eq!(config.execution_limits, ExecutionLimits::default());
+    }
+
+    #[test]
+    fn model_tool_round_limit_is_bounded() {
+        let mut config = CliHostConfig::none();
+        for value in [0, 4_097] {
+            let profile = RuntimeExecutionProfile {
+                max_tool_rounds: Some(value),
+                ..Default::default()
+            };
+            let error = config
+                .apply_execution_config(&profile, &Default::default(), None, None)
+                .unwrap_err();
+            assert!(error.to_string().contains("max_tool_rounds"), "{error}");
+        }
+        config
+            .apply_execution_config(
+                &RuntimeExecutionProfile {
+                    max_tool_rounds: Some(4_096),
+                    ..Default::default()
+                },
+                &Default::default(),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(config.run_options().model_policy.max_tool_rounds, 4_096);
     }
 
     #[test]
@@ -2587,9 +2639,10 @@ mod tests {
             max_call_depth: Some(0),
             max_steps: None,
             shutdown_grace_ms: None,
+            max_tool_rounds: None,
         };
         let error = config
-            .apply_execution_config(&zero, &RuntimeExecutionProfile::default(), None)
+            .apply_execution_config(&zero, &RuntimeExecutionProfile::default(), None, None)
             .expect_err("zero call depth must be rejected");
         assert!(error.to_string().contains("greater than zero"), "{error}");
 
@@ -2598,6 +2651,7 @@ mod tests {
                 &RuntimeExecutionProfile::default(),
                 &RuntimeExecutionProfile::default(),
                 Some(65_537),
+                None,
             )
             .expect_err("call depth above the hard cap must be rejected");
         assert!(error.to_string().contains("hard cap 65536"), "{error}");
