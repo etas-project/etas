@@ -367,6 +367,28 @@ the primitive ABI, and generic type/effect arguments are forwarded by checked
 calls. Rebuilding with `--std-provider artifact --sysroot <root>` uses that SDK's
 verified primitive contract independently of its migrated public exports.
 
+The source task module owns its opaque declarations and `run` signature:
+
+```etas
+module std.task;
+@std.role("std.task.Task")
+public type Task<T, effect E>;
+@std.role("std.task.Scheduler")
+public type Scheduler;
+@std.role("std.task.Continuation")
+public type Continuation<T>;
+@std.binding("std.task.run")
+public flow run<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
+```
+
+`std.role` is accepted only in a toolchain std build. The compiler checks the
+canonical opaque declaration and its type/effect parameter shape; the SDK query
+view preserves that source owner. Rust retains scheduler scopes, continuation
+capture and transfer, value representation, and enforced budgets and permissions.
+Public declarations and algorithms belong to Etas; native text acceleration is
+optional. The build still obtains contracts from the complete legacy registry,
+so independent minimal bootstrap remains an outstanding acceptance gate.
+
 Public source types and enum constructors are published from the checked SDK:
 
 ```etas
@@ -397,9 +419,9 @@ Effect handling uses existing `let ... = handler { ... }` values applied with
 `with`; there is no `controller` language declaration or migration requirement.
 
 The release default remains `--std-provider legacy`. The current source batch
-covers text flows; trusted source role contracts, remaining std modules, minimal
-bootstrap and artifact checkpoint/resume still require their migration gates before the
-default changes.
+covers text flows and the first opaque task roles. Remaining roles and modules,
+minimal bootstrap and artifact checkpoint/resume still require their migration
+gates before the default changes.
 
 ## Etas Projects
 

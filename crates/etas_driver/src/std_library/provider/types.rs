@@ -30,6 +30,26 @@ pub(super) fn publish(
         let Some(key) = declarations.get(&canonical).copied() else {
             continue;
         };
+        let source_role = sdk
+            .image
+            .declarations
+            .get(key)
+            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(etas_hir::HirItem::symbol)
+            .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
+        if let Some(native) = source_role {
+            if registered.contains(&canonical) {
+                continue;
+            }
+            if symbols.get(&canonical) != Some(native) {
+                return Err(invalid(
+                    "checked std role differs from its native canonical declaration",
+                ));
+            }
+            builder.bind_declaration(*native, key.clone());
+            registered.insert(canonical.clone());
+            continue;
+        }
         if symbols.contains_key(&canonical) {
             // Re-exports retain the original slot. Native role replacement
             // requires a separately checked source role contract.

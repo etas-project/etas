@@ -6,6 +6,23 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
     let source = root.join("std-source");
     fs::create_dir_all(source.join("library/std/text")).unwrap();
     fs::create_dir_all(source.join("library/std/extra")).unwrap();
+    fs::create_dir_all(source.join("library/std/task")).unwrap();
+    fs::write(
+        source.join("library/std/task/mod.es"),
+        r#"module std.task;
+@std.role("std.task.Task")
+public type Task<T, effect E>;
+@std.role("std.task.Scheduler")
+public type Scheduler;
+@std.role("std.task.Continuation")
+public type Continuation<T>;
+@std.binding("std.task.run")
+public flow run<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
+@std.binding("std.task.run")
+public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
+"#,
+    )
+    .unwrap();
     fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
     for (file, id) in [
         ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
@@ -78,7 +95,12 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         r#"module app.main;
 import std.text.{join, trim, append};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader};
+import std.task.{run, execute, Scheduler};
+flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
 flow main(args: Array<string>) -> i32 {
+    let outcome = execute(scheduled);
+    if outcome != 7 { return 94; }
+    if run(scheduled) != 7 { return 93; }
     let assemble = join;
     let strip = trim;
     let values = append([strip(" a ")], strip(" b "));
