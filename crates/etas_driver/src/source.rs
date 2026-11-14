@@ -107,6 +107,7 @@ fn finish_loaded_project(
         .profile
         .span("driver.frontend_environment", "driver");
     loaded.input.environment = local_project.environment;
+    options.std_provider.configure(&mut loaded.input);
     drop(environment_span);
     loaded.input.options.entry_policy = entry_policy;
     loaded.input.options.reflection = local_project.reflection;

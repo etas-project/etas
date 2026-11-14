@@ -20,7 +20,7 @@ pub fn check_project_once(
     input: ProjectInput,
 ) -> Result<ProjectOutput, CliError> {
     etas_driver::check_project_once(
-        &driver_options(global, profile),
+        &driver_options(global, profile)?,
         CompileProjectRequest {
             input,
             snapshot_detail: SnapshotDetailLevel::None,
@@ -77,8 +77,20 @@ pub fn load_project_with_optimization(
     .map_err(driver_error)
 }
 
-pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) -> DriverOptions {
-    DriverOptions {
+pub(crate) fn driver_options(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+) -> Result<DriverOptions, CliError> {
+    Ok(DriverOptions {
+        std_provider: match global.std_provider {
+            crate::args::global::StdProviderChoice::Legacy => {
+                etas_driver::std_library::provider::StdProvider::Legacy
+            }
+            crate::args::global::StdProviderChoice::Artifact => {
+                etas_driver::std_library::provider::StdProvider::artifact(global.sysroot.as_deref())
+                    .map_err(driver_error)?
+            }
+        },
         workspace: global.workspace.clone(),
         cache_mode: match global.cache {
             CacheMode::Auto => DriverCacheMode::Auto,
@@ -94,7 +106,7 @@ pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) ->
         #[cfg(not(feature = "component-runtime"))]
         residual_target: None,
         optimization_level: None,
-    }
+    })
 }
 
 pub(crate) fn driver_options_with_optimization(
@@ -102,7 +114,7 @@ pub(crate) fn driver_options_with_optimization(
     profile: &ProfileHandle,
     optimization_level: Option<u8>,
 ) -> Result<DriverOptions, CliError> {
-    let options = driver_options(global, profile);
+    let options = driver_options(global, profile)?;
     optimization_level.map_or(Ok(options.clone()), |level| {
         options.with_optimization_level(level).map_err(driver_error)
     })

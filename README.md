@@ -296,6 +296,8 @@ printf 'hello from stdin\n' | $ETAS run examples/stdin_stdout.es
 | `etas resume <checkpoint-id>` | Resume a persisted interpreter checkpoint | Available |
 | `etas pkg lock|update|prepare` | Resolve and materialize dependencies | Available |
 | `etas pkg metadata|pack` | Produce package metadata or an `.etaspkg` archive | Available |
+| `etas std build --manifest-path <path> --out-dir <path>` | Check the std source package and install its matching SDK | Development migration |
+| `etas std install --manifest-path <path> --prefix <path>` | Install the current CLI and matching std SDK into a relocatable prefix | Development migration |
 | `etas dump air`, `etas graph` | Future AIR/analysis surfaces | Explicitly unsupported |
 | `etas policy` | Legacy CLI placeholder; not a source-language Policy construct | Explicitly unsupported |
 | `etas watch`, `etas repl`, `etas lsp` | Long-lived CLI service surfaces | Explicitly unsupported |
@@ -303,6 +305,101 @@ printf 'hello from stdin\n' | $ETAS run examples/stdin_stdout.es
 Use `etas <command> --help` for the authoritative option set. Human-readable,
 text, JSON, JSONL, Mermaid, and DOT outputs are available where a command has a
 corresponding renderer.
+
+### Build the std SDK
+
+The maintained Etas standard library sources live in the sibling `etas-core`
+repository. Build them as a whole library, including private bodies, without a
+`main` flow:
+
+```bash
+./target/debug/etas std build \
+  --manifest-path ../etas-core/crates/etas_std/etas.toml \
+  --out-dir /tmp/etas-sdk/std
+```
+
+The output contains `manifest.json`, `etas.toml`, the complete `library/` source
+tree, and `artifacts/std.etasmeta`. The existing package artifact container
+holds public metadata and the checked body graph together. Relative source
+paths allow moving the SDK. Rebuilding replaces the installed source tree.
+
+The driver loader verifies compiler, schema, target, toolchain ID, native binding
+ABI, and content digests before exposing the bundle. Its ABI expectation is
+compiled into the toolchain; loading never constructs the handwritten registry.
+Release packaging can set `ETAS_TOOLCHAIN_ID` when building the driver.
+
+Select the SDK for an entire compilation session, including dependencies:
+
+```bash
+etas check app.es --std-provider artifact --sysroot /tmp/etas-sdk
+etas run app.es --std-provider artifact --sysroot /tmp/etas-sdk
+```
+
+Artifact mode loads source exports and checked bodies from the verified SDK.
+Adding a public flow in a new `.es` file requires no Rust registration. Rebuild
+the SDK after source changes; its complete content identity invalidates the
+consumer cache. Direct calls, function values and checked generic applications
+use the independently checked body graph and the caller's execution state.
+
+Without `--sysroot`, artifact mode looks beside the actual executable:
+`<prefix>/bin/etas` uses `<prefix>/lib/etas/<toolchain-id>/std`. Install both the
+binary and the SDK together, including for a Cargo-built CLI:
+
+```bash
+./target/debug/etas std install \
+  --manifest-path ../etas-core/crates/etas_std/etas.toml \
+  --prefix /tmp/etas-toolchain
+/tmp/etas-toolchain/bin/etas run app.es --std-provider artifact
+```
+
+The complete prefix can be moved and used offline. An explicit sysroot is never
+replaced with a legacy fallback.
+
+Std native declarations use an explicit checked binding, for example:
+
+```etas
+@std.binding("std.text.trim")
+public flow trim(value: string) -> string ![] {}
+```
+
+Only a std source build accepts this annotation. Its signature is checked against
+the primitive ABI, and generic type/effect arguments are forwarded by checked
+calls. Rebuilding with `--std-provider artifact --sysroot <root>` uses that SDK's
+verified primitive contract independently of its migrated public exports.
+
+Public source types and enum constructors are published from the checked SDK:
+
+```etas
+public type Parcel<T> = { value: T };
+public spec Reader { flow read(self) -> string ![]; }
+impl Parcel<string> ~ Reader {
+    flow read(self) -> string ![] { return self.value; }
+}
+public flow via_reader<T ~ Reader>(value: T) -> string ![] {
+    return value.read();
+}
+public enum Reply<T> { Empty, Item(T), Named { value: T }, }
+```
+
+Applications import these declarations from their authored module and can pass
+their values through installed generic flows. Canonical owners, generic
+parameters and named payload fields survive separate build/run processes and
+installation relocation. Native role replacement requires its checked role
+contract before publication.
+
+Source specs and implementations use the existing checked package metadata and
+canonical method identities. Imported methods and generic spec calls execute
+the SDK's checked bodies. Public methods retain their checked Effect contracts
+even when their implementation has no separate `public` keyword.
+
+Standard-library orchestration uses ordinary `flow` declarations. Reusable
+Effect handling uses existing `let ... = handler { ... }` values applied with
+`with`; there is no `controller` language declaration or migration requirement.
+
+The release default remains `--std-provider legacy`. The current source batch
+covers text flows; trusted source role contracts, remaining std modules, minimal
+bootstrap and artifact checkpoint/resume still require their migration gates before the
+default changes.
 
 ## Etas Projects
 

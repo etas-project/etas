@@ -21,6 +21,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct DriverOptions {
+    pub std_provider: crate::std_library::provider::StdProvider,
     pub workspace: Option<PathBuf>,
     pub cache_mode: DriverCacheMode,
     pub cache_root: Option<PathBuf>,
@@ -32,6 +33,7 @@ pub struct DriverOptions {
 impl Default for DriverOptions {
     fn default() -> Self {
         Self {
+            std_provider: Default::default(),
             workspace: None,
             cache_mode: DriverCacheMode::Auto,
             cache_root: None,
@@ -82,6 +84,7 @@ pub fn check_project_once(
     options: &DriverOptions,
     mut request: CompileProjectRequest,
 ) -> Result<CompileProjectResponse, DriverError> {
+    options.std_provider.configure(&mut request.input);
     if let Some(level) = options.optimization_level {
         request.input.options.optimization_level = level;
     }
@@ -89,7 +92,20 @@ pub fn check_project_once(
         request.input.options.residual_target = target.clone();
     }
     let _span = options.profile.span("frontend.check", "frontend");
-    let mut session = frontend_session(options)?;
+    let mut session = if request.input.options.standard_library_mode
+        == etas_frontend::StandardLibraryMode::SourceBootstrap
+        && let crate::std_library::provider::StdProvider::Artifact(provider) = &options.std_provider
+    {
+        // Source builds consume the verified primitive ABI, independently of
+        // which public exports the previous SDK has already migrated.
+        FrontendSession::with_options_and_std_registry(
+            session_options(options)?,
+            provider.library.program.std_registry.clone(),
+        )
+        .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
+    } else {
+        frontend_session(options)?
+    };
     let project = session
         .try_open_project(request.input)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
@@ -387,8 +403,19 @@ fn dependency_overlay_changes_from_sources(
 pub fn frontend_session(
     options: &DriverOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
-    FrontendSession::with_options(session_options(options)?)
-        .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))
+    let session = match &options.std_provider {
+        crate::std_library::provider::StdProvider::Legacy => {
+            FrontendSession::with_options(session_options(options)?)
+        }
+        crate::std_library::provider::StdProvider::Artifact(provider) => {
+            FrontendSession::with_options_and_std_registry(
+                session_options(options)?,
+                provider.registry.clone(),
+            )
+            .map(|session| session.with_standard_library(provider.library.clone()))
+        }
+    };
+    session.map_err(|error| DriverError::FrontendSession(format!("{error:?}")))
 }
 
 pub fn session_options(options: &DriverOptions) -> Result<FrontendSessionOptions, DriverError> {

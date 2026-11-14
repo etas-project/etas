@@ -11,6 +11,7 @@ pub use container::{
     package_metadata_artifact_path, package_source_payload_hash, read_package_metadata_artifact,
     read_package_metadata_artifact_info,
 };
+pub use convert::package_index_from_metadata;
 pub use encode::resolved_dependency_metadata;
 #[cfg(any(test, feature = "test-support"))]
 pub use fixture::write_fixture_package_metadata_artifact;

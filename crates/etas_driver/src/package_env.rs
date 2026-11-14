@@ -360,7 +360,7 @@ pub(crate) fn stable_external_package_id(key: &str) -> ExternalPackageId {
     ExternalPackageId(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-fn external_public_metadata_input(
+pub(crate) fn external_public_metadata_input(
     package: &ProjectExternalPackageInput,
     packages: &[ProjectExternalPackageInput],
     metadata: &etas_package::PackagePublicMetadata,

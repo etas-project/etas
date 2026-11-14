@@ -49,8 +49,8 @@ pub use metadata::{
 pub use metadata_artifact::write_fixture_package_metadata_artifact;
 pub use metadata_artifact::{
     MetadataArtifactHeader, MetadataArtifactInfo, MetadataSectionKind, metadata_artifact_hash,
-    package_dependency_lock_hash, package_manifest_hash, package_metadata_artifact_path,
-    package_source_payload_hash, read_package_metadata_artifact,
+    package_dependency_lock_hash, package_index_from_metadata, package_manifest_hash,
+    package_metadata_artifact_path, package_source_payload_hash, read_package_metadata_artifact,
     read_package_metadata_artifact_info, resolved_dependency_metadata,
 };
 pub use pack::{PackPackageOptions, PackedPackageResult, pack_package};

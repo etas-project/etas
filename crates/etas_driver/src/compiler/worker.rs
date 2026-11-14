@@ -46,6 +46,14 @@ impl NativeCompilerService {
                     service.config.resources,
                 )?);
                 let mut session = FrontendSession::with_std_registry(std_registry);
+                if let Some(library) = &service
+                    .definitions
+                    .catalog()
+                    .checked_program()
+                    .standard_library
+                {
+                    session = session.with_standard_library(library.clone());
+                }
                 let (service, work) =
                     service.restore_external_source(&work, &mut session, control.clone())?;
                 let analysis = service.analyze_complete(&work, &mut session, control.clone())?;
