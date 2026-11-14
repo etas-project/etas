@@ -345,7 +345,14 @@ flow main(args: Array<string>) -> i32 {
 }"#,
     )
     .unwrap();
-    for (provider, expected) in [("artifact", "2"), ("legacy", "0")] {
+    // The acceptance toolchain compiles the complete legacy factory out.
+    // Ordinary builds additionally retain the independent legacy comparison.
+    let providers = if cfg!(feature = "forbid-legacy-std") {
+        &[("artifact", "2")][..]
+    } else {
+        &[("artifact", "2"), ("legacy", "0")][..]
+    };
+    for &(provider, expected) in providers {
         let output = invoke(&[
             "--cache",
             "off",

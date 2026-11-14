@@ -5,11 +5,26 @@ use std::collections::BTreeMap;
 pub fn fingerprint(registry: &etas_std::StdRegistry) -> Result<String, serde_json::Error> {
     let bindings = registry
         .symbols()
-        .filter_map(|symbol| symbol.intrinsic.as_ref())
-        .map(|binding| (binding.id, binding))
+        .map(|symbol| {
+            (
+                symbol.qualified_path.join("."),
+                (
+                    symbol.kind,
+                    &symbol.decl,
+                    &symbol.intrinsic,
+                    symbol.enum_owner.map(|owner| {
+                        &registry
+                            .symbol(owner)
+                            .expect("native enum owner")
+                            .qualified_path
+                    }),
+                ),
+            )
+        })
         .collect::<BTreeMap<_, _>>();
+    let implementations = registry.spec_impls().collect::<Vec<_>>();
     Ok(format!(
         "blake3:{}",
-        blake3::hash(&serde_json::to_vec(&bindings)?).to_hex()
+        blake3::hash(&serde_json::to_vec(&(bindings, implementations))?).to_hex()
     ))
 }

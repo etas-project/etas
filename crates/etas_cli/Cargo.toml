@@ -1,6 +1,6 @@
 [package]
 name = "etas_cli"
-version = "0.14.4"
+version = "0.14.5"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -29,6 +29,7 @@ tracing.workspace = true
 tokio = { version = "1", features = ["rt", "time", "signal", "macros"], optional = true }
 
 [features]
+forbid-legacy-std = ["etas_driver/forbid-legacy-std"]
 default = [
     "component-frontend",
     "component-runtime",

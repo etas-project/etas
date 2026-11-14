@@ -20,7 +20,7 @@ use etas_frontend::{
     ProjectExternalTraceSpecConformanceTargetInput, ProjectExternalTraceSpecSummaryInput,
     ProjectExternalTypeInput, ProjectExternalTypeSpecSatisfactionInput, ProjectToolBindingInput,
 };
-use etas_std::{StdDecl, StdSymbolKind};
+use etas_std::StdSymbolKind;
 
 use crate::DriverError;
 
@@ -1009,29 +1009,7 @@ fn path_segments_from_text(text: &str) -> Vec<String> {
 }
 
 fn is_standard_effect_base(base: &str) -> bool {
-    if base == "Error" {
-        return true;
-    }
-    let registry = etas_std::standard_registry();
-    if registry
-        .lookup_qualified(&path_segments_from_text(base))
-        .is_some_and(|symbol| {
-            matches!(
-                symbol.kind,
-                StdSymbolKind::Effect | StdSymbolKind::EffectAction
-            )
-        })
-    {
-        return true;
-    }
-    registry.symbols().any(|symbol| match &symbol.decl {
-        StdDecl::Effect(effect) => effect.name == base,
-        StdDecl::EffectAction(action) => {
-            format!("{}.{}", action.owner, action.name) == base
-                || symbol.qualified_path.join(".") == base
-        }
-        _ => false,
-    })
+    etas_std::is_standard_effect_reference(base)
 }
 
 fn dependency_callable_values(
@@ -1909,9 +1887,7 @@ mod tests {
             version: "1".into(),
             edition: "2026".into(),
             import_root: "dep.library".into(),
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         };
         let clause = etas_package::PackageTraceSpecClauseMetadata {
             kind: etas_package::PackageTraceSpecClauseKindMetadata::Allow,
@@ -1959,9 +1935,7 @@ mod tests {
             version: "0.1.0".to_owned(),
             edition: "2026".to_owned(),
             import_root: "edk.algorithm".to_owned(),
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         };
 
         let std_error = dependency_type_input(
@@ -2000,9 +1974,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "errors".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/errors".to_owned(),
@@ -2110,9 +2082,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "dep".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/generic-fs".to_owned(),
@@ -2248,9 +2218,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "edk.http".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/edk-http".to_owned(),

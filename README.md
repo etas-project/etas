@@ -418,10 +418,38 @@ Standard-library orchestration uses ordinary `flow` declarations. Reusable
 Effect handling uses existing `let ... = handler { ... }` values applied with
 `with`; there is no `controller` language declaration or migration requirement.
 
-The release default remains `--std-provider legacy`. The current source batch
-covers text flows and the first opaque task roles. Remaining roles and modules,
-minimal bootstrap and artifact checkpoint/resume still require their migration
-gates before the default changes.
+Std source builds predeclare the explicit compiler/host contracts in
+`etas_std/src/intrinsic/bootstrap-contracts.json`; they construct no complete
+legacy registry. The catalog carries primitive operand/result ABI, fixed core
+Effect/action identities, opaque task roles, and budget enforcement contracts.
+Its content identity participates in the source build cache, and the installed
+binding ABI includes signatures and roles as well as primitive descriptors.
+Public std flows and checked bodies come from `.es` files.
+
+Verify the existing SDK process fixture with the complete legacy factory
+compiled out (the ordinary configuration also runs the legacy comparison):
+
+```bash
+cargo test --locked -p etas_cli --features forbid-legacy-std --test cli \
+  installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes
+```
+
+The core export example refreshes this small ABI catalog from the retained
+migration baseline during native contract development; SDK build/load processes
+do not run that exporter. The catalog contains no std source algorithms. Native
+text bindings can later be replaced with Etas implementations independently.
+
+Compare the installed SDK with the existing per-module API inventory:
+
+```bash
+cargo run -p etas_driver --example std_sdk_inventory -- /tmp/etas-sdk \
+  > /tmp/std-candidate.json
+```
+
+The release default remains `--std-provider legacy`. The source batch covers
+text flows and the first opaque task roles. Remaining roles/modules, full API
+and runtime parity, artifact checkpoint/resume and release gates remain required
+before the default changes.
 
 ## Etas Projects
 

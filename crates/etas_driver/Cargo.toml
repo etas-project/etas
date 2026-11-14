@@ -1,10 +1,13 @@
 [package]
 name = "etas_driver"
-version = "0.2.4"
+version = "0.2.5"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+
+[features]
+forbid-legacy-std = ["etas_std/forbid-legacy-registry"]
 
 [dependencies]
 etas_core.workspace = true

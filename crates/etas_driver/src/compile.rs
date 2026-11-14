@@ -94,13 +94,12 @@ pub fn check_project_once(
     let _span = options.profile.span("frontend.check", "frontend");
     let mut session = if request.input.options.standard_library_mode
         == etas_frontend::StandardLibraryMode::SourceBootstrap
-        && let crate::std_library::provider::StdProvider::Artifact(provider) = &options.std_provider
     {
-        // Source builds consume the verified primitive ABI, independently of
-        // which public exports the previous SDK has already migrated.
+        request.input.options.standard_library_artifact =
+            Some(etas_std::compiler_contract_identity());
         FrontendSession::with_options_and_std_registry(
             session_options(options)?,
-            provider.library.program.std_registry.clone(),
+            std::sync::Arc::new(etas_std::compiler_contract_registry()),
         )
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
     } else {

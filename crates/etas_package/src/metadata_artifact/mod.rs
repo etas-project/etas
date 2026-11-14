@@ -37,9 +37,7 @@ mod tests {
     fn selector_bound_metadata_survives_binary_and_package_conversion() {
         let mut metadata = etas_package_metadata::PackageMetadata {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: etas_package_metadata::PackageIdentity {
                 name: "dependency".into(),
                 version: "1.0.0".into(),
@@ -122,9 +120,7 @@ mod tests {
         .unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "consumer".into(),
                 version: "0.1.0".into(),
@@ -170,9 +166,7 @@ edition = "2026"
         fs::write(root.join("src").join("lib.es"), "module artifact;\n").unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "artifact".to_owned(),
                 version: "0.1.0".to_owned(),
@@ -272,9 +266,7 @@ edition = "2026"
         fs::write(root.join("src").join("lib.es"), "module artifact;\n").unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "artifact".to_owned(),
                 version: "0.1.0".to_owned(),

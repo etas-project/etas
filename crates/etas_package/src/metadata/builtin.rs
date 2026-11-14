@@ -28,7 +28,7 @@ pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDepen
             version,
             edition,
         },
-        std_compatibility: standard_registry().version().compatibility_identity(),
+        std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         import_root: "std".to_owned(),
         source: ResolvedDependencySource::Builtin {
             checksum: "builtin:std".to_owned(),
@@ -303,9 +303,7 @@ fn package_action_arg_kind_from_std(
             PackageEffectActionArgKindMetadata::MemoryPlace
         }
         etas_std::EffectActionArgKind::StaticResourcePath { ty } => {
-            PackageEffectActionArgKindMetadata::StaticResourcePath {
-                ty: ty.to_string(),
-            }
+            PackageEffectActionArgKindMetadata::StaticResourcePath { ty: ty.to_string() }
         }
         etas_std::EffectActionArgKind::StringPattern => {
             PackageEffectActionArgKindMetadata::StringPattern

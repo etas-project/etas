@@ -610,9 +610,7 @@ flow extra() -> unit { return; }
                 version: "0.1.0".to_owned(),
                 edition: "2026".to_owned(),
             },
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             import_root: "dep".to_owned(),
             source: ResolvedDependencySource::Path {
                 path: dependency_root.to_string_lossy().into_owned(),
@@ -966,9 +964,7 @@ root = "src"
                 version: "0.1.0".to_owned(),
                 edition: "2026".to_owned(),
             },
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             import_root: "dep".to_owned(),
             source: ResolvedDependencySource::Path {
                 path: dependency_root.to_string_lossy().into_owned(),
