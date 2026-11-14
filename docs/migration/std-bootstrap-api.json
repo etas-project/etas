@@ -2,18 +2,26 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "00bcdf0e6c541d58b05280b3ac3d7bc6ce6fdb5a",
-    "frontend": "41deef1bf79180ca53ef8046688f8a8d88520eef",
-    "std_version": "0.2.8",
-    "compiler_version": "0.11.7",
+    "core": "63c70c15c7413709456bd42eb468dd0bac473e64",
+    "frontend": "d78efa77db42a38c22fafa580e638a80c3e11b28",
+    "std_version": "0.2.9",
+    "compiler_version": "0.11.8",
     "native_binding_abi": "blake3:3bfb2e43ac304b9e3e4c80278f78263fe0d87af3120463cadc8270b1278bb99e",
-    "source_payload_hash": "blake3:b8009cea2102e982cb9fb3260b8b669dca082577fc3ecd9028c03c8048a970b9",
-    "body_schema": 9
+    "source_payload_hash": "blake3:7f8fb9e264eb5862fe37ec853a965a05aafebb8292a2f1e6bbafcdcbac79989d",
+    "body_schema": 10
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 139,
-  "missing_symbols": 528,
-  "pending_contract_difference": null,
+  "candidate_symbols": 143,
+  "missing_symbols": 526,
+  "pending_contract_difference": {
+    "symbols": [
+      "std.result.Ok",
+      "std.result.Err",
+      "std.result.is_ok",
+      "std.result.is_err"
+    ],
+    "classification": "Declaration representation differs: Ok/Err are checked source flows; predicate methods are published as source impl methods rather than intrinsic method aliases. Independent legacy/artifact samples agree for constructors, first-class Ok, matching and predicate functions/methods; broader behavior parity remains a full std gate."
+  },
   "report": {
     "compatibility_matches": true,
     "modules": {
@@ -1274,25 +1282,51 @@
           "unwrap"
         ]
       },
+      "std.prelude": {
+        "missing_module": false,
+        "added_module": true,
+        "covered": [],
+        "missing": [],
+        "added": [],
+        "contract_changes": [],
+        "implementation_changes": [],
+        "export_changes": [
+          "Err",
+          "Index",
+          "Ok",
+          "Result"
+        ]
+      },
       "std.result": {
         "missing_module": false,
         "added_module": false,
         "covered": [
           "std.result.Err",
           "std.result.Ok",
-          "std.result.Result"
+          "std.result.Result",
+          "std.result.is_err",
+          "std.result.is_ok"
         ],
         "missing": [
-          "std.result.is_err",
-          "std.result.is_ok",
           "std.result.unwrap"
         ],
-        "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
+        "added": [
+          "std.result.Result.Err",
+          "std.result.Result.Ok"
+        ],
+        "contract_changes": [
+          "std.result.Err",
+          "std.result.Ok",
+          "std.result.is_err",
+          "std.result.is_ok"
+        ],
+        "implementation_changes": [
+          "std.result.Err",
+          "std.result.Ok",
+          "std.result.is_err",
+          "std.result.is_ok"
+        ],
         "export_changes": [
-          "is_err",
-          "is_ok",
           "unwrap"
         ]
       },
@@ -2024,6 +2058,8 @@
       18,
       22,
       23,
+      25,
+      26,
       27,
       28,
       29,
@@ -2275,5 +2311,15 @@
     "source_sdk": null,
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
+  },
+  "covered_baseline_symbols": 141,
+  "source_ownership_note": "Public declarations/algorithms belong to Etas; Rust retains execution/host primitive contracts. A successful build with the complete legacy factory disabled does not prove the 132-entry transitional catalog minimal or the entire std migrated.",
+  "source_index_impls": {
+    "authored": 12,
+    "matches_legacy_index_impls": true,
+    "remaining_unmigrated_impls": [
+      "std.net.tcp.TcpStream ~ std.stream.ByteStream",
+      "std.tls.TlsStream ~ std.stream.ByteStream"
+    ]
   }
 }

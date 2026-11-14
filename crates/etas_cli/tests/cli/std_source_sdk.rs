@@ -26,6 +26,48 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
 "#,
     )
     .unwrap();
+    fs::create_dir_all(source.join("library/std/core")).unwrap();
+    fs::write(
+        source.join("library/std/core/mod.es"),
+        r#"module std.core;
+@std.role("std.core.Index")
+public spec Index;
+impl i8 ~ Index;
+impl i16 ~ Index;
+impl i32 ~ Index;
+impl i64 ~ Index;
+impl i128 ~ Index;
+impl isize ~ Index;
+impl u8 ~ Index;
+impl u16 ~ Index;
+impl u32 ~ Index;
+impl u64 ~ Index;
+impl u128 ~ Index;
+impl usize ~ Index;
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(source.join("library/std/result")).unwrap();
+    fs::write(source.join("library/std/result/mod.es"), r#"module std.result;
+@std.role("std.result.Result")
+public enum Result<T, E> { Ok(T), Err(E), }
+public flow is_ok<T, E>(value: Result<T, E>) -> bool ![] {
+    return match value { Result.Ok(_) => true, Result.Err(_) => false };
+}
+public flow is_err<T, E>(value: Result<T, E>) -> bool ![] {
+    return match value { Result.Ok(_) => false, Result.Err(_) => true };
+}
+
+@std.role("std.result.Ok")
+public flow Ok<T, E>(value: T) -> Result<T, E> ![] { return Result.Ok(value); }
+@std.role("std.result.Err")
+public flow Err<T, E>(error: E) -> Result<T, E> ![] { return Result.Err(error); }
+
+impl Result<T, E> {
+    public flow is_ok(self) -> bool ![] { return match self { Result.Ok(_) => true, Result.Err(_) => false }; }
+    public flow is_err(self) -> bool ![] { return match self { Result.Ok(_) => false, Result.Err(_) => true }; }
+}
+"#).unwrap();
     fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
     for (file, id) in [
         ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
@@ -41,6 +83,8 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
         source.join("library/std/extra/mod.es"),
         r#"module std.extra;
 import std.fs.IOError;
+import std.core.Index;
+public flow index_identity<I ~ Index>(index: I) -> I ![] { return index; }
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
 public spec Reader { flow read(self) -> string ![]; }
@@ -96,7 +140,7 @@ public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOErro
     fs::create_dir_all(source.join("library/std/prelude")).unwrap();
     fs::write(
         source.join("library/std/prelude/mod.es"),
-        "module std.prelude; public import std.extra.sdk_echo as bundled_echo;",
+        "module std.prelude; public import std.extra.sdk_echo as bundled_echo; public import std.result.{Result, Ok, Err}; public import std.core.Index;",
     )
     .unwrap();
     fs::write(
@@ -116,6 +160,8 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
 import std.text.{join, trim, append};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
 import std.task.{run, execute, Scheduler};
+import std.result.{is_ok, is_err};
+import std.extra.index_identity;
 type CallerParcel<T> = { value: T };
 impl CallerParcel<T> ~ Reader {
     flow read(self) -> string ![] { return "caller"; }
@@ -130,6 +176,14 @@ impl CallerTransformer<A> ~ Transformer {
 }
 flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
 flow main(args: Array<string>) -> i32 {
+    let good: Result<i32, string> = Result.Ok(7);
+    let bad: Result<i32, string> = Err("failed");
+    if !is_ok(good) || is_err(good) || !is_err(bad) { return 79; }
+    if !good.is_ok() || good.is_err() || !bad.is_err() { return 77; }
+    let constructor = Ok;
+    let copied: Result<i32, string> = constructor(9);
+    let payload = match copied { Result.Ok(value) => value, Result.Err(_) => 0 };
+    if payload != 9 || index_identity<i32>(7) != 7 { return 78; }
     let caller = sdk_echo(CallerParcel { value = "caller" });
     if caller.value != "caller" { return 92; }
     if via_reader(caller) != "caller" { return 83; }

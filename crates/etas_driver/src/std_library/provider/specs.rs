@@ -17,6 +17,44 @@ pub(super) fn publish(
         let Some(key) = declarations.get(&canonical).copied() else {
             continue;
         };
+        let source_role = sdk
+            .image
+            .declarations
+            .get(key)
+            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(etas_hir::HirItem::symbol)
+            .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
+        if let Some(native) = source_role {
+            if registered.insert(canonical.clone()) {
+                builder.bind_declaration(*native, key.clone());
+                let projector = TypeProjector {
+                    owner: key,
+                    params: &spec.generic_params,
+                };
+                let implementations = sdk
+                    .public
+                    .public_metadata
+                    .spec_impls
+                    .iter()
+                    .filter(|implementation| implementation.spec == canonical)
+                    .map(|implementation| {
+                        Ok(etas_std::StdImplFact {
+                            self_type: projector.ty(&implementation.self_type)?,
+                            spec: etas_std::StdSpecRef {
+                                path: canonical.clone(),
+                                args: implementation
+                                    .args
+                                    .iter()
+                                    .map(|ty| projector.ty(ty))
+                                    .collect::<Result<_, DriverError>>()?,
+                            },
+                        })
+                    })
+                    .collect::<Result<Vec<_>, DriverError>>()?;
+                builder.replace_spec_impls(&canonical, implementations);
+            }
+            continue;
+        }
         if symbols.contains_key(&canonical) {
             if registered.contains(&canonical) {
                 continue;

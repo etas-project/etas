@@ -74,7 +74,31 @@ pub fn build_standard_library(
                 .output
                 .diagnostics
                 .iter()
-                .map(|d| d.message.as_str())
+                .map(|d| {
+                    let source = output.response.output.sources.as_ref().and_then(|sources| {
+                        sources
+                            .files
+                            .iter()
+                            .find(|source| source.id == d.primary.span.source)
+                    });
+                    match source {
+                        Some(source) => {
+                            let position = source.line_index.line_col(d.primary.span.range.start);
+                            format!(
+                                "{}:{}:{}: {}",
+                                source
+                                    .path
+                                    .as_ref()
+                                    .map(|path| path.display().to_string())
+                                    .unwrap_or_else(|| "<std source>".into()),
+                                position.line + 1,
+                                position.col + 1,
+                                d.message
+                            )
+                        }
+                        None => d.message.clone(),
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("; ")
         ))

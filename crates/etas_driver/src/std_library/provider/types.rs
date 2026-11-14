@@ -37,29 +37,8 @@ pub(super) fn publish(
             .and_then(|item| sdk.image.program.items.get(*item))
             .and_then(etas_hir::HirItem::symbol)
             .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
-        if let Some(native) = source_role {
-            if registered.contains(&canonical) {
-                continue;
-            }
-            if symbols.get(&canonical) != Some(native) {
-                return Err(invalid(
-                    "checked std role differs from its native canonical declaration",
-                ));
-            }
-            builder.bind_declaration(*native, key.clone());
-            registered.insert(canonical.clone());
+        if registered.contains(&canonical) {
             continue;
-        }
-        if symbols.contains_key(&canonical) {
-            // Re-exports retain the original slot. Native role replacement
-            // requires a separately checked source role contract.
-            if registered.contains(&canonical) {
-                continue;
-            }
-            return Err(invalid(format!(
-                "std source type {} replaces a native type without a checked role contract",
-                canonical.join(".")
-            )));
         }
         let (name, parent) = canonical
             .split_last()
@@ -75,9 +54,14 @@ pub(super) fn publish(
             .ty
             .as_ref()
             .ok_or_else(|| invalid("std source type has no checked shape"))?;
+        let params = signature
+            .generic_params
+            .iter()
+            .map(|param| projector.param(param))
+            .collect::<Result<Vec<_>, _>>()?;
         let kind = match ty.kind {
-            metadata::TypeKind::Nominal => TypeDeclKind::Struct,
             metadata::TypeKind::Enum => TypeDeclKind::Enum,
+            metadata::TypeKind::Nominal => TypeDeclKind::Struct,
             _ => {
                 return Err(invalid(format!(
                     "std source type {} requires its declaration contract before publication",
@@ -85,26 +69,36 @@ pub(super) fn publish(
                 )));
             }
         };
-        let mut declaration = TypeDecl::generic_params(
-            name,
-            signature
-                .generic_params
-                .iter()
-                .map(|p| projector.param(p))
-                .collect::<Result<_, _>>()?,
-            kind,
-        );
-        declaration.representation = ty.children.first().map(|ty| projector.ty(ty)).transpose()?;
-        let params = declaration.params.clone();
-        let id = builder.symbol(
-            module,
-            name,
-            StdSymbolKind::Type,
-            StdDecl::Type(declaration),
-            "",
-        );
-        builder.bind_declaration(id, key.clone());
-        symbols.insert(canonical.clone(), id);
+        let id = if let Some(native) = source_role {
+            if symbols.get(&canonical) != Some(native) {
+                return Err(invalid(
+                    "checked std role differs from its native canonical declaration",
+                ));
+            }
+            builder.bind_declaration(*native, key.clone());
+            builder.source_type_parameters(*native, params.clone());
+            *native
+        } else {
+            if symbols.contains_key(&canonical) {
+                return Err(invalid(format!(
+                    "std source type {} replaces a native type without a checked role contract",
+                    canonical.join(".")
+                )));
+            }
+            let mut declaration = TypeDecl::generic_params(name, params.clone(), kind);
+            declaration.representation =
+                ty.children.first().map(|ty| projector.ty(ty)).transpose()?;
+            let id = builder.symbol(
+                module,
+                name,
+                StdSymbolKind::Type,
+                StdDecl::Type(declaration),
+                "",
+            );
+            builder.bind_declaration(id, key.clone());
+            symbols.insert(canonical.clone(), id);
+            id
+        };
         registered.insert(canonical.clone());
         if kind != TypeDeclKind::Enum {
             continue;
@@ -131,20 +125,29 @@ pub(super) fn publish(
                 .into_iter()
                 .map(|ty| projector.ty(ty))
                 .collect::<Result<_, _>>()?;
-            constructor.output = if params.is_empty() {
-                StdType::Named(canonical.join("."))
-            } else {
-                StdType::NamedApplied {
-                    name: canonical.join("."),
-                    args: params
-                        .iter()
-                        .map(|param| StdType::Var(param.name.clone()))
-                        .collect(),
-                }
-            };
+            constructor.output =
+                if source_role.is_some() && canonical == ["std", "result", "Result"] {
+                    StdType::Result {
+                        ok: Box::new(StdType::Var(params[0].name.clone())),
+                        err: Box::new(StdType::Var(params[1].name.clone())),
+                    }
+                } else if params.is_empty() {
+                    StdType::Named(canonical.join("."))
+                } else {
+                    StdType::NamedApplied {
+                        name: canonical.join("."),
+                        args: params
+                            .iter()
+                            .map(|param| StdType::Var(param.name.clone()))
+                            .collect(),
+                    }
+                };
             let constructor = builder
                 .enum_constructor(id, constructor, "")
                 .map_err(invalid)?;
+            let mut variant_path = canonical.clone();
+            variant_path.push(variant.name.clone());
+            symbols.insert(variant_path, constructor);
             let mut declaration = key.declaration().to_vec();
             declaration.push(variant.name.clone());
             builder.bind_declaration(

@@ -434,6 +434,27 @@ Its content identity participates in the source build cache, and the installed
 binding ABI includes signatures and roles as well as primitive descriptors.
 Migrated public std flows and their checked bodies come from `.es` files.
 
+Public declarations, generic parameters, Effect signatures, enums and spec/impl
+belong to the Etas source package. Text/collection algorithms, error conversion,
+protocol parsing, task composition, retries and Handler scheduling should use
+Etas wherever the language can express them. Rust provides OS threads, file and
+network operations and storage primitives, plus continuation capture/resume,
+value representation and enforced budgets/permissions.
+
+`std.role` binds a checked source declaration to a compiler execution role; it
+does not transfer ownership of that declaration to Rust. A `StdRegistry` query
+view generated from the checked bundle is compatible with source ownership.
+The migration must remove manually duplicated public API/signature/algorithm
+tables, including transitional bootstrap declarations as they move to source.
+A retained primitive such as `trim` is an acceleration choice, not a requirement
+that its algorithm stay native.
+
+Independent source ownership requires both a new ordinary API added only in
+`.es` and a std build process that avoids the complete legacy registry and uses
+an explicitly reviewed minimal compiler/host contract set. Compiling out the
+legacy factory verifies that dependency boundary; it does not by itself prove
+that the remaining bootstrap catalog is minimal or the entire std is migrated.
+
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
 
@@ -442,7 +463,7 @@ cargo test --locked -p etas_cli --features forbid-legacy-std --test cli \
   installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes
 ```
 
-The core export example refreshes this small ABI catalog from the retained
+The core export example refreshes the transitional ABI catalog from the retained
 migration baseline during native contract development; SDK build/load processes
 do not run that exporter. The catalog contains no std source algorithms. Native
 text bindings can later be replaced with Etas implementations independently.
@@ -455,7 +476,8 @@ cargo run -p etas_driver --example std_sdk_inventory -- /tmp/etas-sdk \
 ```
 
 The release default remains `--std-provider legacy`. The source batch covers
-text flows and the first opaque task roles. Remaining roles/modules, full API
+text flows, opaque task roles, the source Result enum/predicates/methods, and
+Index declarations/implementations. Remaining roles/modules, full API
 and runtime parity, artifact checkpoint/resume and release gates remain required
 before the default changes.
 
