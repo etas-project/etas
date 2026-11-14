@@ -1,6 +1,6 @@
 [package]
 name = "etas_driver"
-version = "0.1.7"
+version = "0.1.8"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -22,6 +22,11 @@ etas_utils.workspace = true
 blake3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[build-dependencies]
+etas_std.workspace = true
+serde_json.workspace = true
+blake3.workspace = true
 
 [dev-dependencies]
 bincode = { version = "2.0.1", features = ["serde"] }

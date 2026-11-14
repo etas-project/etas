@@ -1,6 +1,6 @@
 [package]
 name = "etas_cli"
-version = "0.13.5"
+version = "0.13.6"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -60,7 +60,7 @@ cli-dump-air = ["component-runtime"]
 cli-graph = []
 cli-effects = ["component-frontend", "dep:etas_effects", "dep:etas_hir"]
 cli-policy = ["component-runtime"]
-cli-pkg = ["dep:etas_driver"]
+cli-pkg = ["component-frontend"]
 cli-run = ["component-frontend", "component-runtime"]
 cli-replay = ["component-frontend", "component-runtime"]
 cli-resume = ["component-frontend", "component-runtime"]

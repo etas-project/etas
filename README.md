@@ -296,6 +296,7 @@ printf 'hello from stdin\n' | $ETAS run examples/stdin_stdout.es
 | `etas resume <checkpoint-id>` | Resume a persisted interpreter checkpoint | Available |
 | `etas pkg lock|update|prepare` | Resolve and materialize dependencies | Available |
 | `etas pkg metadata|pack` | Produce package metadata or an `.etaspkg` archive | Available |
+| `etas std build --manifest-path <path> --out-dir <path>` | Check the std source package and install its matching SDK | Development migration |
 | `etas dump air`, `etas graph` | Future AIR/analysis surfaces | Explicitly unsupported |
 | `etas policy` | Legacy CLI placeholder; not a source-language Policy construct | Explicitly unsupported |
 | `etas watch`, `etas repl`, `etas lsp` | Long-lived CLI service surfaces | Explicitly unsupported |
@@ -303,6 +304,32 @@ printf 'hello from stdin\n' | $ETAS run examples/stdin_stdout.es
 Use `etas <command> --help` for the authoritative option set. Human-readable,
 text, JSON, JSONL, Mermaid, and DOT outputs are available where a command has a
 corresponding renderer.
+
+### Build the std SDK
+
+The maintained Etas standard library sources live in the sibling `etas-core`
+repository. Build them as a whole library, including private bodies, without a
+`main` flow:
+
+```bash
+./target/debug/etas std build \
+  --manifest-path ../etas-core/crates/etas_std/etas.toml \
+  --out-dir /tmp/etas-sdk/std
+```
+
+The output contains `manifest.json`, `etas.toml`, the complete `library/` source
+tree, and `artifacts/std.etasmeta`. The existing package artifact container
+holds public metadata and the checked body graph together. Relative source
+paths allow moving the SDK. Rebuilding replaces the installed source tree.
+
+The driver loader verifies compiler, schema, target, toolchain ID, native binding
+ABI, and content digests before exposing the bundle. Its ABI expectation is
+compiled into the toolchain; loading never constructs the handwritten registry.
+Release packaging can set `ETAS_TOOLCHAIN_ID` when building the driver.
+
+This is the SDK producer stage of the std migration. Ordinary `check`/`run` still
+use the legacy provider; application provider selection and artifact body linking
+remain under development.
 
 ## Etas Projects
 

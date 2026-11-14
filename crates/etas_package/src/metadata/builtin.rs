@@ -304,7 +304,7 @@ fn package_action_arg_kind_from_std(
         }
         etas_std::EffectActionArgKind::StaticResourcePath { ty } => {
             PackageEffectActionArgKindMetadata::StaticResourcePath {
-                ty: (*ty).to_owned(),
+                ty: ty.to_string(),
             }
         }
         etas_std::EffectActionArgKind::StringPattern => {

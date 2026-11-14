@@ -28,6 +28,8 @@ pub mod replay;
 pub mod resume;
 #[cfg(feature = "cli-run")]
 pub mod run;
+#[cfg(feature = "cli-pkg")]
+pub mod std_library;
 #[cfg(feature = "cli-watch")]
 pub mod watch;
 
@@ -105,6 +107,8 @@ pub(crate) fn dispatch_with_lifecycle(
         Command::Policy(command) => policy::run(&args.global, command, stdout, stderr),
         #[cfg(feature = "cli-pkg")]
         Command::Pkg(command) => pkg::run(&args.global, command, &profile, stdout, stderr),
+        #[cfg(feature = "cli-pkg")]
+        Command::Std(command) => std_library::run(&args.global, command, &profile, stdout),
         #[cfg(feature = "cli-run")]
         Command::Run(command) => {
             run::run(&args.global, command, &profile, lifecycle, stdout, stderr)
@@ -196,6 +200,8 @@ fn command_name(command: &Command) -> &'static str {
         Command::Policy(_) => "policy",
         #[cfg(feature = "cli-pkg")]
         Command::Pkg(_) => "pkg",
+        #[cfg(feature = "cli-pkg")]
+        Command::Std(_) => "std",
         #[cfg(feature = "cli-run")]
         Command::Run(_) => "run",
         #[cfg(feature = "cli-replay")]

@@ -1,5 +1,8 @@
 use std::path::PathBuf;
 
+mod native_abi;
+pub mod sdk;
+
 use etas_frontend::{CheckResponse, EntryPolicy, SnapshotDetailLevel, StandardLibraryMode};
 
 use crate::{
