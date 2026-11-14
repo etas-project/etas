@@ -1,4 +1,5 @@
 use super::*;
+use etas_frontend::StandardLibraryMode;
 use std::fs;
 
 struct Fixture(PathBuf);
@@ -201,6 +202,12 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
 #[test]
 fn artifact_provider_checks_application_imports_against_installed_source_contracts() {
     let fixture = Fixture::new();
+    fs::create_dir_all(fixture.0.join("library/std/core")).unwrap();
+    fs::write(
+        fixture.0.join("library/std/core/mod.es"),
+        "module std.core; @std.role(\"std.core.Index\") public spec Index; impl usize ~ Index;",
+    )
+    .unwrap();
     for (file, source) in [
         ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
         ("format.es", etas_std::StdLibrarySourceId::TextFormat),

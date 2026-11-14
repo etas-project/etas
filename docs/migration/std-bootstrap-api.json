@@ -2,11 +2,11 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "63c70c15c7413709456bd42eb468dd0bac473e64",
-    "frontend": "d78efa77db42a38c22fafa580e638a80c3e11b28",
-    "std_version": "0.2.9",
-    "compiler_version": "0.11.8",
-    "native_binding_abi": "blake3:3bfb2e43ac304b9e3e4c80278f78263fe0d87af3120463cadc8270b1278bb99e",
+    "core": "160d3509cfbdc866778b711ad8c6bfe6ab3772f8",
+    "frontend": "28a5d20ca8fc7c1e3bfd94e8ca40a131eae45887",
+    "std_version": "0.2.10",
+    "compiler_version": "0.11.9",
+    "native_binding_abi": "blake3:65790979039513d7b8b3ee34ca25abb9fb5075b08a70eb29cfa1a629d2bf952c",
     "source_payload_hash": "blake3:7f8fb9e264eb5862fe37ec853a965a05aafebb8292a2f1e6bbafcdcbac79989d",
     "body_schema": 10
   },
@@ -2320,6 +2320,9 @@
     "remaining_unmigrated_impls": [
       "std.net.tcp.TcpStream ~ std.stream.ByteStream",
       "std.tls.TlsStream ~ std.stream.ByteStream"
-    ]
-  }
+    ],
+    "bootstrap_implementations": 0
+  },
+  "provider_note": "Package resolver records builtin identity only. Package and IDE type projection use the selected registry and canonicalize its prelude aliases; immutable source restoration preserves parent std mode and artifact identity. Source compilation selects explicit bootstrap before package preparation. Forbidden-factory acceptance covers single-file, application package and path dependency calls.",
+  "determinism_note": "Body type materialization traverses checked facts and generic applications in source-ID order; same-input cross-process std outputs are compared by complete manifest."
 }

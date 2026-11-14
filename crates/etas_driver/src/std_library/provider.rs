@@ -14,6 +14,8 @@ mod types;
 pub enum StdProvider {
     #[default]
     Legacy,
+    /// Internal std producer phase: compiler/host contracts without a legacy library.
+    SourceBootstrap(Arc<StdRegistry>),
     Artifact(Arc<ArtifactStdProvider>),
 }
 
@@ -27,6 +29,10 @@ pub struct ArtifactStdProvider {
 }
 
 impl StdProvider {
+    pub(crate) fn source_bootstrap() -> Self {
+        Self::SourceBootstrap(Arc::new(etas_std::compiler_contract_registry()))
+    }
+
     pub fn artifact(sysroot: Option<&Path>) -> Result<Self, DriverError> {
         let sysroot = match sysroot {
             Some(path) => path.to_owned(),
@@ -66,6 +72,7 @@ impl StdProvider {
             &package,
             std::slice::from_ref(&package),
             &index.public_metadata,
+            &registry,
         );
         let library = Arc::new(etas_frontend::StandardLibrary {
             program: checked,
@@ -125,7 +132,29 @@ impl StdProvider {
         })))
     }
 
+    pub fn frontend_environment(
+        &self,
+        metadata: etas_package::PackageEnvironmentMetadata,
+    ) -> Result<etas_frontend::ProjectEnvironmentInput, DriverError> {
+        match self {
+            Self::Legacy => crate::package_env::frontend_environment(metadata),
+            Self::SourceBootstrap(registry) => {
+                crate::package_env::frontend_environment_with_std_registry(metadata, registry)
+            }
+            Self::Artifact(provider) => crate::package_env::frontend_environment_with_std_registry(
+                metadata,
+                &provider.registry,
+            ),
+        }
+    }
+
     pub(crate) fn configure(&self, input: &mut etas_frontend::ProjectInput) {
+        if let Self::SourceBootstrap(_) = self {
+            input.options.standard_library_mode =
+                etas_frontend::StandardLibraryMode::SourceBootstrap;
+            input.options.standard_library_artifact = Some(etas_std::compiler_contract_identity());
+            return;
+        }
         if let Self::Artifact(provider) = self {
             if input.options.standard_library_mode
                 != etas_frontend::StandardLibraryMode::SourceBootstrap

@@ -14,6 +14,8 @@ use super::*;
 pub(crate) fn load_locked_source_project(
     snapshot: &etas_package::LockedPackageSourceSnapshot,
     owner: &etas_package::ResolvedDependency,
+    std_registry: &etas_std::StdRegistry,
+    compile_options: &etas_frontend::ProjectCompileOptions,
     checkpoint: &dyn Fn() -> Result<(), HostError>,
 ) -> Result<LoadedDriverProject, HostError> {
     checkpoint()?;
@@ -33,8 +35,11 @@ pub(crate) fn load_locked_source_project(
     let entry = entry_from_package(&prepared, None, EntryPolicy::Optional)
         .map_err(|error| invalid(error.to_string()))?;
     let reflection = reflection_options(&prepared.manifest.reflection);
-    let frontend_environment =
-        frontend_environment(environment.clone()).map_err(|error| invalid(error.to_string()))?;
+    let frontend_environment = crate::package_env::frontend_environment_with_std_registry(
+        environment.clone(),
+        std_registry,
+    )
+    .map_err(|error| invalid(error.to_string()))?;
     let loader = SnapshotSourceLoader::new(snapshot, checkpoint)?;
     let loaded = ProjectSourceLoader::new(loader)
         .load(ProjectSourceLoadOptions {
@@ -67,8 +72,11 @@ pub(crate) fn load_locked_source_project(
         cache_mode: crate::DriverCacheMode::Off,
         ..Default::default()
     };
-    let loaded = finish_loaded_project(&options, loaded, local, EntryPolicy::Optional)
+    let mut loaded = finish_loaded_project(&options, loaded, local, EntryPolicy::Optional)
         .map_err(|error| invalid(error.to_string()))?;
+    loaded.loaded.input.options.standard_library_mode = compile_options.standard_library_mode;
+    loaded.loaded.input.options.standard_library_artifact =
+        compile_options.standard_library_artifact.clone();
     checkpoint()?;
     Ok(loaded)
 }
@@ -280,7 +288,25 @@ mod tests {
         )
         .unwrap();
         std::fs::write(fixture.0.join("etas.toml"), "invalid after verification").unwrap();
-        let restored = load_locked_source_project(&snapshot, &owner, &|| Ok(())).unwrap();
+        let mut compile_options = original.loaded.input.options.clone();
+        compile_options.standard_library_mode = etas_frontend::StandardLibraryMode::Artifact;
+        compile_options.standard_library_artifact = Some("locked-producer-sdk".into());
+        let restored = load_locked_source_project(
+            &snapshot,
+            &owner,
+            &etas_std::compiler_contract_registry(),
+            &compile_options,
+            &|| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(
+            restored.loaded.input.options.standard_library_mode,
+            compile_options.standard_library_mode
+        );
+        assert_eq!(
+            restored.loaded.input.options.standard_library_artifact,
+            compile_options.standard_library_artifact
+        );
         assert_eq!(
             restored.loaded.input.sources.len(),
             original.loaded.input.sources.len()
@@ -311,9 +337,13 @@ mod tests {
             restored.loaded.input.environment.stable_source_keys,
             original.loaded.input.environment.stable_source_keys
         );
-        let error = load_locked_source_project(&snapshot, &owner, &|| {
-            Err(HostError::new(HostErrorCode::Cancelled, "cancelled"))
-        })
+        let error = load_locked_source_project(
+            &snapshot,
+            &owner,
+            &etas_std::standard_registry(),
+            &etas_frontend::ProjectCompileOptions::default(),
+            &|| Err(HostError::new(HostErrorCode::Cancelled, "cancelled")),
+        )
         .unwrap_err();
         assert_eq!(error.code, HostErrorCode::Cancelled);
     }

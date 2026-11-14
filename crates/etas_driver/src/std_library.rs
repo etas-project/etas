@@ -4,7 +4,7 @@ mod native_abi;
 pub mod provider;
 pub mod sdk;
 
-use etas_frontend::{CheckResponse, EntryPolicy, SnapshotDetailLevel, StandardLibraryMode};
+use etas_frontend::{CheckResponse, EntryPolicy, SnapshotDetailLevel};
 
 use crate::{
     DriverError, DriverOptions, LoadProjectRequest, SourceDependencyMode, load_project,
@@ -56,8 +56,10 @@ pub fn check_standard_library_source(
             manifest_path.display()
         )));
     }
-    let mut loaded = load_project(
-        options,
+    let mut options = options.clone();
+    options.std_provider = provider::StdProvider::source_bootstrap();
+    let loaded = load_project(
+        &options,
         LoadProjectRequest {
             paths: vec![package_root.clone()],
             all: true,
@@ -71,8 +73,7 @@ pub fn check_standard_library_source(
         .source_definition_provenance
         .local_package_key()
         .expect("loaded std package has a definition owner");
-    loaded.loaded.input.options.standard_library_mode = StandardLibraryMode::SourceBootstrap;
-    let compiled = compile_loaded_project(options, loaded.loaded, SnapshotDetailLevel::None)?;
+    let compiled = compile_loaded_project(&options, loaded.loaded, SnapshotDetailLevel::None)?;
     Ok(StdLibraryCheckOutput {
         package_root,
         manifest,

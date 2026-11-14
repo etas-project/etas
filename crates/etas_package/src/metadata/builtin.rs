@@ -22,6 +22,14 @@ use super::{
 pub const BUILTIN_STD_VERSION: &str = "0.2.0";
 
 pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDependency {
+    let mut dependency = builtin_std_identity(version, edition);
+    dependency.public_metadata = builtin_std_public_metadata();
+    dependency.effect_metadata = builtin_std_effect_metadata();
+    dependency
+}
+
+/// The package resolver owns the builtin lock identity; the compiler session owns its interfaces.
+pub fn builtin_std_identity(version: String, edition: String) -> ResolvedDependency {
     ResolvedDependency {
         identity: PackageIdentity {
             name: "std".to_owned(),
@@ -34,8 +42,8 @@ pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDepen
             checksum: "builtin:std".to_owned(),
         },
         dependencies: Vec::new(),
-        public_metadata: builtin_std_public_metadata(),
-        effect_metadata: builtin_std_effect_metadata(),
+        public_metadata: PackagePublicMetadata::default(),
+        effect_metadata: PackageEffectMetadata::default(),
         tool_bindings: Vec::new(),
     }
 }

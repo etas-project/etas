@@ -406,6 +406,12 @@ pub fn frontend_session(
         crate::std_library::provider::StdProvider::Legacy => {
             FrontendSession::with_options(session_options(options)?)
         }
+        crate::std_library::provider::StdProvider::SourceBootstrap(registry) => {
+            FrontendSession::with_options_and_std_registry(
+                session_options(options)?,
+                registry.clone(),
+            )
+        }
         crate::std_library::provider::StdProvider::Artifact(provider) => {
             FrontendSession::with_options_and_std_registry(
                 session_options(options)?,

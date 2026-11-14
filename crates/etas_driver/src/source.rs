@@ -12,7 +12,7 @@ use etas_package::{PreparePackageOptions, prepare_package};
 
 use crate::{
     DriverError, DriverOptions,
-    package_env::{external_package_key, frontend_environment, stable_external_package_id},
+    package_env::{external_package_key, stable_external_package_id},
     project_discovery::{
         absolute_input_path, choose_source_project_root, discover_package_root, resolve_workspace,
     },
@@ -352,7 +352,9 @@ fn resolve_directory_project(
         let frontend_environment_span = options
             .profile
             .span("driver.frontend_environment_build", "driver");
-        let frontend_environment = frontend_environment(prepared.environment.clone())?;
+        let frontend_environment = options
+            .std_provider
+            .frontend_environment(prepared.environment.clone())?;
         drop(frontend_environment_span);
         let package_environment = Some(prepared.environment.clone());
         return Ok(LocalSourceProject {
@@ -431,7 +433,9 @@ fn resolve_single_file_project(
                 vec![prepared.source_root.clone()]
             },
             entry: entry_from_package(&prepared, request.flow.clone(), request.entry_policy)?,
-            environment: frontend_environment(prepared.environment.clone())?,
+            environment: options
+                .std_provider
+                .frontend_environment(prepared.environment.clone())?,
             package_environment,
             mode: DriverProjectMode::Package,
             source_dependencies,

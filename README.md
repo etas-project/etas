@@ -449,6 +449,15 @@ tables, including transitional bootstrap declarations as they move to source.
 A retained primitive such as `trim` is an acceleration choice, not a requirement
 that its algorithm stay native.
 
+Package preparation records only the builtin std dependency identity; it does
+not project another Rust std interface. Driver and IDE dependency type projection
+use the selected session registry, including its prelude aliases. Immutable
+producer-source restoration retains the caller's std provider/cache identity.
+The source build phase selects the compiler/host bootstrap before package
+loading, so even package preparation does not invoke the legacy factory.
+Index implementations are absent from the bootstrap catalog and come only from
+checked Etas source when building and loading the SDK.
+
 Independent source ownership requires both a new ordinary API added only in
 `.es` and a std build process that avoids the complete legacy registry and uses
 an explicitly reviewed minimal compiler/host contract set. Compiling out the

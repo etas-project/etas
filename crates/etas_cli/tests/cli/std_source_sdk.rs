@@ -68,7 +68,7 @@ impl Result<T, E> {
     public flow is_err(self) -> bool ![] { return match self { Result.Ok(_) => false, Result.Err(_) => true }; }
 }
 "#).unwrap();
-    fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
+    fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
     for (file, id) in [
         ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
         ("format.es", etas_std::StdLibrarySourceId::TextFormat),
@@ -261,6 +261,90 @@ flow main(args: Array<string>) -> i32 {
     build();
     let before = execute();
     assert_eq!(before["value"]["value"], "0");
+    let first_manifest = fs::read(sdk.join("std/manifest.json")).unwrap();
+    build();
+    assert_eq!(
+        first_manifest,
+        fs::read(sdk.join("std/manifest.json")).unwrap()
+    );
+    // Package preparation and projection must use the selected SDK as well.
+    let packaged = root.join("package-app");
+    fs::create_dir_all(packaged.join("src/app")).unwrap();
+    fs::write(
+        packaged.join("etas.toml"),
+        r#"[package]
+name = "source-sdk-consumer"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = { version = "0.2" }
+bridge = { path = "../bridge" }
+[[bin]]
+name = "source-sdk-consumer"
+module = "app.main"
+flow = "main"
+"#,
+    )
+    .unwrap();
+    let bridge = root.join("bridge");
+    fs::create_dir_all(bridge.join("src")).unwrap();
+    fs::write(
+        bridge.join("etas.toml"),
+        r#"[package]
+name = "source-sdk-bridge"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[dependencies]
+std = { version = "0.2" }
+"#,
+    )
+    .unwrap();
+    fs::write(
+        bridge.join("src/bridge.es"),
+        r#"module bridge;
+public flow bridge_summary(value: string) -> Result<string, string> ![] { return Ok(value); }
+"#,
+    )
+    .unwrap();
+    invoke(&["pkg", "lock", path(&bridge)]);
+    invoke(&[
+        "pkg",
+        "metadata",
+        path(&bridge),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+    ]);
+    let package_source = fs::read_to_string(&app).unwrap()
+        .replace("type CallerParcel<T>", "import bridge.bridge_summary;\ntype CallerParcel<T>")
+        .replace("    let caller = sdk_echo", "    let bridged = bridge_summary(\"package\");\n    if !is_ok(bridged) { return 76; }\n    let caller = sdk_echo");
+    fs::write(packaged.join("src/app/main.es"), package_source).unwrap();
+    invoke(&["pkg", "update", path(&packaged)]);
+    invoke(&[
+        "check",
+        path(&packaged),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+    ]);
+    let package_run: serde_json::Value = serde_json::from_str(&invoke(&[
+        "run",
+        path(&packaged),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+        "--format",
+        "json",
+    ]))
+    .unwrap();
+    assert_eq!(package_run["value"]["value"], "0");
     let native = source.join("library/std/text/native.es");
     let binding = fs::read_to_string(&native).unwrap();
     fs::write(

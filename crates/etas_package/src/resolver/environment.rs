@@ -54,7 +54,7 @@ pub(super) fn build_environment(
                 spec.version(),
                 &locked.version,
             );
-            dependencies.push(metadata::builtin_std_dependency(
+            dependencies.push(metadata::builtin_std_identity(
                 locked.version.clone(),
                 manifest.package.edition.clone(),
             ));
