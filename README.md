@@ -297,6 +297,7 @@ printf 'hello from stdin\n' | $ETAS run examples/stdin_stdout.es
 | `etas pkg lock|update|prepare` | Resolve and materialize dependencies | Available |
 | `etas pkg metadata|pack` | Produce package metadata or an `.etaspkg` archive | Available |
 | `etas std build --manifest-path <path> --out-dir <path>` | Check the std source package and install its matching SDK | Development migration |
+| `etas std install --manifest-path <path> --prefix <path>` | Install the current CLI and matching std SDK into a relocatable prefix | Development migration |
 | `etas dump air`, `etas graph` | Future AIR/analysis surfaces | Explicitly unsupported |
 | `etas policy` | Legacy CLI placeholder; not a source-language Policy construct | Explicitly unsupported |
 | `etas watch`, `etas repl`, `etas lsp` | Long-lived CLI service surfaces | Explicitly unsupported |
@@ -327,9 +328,37 @@ ABI, and content digests before exposing the bundle. Its ABI expectation is
 compiled into the toolchain; loading never constructs the handwritten registry.
 Release packaging can set `ETAS_TOOLCHAIN_ID` when building the driver.
 
-This is the SDK producer stage of the std migration. Ordinary `check`/`run` still
-use the legacy provider; application provider selection and artifact body linking
-remain under development.
+Select the SDK for an entire compilation session, including dependencies:
+
+```bash
+etas check app.es --std-provider artifact --sysroot /tmp/etas-sdk
+etas run app.es --std-provider artifact --sysroot /tmp/etas-sdk
+```
+
+Artifact mode loads source exports and checked bodies from the verified SDK.
+Adding a public flow in a new `.es` file requires no Rust registration. Rebuild
+the SDK after source changes; its complete content identity invalidates the
+consumer cache. Direct calls, function values and checked generic applications
+use the independently checked body graph and the caller's execution state.
+
+Without `--sysroot`, artifact mode looks beside the actual executable:
+`<prefix>/bin/etas` uses `<prefix>/lib/etas/<toolchain-id>/std`. Install both the
+binary and the SDK together, including for a Cargo-built CLI:
+
+```bash
+./target/debug/etas std install \
+  --manifest-path ../etas-core/crates/etas_std/etas.toml \
+  --prefix /tmp/etas-toolchain
+/tmp/etas-toolchain/bin/etas run app.es --std-provider artifact
+```
+
+The complete prefix can be moved and used offline. An explicit sysroot is never
+replaced with a legacy fallback.
+
+The release default remains `--std-provider legacy`. The current source batch
+covers text flows; declaration contracts, remaining std modules, IDE navigation
+and artifact checkpoint/resume still require their migration gates before the
+default changes.
 
 ## Etas Projects
 

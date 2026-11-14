@@ -197,3 +197,93 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
             .starts_with(&moved))
     );
 }
+
+#[test]
+fn artifact_provider_checks_application_imports_against_installed_source_contracts() {
+    let fixture = Fixture::new();
+    for (file, source) in [
+        ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
+        ("format.es", etas_std::StdLibrarySourceId::TextFormat),
+    ] {
+        fs::write(
+            fixture.0.join("library/std/text").join(file),
+            etas_std::standard_library_source(source).source,
+        )
+        .unwrap();
+    }
+    fs::write(
+        fixture.0.join("library/std/text/extra.es"),
+        "module std.text; public flow echo<T>(value: T) -> T { return value; }",
+    )
+    .unwrap();
+    let options = DriverOptions {
+        cache_mode: crate::DriverCacheMode::Off,
+        ..Default::default()
+    };
+    sdk::build_standard_library(
+        &options,
+        sdk::StdLibraryBuildRequest {
+            manifest_path: fixture.0.join("etas.toml"),
+            out_dir: fixture.0.join("sdk/std"),
+        },
+    )
+    .unwrap();
+    let provider = provider::StdProvider::artifact(Some(&fixture.0.join("sdk"))).unwrap();
+    let provider::StdProvider::Artifact(artifact) = &provider else {
+        unreachable!()
+    };
+    assert!(artifact.registry.symbols().all(|symbol| !matches!(
+        symbol.implementation,
+        Some(etas_std::StdImplementationRef::Source { .. })
+    )));
+    let echo = artifact
+        .registry
+        .lookup_qualified(&["std", "text", "echo"])
+        .unwrap();
+    assert_eq!(
+        artifact
+            .registry
+            .body_binding(echo.id)
+            .unwrap()
+            .callable
+            .as_declaration()
+            .unwrap()
+            .package(),
+        artifact.sdk.image.package
+    );
+    fs::create_dir_all(fixture.0.join("application")).unwrap();
+    fs::write(fixture.0.join("application/etas.toml"), "[package]\nname = 'consumer'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'src'\n[[bin]]\nname = 'consumer'\nmodule = 'app.main'\nflow = 'main'\n").unwrap();
+    let application = fixture.0.join("application/src/app/main.es");
+    fs::create_dir_all(application.parent().unwrap()).unwrap();
+    let source = "module app.main; import std.text.{identity as keep, echo, join}; flow main(args: Array<string>) -> i32 { let value = keep(echo(join([\"a\", \"b\"], \"\"))); if value == \"ab\" { return 0; } return 1; }";
+    fs::write(&application, source).unwrap();
+    let options = DriverOptions {
+        std_provider: provider,
+        ..options
+    };
+    let response = crate::compile_runnable_project(
+        &options,
+        LoadProjectRequest {
+            paths: vec![application],
+            all: false,
+            entry_policy: EntryPolicy::Runnable,
+            flow: None,
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
+        SnapshotDetailLevel::None,
+    )
+    .unwrap();
+    let output = response.response.output;
+    assert!(output.checked.is_some(), "{:?}", output.diagnostics);
+    let checked = output.checked.unwrap();
+    assert_eq!(
+        checked.compile_options.standard_library_mode,
+        StandardLibraryMode::Artifact
+    );
+    assert_eq!(checked.sources.sources.len(), 1);
+    assert!(checked.compile_options.standard_library_artifact.is_some());
+    assert!(checked.standard_library.is_some());
+    let plan = etas_interpreter::Interpreter.plan(&checked, Default::default());
+    assert!(plan.plan.is_some(), "{:?}", plan.diagnostics);
+}

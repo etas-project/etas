@@ -34,6 +34,14 @@ pub struct GlobalOptions {
     #[arg(long, global = true, value_name = "PATH")]
     pub cache_root: Option<PathBuf>,
 
+    /// Select the standard library for the entire compilation session.
+    #[arg(long, global = true, value_enum, default_value_t = StdProviderChoice::Legacy)]
+    pub std_provider: StdProviderChoice,
+
+    /// SDK root containing std/manifest.json for the artifact provider.
+    #[arg(long, global = true, value_name = "PATH")]
+    pub sysroot: Option<PathBuf>,
+
     #[arg(long, global = true, value_name = "PATH")]
     pub profile_out: Option<PathBuf>,
 
@@ -80,4 +88,10 @@ pub enum CacheMode {
     ReadOnly,
     WriteOnly,
     ReadWrite,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum StdProviderChoice {
+    Legacy,
+    Artifact,
 }

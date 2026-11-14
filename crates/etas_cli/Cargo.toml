@@ -1,6 +1,6 @@
 [package]
 name = "etas_cli"
-version = "0.13.6"
+version = "0.14.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -69,5 +69,6 @@ cli-repl = ["component-frontend"]
 cli-lsp = ["component-ide"]
 
 [dev-dependencies]
+etas_std.workspace = true
 etas_package = { workspace = true, features = ["test-support"] }
 etas_package_metadata.workspace = true

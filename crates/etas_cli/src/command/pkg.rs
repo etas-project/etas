@@ -1,15 +1,15 @@
 use std::io::Write;
 
 use etas_driver::{
-    DriverCacheMode, DriverError, DriverOptions, PackageLockRequest, PackageMetadataRequest,
-    PackagePackRequest, PackagePrepareRequest, PackageUpdateRequest, build_package_metadata,
-    lock_package, pack_package, prepare_package, update_package,
+    DriverError, PackageLockRequest, PackageMetadataRequest, PackagePackRequest,
+    PackagePrepareRequest, PackageUpdateRequest, build_package_metadata, lock_package,
+    pack_package, prepare_package, update_package,
 };
 use etas_utils::ProfileHandle;
 
 use crate::{
     args::{
-        global::{CacheMode, GlobalOptions},
+        global::GlobalOptions,
         pkg::{PkgArgs, PkgCommand},
     },
     error::CliError,
@@ -23,7 +23,8 @@ pub fn run(
     stdout: &mut dyn Write,
     _stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
-    let options = driver_options(global, profile);
+    let mut options = super::frontend::driver_options(global, profile)?;
+    options.residual_target = None;
     match args.command {
         PkgCommand::Lock(args) => {
             let response = lock_package(
@@ -145,23 +146,6 @@ pub fn run(
             })?;
             Ok(CliExit::Success)
         }
-    }
-}
-
-fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) -> DriverOptions {
-    DriverOptions {
-        workspace: global.workspace.clone(),
-        cache_mode: match global.cache {
-            CacheMode::Auto => DriverCacheMode::Auto,
-            CacheMode::Off => DriverCacheMode::Off,
-            CacheMode::ReadOnly => DriverCacheMode::ReadOnly,
-            CacheMode::WriteOnly => DriverCacheMode::WriteOnly,
-            CacheMode::ReadWrite => DriverCacheMode::ReadWrite,
-        },
-        cache_root: global.cache_root.clone(),
-        profile: profile.clone(),
-        residual_target: None,
-        optimization_level: None,
     }
 }
 

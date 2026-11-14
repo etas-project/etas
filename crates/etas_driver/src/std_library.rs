@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 mod native_abi;
+pub mod provider;
 pub mod sdk;
 
 use etas_frontend::{CheckResponse, EntryPolicy, SnapshotDetailLevel, StandardLibraryMode};

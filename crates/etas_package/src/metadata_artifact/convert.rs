@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-pub(super) fn package_index_from_metadata(
+pub fn package_index_from_metadata(
     metadata: etas_package_metadata::PackageMetadata,
     path: &Path,
 ) -> Result<PackageIndex, PackageError> {
