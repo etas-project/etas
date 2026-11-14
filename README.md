@@ -371,6 +371,13 @@ Public source types and enum constructors are published from the checked SDK:
 
 ```etas
 public type Parcel<T> = { value: T };
+public spec Reader { flow read(self) -> string ![]; }
+impl Parcel<string> ~ Reader {
+    flow read(self) -> string ![] { return self.value; }
+}
+public flow via_reader<T ~ Reader>(value: T) -> string ![] {
+    return value.read();
+}
 public enum Reply<T> { Empty, Item(T), Named { value: T }, }
 ```
 
@@ -380,8 +387,17 @@ parameters and named payload fields survive separate build/run processes and
 installation relocation. Native role replacement requires its checked role
 contract before publication.
 
+Source specs and implementations use the existing checked package metadata and
+canonical method identities. Imported methods and generic spec calls execute
+the SDK's checked bodies. Public methods retain their checked Effect contracts
+even when their implementation has no separate `public` keyword.
+
+Standard-library orchestration uses ordinary `flow` declarations. Reusable
+Effect handling uses existing `let ... = handler { ... }` values applied with
+`with`; there is no `controller` language declaration or migration requirement.
+
 The release default remains `--std-provider legacy`. The current source batch
-covers text flows; source role/spec contracts, remaining std modules, minimal
+covers text flows; trusted source role contracts, remaining std modules, minimal
 bootstrap and artifact checkpoint/resume still require their migration gates before the
 default changes.
 

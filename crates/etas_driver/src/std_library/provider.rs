@@ -7,6 +7,7 @@ use etas_std::{StdRegistry, StdRegistryBuilder, StdType};
 use super::sdk::{LoadedStdSdk, STD_TOOLCHAIN_ID, load_standard_library_sdk};
 use crate::DriverError;
 
+mod specs;
 mod types;
 
 #[derive(Clone, Debug, Default)]
@@ -70,6 +71,31 @@ impl StdProvider {
             program: checked,
             package,
             metadata: public_metadata,
+            modules: sdk
+                .public
+                .public_metadata
+                .modules
+                .iter()
+                .map(|module| etas_frontend::ProjectExternalModuleInput {
+                    package: Some(etas_frontend::ExternalPackageId(0)),
+                    id: etas_frontend::ExternalModuleId(module.id),
+                    path: etas_frontend::ModulePath {
+                        segments: module.path.clone(),
+                    },
+                    exports: module
+                        .exports
+                        .iter()
+                        .map(|export| etas_frontend::ProjectExternalExportInput {
+                            symbol: etas_frontend::ExternalSymbolId(export.id),
+                            name: export.name.clone(),
+                            visibility: match export.visibility {
+                                metadata::Visibility::Public => etas_hir::Visibility::Public,
+                                metadata::Visibility::Private => etas_hir::Visibility::Private,
+                            },
+                        })
+                        .collect(),
+                })
+                .collect(),
             origins: sdk
                 .public
                 .public_metadata
@@ -153,6 +179,14 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .iter()
         .map(|export| (export.exported.clone(), export.from.clone()))
         .collect();
+    specs::publish(
+        sdk,
+        &mut builder,
+        &mut modules,
+        &mut symbols,
+        &declarations,
+        &aliases,
+    )?;
     types::publish(
         sdk,
         &mut builder,

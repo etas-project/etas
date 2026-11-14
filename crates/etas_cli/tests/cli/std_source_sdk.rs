@@ -22,10 +22,32 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         r#"module std.extra;
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
+public spec Reader { flow read(self) -> string ![]; }
+impl Parcel<string> ~ Reader {
+    flow read(self) -> string ![] { return self.value; }
+}
+public flow via_reader<T ~ Reader>(value: T) -> string ![] { return value.read(); }
 public enum Reply<T> { Empty, Item(T), Named { value: T }, }
 public flow pack(value: string) -> Parcel<string> { return Parcel { value = value }; }
 public flow read_reply(value: Reply<string>) -> string {
     return match value { Reply.Empty => "", Reply.Item(text) => text, Reply.Named { value } => value };
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("library/std/extra/protected.es"),
+        r#"module std.extra;
+import std.fs.{Region, WorkspacePath, IOError};
+public type Sandbox;
+impl Sandbox ~ Region;
+@std.binding("std.fs.read_bytes")
+flow raw_read<R ~ Region>(target: WorkspacePath<R>) -> bytes ![Error<IOError>] {}
+public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOError> ![] {
+    let CatchIo: ![Error<IOError> => [] for Result<bytes, IOError>] = handler {
+        Error<IOError>.raise(error) => { finish Err(error); }
+    };
+    return handle { Ok(raw_read(target)) } with CatchIo;
 }
 "#,
     )
@@ -51,13 +73,14 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         &app,
         r#"module app.main;
 import std.text.{join, trim, append};
-import std.extra.{sdk_echo, Parcel, Reply, pack, read_reply};
+import std.extra.{sdk_echo, Parcel, Reply, pack, read_reply, Reader, via_reader};
 flow main(args: Array<string>) -> i32 {
     let assemble = join;
     let strip = trim;
     let values = append([strip(" a ")], strip(" b "));
     let parcel: Parcel<string> = sdk_echo(pack(bundled_echo(assemble(values, "|"))));
-    let text = read_reply(Reply.Named { value = parcel.value });
+    let text = read_reply(Reply.Named { value = via_reader(parcel) });
+    if parcel.read() != text { return 96; }
     if read_reply(Reply.Item(text)) != text { return 98; }
     if read_reply(Reply.Empty) != "" { return 97; }
     if text == "a|b" { return 0; }
@@ -198,6 +221,88 @@ flow main(args: Array<string>) -> i32 {
             assert_eq!(value["value"]["value"], "2");
         }
     }
+    let protected = package_fixture(
+        "std-sdk-protected-read",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "std-sdk-protected-read"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "std-sdk-protected-read"
+module = "app.main"
+flow = "main"
+profile = "readonly"
+[runtime.profiles.readonly.filesystem.regions."std.extra.Sandbox"]
+root = "."
+read = true
+"#,
+            ),
+            ("data.txt", "sdk read"),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+import std.extra.{Sandbox, load_checked, pack, Reader, via_reader, Reply, read_reply};
+import std.fs.path;
+import std.codec.text.utf8_encode;
+flow main(args: Array<string>) -> i32 {
+    let parcel = pack("sdk read");
+    if parcel.read() != via_reader(parcel) { return 4; }
+    let expected = read_reply(Reply.Named { value = parcel.read() });
+    let target = match path<Sandbox>("data.txt") {
+        Ok(value) => value, Err(_) => { return 2; }
+    };
+    let loaded = match load_checked(target) {
+        Ok(value) => value, Err(_) => { return 3; }
+    };
+    if loaded != utf8_encode(expected) { return 5; }
+    let missing = match path<Sandbox>("missing.txt") {
+        Ok(value) => value, Err(_) => { return 2; }
+    };
+    return match load_checked(missing) { Err(_) => 0, Ok(_) => 6 };
+}
+"#,
+            ),
+        ],
+    );
+    let output = Command::new(moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)))
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&protected),
+            "--std-provider",
+            "artifact",
+            "--format",
+            "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["value"]["value"], "0", "{report}");
+    assert_eq!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|event| event["kind"] == "host_request_started"
+                && event["qualified_action"] == "Fs.read")
+            .count(),
+        2,
+        "{report}"
+    );
+    fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
     fs::write(
