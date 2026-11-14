@@ -23,6 +23,10 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
 public spec Reader { flow read(self) -> string ![]; }
+public type Constructed<T> = { value: T };
+impl Constructed<string> ~ Reader {
+    flow read(self) -> string ![] { return self.value; }
+}
 impl Parcel<string> ~ Reader {
     flow read(self) -> string ![] { return self.value; }
 }
@@ -73,13 +77,15 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         &app,
         r#"module app.main;
 import std.text.{join, trim, append};
-import std.extra.{sdk_echo, Parcel, Reply, pack, read_reply, Reader, via_reader};
+import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader};
 flow main(args: Array<string>) -> i32 {
     let assemble = join;
     let strip = trim;
     let values = append([strip(" a ")], strip(" b "));
     let parcel: Parcel<string> = sdk_echo(pack(bundled_echo(assemble(values, "|"))));
     let text = read_reply(Reply.Named { value = via_reader(parcel) });
+    let constructed: Constructed<string> = Constructed { value = text };
+    if constructed.read() != text { return 95; }
     if parcel.read() != text { return 96; }
     if read_reply(Reply.Item(text)) != text { return 98; }
     if read_reply(Reply.Empty) != "" { return 97; }
