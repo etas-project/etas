@@ -355,6 +355,18 @@ binary and the SDK together, including for a Cargo-built CLI:
 The complete prefix can be moved and used offline. An explicit sysroot is never
 replaced with a legacy fallback.
 
+Std native declarations use an explicit checked binding, for example:
+
+```etas
+@std.binding("std.text.trim")
+public flow trim(value: string) -> string ![] {}
+```
+
+Only a std source build accepts this annotation. Its signature is checked against
+the primitive ABI, and generic type/effect arguments are forwarded by checked
+calls. Rebuilding with `--std-provider artifact --sysroot <root>` uses that SDK's
+verified primitive contract independently of its migrated public exports.
+
 The release default remains `--std-provider legacy`. The current source batch
 covers text flows; declaration contracts, remaining std modules, IDE navigation
 and artifact checkpoint/resume still require their migration gates before the

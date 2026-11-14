@@ -164,12 +164,15 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     flows.sort_by(|(left, from), (right, to)| {
         (left.path != *from, &left.path).cmp(&(right.path != *to, &right.path))
     });
+    let mut registered = std::collections::BTreeSet::new();
     for (flow, canonical) in flows {
         if flow.visibility != metadata::Visibility::Public {
             continue;
         }
         // Re-exports share the original symbol and checked body identity.
-        if symbols.contains_key(&canonical) {
+        if (symbols.contains_key(&canonical) && !declarations.contains_key(&canonical))
+            || !registered.insert(canonical.clone())
+        {
             continue;
         }
         let key = *declarations.get(&canonical).ok_or_else(|| {

@@ -28,8 +28,35 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         "module std.prelude; public import std.extra.sdk_echo as bundled_echo;",
     )
     .unwrap();
+    fs::write(
+        source.join("library/std/text/native.es"),
+        r#"module std.text;
+@std.binding("std.text.trim")
+public flow trim(value: string) -> string ![] {}
+@std.binding("std.collections.array_push")
+public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
+"#,
+    )
+    .unwrap();
     let app = root.join("app.es");
-    fs::write(&app, "module app.main; import std.text.join; import std.extra.sdk_echo; flow main(args: Array<string>) -> i32 { let assemble = join; let text = sdk_echo(bundled_echo(assemble([\"a\", \"b\"], \"|\"))); if text == \"a|b\" { return 0; } if text == \"rebuilt:a|b\" { return 2; } return 99; }").unwrap();
+    fs::write(
+        &app,
+        r#"module app.main;
+import std.text.{join, trim, append};
+import std.extra.sdk_echo;
+flow main(args: Array<string>) -> i32 {
+    let assemble = join;
+    let strip = trim;
+    let values = append([strip(" a ")], strip(" b "));
+    let text = sdk_echo(bundled_echo(assemble(values, "|")));
+    if text == "a|b" { return 0; }
+    if text == " A | B " { return 3; }
+    if text == "rebuilt:a|b" { return 2; }
+    return 99;
+}
+"#,
+    )
+    .unwrap();
     let sdk = root.join("sdk");
     let invoke = |args: &[&str]| {
         let output = Command::new(env!("CARGO_BIN_EXE_etas"))
@@ -78,6 +105,16 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
     build();
     let before = execute();
     assert_eq!(before["value"]["value"], "0");
+    let native = source.join("library/std/text/native.es");
+    let binding = fs::read_to_string(&native).unwrap();
+    fs::write(
+        &native,
+        binding.replace("std.text.trim", "std.text.uppercase"),
+    )
+    .unwrap();
+    build();
+    assert_eq!(execute()["value"]["value"], "3");
+    fs::write(native, binding).unwrap();
     let assembly = source.join("library/std/text/assembly.es");
     let text = fs::read_to_string(&assembly).unwrap();
     let start = text.find("public flow join(").unwrap();
@@ -92,7 +129,20 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         ),
     )
     .unwrap();
-    build();
+    invoke(&[
+        "--cache",
+        "off",
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+        "std",
+        "build",
+        "--manifest-path",
+        path(&source.join("etas.toml")),
+        "--out-dir",
+        path(&sdk.join("std")),
+    ]);
     fs::remove_dir_all(source).unwrap();
     let after = execute();
     assert_eq!(after["value"]["value"], "2");

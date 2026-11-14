@@ -92,7 +92,20 @@ pub fn check_project_once(
         request.input.options.residual_target = target.clone();
     }
     let _span = options.profile.span("frontend.check", "frontend");
-    let mut session = frontend_session(options)?;
+    let mut session = if request.input.options.standard_library_mode
+        == etas_frontend::StandardLibraryMode::SourceBootstrap
+        && let crate::std_library::provider::StdProvider::Artifact(provider) = &options.std_provider
+    {
+        // Source builds consume the verified primitive ABI, independently of
+        // which public exports the previous SDK has already migrated.
+        FrontendSession::with_options_and_std_registry(
+            session_options(options)?,
+            provider.library.program.std_registry.clone(),
+        )
+        .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
+    } else {
+        frontend_session(options)?
+    };
     let project = session
         .try_open_project(request.input)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
