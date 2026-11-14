@@ -424,7 +424,7 @@ legacy registry. The catalog carries primitive operand/result ABI, fixed core
 Effect/action identities, opaque task roles, and budget enforcement contracts.
 Its content identity participates in the source build cache, and the installed
 binding ABI includes signatures and roles as well as primitive descriptors.
-Public std flows and checked bodies come from `.es` files.
+Migrated public std flows and their checked bodies come from `.es` files.
 
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):

@@ -96,8 +96,11 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
 import std.text.{join, trim, append};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader};
 import std.task.{run, execute, Scheduler};
+type CallerParcel = { value: string };
 flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
 flow main(args: Array<string>) -> i32 {
+    let caller = sdk_echo(CallerParcel { value = "caller" });
+    if caller.value != "caller" { return 92; }
     let outcome = execute(scheduled);
     if outcome != 7 { return 94; }
     if run(scheduled) != 7 { return 93; }
@@ -368,6 +371,140 @@ flow main(args: Array<string>) -> i32 {
         let value: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(value["value"]["value"], expected, "{provider}");
     }
+    // The same callback crosses source std, requests a protected host action,
+    // and raises a typed error back to a handler owned by its caller.
+    let task_app = package_fixture(
+        "std-sdk-task-callback",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "task-run-parity"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "parity"
+module = "app"
+flow = "main"
+profile = "read"
+[runtime.profiles.read.filesystem.regions."app.Sandbox"]
+root = "."
+read = true
+"#,
+            ),
+            ("data.txt", "task read"),
+            (
+                "src/app.es",
+                r#"module app;
+import std.task.{run, Scheduler};
+import std.fs.{Region, IOError, path, read_bytes};
+import std.codec.text.utf8_encode;
+type Sandbox;
+impl Sandbox ~ Region;
+flow job(scheduler: Scheduler) -> bytes ![Error<IOError>] {
+    var total = 0;
+    for value in [1, 2, 3] limit Iterations(4) { total = total + value; }
+    let target = match path<Sandbox>("data.txt") {
+        Ok(value) => value,
+        Err(error) => { return perform Error<IOError>.raise(error); }
+    };
+    return read_bytes(target);
+}
+flow missing(scheduler: Scheduler) -> bytes ![Error<IOError>] {
+    let target = match path<Sandbox>("missing.txt") {
+        Ok(value) => value,
+        Err(error) => { return perform Error<IOError>.raise(error); }
+    };
+    return read_bytes(target);
+}
+flow main(args: Array<string>) -> i32 {
+    let Catch: ![Error<IOError> => [] for i32] = handler {
+        Error<IOError>.raise(error) => { finish 2; }
+    };
+    let first = handle {
+        let data = run(job);
+        if data == utf8_encode("task read") { 0 } else { 3 }
+    } with Catch;
+    if first != 0 { return first; }
+    let Missing: ![Error<IOError> => [] for i32] = handler {
+        Error<IOError>.raise(error) => { finish 7; }
+    };
+    let absent = handle { run(missing); 99 } with Missing;
+    if absent == 7 { return 0; }
+    return 4;
+}
+"#,
+            ),
+        ],
+    );
+    let mut reference_effects = None;
+    for &(provider, _) in providers {
+        let output = invoke(&[
+            "--cache",
+            "off",
+            "effects",
+            path(&task_app),
+            "--std-provider",
+            provider,
+            "--sysroot",
+            path(&sdk),
+            "--format",
+            "json",
+        ]);
+        let report: serde_json::Value = serde_json::from_str(&output).unwrap();
+        let effects = report["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| {
+                serde_json::json!({
+                    "name": item["name"],
+                    "requested": item["requested_actions"],
+                    "escaping": item["escaping_effects"],
+                    "determinism": item["determinism"],
+                    "support": item["support"],
+                })
+            })
+            .collect::<Vec<_>>();
+        let main = effects.iter().find(|item| item["name"] == "main").unwrap();
+        assert_eq!(main["requested"], "[Fs.read[app.Sandbox]]", "{provider}");
+        assert_eq!(main["escaping"], "[]", "{provider}");
+        if let Some(reference) = &reference_effects {
+            assert_eq!(&effects, reference, "{provider}");
+        } else {
+            reference_effects = Some(effects);
+        }
+        let output = invoke(&[
+            "--cache",
+            "off",
+            "run",
+            path(&task_app),
+            "--std-provider",
+            provider,
+            "--sysroot",
+            path(&sdk),
+            "--format",
+            "json",
+        ]);
+        let report: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{provider}: {report}");
+        assert_eq!(
+            report["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|event| {
+                    event["kind"] == "host_request_started"
+                        && event["qualified_action"] == "Fs.read"
+                })
+                .count(),
+            2,
+            "{provider}: {report}"
+        );
+    }
+    fs::remove_dir_all(task_app).unwrap();
     // Remove only the checked bodies, leaving valid public metadata and digests.
     // Artifact mode must report the missing implementation despite source and
     // legacy implementations remaining available.
