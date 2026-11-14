@@ -3,11 +3,12 @@
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
     "core": "00bcdf0e6c541d58b05280b3ac3d7bc6ce6fdb5a",
-    "frontend": "a2b5546719c990119f5b197f20a68e7c3deaad1d",
+    "frontend": "41deef1bf79180ca53ef8046688f8a8d88520eef",
     "std_version": "0.2.8",
-    "compiler_version": "0.11.6",
+    "compiler_version": "0.11.7",
     "native_binding_abi": "blake3:3bfb2e43ac304b9e3e4c80278f78263fe0d87af3120463cadc8270b1278bb99e",
-    "source_payload_hash": "blake3:b8009cea2102e982cb9fb3260b8b669dca082577fc3ecd9028c03c8048a970b9"
+    "source_payload_hash": "blake3:b8009cea2102e982cb9fb3260b8b669dca082577fc3ecd9028c03c8048a970b9",
+    "body_schema": 9
   },
   "baseline_symbols": 667,
   "candidate_symbols": 139,

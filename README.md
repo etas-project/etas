@@ -386,8 +386,7 @@ canonical opaque declaration and its type/effect parameter shape; the SDK query
 view preserves that source owner. Rust retains scheduler scopes, continuation
 capture and transfer, value representation, and enforced budgets and permissions.
 Public declarations and algorithms belong to Etas; native text acceleration is
-optional. The build still obtains contracts from the complete legacy registry,
-so independent minimal bootstrap remains an outstanding acceptance gate.
+optional. Source builds use the explicit bootstrap contracts described below.
 
 Public source types and enum constructors are published from the checked SDK:
 
@@ -413,6 +412,15 @@ Source specs and implementations use the existing checked package metadata and
 canonical method identities. Imported methods and generic spec calls execute
 the SDK's checked bodies. Public methods retain their checked Effect contracts
 even when their implementation has no separate `public` keyword.
+
+Applications can also implement SDK specs on their own private types. Generic
+SDK flows select those implementations by canonical spec and method identity;
+the linker prepares concrete generic method bodies in the defining program,
+including private body types and nested SDK calls. SDK-private types can pass
+through these generic methods without being exported as lexical names. Returned
+SDK closures retain the checked caller method link. Calls keep the current
+runtime Handler, permission, budget and trace context, including protected
+filesystem methods and typed errors handled by the application.
 
 Standard-library orchestration uses ordinary `flow` declarations. Reusable
 Effect handling uses existing `let ... = handler { ... }` values applied with

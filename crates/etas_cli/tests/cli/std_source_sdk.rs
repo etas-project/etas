@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes() {
-    let root = temp_path("std-source-sdk", "workspace");
+    let root = temp_path(
+        &format!("std-source-sdk-{}", std::process::id()),
+        "workspace",
+    );
     let source = root.join("std-source");
     fs::create_dir_all(source.join("library/std/text")).unwrap();
     fs::create_dir_all(source.join("library/std/extra")).unwrap();
@@ -37,6 +40,7 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
     fs::write(
         source.join("library/std/extra/mod.es"),
         r#"module std.extra;
+import std.fs.IOError;
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
 public spec Reader { flow read(self) -> string ![]; }
@@ -48,6 +52,22 @@ impl Parcel<string> ~ Reader {
     flow read(self) -> string ![] { return self.value; }
 }
 public flow via_reader<T ~ Reader>(value: T) -> string ![] { return value.read(); }
+public flow reader<T ~ Reader>(value: T) -> () -> string ![] {
+    return () => { return value.read(); };
+}
+public spec Transformer { flow apply<T>(self, value: T) -> T ![]; }
+public flow transform<R ~ Transformer, T>(receiver: R, value: T) -> T ![] {
+    return receiver.apply<T>(value);
+}
+type Hidden<T> = { value: T };
+public flow roundtrip<R ~ Transformer>(receiver: R) -> string ![] {
+    let value = transform(receiver, Hidden { value = "hidden" });
+    return value.value;
+}
+public spec Loader { flow load(self) -> bytes ![Error<IOError>]; }
+public flow load_through<L ~ Loader>(loader: L) -> bytes ![Error<IOError>] {
+    return loader.load();
+}
 public enum Reply<T> { Empty, Item(T), Named { value: T }, }
 public flow pack(value: string) -> Parcel<string> { return Parcel { value = value }; }
 public flow read_reply(value: Reply<string>) -> string {
@@ -94,13 +114,30 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         &app,
         r#"module app.main;
 import std.text.{join, trim, append};
-import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader};
+import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
 import std.task.{run, execute, Scheduler};
-type CallerParcel = { value: string };
+type CallerParcel<T> = { value: T };
+impl CallerParcel<T> ~ Reader {
+    flow read(self) -> string ![] { return "caller"; }
+}
+type CallerTransformer<A> = { active: A };
+type PrivateBox<T> = { value: T };
+impl CallerTransformer<A> ~ Transformer {
+    flow apply<U>(self, value: U) -> U ![] {
+        let box: PrivateBox<U> = PrivateBox { value = sdk_echo(value) };
+        return sdk_echo(box.value);
+    }
+}
 flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
 flow main(args: Array<string>) -> i32 {
     let caller = sdk_echo(CallerParcel { value = "caller" });
     if caller.value != "caller" { return 92; }
+    if via_reader(caller) != "caller" { return 83; }
+    if reader(caller)() != "caller" { return 87; }
+    let transformer = CallerTransformer { active = true };
+    if transform(transformer, 27) != 27 { return 84; }
+    if transform(transformer, "caller") != "caller" { return 85; }
+    if roundtrip(transformer) != "hidden" { return 86; }
     let outcome = execute(scheduled);
     if outcome != 7 { return 94; }
     if run(scheduled) != 7 { return 93; }
@@ -271,16 +308,40 @@ profile = "readonly"
 [runtime.profiles.readonly.filesystem.regions."std.extra.Sandbox"]
 root = "."
 read = true
+[runtime.profiles.readonly.filesystem.regions."app.main.CallerSandbox"]
+root = "."
+read = true
 "#,
             ),
             ("data.txt", "sdk read"),
             (
                 "src/app/main.es",
                 r#"module app.main;
-import std.extra.{Sandbox, load_checked, pack, Reader, via_reader, Reply, read_reply};
-import std.fs.path;
+import std.extra.{Sandbox, load_checked, pack, Reader, via_reader, Reply, read_reply, Loader, load_through};
+import std.fs.{Region, IOError, WorkspacePath, path, read_bytes};
 import std.codec.text.utf8_encode;
+type CallerSandbox;
+impl CallerSandbox ~ Region;
+type File = { target: WorkspacePath<CallerSandbox> };
+impl File ~ Loader {
+    flow load(self) -> bytes ![Error<IOError>] { return read_bytes(self.target); }
+}
 flow main(args: Array<string>) -> i32 {
+    let Catch: ![Error<IOError> => [] for i32] = handler {
+        Error<IOError>.raise(error) => { finish 7; }
+    };
+    let caller_target = match path<CallerSandbox>("data.txt") {
+        Ok(value) => value, Err(_) => { return 8; }
+    };
+    let caller_loaded = handle {
+        if load_through(File { target = caller_target }) == utf8_encode("sdk read") { 0 } else { 9 }
+    } with Catch;
+    if caller_loaded != 0 { return caller_loaded; }
+    let caller_absent = match path<CallerSandbox>("missing.txt") {
+        Ok(value) => value, Err(_) => { return 8; }
+    };
+    let caller_missing = handle { load_through(File { target = caller_absent }); 99 } with Catch;
+    if caller_missing != 7 { return 10; }
     let parcel = pack("sdk read");
     if parcel.read() != via_reader(parcel) { return 4; }
     let expected = read_reply(Reply.Named { value = parcel.read() });
@@ -330,7 +391,7 @@ flow main(args: Array<string>) -> i32 {
             .filter(|event| event["kind"] == "host_request_started"
                 && event["qualified_action"] == "Fs.read")
             .count(),
-        2,
+        4,
         "{report}"
     );
     fs::remove_dir_all(protected).unwrap();
