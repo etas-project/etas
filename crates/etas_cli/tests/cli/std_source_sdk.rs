@@ -19,7 +19,15 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
     }
     fs::write(
         source.join("library/std/extra/mod.es"),
-        "module std.extra; public flow sdk_echo<T>(value: T) -> T { return value; }",
+        r#"module std.extra;
+public flow sdk_echo<T>(value: T) -> T { return value; }
+public type Parcel<T> = { value: T };
+public enum Reply<T> { Empty, Item(T), Named { value: T }, }
+public flow pack(value: string) -> Parcel<string> { return Parcel { value = value }; }
+public flow read_reply(value: Reply<string>) -> string {
+    return match value { Reply.Empty => "", Reply.Item(text) => text, Reply.Named { value } => value };
+}
+"#,
     )
     .unwrap();
     fs::create_dir_all(source.join("library/std/prelude")).unwrap();
@@ -43,12 +51,15 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         &app,
         r#"module app.main;
 import std.text.{join, trim, append};
-import std.extra.sdk_echo;
+import std.extra.{sdk_echo, Parcel, Reply, pack, read_reply};
 flow main(args: Array<string>) -> i32 {
     let assemble = join;
     let strip = trim;
     let values = append([strip(" a ")], strip(" b "));
-    let text = sdk_echo(bundled_echo(assemble(values, "|")));
+    let parcel: Parcel<string> = sdk_echo(pack(bundled_echo(assemble(values, "|"))));
+    let text = read_reply(Reply.Named { value = parcel.value });
+    if read_reply(Reply.Item(text)) != text { return 98; }
+    if read_reply(Reply.Empty) != "" { return 97; }
     if text == "a|b" { return 0; }
     if text == " A | B " { return 3; }
     if text == "rebuilt:a|b" { return 2; }
@@ -187,20 +198,77 @@ flow main(args: Array<string>) -> i32 {
             assert_eq!(value["value"]["value"], "2");
         }
     }
-    // A separate legacy session keeps its original join implementation.
-    let legacy = root.join("legacy.es");
-    fs::write(&legacy, "module app.main; import std.text.join; flow main(args: Array<string>) -> i32 { if join([\"a\", \"b\"], \"|\") == \"a|b\" { return 0; } return 99; }").unwrap();
-    let output = invoke(&[
-        "--cache",
-        "off",
-        "run",
-        path(&legacy),
-        "--std-provider",
-        "legacy",
-        "--format",
-        "json",
-    ]);
-    let value: serde_json::Value = serde_json::from_str(&output).unwrap();
-    assert_eq!(value["value"]["value"], "0");
+    // The exact same application runs in two independent provider sessions.
+    let common = root.join("common.es");
+    fs::write(
+        &common,
+        r#"module app.main;
+import std.text.join;
+flow main(args: Array<string>) -> i32 {
+    let text = join(["a", "b"], "|");
+    if text == "a|b" { return 0; }
+    if text == "rebuilt:a|b" { return 2; }
+    return 99;
+}"#,
+    )
+    .unwrap();
+    for (provider, expected) in [("artifact", "2"), ("legacy", "0")] {
+        let output = invoke(&[
+            "--cache",
+            "off",
+            "run",
+            path(&common),
+            "--std-provider",
+            provider,
+            "--sysroot",
+            path(&sdk),
+            "--format",
+            "json",
+        ]);
+        let value: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(value["value"]["value"], expected, "{provider}");
+    }
+    // Remove only the checked bodies, leaving valid public metadata and digests.
+    // Artifact mode must report the missing implementation despite source and
+    // legacy implementations remaining available.
+    let manifest_path = sdk.join("std/manifest.json");
+    let mut manifest: etas_driver::std_library::sdk::StdSdkManifest =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    let artifact = sdk.join("std").join(&manifest.artifact);
+    let decoded =
+        etas_package_metadata::decode_metadata_artifact(&artifact, &fs::read(&artifact).unwrap())
+            .unwrap();
+    let sections = decoded
+        .sections
+        .into_iter()
+        .filter(|(kind, _)| *kind != etas_package_metadata::MetadataSectionKind::LibraryBodies)
+        .map(|(kind, payload)| etas_package_metadata::EncodedMetadataSection { kind, payload })
+        .collect();
+    let bodyless =
+        etas_package_metadata::encode_metadata_artifact(&decoded.header, sections).unwrap();
+    manifest.artifact_hash = etas_package_metadata::blake3_hash(&bodyless);
+    fs::write(artifact, bodyless).unwrap();
+    fs::write(manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
+    let missing = Command::new(env!("CARGO_BIN_EXE_etas"))
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&common),
+            "--std-provider",
+            "artifact",
+            "--sysroot",
+            path(&sdk),
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(!missing.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing.stderr)
+            .contains("std artifact is missing checked library bodies"),
+        "{}",
+        String::from_utf8_lossy(&missing.stderr)
+    );
     fs::remove_dir_all(root).unwrap();
 }

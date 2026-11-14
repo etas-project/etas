@@ -367,9 +367,22 @@ the primitive ABI, and generic type/effect arguments are forwarded by checked
 calls. Rebuilding with `--std-provider artifact --sysroot <root>` uses that SDK's
 verified primitive contract independently of its migrated public exports.
 
+Public source types and enum constructors are published from the checked SDK:
+
+```etas
+public type Parcel<T> = { value: T };
+public enum Reply<T> { Empty, Item(T), Named { value: T }, }
+```
+
+Applications import these declarations from their authored module and can pass
+their values through installed generic flows. Canonical owners, generic
+parameters and named payload fields survive separate build/run processes and
+installation relocation. Native role replacement requires its checked role
+contract before publication.
+
 The release default remains `--std-provider legacy`. The current source batch
-covers text flows; declaration contracts, remaining std modules, IDE navigation
-and artifact checkpoint/resume still require their migration gates before the
+covers text flows; source role/spec contracts, remaining std modules, minimal
+bootstrap and artifact checkpoint/resume still require their migration gates before the
 default changes.
 
 ## Etas Projects

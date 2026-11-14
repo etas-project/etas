@@ -213,7 +213,11 @@ fn artifact_provider_checks_application_imports_against_installed_source_contrac
     }
     fs::write(
         fixture.0.join("library/std/text/extra.es"),
-        "module std.text; public flow echo<T>(value: T) -> T { return value; }",
+        r#"module std.text;
+public flow echo<T>(value: T) -> T { return value; }
+public type Parcel<T> = { value: T };
+public enum Reply<T> { Empty, Item(T), Named { value: T }, }
+"#,
     )
     .unwrap();
     let options = DriverOptions {
@@ -236,6 +240,26 @@ fn artifact_provider_checks_application_imports_against_installed_source_contrac
         symbol.implementation,
         Some(etas_std::StdImplementationRef::Source { .. })
     )));
+    let reply = artifact
+        .registry
+        .lookup_qualified(&["std", "text", "Reply"])
+        .unwrap();
+    assert_eq!(
+        artifact
+            .registry
+            .declaration_key(reply.id)
+            .unwrap()
+            .package(),
+        artifact.sdk.image.package
+    );
+    let named = artifact
+        .registry
+        .enum_constructor(reply.id, "Named")
+        .unwrap();
+    assert_eq!(
+        artifact.registry.enum_field_names(named.id),
+        Some(["value".into()].as_slice())
+    );
     let echo = artifact
         .registry
         .lookup_qualified(&["std", "text", "echo"])

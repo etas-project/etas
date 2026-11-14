@@ -7,6 +7,8 @@ use etas_std::{StdRegistry, StdRegistryBuilder, StdType};
 use super::sdk::{LoadedStdSdk, STD_TOOLCHAIN_ID, load_standard_library_sdk};
 use crate::DriverError;
 
+mod types;
+
 #[derive(Clone, Debug, Default)]
 pub enum StdProvider {
     #[default]
@@ -151,6 +153,14 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .iter()
         .map(|export| (export.exported.clone(), export.from.clone()))
         .collect();
+    types::publish(
+        sdk,
+        &mut builder,
+        &mut modules,
+        &mut symbols,
+        &declarations,
+        &aliases,
+    )?;
     let mut flows = sdk
         .public
         .public_metadata
