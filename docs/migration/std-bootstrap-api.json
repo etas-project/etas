@@ -2485,5 +2485,12 @@
     "constructor_alias_primitives_in_bootstrap": 0,
     "native_abi_note": "Source role query parameter spellings are excluded. The native fingerprint includes the explicit compiler contract identity and all remaining transitional native bindings/impl facts. Source payload and artifact identities still capture source declaration changes.",
     "positive_acceptance": "Complete maintained source tree is built in the SDK fixture. Task<Output,effect Remaining>, Continuation<ActionOutput>, Option<Payload>, Result<Success,Failure> and collection Element/Key/Value/Position declarations retain independently named constructor/function/method binders. Source prelude aliases bind to checked source exports. Compiler role checks use no copied public registry declaration."
+  },
+  "std_lock_upgrade": {
+    "command": "etas pkg lock <project> --std-provider artifact --sysroot <sdk>",
+    "identity": "Installed manifest version and native binding ABI; legacy builtin identity remains compatible.",
+    "validation": "Manifest requirement is checked when locking/preparing; consumer uses the selected provider only when explicit root/transitive std records match its version and ABI. Check/run never edit locks.",
+    "cache": "Stable lock across same-version/ABI source body rebuilds. Full provider identity stamps source dependency metadata and participates in compilation/execution caches.",
+    "acceptance": "Full real-version SDK lifecycle passes in ordinary and full-legacy-disabled exact-Git dependency builds. It rejects old records without rewriting, explicitly upgrades via pkg lock, verifies selected version/native ABI, checks an exact manifest version requirement and executes root/path dependency packages."
   }
 }

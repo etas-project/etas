@@ -60,7 +60,7 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
 "#,
     )
     .unwrap();
-    fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
+    fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
     fs::write(
         source.join("library/std/extra/mod.es"),
         r#"module std.extra;
@@ -346,6 +346,7 @@ flow main(args: Array<string>) -> i32 {
     let before = execute();
     assert_eq!(before["value"]["value"], "0");
     let first_manifest = fs::read(sdk.join("std/manifest.json")).unwrap();
+    let sdk_manifest: serde_json::Value = serde_json::from_slice(&first_manifest).unwrap();
     build();
     assert_eq!(
         first_manifest,
@@ -369,7 +370,14 @@ bridge = { path = "../bridge" }
 name = "source-sdk-consumer"
 module = "app.main"
 flow = "main"
-"#,
+"#
+        .replace(
+            "std = { version = \"0.2\" }",
+            &format!(
+                "std = {{ version = \"={}\" }}",
+                sdk_manifest["version"].as_str().unwrap(),
+            ),
+        ),
     )
     .unwrap();
     let bridge = root.join("bridge");
@@ -395,6 +403,49 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
     )
     .unwrap();
     invoke(&["pkg", "lock", path(&bridge)]);
+    let old_lock = fs::read(bridge.join("etas.lock")).unwrap();
+    let needs_upgrade = Command::new(env!("CARGO_BIN_EXE_etas"))
+        .args([
+            "pkg",
+            "metadata",
+            path(&bridge),
+            "--std-provider",
+            "artifact",
+            "--sysroot",
+            path(&sdk),
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(!needs_upgrade.status.success());
+    assert!(
+        String::from_utf8_lossy(&needs_upgrade.stderr)
+            .contains("explicitly upgrade the builtin std lock")
+    );
+    assert_eq!(fs::read(bridge.join("etas.lock")).unwrap(), old_lock);
+    invoke(&[
+        "pkg",
+        "lock",
+        path(&bridge),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+    ]);
+    let upgraded = etas_package::lockfile::read_lockfile(&bridge)
+        .unwrap()
+        .unwrap();
+    let standard = upgraded
+        .packages
+        .iter()
+        .find(|package| package.name == "std")
+        .unwrap();
+    assert_eq!(standard.version, sdk_manifest["version"].as_str().unwrap());
+    assert!(
+        standard
+            .checksum
+            .contains(sdk_manifest["native_binding_abi"].as_str().unwrap())
+    );
     invoke(&[
         "pkg",
         "metadata",
@@ -408,7 +459,15 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
         .replace("type CallerParcel<T>", "import bridge.bridge_summary;\ntype CallerParcel<T>")
         .replace("    let caller = sdk_echo", "    let bridged = bridge_summary(\"package\");\n    if !is_ok(bridged) { return 76; }\n    let caller = sdk_echo");
     fs::write(packaged.join("src/app/main.es"), package_source).unwrap();
-    invoke(&["pkg", "update", path(&packaged)]);
+    invoke(&[
+        "pkg",
+        "update",
+        path(&packaged),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+    ]);
     invoke(&[
         "check",
         path(&packaged),

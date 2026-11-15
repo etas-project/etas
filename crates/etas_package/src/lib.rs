@@ -56,8 +56,8 @@ pub use metadata_artifact::{
 pub use pack::{PackPackageOptions, PackedPackageResult, pack_package};
 pub use resolver::{
     LockPackageOptions, LockedPackageResult, MaterializePackageOptions, MaterializedPackageResult,
-    PreparePackageOptions, PreparedPackage, environment_from_locked_snapshot, lock_package,
-    materialize_package, prepare_package,
+    PreparePackageOptions, PreparedPackage, StdLockIdentity, environment_from_locked_snapshot,
+    lock_package, lock_package_with_std, materialize_package, prepare_package,
 };
 pub use source::{GitHubSourceConfig, PackageSourceConfig, RegistrySourceConfig};
 pub use source_snapshot::{

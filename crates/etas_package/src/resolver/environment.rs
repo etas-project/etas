@@ -54,10 +54,14 @@ pub(super) fn build_environment(
                 spec.version(),
                 &locked.version,
             );
-            dependencies.push(metadata::builtin_std_identity(
+            let mut dependency = metadata::builtin_std_identity(
                 locked.version.clone(),
                 manifest.package.edition.clone(),
-            ));
+            );
+            dependency.source = crate::ResolvedDependencySource::Builtin {
+                checksum: locked.checksum.clone(),
+            };
+            dependencies.push(dependency);
             continue;
         }
 

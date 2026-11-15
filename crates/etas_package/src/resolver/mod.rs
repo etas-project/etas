@@ -13,7 +13,9 @@ use environment::build_environment;
 pub use environment::environment_from_locked_snapshot;
 use lock_policy::resolve_lockfile;
 
-pub use lock::{LockPackageOptions, LockedPackageResult, lock_package};
+pub use lock::{
+    LockPackageOptions, LockedPackageResult, StdLockIdentity, lock_package, lock_package_with_std,
+};
 pub use materialize::{MaterializePackageOptions, MaterializedPackageResult, materialize_package};
 
 use crate::{PackageEnvironmentMetadata, PackageError, manifest, vendor};
@@ -1060,6 +1062,33 @@ std = { version = "0.2" }
         assert_eq!(result.lockfile.packages[0].name, "std");
         assert_eq!(result.lockfile.packages[0].source, "builtin");
         assert!(root.join("etas.lock").is_file());
+
+        let selected = StdLockIdentity {
+            version: "0.2.13".to_owned(),
+            checksum: "builtin:std:artifact:0.2.13:checked-abi".to_owned(),
+        };
+        let upgraded = lock_package_with_std(
+            LockPackageOptions {
+                package_root: root.clone(),
+            },
+            &selected,
+        )
+        .unwrap();
+        assert_eq!(upgraded.lockfile.packages[0].version, selected.version);
+        assert_eq!(upgraded.lockfile.packages[0].checksum, selected.checksum);
+        fs::create_dir_all(root.join("src")).unwrap();
+        let prepared = prepare_package(PreparePackageOptions {
+            package_root: root,
+            selected_bin: None,
+        })
+        .unwrap();
+        assert!(matches!(&prepared.environment.dependencies[0].source,
+            crate::ResolvedDependencySource::Builtin { checksum } if checksum == &selected.checksum));
+        assert!(
+            prepared.environment.dependencies[0]
+                .public_metadata
+                .is_empty()
+        );
     }
 
     #[test]

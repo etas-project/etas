@@ -29,6 +29,66 @@ pub struct ArtifactStdProvider {
 }
 
 impl StdProvider {
+    pub(crate) fn lock_identity(&self) -> etas_package::StdLockIdentity {
+        match self {
+            Self::Legacy | Self::SourceBootstrap(_) => etas_package::StdLockIdentity::legacy(),
+            Self::Artifact(provider) => etas_package::StdLockIdentity {
+                version: provider.sdk.manifest.version.clone(),
+                checksum: format!(
+                    "builtin:std:artifact:{}:{}",
+                    provider.sdk.manifest.version, provider.sdk.manifest.native_binding_abi,
+                ),
+            },
+        }
+    }
+
+    pub(crate) fn package_metadata_identity(&self) -> Option<String> {
+        match self {
+            Self::Legacy => None,
+            Self::SourceBootstrap(_) => Some(etas_std::compiler_contract_identity()),
+            Self::Artifact(provider) => Some(provider.identity.clone()),
+        }
+    }
+
+    fn validate_std_dependencies(
+        &self,
+        metadata: &etas_package::PackageEnvironmentMetadata,
+    ) -> Result<(), DriverError> {
+        if matches!(self, Self::SourceBootstrap(_)) {
+            return Ok(());
+        }
+        let selected = self.lock_identity();
+        let upgrade = match self {
+            Self::Artifact(provider) => format!(
+                "etas pkg lock --std-provider artifact --sysroot \"{}\" <PACKAGE_ROOT>",
+                provider
+                    .sdk
+                    .root
+                    .parent()
+                    .expect("installed std has a sysroot")
+                    .display(),
+            ),
+            Self::Legacy => "etas pkg lock --std-provider legacy <PACKAGE_ROOT>".to_owned(),
+            Self::SourceBootstrap(_) => unreachable!(),
+        };
+        let mut pending = metadata.dependencies.iter().collect::<Vec<_>>();
+        while let Some(dependency) = pending.pop() {
+            if dependency.identity.name == "std"
+                && let etas_package::ResolvedDependencySource::Builtin { checksum } =
+                    &dependency.source
+                && (dependency.identity.version != selected.version
+                    || *checksum != selected.checksum)
+            {
+                return Err(invalid(format!(
+                    "selected std version `{}` with identity `{}` differs from etas.lock version `{}` with identity `{checksum}`; explicitly upgrade the builtin std lock with `{upgrade}`",
+                    selected.version, selected.checksum, dependency.identity.version,
+                )));
+            }
+            pending.extend(&dependency.dependencies);
+        }
+        Ok(())
+    }
+
     pub(crate) fn source_bootstrap() -> Self {
         Self::SourceBootstrap(Arc::new(etas_std::compiler_contract_registry()))
     }
@@ -136,6 +196,7 @@ impl StdProvider {
         &self,
         metadata: etas_package::PackageEnvironmentMetadata,
     ) -> Result<etas_frontend::ProjectEnvironmentInput, DriverError> {
+        self.validate_std_dependencies(&metadata)?;
         match self {
             Self::Legacy => crate::package_env::frontend_environment(metadata),
             Self::SourceBootstrap(registry) => {

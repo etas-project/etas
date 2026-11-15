@@ -335,6 +335,20 @@ etas check app.es --std-provider artifact --sysroot /tmp/etas-sdk
 etas run app.es --std-provider artifact --sysroot /tmp/etas-sdk
 ```
 
+Projects that declare a std dependency lock it with the same provider:
+
+```bash
+etas pkg lock ./project --std-provider artifact --sysroot /tmp/etas-sdk
+etas run ./project --std-provider artifact --sysroot /tmp/etas-sdk
+```
+
+This explicitly upgrades old `builtin:std` records to the selected SDK's version
+and native ABI. Manifest version requirements apply to that selected version.
+Check/run reject a different installed version or ABI and leave the lockfile
+untouched. Source body rebuilds keep the lock when the version/ABI stays the
+same; the SDK's complete content identity invalidates execution and dependency
+metadata caches. The legacy provider retains its original builtin lock identity.
+
 Artifact mode loads source exports and checked bodies from the verified SDK.
 Adding a public flow in a new `.es` file requires no Rust registration. Rebuild
 the SDK after source changes; its complete content identity invalidates the

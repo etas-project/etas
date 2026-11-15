@@ -93,9 +93,12 @@ pub fn lock_package(
         })?;
     materialize_span.finish_ok();
     let lock_span = options.profile.span("package.write_lockfile", "package");
-    let locked = etas_package::lock_package(etas_package::LockPackageOptions {
-        package_root: materialized.package_root,
-    })?;
+    let locked = etas_package::lock_package_with_std(
+        etas_package::LockPackageOptions {
+            package_root: materialized.package_root,
+        },
+        &options.std_provider.lock_identity(),
+    )?;
     lock_span.finish_ok();
     options.profile.counter(
         "package.locked_packages",
@@ -148,9 +151,12 @@ pub fn update_package(
         })?;
     materialize_span.finish_ok();
     let lock_span = options.profile.span("package.write_lockfile", "package");
-    let locked = etas_package::lock_package(etas_package::LockPackageOptions {
-        package_root: materialized.package_root.clone(),
-    })?;
+    let locked = etas_package::lock_package_with_std(
+        etas_package::LockPackageOptions {
+            package_root: materialized.package_root.clone(),
+        },
+        &options.std_provider.lock_identity(),
+    )?;
     lock_span.finish_ok();
     options
         .profile
@@ -232,7 +238,7 @@ fn build_package_metadata_without_dependency_bootstrap(
             package_id: manifest.package.name.clone(),
             package_version: manifest.package.version.clone(),
             package_edition: manifest.package.edition.clone(),
-            compiler_version: PACKAGE_METADATA_COMPILER_VERSION.to_owned(),
+            compiler_version: package_metadata_compiler_version(options),
             source_payload_hash: etas_package::package_source_payload_hash(&package_root)?,
             manifest_hash: etas_package::package_manifest_hash(&package_root)?,
             dependency_lock_hash: etas_package::package_dependency_lock_hash(&package_root)?,
@@ -324,9 +330,9 @@ fn ensure_local_path_dependency_metadata_inner(
 
         ensure_local_path_dependency_metadata_inner(options, &dependency_root, visiting)
             .map_err(|error| dependency_metadata_error(dependency_name, &dependency_root, error))?;
-        materialize_and_lock_package(&dependency_root)
+        materialize_and_lock_package(options, &dependency_root)
             .map_err(|error| dependency_metadata_error(dependency_name, &dependency_root, error))?;
-        if dependency_metadata_needs_rebuild(&dependency_root)? {
+        if dependency_metadata_needs_rebuild(options, &dependency_root)? {
             build_package_metadata_without_dependency_bootstrap(
                 options,
                 PackageMetadataRequest {
@@ -353,23 +359,41 @@ fn dependency_metadata_error(
     ))
 }
 
-fn materialize_and_lock_package(package_root: &Path) -> Result<(), DriverError> {
+fn materialize_and_lock_package(
+    options: &DriverOptions,
+    package_root: &Path,
+) -> Result<(), DriverError> {
     let source_config = etas_package::PackageSourceConfig::read_project(package_root)?;
     let materialized =
         etas_package::materialize_package(etas_package::MaterializePackageOptions {
             package_root: package_root.to_path_buf(),
             source_config: Some(source_config),
         })?;
-    etas_package::lock_package(etas_package::LockPackageOptions {
-        package_root: materialized.package_root,
-    })?;
+    etas_package::lock_package_with_std(
+        etas_package::LockPackageOptions {
+            package_root: materialized.package_root,
+        },
+        &options.std_provider.lock_identity(),
+    )?;
     Ok(())
 }
 
-fn dependency_metadata_needs_rebuild(package_root: &Path) -> Result<bool, DriverError> {
+fn package_metadata_compiler_version(options: &DriverOptions) -> String {
+    match options.std_provider.package_metadata_identity() {
+        Some(identity) => format!("{PACKAGE_METADATA_COMPILER_VERSION}+std:{identity}"),
+        None => PACKAGE_METADATA_COMPILER_VERSION.to_owned(),
+    }
+}
+
+fn dependency_metadata_needs_rebuild(
+    options: &DriverOptions,
+    package_root: &Path,
+) -> Result<bool, DriverError> {
     match etas_package::read_package_metadata_artifact(package_root) {
         Ok(Some(_)) => match etas_package::read_package_metadata_artifact_info(package_root) {
-            Ok(Some(info)) => Ok(info.header.compiler_version != PACKAGE_METADATA_COMPILER_VERSION),
+            Ok(Some(info)) => {
+                Ok(info.header.compiler_version != package_metadata_compiler_version(options))
+            }
             Ok(None) => Ok(true),
             Err(_) => Ok(true),
         },
