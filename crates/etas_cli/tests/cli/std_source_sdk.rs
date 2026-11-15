@@ -1007,11 +1007,17 @@ read = true
 import std.fs.{Region, WorkspacePath, IOError, FsStat, FsEntry, ReadLimitError, ListLimitError,
     root, relative_name, path, read_bytes, read_bytes_limited, write_bytes, list, list_limited, stat, atomic_replace};
 import std.codec.text.utf8_encode;
+import std.runtime.limits.Attempts;
 type Project; impl Project ~ Region;
 flow selected<R ~ Region>() -> WorkspacePath<R> ![] { return root<R>(); }
 flow denied(args: Array<string>) -> i32 {
     let target = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 1; } };
     write_bytes(target, utf8_encode("forbidden"));
+    return 0;
+}
+flow denied_retry(args: Array<string>) -> i32 {
+    let target = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 1; } };
+    retry limit Attempts(2) { write_bytes(target, utf8_encode("forbidden")); }
     return 0;
 }
 flow main(args: Array<string>) -> i32 {
@@ -1137,5 +1143,36 @@ flow main(args: Array<string>) -> i32 {
         fs::read(project.join("workspace/created.txt")).unwrap(),
         b"after"
     );
+    let providers = if cfg!(feature = "forbid-legacy-std") {
+        &["artifact"][..]
+    } else {
+        &["artifact", "legacy"][..]
+    };
+    let mut previous = None;
+    for provider in providers {
+        let output = Command::new(binary)
+            .args([
+                "--cache", "off", "run", path(&project),
+                "--std-provider", provider, "--profile", "readonly",
+                "--flow", "denied_retry", "--format", "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output().unwrap();
+        assert_eq!(output.status.code(), Some(3), "{}\n{}",
+            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["diagnostics"][0]["code"], "Analysis(InvalidArguments)", "{report}");
+        assert_eq!(report["diagnostics"][0]["message"],
+            "retry exhausted after 2 attempt(s): filesystem host boundary failed: filesystem request is missing its region-scoped action grant (action=Fs.write, region=app.main.Project)", "{report}");
+        let events = report["events"].as_array().unwrap();
+        let count = |kind| events.iter().filter(|event| event["kind"] == kind).count();
+        assert_eq!(count("host_request_started"), 2, "{report}");
+        assert_eq!(count("retry_attempt_failed"), 2, "{report}");
+        assert_eq!(count("retry_exhausted"), 1, "{report}");
+        let signature = (report["diagnostics"].clone(), events.iter().map(|event| event["kind"].clone()).collect::<Vec<_>>());
+        if let Some(previous) = previous { assert_eq!(previous, signature); }
+        previous = Some(signature);
+        assert_eq!(fs::read(project.join("workspace/created.txt")).unwrap(), b"after");
+    }
     fs::remove_dir_all(project).unwrap();
 }

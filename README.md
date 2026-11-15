@@ -532,8 +532,14 @@ capabilities. Eight existing primitives and four action descriptors were added
 to the explicit catalog for these bindings; this does not establish whole-catalog
 minimality. Native binding aliases retain the primitive identity even when the public wrapper has
 the same path, preserving requested actions and caller Handler error handling. Terminal host failures keep the original permission diagnostic when no
-retry surrounds the source call. Retry transitions across checked program
-revisions remain a whole-library execution gate.
+retry surrounds the source call. An enclosing retry now unwinds the callee's
+Handler and residual scopes, restores the parent model policy, and switches to
+the caller's checked program before starting the next attempt. Installed SDK
+acceptance compares two denied write attempts and their exhaustion diagnostic
+against legacy; a separate checked-revision test verifies transient Host failure
+recovery and caller continuation. Pending retry failures are portable in
+checkpoint schema v77. Library-owned checkpoint/resume across distinct prepared
+revisions remains a whole-library execution gate.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,
