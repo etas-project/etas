@@ -466,13 +466,23 @@ legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
 Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
-registry declaration/signature lookup. Its ten roles define only the recognized
+registry declaration/signature lookup. Its seventeen roles define only the recognized
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 124 transitional contracts
-and 21 primitives. The SDK fixture uses different source parameter names for
-Task, Continuation, Option and Result to exercise this ownership boundary.
+are removed from the static catalog, which still has 116 transitional contracts
+and 20 primitives. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+now join the source roles. The SDK fixture uses different source parameter names
+for Task, Continuation, Option, Result and collections to exercise this ownership
+boundary. Source-bootstrap prelude references bind to their checked source exports.
+
+Array get/push/pop/extend and List head/tail/pop/push/extend methods are authored
+in Etas. Array get/push retain minimal storage primitives; iteration, list
+construction and the other algorithms use ordinary Etas bodies. Checked generic
+payload origins survive both free flows and methods, including adding a callback
+to an empty collection and invoking it under the original caller's Handler.
+Unicode char_count/is_empty/trim_start/trim_end and core assert also use source
+bodies. Rust retains the scalar Unicode property and underlying text storage.
 
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
@@ -496,9 +506,9 @@ cargo run -p etas_driver --example std_sdk_inventory -- /tmp/etas-sdk \
 
 The release default remains `--std-provider legacy`. The source batch covers
 text flows, opaque task roles, source Option/Result enums, constructors,
-predicates and unwrap methods, and Index declarations/implementations. Array
-extend and list push/extend have source flow bodies; collection type and value
-method migration remains pending. Remaining roles/modules, full API
+predicates and unwrap methods, Index declarations/implementations, seven
+collection declarations and nine Array/List methods. Remaining collection APIs,
+roles/modules, full API
 and runtime parity, artifact checkpoint/resume and release gates remain required
 before the default changes.
 

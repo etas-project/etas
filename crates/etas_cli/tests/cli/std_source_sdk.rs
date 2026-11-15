@@ -7,118 +7,60 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         "workspace",
     );
     let source = root.join("std-source");
-    fs::create_dir_all(source.join("library/std/text")).unwrap();
+    let maintained = etas_std::library::source_checkout_manifest()
+        .parent()
+        .unwrap();
+    copy_dir_contents(&maintained.join("library"), &source.join("library"));
     fs::create_dir_all(source.join("library/std/extra")).unwrap();
-    fs::create_dir_all(source.join("library/std/task")).unwrap();
+    // Check source ownership with binders independent of constructor/method binders.
+    for (file, replacements) in [
+        (
+            "task/mod.es",
+            vec![
+                (
+                    "public type Task<T, effect E>;",
+                    "public type Task<Output, effect Remaining>;",
+                ),
+                (
+                    "public type Continuation<T>;",
+                    "public type Continuation<ActionOutput>;",
+                ),
+            ],
+        ),
+        (
+            "option/mod.es",
+            vec![(
+                "public enum Option<T> { Some(T), None, }",
+                "public enum Option<Payload> { Some(Payload), None, }",
+            )],
+        ),
+        (
+            "result/mod.es",
+            vec![(
+                "public enum Result<T, E> { Ok(T), Err(E), }",
+                "public enum Result<Success, Failure> { Ok(Success), Err(Failure), }",
+            )],
+        ),
+    ] {
+        let path = source.join("library/std").join(file);
+        let mut text = fs::read_to_string(&path).unwrap();
+        for (from, to) in replacements {
+            assert!(text.contains(from));
+            text = text.replace(from, to);
+        }
+        fs::write(path, text).unwrap();
+    }
+    let task = source.join("library/std/task/mod.es");
     fs::write(
-        source.join("library/std/task/mod.es"),
-        r#"module std.task;
-@std.role("std.task.Task")
-public type Task<Output, effect Remaining>;
-@std.role("std.task.Scheduler")
-public type Scheduler;
-@std.role("std.task.Continuation")
-public type Continuation<ActionOutput>;
-@std.binding("std.task.run")
-public flow run<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
+        &task,
+        fs::read_to_string(&task).unwrap()
+            + r#"
 @std.binding("std.task.run")
 public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
 "#,
     )
     .unwrap();
-    fs::create_dir_all(source.join("library/std/core")).unwrap();
-    fs::write(
-        source.join("library/std/core/mod.es"),
-        r#"module std.core;
-@std.binding("std.core.abort")
-public flow abort(message: string) -> never ![] {}
-@std.role("std.core.Index")
-public spec Index;
-impl i8 ~ Index;
-impl i16 ~ Index;
-impl i32 ~ Index;
-impl i64 ~ Index;
-impl i128 ~ Index;
-impl isize ~ Index;
-impl u8 ~ Index;
-impl u16 ~ Index;
-impl u32 ~ Index;
-impl u64 ~ Index;
-impl u128 ~ Index;
-impl usize ~ Index;
-"#,
-    )
-    .unwrap();
-    fs::create_dir_all(source.join("library/std/option")).unwrap();
-    fs::write(source.join("library/std/option/mod.es"), r#"module std.option;
-
-import std.core.abort;
-
-@std.role("std.option.Option")
-public enum Option<Payload> { Some(Payload), None, }
-
-@std.role("std.option.Some")
-public flow Some<T>(value: T) -> Option<T> ![] { return Option.Some(value); }
-
-@std.role("std.option.None")
-public flow None<T>() -> Option<T> ![] { return Option.None; }
-
-public flow is_some<T>(value: Option<T>) -> bool ![] {
-    return match value { Option.Some(_) => true, Option.None => false };
-}
-
-public flow is_none<T>(value: Option<T>) -> bool ![] {
-    return match value { Option.Some(_) => false, Option.None => true };
-}
-
-public flow unwrap<T>(value: Option<T>) -> T ![] {
-    return match value { Option.Some(inner) => inner, Option.None => abort("unwrap encountered None") };
-}
-
-impl Option<T> {
-    public flow is_some(self) -> bool ![] { return is_some(self); }
-    public flow is_none(self) -> bool ![] { return is_none(self); }
-    public flow unwrap(self) -> T ![] { return unwrap(self); }
-}
-"#).unwrap();
-    fs::create_dir_all(source.join("library/std/result")).unwrap();
-    fs::write(source.join("library/std/result/mod.es"), r#"module std.result;
-import std.core.abort;
-@std.role("std.result.Result")
-public enum Result<Success, Failure> { Ok(Success), Err(Failure), }
-public flow is_ok<T, E>(value: Result<T, E>) -> bool ![] {
-    return match value { Result.Ok(_) => true, Result.Err(_) => false };
-}
-public flow is_err<T, E>(value: Result<T, E>) -> bool ![] {
-    return match value { Result.Ok(_) => false, Result.Err(_) => true };
-}
-
-@std.role("std.result.Ok")
-public flow Ok<T, E>(value: T) -> Result<T, E> ![] { return Result.Ok(value); }
-@std.role("std.result.Err")
-public flow Err<T, E>(error: E) -> Result<T, E> ![] { return Result.Err(error); }
-
-public flow unwrap<T, E>(value: Result<T, E>) -> T ![] {
-    return match value { Result.Ok(inner) => inner, Result.Err(_) => abort("unwrap encountered Err") };
-}
-
-impl Result<T, E> {
-    public flow is_ok(self) -> bool ![] { return match self { Result.Ok(_) => true, Result.Err(_) => false }; }
-    public flow is_err(self) -> bool ![] { return match self { Result.Ok(_) => false, Result.Err(_) => true }; }
-    public flow unwrap(self) -> T ![] { return unwrap(self); }
-}
-"#).unwrap();
     fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
-    for (file, id) in [
-        ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
-        ("format.es", etas_std::StdLibrarySourceId::TextFormat),
-    ] {
-        fs::write(
-            source.join("library/std/text").join(file),
-            etas_std::standard_library_source(id).source,
-        )
-        .unwrap();
-    }
     fs::write(
         source.join("library/std/extra/mod.es"),
         r#"module std.extra;
@@ -177,83 +119,22 @@ public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOErro
 "#,
     )
     .unwrap();
-    fs::create_dir_all(source.join("library/std/prelude")).unwrap();
+    let prelude = source.join("library/std/prelude/mod.es");
     fs::write(
-        source.join("library/std/prelude/mod.es"),
-        "module std.prelude; public import std.option.{Option, Some, None}; public import std.extra.sdk_echo as bundled_echo; public import std.result.{Result, Ok, Err}; public import std.core.Index;",
+        &prelude,
+        fs::read_to_string(&prelude).unwrap()
+            + "\npublic import std.extra.sdk_echo as bundled_echo;\n",
     )
     .unwrap();
+    let native = source.join("library/std/text/native.es");
     fs::write(
-        source.join("library/std/text/native.es"),
-        r#"module std.text;
-
-import std.char.is_whitespace;
-import std.text.{chars, from_char};
-
-// Keep text policy in Etas. Only the Unicode scalar property is primitive.
-public flow trim(value: string) -> string ![] {
-    var output = "";
-    var pending = "";
-    var started = false;
-    for scalar in chars(value) limit Iterations(18446744073709551615) {
-        if is_whitespace(scalar) {
-            if started { pending = pending + from_char(scalar); }
-        } else {
-            output = output + pending + from_char(scalar);
-            pending = "";
-            started = true;
-        }
-    }
-    return output;
-}
+        &native,
+        fs::read_to_string(&native).unwrap()
+            + r#"
 @std.binding("std.text.uppercase")
 public flow case_text(value: string) -> string ![] {}
 @std.binding("std.collections.array_push")
 public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
-"#,
-    )
-    .unwrap();
-    fs::create_dir_all(source.join("library/std/char")).unwrap();
-    fs::write(
-        source.join("library/std/char/mod.es"),
-        r#"module std.char;
-
-// Unicode property tables are provided by the host character primitive.
-@std.binding("std.char.is_whitespace")
-public flow is_whitespace(value: char) -> bool ![] {}
-"#,
-    )
-    .unwrap();
-    fs::create_dir_all(source.join("library/std/collections")).unwrap();
-    fs::write(
-        source.join("library/std/collections/algorithms.es"),
-        r#"module std.collections;
-import std.collections.array_push;
-
-public flow array_extend<T>(values: Array<T>, appended: Array<T>) -> Array<T> ![] {
-    var output = values;
-    for value in appended limit Iterations(18446744073709551615) {
-        output = array_push(output, value);
-    }
-    return output;
-}
-
-public flow list_push<T>(values: List<T>, value: T) -> List<T> ![] {
-    return value :: values;
-}
-
-// List.extend prepends the second list, preserving its order.
-public flow list_extend<T>(values: List<T>, prepended: List<T>) -> List<T> ![] {
-    var reversed: List<T> = [];
-    for value in prepended limit Iterations(18446744073709551615) {
-        reversed = value :: reversed;
-    }
-    var output = values;
-    for value in reversed limit Iterations(18446744073709551615) {
-        output = value :: output;
-    }
-    return output;
-}
 "#,
     )
     .unwrap();
@@ -303,7 +184,43 @@ flow option_checks() -> bool ![] {
     return some.is_some() && !some.is_none() && none.is_none() && empty.is_none()
         && some.unwrap() == 7 && payload == 9 && old == 11;
 }
+flow collection_checks() -> bool ![] {
+    let values = [1, 2];
+    let (array, last) = values.pop();
+    if array != [1] || last != Some(2) || values != [1, 2] { return false; }
+    let index: u8 = 1;
+    if values.get(index) != Some(2) || values.push(3) != [1, 2, 3] { return false; }
+    if values.extend([3]) != [1, 2, 3] { return false; }
+    let linked = [1; 2];
+    let (list, first) = linked.pop();
+    if list != [2;] || first != Some(1) || linked != [1; 2] { return false; }
+    if linked.head() != Some(1) || linked.tail() != Some([2;]) { return false; }
+    if linked.push(0).extend([3; 4]) != [3; 4; 0; 1; 2] { return false; }
+    let empty: List<i32> = [];
+    if empty.pop() != (empty, None) || empty.tail() != None { return false; }
+    if std.collections.array_pop([4]) != ([], Some(4)) { return false; }
+    if std.collections.list_head([5;]) != Some(5) { return false; }
+    let Handle: ![Wrapped => [] for i32] = handler {
+        Wrapped.read() => { resume 13; }
+    };
+    let callbacks = list_push([], deferred).extend([deferred;]);
+    let head_answer = handle { callbacks.head().unwrap()() } with Handle;
+    if head_answer != 13 { return false; }
+    let array_callbacks = array_extend([], [deferred, deferred]);
+    let (earlier, final_callback) = array_callbacks.pop();
+    let final_answer = handle { final_callback.unwrap()() } with Handle;
+    if final_answer != 13 { return false; }
+    let position: usize = 0;
+    let earlier_answer = handle { earlier.get(position).unwrap()() } with Handle;
+    if earlier_answer != 13 { return false; }
+    std.core.assert(true);
+    if std.text.char_count("Á😀") != 3 || !std.text.is_empty("") { return false; }
+    if std.text.trim_start("　 a 　") != "a 　" { return false; }
+    if std.text.trim_end("　 a 　") != "　 a" { return false; }
+    return true;
+}
 flow main(args: Array<string>) -> i32 {
+    if !collection_checks() { return 86; }
     if !option_checks() { return 76; }
     if array_extend([1, 2], [3, 4]) != [1, 2, 3, 4] { return 71; }
     if list_push([1; 2], 0) != [0; 1; 2] { return 72; }

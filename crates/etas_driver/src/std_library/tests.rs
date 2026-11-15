@@ -14,7 +14,15 @@ impl Fixture {
             std::env::temp_dir().join(format!("etas-std-driver-{}-{nonce}", std::process::id()));
         fs::create_dir_all(root.join("library/std/text")).unwrap();
         fs::write(root.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.2'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
-        fs::write(root.join("library/std/text/mod.es"), "module std.text;").unwrap();
+        let algorithms = etas_std::library::source_checkout_manifest()
+            .parent()
+            .unwrap()
+            .join("library/std/text/native.es");
+        fs::write(
+            root.join("library/std/text/mod.es"),
+            fs::read(algorithms).unwrap(),
+        )
+        .unwrap();
         fs::write(
             root.join("library/std/text/base.es"),
             "module std.text; public flow identity(value: string) -> string { return value; }",
@@ -189,7 +197,12 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
     let sdk = sdk::load_standard_library_sdk(moved.parent().unwrap()).unwrap();
     assert_eq!(sdk.manifest, first.manifest);
     let checked = sdk.image.into_checked_from_image(&sdk.root).unwrap();
-    assert_eq!(checked.hir.items.len(), 3);
+    for name in ["identity", "width", "decorate", "char_count"] {
+        assert!(
+            checked.symbols.iter().any(|symbol| symbol.name == name
+                && matches!(symbol.def, etas_hir::SymbolDef::Item { .. }))
+        );
+    }
     assert!(
         checked.sources.sources.iter().all(|source| source
             .path
