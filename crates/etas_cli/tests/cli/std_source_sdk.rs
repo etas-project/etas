@@ -14,11 +14,11 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         source.join("library/std/task/mod.es"),
         r#"module std.task;
 @std.role("std.task.Task")
-public type Task<T, effect E>;
+public type Task<Output, effect Remaining>;
 @std.role("std.task.Scheduler")
 public type Scheduler;
 @std.role("std.task.Continuation")
-public type Continuation<T>;
+public type Continuation<ActionOutput>;
 @std.binding("std.task.run")
 public flow run<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
 @std.binding("std.task.run")
@@ -55,7 +55,7 @@ impl usize ~ Index;
 import std.core.abort;
 
 @std.role("std.option.Option")
-public enum Option<T> { Some(T), None, }
+public enum Option<Payload> { Some(Payload), None, }
 
 @std.role("std.option.Some")
 public flow Some<T>(value: T) -> Option<T> ![] { return Option.Some(value); }
@@ -85,7 +85,7 @@ impl Option<T> {
     fs::write(source.join("library/std/result/mod.es"), r#"module std.result;
 import std.core.abort;
 @std.role("std.result.Result")
-public enum Result<T, E> { Ok(T), Err(E), }
+public enum Result<Success, Failure> { Ok(Success), Err(Failure), }
 public flow is_ok<T, E>(value: Result<T, E>) -> bool ![] {
     return match value { Result.Ok(_) => true, Result.Err(_) => false };
 }

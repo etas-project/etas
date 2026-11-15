@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "8c1d366cdcce9e9f5bca257ea1f7bd154e193b8f",
-    "frontend": "0827350a882952ce8b09f7e0459f408e6cc3b2ee",
-    "interpreter": "97a08dc4b04b615980f58a87d7c0dd5da7f13a8a",
-    "std_version": "0.2.11",
-    "compiler_version": "0.11.10",
-    "native_binding_abi": "blake3:855e20146fa84c3a8cf54831f04a74f5adca9eb157e2dd599d3d49f62f7b6a62",
+    "core": "870415068aac8229b46d11717b12b87563d513b4",
+    "frontend": "c2274843d050f8b39ba8d235857fbb4e939226ed",
+    "interpreter": "998544d558f01dc7128064c02c2251c98f3ce4c1",
+    "std_version": "0.2.12",
+    "compiler_version": "0.11.11",
+    "native_binding_abi": "blake3:f30a85fc07ed8a71c051f3cc5eb865a1bdfd5f3e8e5fb45f368b1c7d033cb808",
     "source_payload_hash": "blake3:b9d5b8d800a5b8800493d4bcc370211a1d045ede142485b3d540bcc488b4a327",
     "body_schema": 11,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:cfa574eb6a278bdf81a879974fca345176b4ed5f069e45fbd240081187c77cb5"
+    "artifact_hash": "blake3:1446ad8aca7954f2449cd4c70c3ac3476f6a204690b1af4e72b7c239be4f6e3f"
   },
   "baseline_symbols": 667,
   "candidate_symbols": 155,
@@ -2345,7 +2345,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 151,
-  "source_ownership_note": "Public declarations/algorithms belong to Etas; Rust retains execution/host primitive contracts. A successful build with the complete legacy factory disabled does not prove the 134-entry transitional catalog minimal or the entire std migrated.",
+  "source_ownership_note": "Public declarations/algorithms belong to Etas; Rust retains minimum execution/host primitive contracts. Ten source roles now have an explicit minimum compiler ABI; source role checking does not look up copied public declarations. The remaining 124-contract static catalog and its transitional prelude references are not yet accepted as minimal.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2364,8 +2364,10 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "contracts": 134,
-    "primitives": 25,
+    "static_contracts": 124,
+    "explicit_source_roles": 10,
+    "query_symbols_before_source_publication": 134,
+    "primitives": 21,
     "spec_impl_facts": 0,
     "minimality_accepted": false
   },
@@ -2384,5 +2386,25 @@
     "trim_host_dependency": "Unicode scalar whitespace property and existing character/text storage primitives",
     "collection_value_methods_migrated": false
   },
-  "callable_boundary_note": "Checked Option/Result payload provenance is retained across source constructors, unwrap flows and methods. Caller-defined Effect tags are carried by canonical checked identity into SDK specialization, and direct external methods can prepare an SDK body without an ordinary std flow root. This does not yet prove arbitrary generic collection payloads, foreign action-selector closure or the full cross-package callable matrix."
+  "callable_boundary_note": "Checked Option/Result payload provenance is retained across source constructors, unwrap flows and methods. Caller-defined Effect tags are carried by canonical checked identity into SDK specialization, and direct external methods can prepare an SDK body without an ordinary std flow root. This does not yet prove arbitrary generic collection payloads, foreign action-selector closure or the full cross-package callable matrix.",
+  "source_role_abi": {
+    "roles": [
+      "std.core.Index",
+      "std.option.Option",
+      "std.option.Some",
+      "std.option.None",
+      "std.result.Result",
+      "std.result.Ok",
+      "std.result.Err",
+      "std.task.Task",
+      "std.task.Scheduler",
+      "std.task.Continuation"
+    ],
+    "validation_uses_public_registry_declarations": false,
+    "source_names_enter_session_before_signature_alias_lowering": true,
+    "public_role_declarations_in_static_catalog": 0,
+    "constructor_alias_primitives_in_bootstrap": 0,
+    "native_abi_note": "Source role query parameter spellings are excluded. The native fingerprint includes the explicit compiler contract identity and all remaining transitional native bindings/impl facts. Source payload and artifact identities still capture source declaration changes.",
+    "positive_acceptance": "Existing cross-process SDK fixture uses Task<Output, effect Remaining>, Continuation<ActionOutput>, Option<Payload> and Result<Success, Failure>, with independently named constructor/function/method binders and original Handler execution."
+  }
 }

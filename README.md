@@ -465,6 +465,15 @@ an explicitly reviewed minimal compiler/host contract set. Compiling out the
 legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
+Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
+registry declaration/signature lookup. Its ten roles define only the recognized
+identities, generic parameter kinds and execution shapes. The query view uses
+temporary internal binders until the checked source supplies public parameter
+names. Those role declarations and their four native constructor implementations
+are removed from the static catalog, which still has 124 transitional contracts
+and 21 primitives. The SDK fixture uses different source parameter names for
+Task, Continuation, Option and Result to exercise this ownership boundary.
+
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
 

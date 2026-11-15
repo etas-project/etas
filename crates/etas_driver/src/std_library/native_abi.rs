@@ -5,6 +5,11 @@ use std::collections::BTreeMap;
 pub fn fingerprint(registry: &etas_std::StdRegistry) -> Result<String, serde_json::Error> {
     let bindings = registry
         .symbols()
+        // Source owns these binders. Their minimum execution ABI is covered by
+        // the compiler contract identity, not a spelling in the query view.
+        .filter(|symbol| {
+            etas_std::StdSourceRole::from_path(&symbol.qualified_path.join(".")).is_none()
+        })
         .map(|symbol| {
             (
                 symbol.qualified_path.join("."),
@@ -25,6 +30,11 @@ pub fn fingerprint(registry: &etas_std::StdRegistry) -> Result<String, serde_jso
     let implementations = registry.spec_impls().collect::<Vec<_>>();
     Ok(format!(
         "blake3:{}",
-        blake3::hash(&serde_json::to_vec(&(bindings, implementations))?).to_hex()
+        blake3::hash(&serde_json::to_vec(&(
+            etas_std::compiler_contract_identity(),
+            bindings,
+            implementations,
+        ))?)
+        .to_hex()
     ))
 }
