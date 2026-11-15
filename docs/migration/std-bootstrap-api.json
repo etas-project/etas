@@ -2,23 +2,24 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "53f7570806299f4313baa984546e4ceb808a2abe",
-    "frontend": "c77b348849d53ac4d15908f3b74ee5d393445d62",
-    "interpreter": "7348cf57391d0cd4d21ae446c303e3724521e90d",
-    "std_version": "0.2.19",
-    "compiler_version": "0.11.19",
-    "native_binding_abi": "blake3:f2460fdc458d8ee2556b7f7c88266bc870f6dcfaf17863ad76e08766bcd98dc3",
-    "source_payload_hash": "blake3:09214e8f0e9c853da6d2ef32d11a57e1c1dd322eea2b2a93221e1de6dc1c6454",
+    "core": "0b4ed320a39981c8710cec2f143560e9f55039bd",
+    "frontend": "2e49e770378f5edf818e01351af6ec6abc299e8a",
+    "interpreter": "747c976e2233272c16c1f6a432fab478cf221982",
+    "std_version": "0.2.20",
+    "compiler_version": "0.11.20",
+    "native_binding_abi": "blake3:2a315658e50c5df66227028eea960294c4141f7cf51765dfe4fe37e027ae0b2f",
+    "source_payload_hash": "blake3:dd1bc576d9d2d61b3deb668a5a3e585114eb87a41ff6788e5a101a1cc4c38745",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:7feb248e5cacf878b3cf72151f24ee9705f10d0b8f1c78af6ce550668944c4bf",
+    "artifact_hash": "blake3:65128e30009aa92438b5c2cc8e1cdfcb3b504f8b929757bf2b0b261ca82f7c28",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 207,
-  "missing_symbols": 464,
+  "candidate_symbols": 220,
+  "missing_symbols": 451,
   "pending_contract_difference": {
     "symbols": [
+      "std.codec.text.utf8_decode",
       "std.collections.Array",
       "std.collections.Iter",
       "std.collections.List",
@@ -59,7 +60,7 @@
       "std.result.is_ok",
       "std.result.unwrap"
     ],
-    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution."
+    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution. UTF-8 declarations are now source-owned. Raw codec declaration differences retain enum layout metadata and fully qualified malformed-input/error paths instead of the original short-name legacy baseline. Strict success/error and replacement behavior are compared across both providers; the original baseline has not been replaced."
   },
   "report": {
     "compatibility_matches": true,
@@ -256,74 +257,74 @@
         ]
       },
       "std.bytes": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.bytes.len"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "len"
-        ]
+        "implementation_changes": [
+          "std.bytes.len"
+        ],
+        "export_changes": []
       },
       "std.char": {
         "missing_module": false,
         "added_module": false,
         "covered": [
-          "std.char.is_whitespace"
-        ],
-        "missing": [
           "std.char.from_u32",
           "std.char.is_alphabetic",
           "std.char.is_alphanumeric",
           "std.char.is_ascii_digit",
           "std.char.is_control",
+          "std.char.is_whitespace",
           "std.char.to_u32"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
         "implementation_changes": [
-          "std.char.is_whitespace"
+          "std.char.from_u32",
+          "std.char.is_alphabetic",
+          "std.char.is_alphanumeric",
+          "std.char.is_ascii_digit",
+          "std.char.is_control",
+          "std.char.is_whitespace",
+          "std.char.to_u32"
         ],
-        "export_changes": [
-          "from_u32",
-          "is_alphabetic",
-          "is_alphanumeric",
-          "is_ascii_digit",
-          "is_control",
-          "to_u32"
-        ]
+        "export_changes": []
       },
       "std.codec.text": {
         "missing_module": false,
         "added_module": false,
         "covered": [
+          "std.codec.text.MalformedInput",
+          "std.codec.text.MalformedInput.Replace",
+          "std.codec.text.MalformedInput.Strict",
+          "std.codec.text.TextCodecError",
+          "std.codec.text.TextCodecError.InvalidUtf8",
+          "std.codec.text.utf8_decode",
           "std.codec.text.utf8_encode"
         ],
         "missing": [
           "std.codec.text.InvalidUtf8",
-          "std.codec.text.MalformedInput",
-          "std.codec.text.MalformedInput.Replace",
-          "std.codec.text.MalformedInput.Strict",
           "std.codec.text.Replace",
-          "std.codec.text.Strict",
-          "std.codec.text.TextCodecError",
-          "std.codec.text.TextCodecError.InvalidUtf8",
-          "std.codec.text.utf8_decode"
+          "std.codec.text.Strict"
         ],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
+        "contract_changes": [
+          "std.codec.text.utf8_decode"
+        ],
+        "implementation_changes": [
+          "std.codec.text.utf8_decode",
+          "std.codec.text.utf8_encode"
+        ],
         "export_changes": [
           "InvalidUtf8",
-          "MalformedInput",
           "Replace",
-          "Strict",
-          "TextCodecError",
-          "utf8_decode"
+          "Strict"
         ]
       },
       "std.collections": {
@@ -1892,6 +1893,7 @@
           "std.text.is_empty",
           "std.text.join",
           "std.text.len",
+          "std.text.lowercase",
           "std.text.pad_end",
           "std.text.pad_start",
           "std.text.parse_bool",
@@ -1909,7 +1911,8 @@
           "std.text.strip_suffix",
           "std.text.trim",
           "std.text.trim_end",
-          "std.text.trim_start"
+          "std.text.trim_start",
+          "std.text.uppercase"
         ],
         "export_changes": [
           "byte_slice",
@@ -2109,6 +2112,8 @@
       1,
       2,
       3,
+      4,
+      5,
       6,
       7,
       8,
@@ -2129,6 +2134,7 @@
       27,
       28,
       29,
+      30,
       31,
       32,
       33,
@@ -2384,8 +2390,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 203,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The 118-entry compiler/host catalog (including 29 primitive contracts) and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
+  "covered_baseline_symbols": 216,
+  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and explicit host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations. The 124-entry compiler/host catalog (including 35 primitive contracts), plus19 source role bindings and transitional prelude references, is not yet accepted as minimal. Generated StdRegistry query structures may remain after handwritten public API/signature/algorithm duplication is removed.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2404,13 +2410,13 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 118,
+    "static_contracts": 124,
     "explicit_source_roles": 19,
-    "query_symbols_before_source_publication": 137,
-    "primitives": 29,
+    "query_symbols_before_source_publication": 143,
+    "primitives": 35,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
-    "native_enum_references": 3,
+    "native_enum_references": 5,
     "native_opaque_references": 1,
     "native_record_references": 1
   },
@@ -2456,7 +2462,9 @@
       "std.text.ascii_lowercase",
       "std.text.ascii_uppercase",
       "std.text.eq_ignore_ascii_case",
-      "std.collections.list_get"
+      "std.collections.list_get",
+      "std.char.is_ascii_digit",
+      "std.char.is_control"
     ],
     "trim_native_contract_removed": true,
     "trim_host_dependency": "Unicode scalar whitespace property and existing character/text storage primitives",
@@ -2693,8 +2701,8 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 23,
-    "source_modules": 11,
+    "source_files": 26,
+    "source_modules": 13,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
     "private_generic_record_and_callback_preserved": true,
@@ -2703,15 +2711,15 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "7613e09a6f35f34d5a931aae40b48a7d4132aa00209bc939a1ba9f5cad8385c6",
+    "manifest_sha256": "6fdbacf7ae8d0d2d83abfdc314054a15388739e5ded02bfb8dba84aa03f9f3a1",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
   },
   "compiler_service_compatibility_audit": {
     "current": {
-      "passed": 475,
-      "failed": 6,
+      "passed": 481,
+      "failed": 0,
       "test_threads": 8
     },
     "prior": {
@@ -2728,6 +2736,7 @@
     "new_failures": [],
     "resolved_failures": [
       "external_agents::a_newly_compiled_body_can_reflect_an_external_agent_without_source_overlay",
+      "external_agents::frozen_callables::a_dependency_returning_a_nominal_closure_keeps_its_frozen_contract_across_import_aliases",
       "external_agents::metadata_only_draft_compilation_requires_a_real_locked_source_environment",
       "external_agents::published_enum_constructors_and_named_payloads_run_without_dependency_source",
       "external_agents::recursive_public_types_replay_and_reflect_without_loading_dependency_source",
@@ -2745,6 +2754,10 @@
       "external_spec_methods::external_spec_method_reflection_selects_published_implementation_and_type_arguments",
       "external_spec_methods::external_spec_method_type_arguments_preserve_nominal_and_structural_identity",
       "external_spec_methods::external_spec_selected_view_keeps_the_canonical_inherent_body",
+      "external_spec_methods::type_method_identity::behavioral_self_type_method_identity_survives_native_agent_revision_compilation",
+      "flow_revisions::compile_reuses_checked_dependency_effect_identity_with_source_overlay",
+      "flow_revisions::compiled_dependency_callback_preserves_argument_and_handler",
+      "flow_revisions::compiled_dependency_callback_respects_branch_choice",
       "flow_revisions::metadata_only_callback_literal_arguments_are_preserved",
       "flow_revisions::metadata_only_callback_preserves_generic_nominal_selector",
       "flow_revisions::metadata_only_callback_preserves_nested_type_selector",
@@ -2756,31 +2769,84 @@
       "flow_revisions::metadata_only_rejects_reordered_distinct_callbacks",
       "flow_revisions::metadata_only_replays_each_callback_call_in_order",
       "retained_metadata::an_exported_body_can_be_rechecked_for_a_local_target_without_dependency_source",
-      "retained_metadata::published_retention_and_export_policy_controls_metadata_only_body_reflection"
-    ],
-    "remaining_failures": [
-      "external_agents::frozen_callables::a_dependency_returning_a_nominal_closure_keeps_its_frozen_contract_across_import_aliases",
-      "external_spec_methods::type_method_identity::behavioral_self_type_method_identity_survives_native_agent_revision_compilation",
-      "flow_revisions::compile_reuses_checked_dependency_effect_identity_with_source_overlay",
-      "flow_revisions::compiled_dependency_callback_preserves_argument_and_handler",
-      "flow_revisions::compiled_dependency_callback_respects_branch_choice",
+      "retained_metadata::published_retention_and_export_policy_controls_metadata_only_body_reflection",
       "revisions::an_active_revision_can_edit_its_definition_without_changing_the_frozen_backend"
     ],
-    "whole_compiler_service_compatibility_accepted": false,
-    "remaining": "Three compiled callback Handler paths still leak Choice.decide during initial checking; two canonical nominal declarations have duplicate local type correspondences; one active-revision fixture conflicts with the frozen outcome contract."
+    "remaining_failures": [],
+    "whole_compiler_service_compatibility_accepted": true,
+    "remaining": "This compiler_service suite is green. Whole-library source coverage, bootstrap minimality, wider compatibility/performance and release/default-switch gates remain incomplete.",
+    "previous_batch": {
+      "passed": 475,
+      "failed": 6,
+      "test_threads": 8
+    }
   },
   "external_callable_compatibility_batch": {
-    "frontend_version": "0.11.19",
-    "effects_version": "0.3.10",
+    "frontend_version": "0.11.20",
+    "effects_version": "0.3.11",
     "method_snapshots_restored_consistently_by_agent_and_callable_projection": true,
     "symbolic_callback_request_bounds_separate_from_concrete_handler_requests": true,
     "selector_fixtures_use_checked_handler_metadata": true,
-    "prior_failures_resolved": 30,
+    "prior_failures_resolved": 36,
     "new_failures": 0,
     "effect_tests_passed": 428,
     "std_source_checks_passed": 9,
     "runtime_tests_passed": 1602,
     "runtime_tests_ignored": 1,
     "whole_library_compatibility_accepted": false
+  },
+  "source_scalar_codec_batch": {
+    "source_modules_completed": [
+      "std.char",
+      "std.bytes",
+      "std.codec.text"
+    ],
+    "additional_source_owned_existing_declarations": [
+      "std.text.lowercase",
+      "std.text.uppercase",
+      "std.codec.text.utf8_encode"
+    ],
+    "source_algorithms": [
+      "std.char.is_ascii_digit",
+      "std.char.is_control"
+    ],
+    "existing_native_contracts_added": 6,
+    "new_os_primitives": 0,
+    "new_language_roles": 0,
+    "source_files": 26,
+    "source_modules": 13,
+    "native_enum_references": {
+      "std.codec.text.MalformedInput": [
+        "Strict",
+        "Replace"
+      ],
+      "std.codec.text.TextCodecError": [
+        "InvalidUtf8"
+      ]
+    },
+    "native_implementation_scope": "Byte storage and scalar conversions, Unicode properties/case tables and UTF-8 codec acceleration remain existing Rust primitives. Source declarations own public names, enums and signatures.",
+    "positive_acceptance": "Complete installed SDK lifecycle verifies Unicode scalar round trips, eight-byte UTF-8 text, strict/replacement decoding, malformed file bytes and one permissioned Fs.read trace action. Normal builds compare legacy/artifact; full-legacy-forbidden builds verify artifact independently.",
+    "whole_bootstrap_minimality_accepted": false,
+    "additional_covered_query_symbols": 13,
+    "source_export_paths_newly_available": 16
+  },
+  "callback_handler_nominal_batch": {
+    "handler_requests_intercepted_on_all_checked_paths": true,
+    "external_nominal_predeclarations_reused": true,
+    "source_overlay_completes_imported_nominal_in_place": true,
+    "runtime_type_identity_checks_unchanged": true,
+    "fixture_return_envelope_allows_intended_edit": true,
+    "prior_six_compiler_failures_resolved": 6,
+    "new_failures": 0
+  },
+  "query_alias_difference": {
+    "symbols": [
+      "std.codec.text.Strict",
+      "std.codec.text.Replace",
+      "std.codec.text.InvalidUtf8"
+    ],
+    "classification": "All three public constructor aliases are available through source re-exports and pass installed SDK import/execution. Source uses the canonical nested enum variant identity, while the legacy baseline has a separate symbol record for each alias. Keep these three raw query-symbol differences visible; do not allocate duplicate source identities merely to increase coverage counts.",
+    "raw_missing_query_symbols": 451,
+    "other_unrepresented_query_symbols": 448
   }
 }

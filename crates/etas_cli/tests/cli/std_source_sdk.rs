@@ -771,6 +771,7 @@ flow main(args: Array<string>) -> i32 {
     );
     verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
@@ -1051,6 +1052,101 @@ flow main(args: Array<string>) -> i32 {
     assert_eq!(execute(None), 3);
     for index in 0..3 {
         assert_eq!(execute(Some(index)), 2 - index);
+    }
+}
+
+fn verify_source_codec_sdk(binary: &Path) {
+    let project = package_fixture(
+        "std-source-codec",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "std-source-codec"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "app"
+module = "app.main"
+flow = "main"
+profile = "files"
+[runtime.profiles.files.filesystem.regions."app.main.Corpus"]
+root = "workspace"
+read = true
+"#,
+            ),
+            ("workspace/malformed.bin", ""),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+import std.fs.{Region, path, read_bytes};
+import std.codec.text.{utf8_encode, utf8_decode, Strict, Replace, MalformedInput, TextCodecError, InvalidUtf8};
+import std.bytes.len as byte_length;
+import std.char.{is_alphabetic, is_alphanumeric, is_ascii_digit, is_control, to_u32, from_u32};
+type Corpus; impl Corpus ~ Region;
+flow main(args: Array<string>) -> i32 {
+    let text = "A界😀";
+    let encoded = utf8_encode(text);
+    if byte_length(encoded) != 8 { return 1; }
+    let mode: MalformedInput = MalformedInput.Strict;
+    if utf8_decode(encoded, mode) != Ok(text) || utf8_decode(encoded, Replace) != Ok(text) { return 2; }
+    if !is_alphabetic('界') || !is_alphanumeric('٣') || !is_ascii_digit('7') { return 3; }
+    if !is_control('\n') || !is_control(from_u32(133).unwrap()) { return 4; }
+    if to_u32('😀') != 128512 || from_u32(128512) != Some('😀') { return 5; }
+    let file = match path<Corpus>("malformed.bin") { Ok(value) => value, Err(_) => { return 6; } };
+    let malformed = read_bytes(file);
+    let failure: TextCodecError = TextCodecError.InvalidUtf8;
+    if utf8_decode(malformed, Strict) != Err(failure) || failure != InvalidUtf8 { return 7; }
+    if utf8_decode(malformed, Replace) != Ok("a�b") { return 8; }
+    if std.text.lowercase("ÉAZ界") != "éaz界" || std.text.uppercase("Straße") != "STRASSE" { return 9; }
+    return 0;
+}
+"#,
+            ),
+        ],
+    );
+    fs::write(project.join("workspace/malformed.bin"), [b'a', 0xff, b'b']).unwrap();
+    let providers = if cfg!(feature = "forbid-legacy-std") {
+        vec!["artifact"]
+    } else {
+        vec!["legacy", "artifact"]
+    };
+    for provider in providers {
+        let output = Command::new(binary)
+            .args([
+                "--cache",
+                "off",
+                "run",
+                path(&project),
+                "--std-provider",
+                provider,
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{provider}: {}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{provider}: {report}");
+        assert_eq!(
+            report["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|event| event["kind"] == "host_request_started"
+                    && event["qualified_action"] == "Fs.read")
+                .count(),
+            1,
+            "{provider}: {report}"
+        );
     }
 }
 

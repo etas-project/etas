@@ -484,11 +484,18 @@ registry declaration/signature lookup. Its nineteen roles define only the recogn
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 118 compiler/host catalog entries
-and 29 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 124 compiler/host catalog entries
+including 35 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
+
+The scalar/codec batch completes source declarations for `std.char`, `std.bytes`
+and `std.codec.text`, including UTF-8 mode/error enums. ASCII digit and control
+predicates use checked Etas bodies. Unicode tables, byte storage and codec
+acceleration retain explicit native bindings; this does not establish bootstrap
+minimality. The installed SDK compares strict/replacement decoding and Unicode
+case/scalar behavior with legacy, including a permissioned file-read trace.
 
 Array get/push/pop/extend and List head/tail/pop/push/extend methods are authored
 in Etas. Array get/push retain minimal storage primitives; iteration, list
