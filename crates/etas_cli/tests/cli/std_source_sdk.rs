@@ -222,6 +222,13 @@ flow collection_checks() -> bool ![] {
 flow main(args: Array<string>) -> i32 {
     if !collection_checks() { return 86; }
     if !option_checks() { return 76; }
+    if std.text.parse_bool(std.text.from_bool(true)) != Ok(true) { return 61; }
+    if std.text.parse_bool(std.text.from_bool(false)) != Ok(false) { return 62; }
+    if !std.text.starts_with("世界😀", "世界") { return 63; }
+    if !std.text.ends_with("世界😀", "😀") { return 64; }
+    if !std.text.contains("aba世界😀", "世界") { return 65; }
+    if std.text.strip_prefix("世界😀", "世界") != Some("😀") { return 66; }
+    if std.text.strip_suffix("世界😀", "😀") != Some("世界") { return 67; }
     if array_extend([1, 2], [3, 4]) != [1, 2, 3, 4] { return 71; }
     if list_push([1; 2], 0) != [0; 1; 2] { return 72; }
     if list_extend([1; 2], [3; 4]) != [3; 4; 1; 2] { return 73; }

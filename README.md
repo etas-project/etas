@@ -498,6 +498,12 @@ to an empty collection and invoking it under the original caller's Handler.
 Unicode char_count/is_empty/trim_start/trim_end and core assert also use source
 bodies. Rust retains the scalar Unicode property and underlying text storage.
 
+Boolean parsing/rendering and exact contains/starts_with/ends_with/strip_prefix/
+strip_suffix policies are also source flows. Their private character matching
+helpers travel in the bundle; no additional compiler role or native signature
+is needed. The text search implementation currently materializes character
+arrays; whole-library performance comparison remains a release gate.
+
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
 
