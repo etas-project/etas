@@ -484,8 +484,8 @@ registry declaration/signature lookup. Its nineteen roles define only the recogn
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 117 compiler/host catalog entries
-and 28 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 118 compiler/host catalog entries
+and 29 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
@@ -538,8 +538,20 @@ the caller's checked program before starting the next attempt. Installed SDK
 acceptance compares two denied write attempts and their exhaustion diagnostic
 against legacy; a separate checked-revision test verifies transient Host failure
 recovery and caller continuation. Pending retry failures are portable in
-checkpoint schema v77. Library-owned checkpoint/resume across distinct prepared
-revisions remains a whole-library execution gate.
+checkpoint schema v78. Source std now declares both checkpoint import paths,
+backed by the existing runtime checkpoint primitive. Saved std callables refer
+to the current caller's verified bundle and checked type bridge; executable
+code and invocation permissions are not taken from checkpoint data.
+
+Installed acceptance saves state inside a private generic std record and while
+a std flow holds an application callback. New processes restore all three save
+points, preserve the caller's Handler, produce 42 and skip checkpoints already
+passed. A separate compiler integration test reloads the SDK and recompiles the
+caller into a fresh PreparedCodeRevision in another process before resuming a
+library-owned checkpoint. Frozen body recompilation strips the previously
+injected std dependency projection before namespace checks, then attaches the
+same selected provider again. Whole-library compatibility and performance
+validation remain migration gates.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,

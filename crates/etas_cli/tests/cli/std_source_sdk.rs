@@ -77,6 +77,20 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
     )
     .unwrap();
     fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
+    fs::write(source.join("library/std/runtime/sdk.es"), r#"module std.runtime;
+type Pending<T> = { value: T };
+flow checkpoint_private<T>(value: T) -> T {
+    let pending = Pending { value = value };
+    checkpoint("inside-std-private");
+    return pending.value;
+}
+public flow checkpointed<T>(value: T) -> T { return checkpoint_private(value); }
+public flow checkpoint_apply<T>(action: (T) -> T ![], value: T) -> T {
+    let first = action(value);
+    checkpoint("inside-std-callback");
+    return action(first);
+}
+"#).unwrap();
     // Ordinary error declarations belong to source. An extra constructor needs
     // no compiler role or native registry entry, and native parse errors keep
     // their source-owned nominal type.
@@ -756,6 +770,7 @@ flow main(args: Array<string>) -> i32 {
         "{report}"
     );
     verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
+    verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
@@ -971,6 +986,72 @@ flow main(args: Array<string>) -> i32 {
         String::from_utf8_lossy(&missing.stderr)
     );
     fs::remove_dir_all(root).unwrap();
+}
+
+fn verify_source_checkpoint_sdk(binary: &Path, root: &Path) {
+    let app = root.join("checkpoint-app.es");
+    let checkpoints = root.join("std-checkpoints");
+    let keys = root.join("checkpoint-keys");
+    fs::write(
+        &app,
+        r#"module app.main;
+import std.runtime.{checkpointed, checkpoint_apply};
+import std.runtime.checkpoint.checkpoint as save;
+flow main(args: Array<string>) -> i32 {
+    let Complete: ![Error<i32> => [] for i32] = handler {
+        Error<i32>.raise(value) => { finish value; }
+    };
+    return handle {
+    let first = checkpointed(40);
+    let add = (value: i32) => value + 1;
+    let result = checkpoint_apply(add, first);
+    save("app-alias");
+    perform Error<i32>.raise(result)
+    } with Complete;
+}
+"#,
+    )
+    .unwrap();
+    let execute = |resume: Option<usize>| {
+        let mut command = Command::new(binary);
+        command.args(["--cache", "off"]);
+        if let Some(index) = resume {
+            command.args(["resume", &index.to_string()]);
+        } else {
+            command.args(["run", path(&app)]);
+        }
+        let output = command
+            .args([
+                "--std-provider",
+                "artifact",
+                "--checkpoint-dir",
+                path(&checkpoints),
+                "--checkpoint-key-dir",
+                path(&keys),
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "42", "{report}");
+        assert!(
+            report["diagnostics"].as_array().unwrap().is_empty(),
+            "{report}"
+        );
+        report["checkpoints"].as_array().unwrap().len()
+    };
+    assert_eq!(execute(None), 3);
+    for index in 0..3 {
+        assert_eq!(execute(Some(index)), 2 - index);
+    }
 }
 
 fn verify_source_filesystem_sdk(binary: &Path) {

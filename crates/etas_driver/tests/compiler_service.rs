@@ -50,6 +50,8 @@ mod flow_revisions;
 mod loaded_origins;
 #[path = "compiler_service/no_host.rs"]
 mod no_host;
+#[path = "compiler_service/std_checkpoint.rs"]
+mod std_checkpoint;
 #[path = "compiler_service/origin_metadata.rs"]
 mod origin_metadata;
 #[path = "compiler_service/residual_generics.rs"]
