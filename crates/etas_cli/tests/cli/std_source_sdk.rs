@@ -182,6 +182,33 @@ flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
 effect Wrapped { action read() -> i32; }
 flow deferred() -> i32 ![Wrapped] { return perform Wrapped.read(); }
 flow increment(value: i32) -> i32 ![] { return value + 1; }
+flow text_policy_checks() -> i32 ![] {
+    let text = "aé界😀a";
+    if std.text.len(text) != 11 || std.text.char_count(text) != 5 { return 1; }
+    if !std.text.is_ascii("Etas\n") || std.text.is_ascii(text) { return 2; }
+    let ordinal: u8 = 3;
+    if std.text.char_get(text, ordinal) != Some('😀') { return 3; }
+    let boundary: u16 = 6;
+    if !std.text.is_char_boundary(text, boundary) || std.text.is_char_boundary(text, 4) { return 4; }
+    if std.text.find(text, "界😀") != Some(3) || std.text.rfind(text, "a") != Some(10) { return 5; }
+    if std.text.find(text, "") != Some(0) || std.text.rfind(text, "") != Some(11) { return 6; }
+    if std.text.count("aaaaa", "aa") != 2 || std.text.count("é😀", "") != 3 { return 7; }
+    if std.text.split("a界b界", "界") != ["a", "b", ""] { return 8; }
+    if std.text.splitn("a界b界c", "界", 2) != ["a", "b界c"] { return 9; }
+    if std.text.split("é😀", "") != ["", "é", "😀", ""] { return 10; }
+    if std.text.splitn("é😀界", "", 3) != ["", "é", "😀界"] { return 11; }
+    if std.text.split_once("a界b界c", "界") != Some(("a", "b界c")) { return 12; }
+    if std.text.rsplit_once("a界b界c", "界") != Some(("a界b", "c")) { return 13; }
+    if std.text.split_once("é😀", "") != Some(("", "é😀")) || std.text.rsplit_once("é😀", "") != Some(("é😀", "")) { return 14; }
+    if std.text.replace("a界a界", "界", "😀") != "a😀a😀" { return 15; }
+    if std.text.replace_n("a界a界", "界", "😀", 1) != "a😀a界" { return 16; }
+    if std.text.replace("é😀", "", "|") != "|é|😀|" || std.text.replace_n("é😀", "", "|", 2) != "|é|😀" { return 17; }
+    if std.text.ascii_lowercase("ÉAZ界") != "Éaz界" || std.text.ascii_uppercase("éaz界") != "éAZ界" { return 18; }
+    if !std.text.eq_ignore_ascii_case("Etas界", "eTAS界") || std.text.eq_ignore_ascii_case("É", "é") { return 19; }
+    if std.collections.list_get([1; 2; 3], ordinal) != None || [1; 2; 3].get(1) != Some(2) { return 20; }
+    return 0;
+}
+
 flow option_checks() -> bool ![] {
     let callable = std.option.unwrap(Some(increment));
     if callable(4) != 5 { return false; }
@@ -224,6 +251,9 @@ flow collection_checks() -> bool ![] {
     let callbacks = list_push([], deferred).extend([deferred;]);
     let head_answer = handle { callbacks.head().unwrap()() } with Handle;
     if head_answer != 13 { return false; }
+    let list_index: u8 = 1;
+    let list_answer = handle { callbacks.get(list_index).unwrap()() } with Handle;
+    if list_answer != 13 { return false; }
     let array_callbacks = array_extend([], [deferred, deferred]);
     let (earlier, final_callback) = array_callbacks.pop();
     let final_answer = handle { final_callback.unwrap()() } with Handle;
@@ -239,6 +269,8 @@ flow collection_checks() -> bool ![] {
 }
 flow main(args: Array<string>) -> i32 {
     if !collection_checks() { return 86; }
+    let policy = text_policy_checks();
+    if policy != 0 { return 100 + policy; }
     if !option_checks() { return 76; }
     let custom: TextError = TextError.SdkOnly;
     if match custom { TextError.SdkOnly => false, _ => true } { return 57; }

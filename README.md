@@ -514,6 +514,15 @@ reference to its checked declaration. Partial compiler library images may retain
 ABI imports until that publication step. The bundle uses body schema 12 and
 registry image schema 3.
 
+UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
+non-overlapping counts, eager split/limited split, first/last partition,
+replacement and ASCII case policies also use Etas bodies. Scalar encoding widths
+are computed from character order; arrays use the existing storage primitives.
+`List.get` delegates checked indexing through those same primitives and preserves
+callback payloads under the caller's Handler. No new host primitive or language
+role is introduced. Lazy text iterator APIs remain pending, alongside the
+whole-library performance gate.
+
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
 
