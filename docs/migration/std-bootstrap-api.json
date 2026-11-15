@@ -3,15 +3,15 @@
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
     "core": "53f7570806299f4313baa984546e4ceb808a2abe",
-    "frontend": "ebb17d5e391a3583202f025664db108e70293823",
-    "interpreter": "491655be69d67cd5e4ed65f8e2bb0ea9aa837fbb",
+    "frontend": "c77b348849d53ac4d15908f3b74ee5d393445d62",
+    "interpreter": "7348cf57391d0cd4d21ae446c303e3724521e90d",
     "std_version": "0.2.19",
-    "compiler_version": "0.11.18",
+    "compiler_version": "0.11.19",
     "native_binding_abi": "blake3:f2460fdc458d8ee2556b7f7c88266bc870f6dcfaf17863ad76e08766bcd98dc3",
     "source_payload_hash": "blake3:09214e8f0e9c853da6d2ef32d11a57e1c1dd322eea2b2a93221e1de6dc1c6454",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:c9e1e2337519afd3aead214e7852152c85ef486de13e1c9b1bbac225d3c1fdb0",
+    "artifact_hash": "blake3:7feb248e5cacf878b3cf72151f24ee9705f10d0b8f1c78af6ce550668944c4bf",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -2703,26 +2703,84 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "a91c658157b105203e69f78d826b04db9012b4823c96324fdca1482f863ba091",
+    "manifest_sha256": "7613e09a6f35f34d5a931aae40b48a7d4132aa00209bc939a1ba9f5cad8385c6",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
   },
   "compiler_service_compatibility_audit": {
     "current": {
+      "passed": 475,
+      "failed": 6,
+      "test_threads": 8
+    },
+    "prior": {
+      "main_commit": "c8b1cea02aa8263f832793a5a5815f6bc2697acf",
+      "original_dependency_graph": true,
       "passed": 445,
       "failed": 36
     },
-    "prior": {
+    "original_baseline": {
       "main_commit": "ba4e4d0727d836d74a46bd527bc35faf437d1616",
-      "original_dependency_graph": true,
       "passed": 444,
       "failed": 36
     },
     "new_failures": [],
-    "resolved_failures": [],
-    "failure_set_matches_prior": true,
+    "resolved_failures": [
+      "external_agents::a_newly_compiled_body_can_reflect_an_external_agent_without_source_overlay",
+      "external_agents::metadata_only_draft_compilation_requires_a_real_locked_source_environment",
+      "external_agents::published_enum_constructors_and_named_payloads_run_without_dependency_source",
+      "external_agents::recursive_public_types_replay_and_reflect_without_loading_dependency_source",
+      "external_agents::transitive::compiled_body_uses_facade_enum_and_agent_identities_without_dependency_sources",
+      "external_agents::transitive::facade_reexports_preserve_enum_layouts_and_agent_headers_without_source",
+      "external_agents::transitive::transitive_spec_evidence_does_not_require_a_direct_dependency_import",
+      "external_methods::a_newly_compiled_local_body_can_reflect_an_external_method_without_source_overlay",
+      "external_methods::external_default_and_additional_method_reflection_uses_published_identities",
+      "external_methods::external_method_reflection_follows_public_reexport_identity",
+      "external_methods::external_method_selection_preserves_inherent_precedence_and_spec_ambiguity",
+      "external_reflection::metadata_only_agent_reflection_preserves_revisions_without_inventing_native_environments",
+      "external_spec_methods::compiled_body_preserves_external_spec_selected_body_ownership",
+      "external_spec_methods::external_spec_method_function_arguments_compare_checked_effect_identities",
+      "external_spec_methods::external_spec_method_reflection_retains_trace_spec_selection",
+      "external_spec_methods::external_spec_method_reflection_selects_published_implementation_and_type_arguments",
+      "external_spec_methods::external_spec_method_type_arguments_preserve_nominal_and_structural_identity",
+      "external_spec_methods::external_spec_selected_view_keeps_the_canonical_inherent_body",
+      "flow_revisions::metadata_only_callback_literal_arguments_are_preserved",
+      "flow_revisions::metadata_only_callback_preserves_generic_nominal_selector",
+      "flow_revisions::metadata_only_callback_preserves_nested_type_selector",
+      "flow_revisions::metadata_only_callback_preserves_nominal_type_selector_identity",
+      "flow_revisions::metadata_only_callback_preserves_type_selector",
+      "flow_revisions::metadata_only_effectful_handler_callback_contract_replays",
+      "flow_revisions::metadata_only_effectful_handler_callback_with_argument_replays",
+      "flow_revisions::metadata_only_reflection_preserves_callback_branch_choices",
+      "flow_revisions::metadata_only_rejects_reordered_distinct_callbacks",
+      "flow_revisions::metadata_only_replays_each_callback_call_in_order",
+      "retained_metadata::an_exported_body_can_be_rechecked_for_a_local_target_without_dependency_source",
+      "retained_metadata::published_retention_and_export_policy_controls_metadata_only_body_reflection"
+    ],
+    "remaining_failures": [
+      "external_agents::frozen_callables::a_dependency_returning_a_nominal_closure_keeps_its_frozen_contract_across_import_aliases",
+      "external_spec_methods::type_method_identity::behavioral_self_type_method_identity_survives_native_agent_revision_compilation",
+      "flow_revisions::compile_reuses_checked_dependency_effect_identity_with_source_overlay",
+      "flow_revisions::compiled_dependency_callback_preserves_argument_and_handler",
+      "flow_revisions::compiled_dependency_callback_respects_branch_choice",
+      "revisions::an_active_revision_can_edit_its_definition_without_changing_the_frozen_backend"
+    ],
     "whole_compiler_service_compatibility_accepted": false,
-    "remaining": "Existing failures cover cross-package method definition conflicts, callback parametric determinism, escaped Choice effects, type bridges and outcome containment. The complete compatibility gate remains open."
+    "remaining": "Three compiled callback Handler paths still leak Choice.decide during initial checking; two canonical nominal declarations have duplicate local type correspondences; one active-revision fixture conflicts with the frozen outcome contract."
+  },
+  "external_callable_compatibility_batch": {
+    "frontend_version": "0.11.19",
+    "effects_version": "0.3.10",
+    "method_snapshots_restored_consistently_by_agent_and_callable_projection": true,
+    "symbolic_callback_request_bounds_separate_from_concrete_handler_requests": true,
+    "selector_fixtures_use_checked_handler_metadata": true,
+    "prior_failures_resolved": 30,
+    "new_failures": 0,
+    "effect_tests_passed": 428,
+    "std_source_checks_passed": 9,
+    "runtime_tests_passed": 1602,
+    "runtime_tests_ignored": 1,
+    "whole_library_compatibility_accepted": false
   }
 }
