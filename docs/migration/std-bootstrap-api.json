@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "d01c54d198d524ddec49bf9b8d2fc2f82e0e1e7b",
-    "frontend": "a18ca29f9f02d4c9e183d8d36cc565813e26218a",
-    "interpreter": "4ca2e351491b0a167047bbdcc3862c3c2a607860",
-    "std_version": "0.2.21",
-    "compiler_version": "0.11.21",
-    "native_binding_abi": "blake3:037549d648c88a4400490cf1cd234c11d987794545f343e9291617b50e93d861",
-    "source_payload_hash": "blake3:4911c02c6c8658b64c8f563326592f0cb4a0798f2c79e75926a437ed0408d2d8",
+    "core": "8ace58c40e156559b785443990bdeded9ba04742",
+    "frontend": "f3c815ae0b7b69e3a4f84b25a3e9b6b6e0e3a994",
+    "interpreter": "15cd632a962241c2ad950e13454e1ce3121139c4",
+    "std_version": "0.2.22",
+    "compiler_version": "0.11.22",
+    "native_binding_abi": "blake3:6636aabc8c35c702ebf555d37a9fbe4090348223a4122fea875dbc3e4845bb01",
+    "source_payload_hash": "blake3:11a9bcf1d2af61f1cef13a27915fa28cdb53f16d04ac3bf4afa1ae4896b4da20",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:851e316298c4aada2bbf68c7f61d4ba357bbe42e277a175a9bb4d2c7cc4fa8a5",
+    "artifact_hash": "blake3:36d824e164bf6ae0fd8cb16705b8734fd8445cb5575b2267dd5a2404a33f9589",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -2423,7 +2423,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 218,
-  "source_ownership_note": "Etas owns public declarations, generic/effect names and expressible algorithms. Rust retains execution rules and explicit primitive/payload ABI constraints. The 103-entry transitional catalog includes 37 primitive contracts; 19 source roles and 24 native record layout constraints are separate. Seventeen compiler execution type declarations remain transitional. Whole-bootstrap minimality is not accepted. Generated StdRegistry query structures remain supported.",
+  "source_ownership_note": "Etas owns public declarations and expressible policy/algorithms. Rust retains execution rules and primitive/payload/role ABI. The 89-entry transitional catalog includes 37 primitive contracts; 33 source roles and 24 record layout constraints are separate. Fourteen opaque compiler metadata declarations use existing CodeTypeRole tags and intrinsic-only construction without copying public fields/signatures. AgentDef, CallableDef and SyntaxBlock projected declarations remain transitional. Whole-bootstrap minimality is not accepted. Generated StdRegistry query structures remain supported.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2442,8 +2442,8 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 103,
-    "explicit_source_roles": 19,
+    "static_contracts": 89,
+    "explicit_source_roles": 33,
     "query_symbols_before_source_publication": 122,
     "primitives": 37,
     "spec_impl_facts": 0,
@@ -2733,7 +2733,7 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 28,
+    "source_files": 29,
     "source_modules": 14,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
@@ -2743,7 +2743,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "6b153871adca26b873b6796a32d6f842629a4c352ceb42ecb99f4e26e1149afd",
+    "manifest_sha256": "1dd0986ffd039eb1203be9db63344298f50e211659f188dd970757eb1d245d39",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -2926,6 +2926,45 @@
     "project_std_namespace_guard_unchanged": true,
     "runtime_nominal_checks_unchanged": true,
     "positive_acceptance": "Installed source-only SDK reflects a flow revision/signature, copies RevisionInfo through std bodies, checks ParameterInfo and calls source-declared parse_body/format. Complete normal/forbidden SDK lifecycle and fresh-revision checkpoint acceptance pass.",
+    "whole_bootstrap_minimality_accepted": false
+  },
+  "compiler_metadata_source_batch": {
+    "source_declarations": [
+      "std.compiler.ActionSummary",
+      "std.compiler.AgentId",
+      "std.compiler.CallableId",
+      "std.compiler.DefinitionId",
+      "std.compiler.DescriptorDetail",
+      "std.compiler.Determinism",
+      "std.compiler.EffectRowInfo",
+      "std.compiler.GenericOwnerInfo",
+      "std.compiler.StaticValueInfo",
+      "std.compiler.ToolRef",
+      "std.compiler.TraceConstraintInfo",
+      "std.compiler.TraceSummary",
+      "std.compiler.TraceWitness",
+      "std.compiler.TypeInfo"
+    ],
+    "count": 14,
+    "public_declarations_removed_from_static_catalog": 14,
+    "existing_code_roles_mapped": 14,
+    "new_execution_roles": 0,
+    "new_os_primitives": 0,
+    "new_primitive_contracts": 0,
+    "source_roles": 33,
+    "native_record_layouts": 24,
+    "source_files": 29,
+    "source_modules": 14,
+    "intrinsic_only_construction_retained": true,
+    "public_signature_or_projected_field_tables_added_to_roles": false,
+    "code_role_mapping_in_compiler_abi_fingerprint": true,
+    "role_abi_fingerprint_format": 2,
+    "positive_acceptance": "TypeInfo and CallableId retain their native metadata payloads across source std bodies. Existing report, syntax parser/formatter, private generic callback, permissions and fresh-revision checkpoint cases pass in installed normal and complete-legacy-forbidden SDKs.",
+    "remaining_compiler_declarations": [
+      "std.compiler.AgentDef",
+      "std.compiler.CallableDef",
+      "std.compiler.SyntaxBlock"
+    ],
     "whole_bootstrap_minimality_accepted": false
   }
 }

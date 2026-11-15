@@ -480,11 +480,11 @@ legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
 Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
-registry declaration/signature lookup. Its nineteen roles define only the recognized
+registry declaration/signature lookup. Its thirty-three roles define only the recognized
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 103 compiler/host catalog entries
+are removed from the static catalog, which still has 89 compiler/host catalog entries
 including 37 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
@@ -500,11 +500,19 @@ case/scalar behavior with legacy, including a permissioned file-read trace.
 Twenty-three ordinary compiler report records are now declared in Etas. Rust
 retains their 91 produced fields as 23 record layout constraints; together with
 FsStat there are 24 such constraints, plus the parser/formatter primitives. Record ABI
-checks use checked declaration TypeIds for nested nominal fields. Seventeen
-compiler execution type declarations still need source ownership work; the
+checks use checked declaration TypeIds for nested nominal fields. Three
+compiler execution type declarations with projected fields still need source ownership work; the
 remaining catalog and payload constraints have no whole-bootstrap minimality
 acceptance. Installed SDK checks include reflected report values crossing std
 body boundaries.
+
+Fourteen opaque compiler metadata declarations now live in Etas source with
+minimal bindings to their existing CodeTypeRole identities. The roles keep
+compiler-only construction and native value representation, without public
+field/signature tables. Their mapping is included in the compiler ABI identity.
+TypeInfo and CallableId values cross checked std body boundaries in the SDK
+acceptance. AgentDef, CallableDef and SyntaxBlock projected declarations remain
+required migration work.
 
 Array get/push/pop/extend and List head/tail/pop/push/extend methods are authored
 in Etas. Array get/push retain minimal storage primitives; iteration, list

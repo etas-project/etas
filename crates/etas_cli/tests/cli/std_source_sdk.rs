@@ -108,8 +108,10 @@ public flow checkpoint_apply<T>(action: (T) -> T ![], value: T) -> T {
         r#"module std.extra;
 import std.fs.IOError;
 import std.core.Index;
-import std.compiler.RevisionInfo;
+import std.compiler.{RevisionInfo, TypeInfo, CallableId};
 public import std.extra.Reply.{Empty, Item, Named};
+public flow preserve_type(value: TypeInfo) -> TypeInfo ![] { return value; }
+public flow preserve_callable(value: CallableId) -> CallableId ![] { return value; }
 public flow revision_key(value: RevisionInfo) -> string ![] { return value.key; }
 public flow copy_revision(value: RevisionInfo) -> RevisionInfo ![] {
     return RevisionInfo { key = value.key, content = value.content, parent = value.parent };
@@ -1065,7 +1067,7 @@ fn verify_source_compiler_report_sdk(binary: &Path, root: &Path) {
     let application = root.join("compiler-reports.es");
     fs::write(&application, r#"module compiler_reports;
 import std.compiler.{RevisionInfo, parse_body, format};
-import std.extra.{revision_key, copy_revision};
+import std.extra.{revision_key, copy_revision, preserve_type, preserve_callable};
 flow original(value: string) -> string ![] { return value; }
 flow main(args: Array<string>) -> i32 {
     let definition = ^original;
@@ -1081,6 +1083,10 @@ flow main(args: Array<string>) -> i32 {
     if parameters != 1 { return 4; }
     let syntax = match parse_body("return 1;") { Ok(body) => body, Err(_) => { return 5; } };
     if format(syntax) == "" { return 6; }
+    let output = definition.signature.output;
+    if preserve_type(output) != output { return 7; }
+    let identity = definition.id;
+    if preserve_callable(identity) != identity { return 8; }
     return 0;
 }
 "#).unwrap();
