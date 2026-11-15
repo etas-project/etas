@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "8ace58c40e156559b785443990bdeded9ba04742",
-    "frontend": "f3c815ae0b7b69e3a4f84b25a3e9b6b6e0e3a994",
-    "interpreter": "15cd632a962241c2ad950e13454e1ce3121139c4",
-    "std_version": "0.2.22",
-    "compiler_version": "0.11.22",
-    "native_binding_abi": "blake3:6636aabc8c35c702ebf555d37a9fbe4090348223a4122fea875dbc3e4845bb01",
-    "source_payload_hash": "blake3:11a9bcf1d2af61f1cef13a27915fa28cdb53f16d04ac3bf4afa1ae4896b4da20",
+    "core": "4058ff5a707e06bdfda163a395b7b3ffce3b946f",
+    "frontend": "b873b70a4089d85df48aa54e44caee6393389eb1",
+    "interpreter": "feddefcf8bb4bd24f679b6b5a33ade1a96b5a369",
+    "std_version": "0.2.23",
+    "compiler_version": "0.11.23",
+    "native_binding_abi": "blake3:8ee7f1ff4fcaf84343e759d5c8139aadae1633d5f6031e58964d1a4035617122",
+    "source_payload_hash": "blake3:dd85b265c54c44221a68bf83c3e2e17f9d2a9f6d2fdcc1a2599835b1cf94d287",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:36d824e164bf6ae0fd8cb16705b8734fd8445cb5575b2267dd5a2404a33f9589",
+    "artifact_hash": "blake3:608c90271436b3634ebdee9fa93f73f80569e9358fdb1e69f00f03a9fc0384e4",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -37,8 +37,10 @@
       "std.collections.list_pop",
       "std.collections.list_push",
       "std.collections.list_tail",
+      "std.compiler.AgentDef",
       "std.compiler.AnnotationArgumentInfo",
       "std.compiler.AnnotationInfo",
+      "std.compiler.CallableDef",
       "std.compiler.ChangeReport",
       "std.compiler.CheckReport",
       "std.compiler.DefinitionBindingInfo",
@@ -542,8 +544,10 @@
         ],
         "added": [],
         "contract_changes": [
+          "std.compiler.AgentDef",
           "std.compiler.AnnotationArgumentInfo",
           "std.compiler.AnnotationInfo",
+          "std.compiler.CallableDef",
           "std.compiler.ChangeReport",
           "std.compiler.CheckReport",
           "std.compiler.DefinitionBindingInfo",
@@ -2423,7 +2427,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 218,
-  "source_ownership_note": "Etas owns public declarations and expressible policy/algorithms. Rust retains execution rules and primitive/payload/role ABI. The 89-entry transitional catalog includes 37 primitive contracts; 33 source roles and 24 record layout constraints are separate. Fourteen opaque compiler metadata declarations use existing CodeTypeRole tags and intrinsic-only construction without copying public fields/signatures. AgentDef, CallableDef and SyntaxBlock projected declarations remain transitional. Whole-bootstrap minimality is not accepted. Generated StdRegistry query structures remain supported.",
+  "source_ownership_note": "Etas owns public declarations, generic names, getter signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/role ABI. The transitional catalog has86 entries including37 primitives,36 source roles,24 record layouts and3 getter layouts (21 fields). AgentDef/CallableDef/SyntaxBlock declarations now live in source; opaque storage and compiler-only construction remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2442,15 +2446,17 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 89,
-    "explicit_source_roles": 33,
+    "static_contracts": 86,
+    "explicit_source_roles": 36,
     "query_symbols_before_source_publication": 122,
     "primitives": 37,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 5,
     "native_opaque_references": 1,
-    "native_record_references": 24
+    "native_record_references": 24,
+    "native_projection_references": 3,
+    "native_projection_fields": 21
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2733,7 +2739,7 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 29,
+    "source_files": 30,
     "source_modules": 14,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
@@ -2743,7 +2749,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "1dd0986ffd039eb1203be9db63344298f50e211659f188dd970757eb1d245d39",
+    "manifest_sha256": "eabe90e1978ea6416e0aa7cd2fb9f1a886155b3243cf980bd06bb8ae04bebffa",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -2960,11 +2966,37 @@
     "code_role_mapping_in_compiler_abi_fingerprint": true,
     "role_abi_fingerprint_format": 2,
     "positive_acceptance": "TypeInfo and CallableId retain their native metadata payloads across source std bodies. Existing report, syntax parser/formatter, private generic callback, permissions and fresh-revision checkpoint cases pass in installed normal and complete-legacy-forbidden SDKs.",
-    "remaining_compiler_declarations": [
+    "remaining_compiler_declarations": [],
+    "whole_bootstrap_minimality_accepted": false,
+    "completed_by": "compiler_projected_source_batch"
+  },
+  "compiler_projected_source_batch": {
+    "source_declarations": [
       "std.compiler.AgentDef",
       "std.compiler.CallableDef",
       "std.compiler.SyntaxBlock"
     ],
-    "whole_bootstrap_minimality_accepted": false
+    "count": 3,
+    "source_file": "library/std/compiler/definitions.es",
+    "source_getter_fields": 21,
+    "static_contracts_removed": 3,
+    "static_contracts_remaining": 86,
+    "source_roles": 36,
+    "native_getter_layouts": 3,
+    "native_record_layouts": 24,
+    "new_execution_roles": 0,
+    "new_os_primitives": 0,
+    "intrinsic_only_construction_retained": true,
+    "opaque_storage_retained": true,
+    "field_signatures_copied_into_roles": false,
+    "metadata_projection_field": "Type.projected_fields / protobuf tag10",
+    "container_schema": 49,
+    "registry_schema": 6,
+    "callable_value_input_fingerprint": 7,
+    "source_files": 30,
+    "source_modules": 14,
+    "positive_acceptance": "SyntaxBlock.text, CallableDef<Function>.revision and AgentDef<Actor>.revision cross separately compiled std bodies in normal and complete-legacy-forbidden installed SDKs. External imports reuse checked compiler role constructors; applied CallableDef values retain native backend leases and strict program ownership.",
+    "whole_bootstrap_minimality_accepted": false,
+    "raw_contract_difference_note": "Two additional raw contract differences are the source-owned AgentDef<Actor> and CallableDef<Callable> generic binder spellings; the original report is preserved. Installed generic calls pass without relaxing matching by canonical identity."
   }
 }

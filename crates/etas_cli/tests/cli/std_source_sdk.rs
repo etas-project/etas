@@ -108,8 +108,11 @@ public flow checkpoint_apply<T>(action: (T) -> T ![], value: T) -> T {
         r#"module std.extra;
 import std.fs.IOError;
 import std.core.Index;
-import std.compiler.{RevisionInfo, TypeInfo, CallableId};
+import std.compiler.{RevisionInfo, TypeInfo, CallableId, SyntaxBlock, CallableDef, AgentDef};
 public import std.extra.Reply.{Empty, Item, Named};
+public flow syntax_text(value: SyntaxBlock) -> string ![] { return value.text; }
+public flow callable_revision<Function>(value: CallableDef<Function>) -> RevisionInfo ![] { return value.revision; }
+public flow agent_revision<Actor>(value: AgentDef<Actor>) -> RevisionInfo ![] { return value.revision; }
 public flow preserve_type(value: TypeInfo) -> TypeInfo ![] { return value; }
 public flow preserve_callable(value: CallableId) -> CallableId ![] { return value; }
 public flow revision_key(value: RevisionInfo) -> string ![] { return value.key; }
@@ -1067,8 +1070,9 @@ fn verify_source_compiler_report_sdk(binary: &Path, root: &Path) {
     let application = root.join("compiler-reports.es");
     fs::write(&application, r#"module compiler_reports;
 import std.compiler.{RevisionInfo, parse_body, format};
-import std.extra.{revision_key, copy_revision, preserve_type, preserve_callable};
+import std.extra.{revision_key, copy_revision, preserve_type, preserve_callable, syntax_text, callable_revision, agent_revision};
 flow original(value: string) -> string ![] { return value; }
+agent Worker() -> string { return "worker"; }
 flow main(args: Array<string>) -> i32 {
     let definition = ^original;
     let revision: RevisionInfo = definition.revision;
@@ -1087,6 +1091,9 @@ flow main(args: Array<string>) -> i32 {
     if preserve_type(output) != output { return 7; }
     let identity = definition.id;
     if preserve_callable(identity) != identity { return 8; }
+    if syntax_text(syntax) != syntax.text { return 9; }
+    if callable_revision(definition).key != revision.key { return 10; }
+    if agent_revision(^Worker).key != (^Worker).revision.key { return 11; }
     return 0;
 }
 "#).unwrap();

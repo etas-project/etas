@@ -77,6 +77,20 @@ pub(super) fn publish(
             }
             builder.bind_declaration(*native, key.clone());
             builder.source_type_parameters(*native, params.clone());
+            if !ty.projected_fields.is_empty() {
+                builder.source_type_projected_fields(
+                    *native,
+                    ty.projected_fields
+                        .iter()
+                        .map(|field| {
+                            Ok(etas_std::StdRecordField {
+                                name: field.name.clone(),
+                                ty: projector.ty(&field.ty)?,
+                            })
+                        })
+                        .collect::<Result<_, DriverError>>()?,
+                );
+            }
             *native
         } else {
             if symbols.contains_key(&canonical) {
