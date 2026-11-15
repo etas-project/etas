@@ -407,6 +407,9 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     registry
         .validate_resolved_native_opaque_references()
         .map_err(invalid)?;
+    registry
+        .validate_resolved_native_record_references()
+        .map_err(invalid)?;
     Ok(registry)
 }
 

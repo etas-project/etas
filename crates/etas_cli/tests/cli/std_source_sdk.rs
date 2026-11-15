@@ -67,6 +67,15 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
 "#,
     )
     .unwrap();
+    let filesystem = source.join("library/std/fs/mod.es");
+    fs::write(
+        &filesystem,
+        fs::read_to_string(&filesystem).unwrap().replace(
+            "public enum ReadLimitError {",
+            "public enum ReadLimitError { SdkOnly,",
+        ),
+    )
+    .unwrap();
     fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
     // Ordinary error declarations belong to source. An extra constructor needs
     // no compiler role or native registry entry, and native parse errors keep
@@ -746,6 +755,7 @@ flow main(args: Array<string>) -> i32 {
         4,
         "{report}"
     );
+    verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
@@ -961,4 +971,159 @@ flow main(args: Array<string>) -> i32 {
         String::from_utf8_lossy(&missing.stderr)
     );
     fs::remove_dir_all(root).unwrap();
+}
+
+fn verify_source_filesystem_sdk(binary: &Path) {
+    let project = package_fixture(
+        "std-source-filesystem",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
+name = "std-source-filesystem"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "app"
+module = "app.main"
+flow = "main"
+profile = "files"
+[runtime.profiles.files.filesystem.regions."app.main.Project"]
+root = "workspace"
+read = true
+write = true
+[runtime.profiles.readonly.filesystem.regions."app.main.Project"]
+root = "workspace"
+read = true
+"#,
+            ),
+            ("workspace/item.txt", "source fs"),
+            ("workspace/sub/other.txt", "more"),
+            (
+                "src/app/main.es",
+                r#"module app.main;
+import std.fs.{Region, WorkspacePath, IOError, FsStat, FsEntry, ReadLimitError, ListLimitError,
+    root, relative_name, path, read_bytes, read_bytes_limited, write_bytes, list, list_limited, stat, atomic_replace};
+import std.codec.text.utf8_encode;
+type Project; impl Project ~ Region;
+flow selected<R ~ Region>() -> WorkspacePath<R> ![] { return root<R>(); }
+flow denied(args: Array<string>) -> i32 {
+    let target = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 1; } };
+    write_bytes(target, utf8_encode("forbidden"));
+    return 0;
+}
+flow main(args: Array<string>) -> i32 {
+    let directory: WorkspacePath<Project> = selected();
+    if relative_name(directory) != "." { return 1; }
+    let item = match path<Project>("item.txt") { Ok(value) => value, Err(_) => { return 2; } };
+    let metadata: FsStat = stat(item);
+    if !metadata.is_file || metadata.is_dir || metadata.len != 9 { return 3; }
+    if read_bytes_limited(item, 9) != utf8_encode("source fs") { return 4; }
+    var names = "";
+    for entry in list(directory) limit Iterations(4) { names = names + relative_name(entry) + ";"; }
+    if names != "item.txt;sub;" { return 5; }
+    var limited_names = "";
+    for entry in list_limited(directory, 2, 11) limit Iterations(4) { limited_names = limited_names + relative_name(entry) + ";"; }
+    if limited_names != names { return 6; }
+    let ReadLimit: ![Error<ReadLimitError> => [] for usize] = handler {
+        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(limit)) => { finish limit; }
+        Error<ReadLimitError>.raise(ReadLimitError.SdkOnly) => { finish 99; }
+    };
+    let read_limit = handle { read_bytes_limited(item, 8); 0 } with ReadLimit;
+    if read_limit != 8 { return 7; }
+    let ListLimit: ![Error<ListLimitError> => [] for usize] = handler {
+        Error<ListLimitError>.raise(ListLimitError.LimitExceeded(count, bytes)) => { finish count + bytes; }
+    };
+    let list_limit = handle { list_limited(directory, 1, 11); 0 } with ListLimit;
+    if list_limit != 12 { return 8; }
+    let destination = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 9; } };
+    write_bytes(destination, utf8_encode("before"));
+    atomic_replace(destination, utf8_encode("after"));
+    if read_bytes(destination) != utf8_encode("after") { return 10; }
+    return 0;
+}
+"#,
+            ),
+        ],
+    );
+    let output = Command::new(binary)
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&project),
+            "--std-provider",
+            "artifact",
+            "--format",
+            "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["value"]["value"], "0", "{report}");
+    let actions = report["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|event| event["kind"] == "host_request_started")
+        .map(|event| event["qualified_action"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        actions,
+        [
+            "Fs.stat",
+            "Fs.read",
+            "Fs.list",
+            "Fs.list",
+            "Fs.read",
+            "Fs.list",
+            "Fs.write",
+            "Fs.atomic_replace",
+            "Fs.read"
+        ],
+        "{report}"
+    );
+    assert_eq!(
+        fs::read(project.join("workspace/created.txt")).unwrap(),
+        b"after"
+    );
+    let denied = Command::new(binary)
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&project),
+            "--std-provider",
+            "artifact",
+            "--profile",
+            "readonly",
+            "--flow",
+            "denied",
+            "--format",
+            "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert_eq!(
+        denied.status.code(),
+        Some(3),
+        "{}\n{}",
+        String::from_utf8_lossy(&denied.stdout),
+        String::from_utf8_lossy(&denied.stderr)
+    );
+    assert_eq!(
+        fs::read(project.join("workspace/created.txt")).unwrap(),
+        b"after"
+    );
+    fs::remove_dir_all(project).unwrap();
 }

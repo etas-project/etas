@@ -484,8 +484,8 @@ registry declaration/signature lookup. Its nineteen roles define only the recogn
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 105 transitional contracts
-and 20 primitives. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 117 compiler/host catalog entries
+and 28 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
@@ -512,7 +512,7 @@ constructor imports/re-exports retain canonical identities, generic payloads and
 checked execution layouts. The published std provider resolves every native enum
 reference to its checked declaration. Partial compiler library images may retain
 ABI imports until that publication step. The bundle uses body schema 12 and
-registry image schema 4.
+registry image schema 5.
 
 `std.fs.Region`, `WorkspacePath<R ~ Region>` and `IOError` are also source
 owned. Region supplies the compiler's static authority-selector identity;
@@ -520,8 +520,17 @@ WorkspacePath binds the existing runtime path representation. Its generic
 parameter name belongs to source and retains the Region ABI bound. IOError is
 an ordinary opaque type with a native payload reference, without a language
 role. Publication resolves that reference to its checked opaque declaration.
-Source `path` and `read_bytes` declarations call existing host primitives. Native
-binding aliases retain the primitive identity even when the public wrapper has
+All filesystem API declarations now use source: path identity helpers, reading,
+writing, listing, stat and atomic replacement. `ReadLimitError` and `ListLimitError`
+are ordinary source enums. Their native references require only the LimitExceeded
+variants and usize payloads returned by the host; extra source variants need no
+Rust API registration. `FsStat` is a source record with checked is_file/is_dir/len
+host payload fields, and its native import shares the source nominal identity.
+The host decoder wraps the result in that checked nominal representation.
+Bounded reads/listings, OS operations and permission enforcement remain host
+capabilities. Eight existing primitives and four action descriptors were added
+to the explicit catalog for these bindings; this does not establish whole-catalog
+minimality. Native binding aliases retain the primitive identity even when the public wrapper has
 the same path, preserving requested actions and caller Handler error handling.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,

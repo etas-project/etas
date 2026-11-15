@@ -36,6 +36,7 @@ pub fn fingerprint(registry: &etas_std::StdRegistry) -> Result<String, serde_jso
             implementations,
             registry.native_enum_references().collect::<Vec<_>>(),
             registry.native_opaque_references().collect::<Vec<_>>(),
+            registry.native_record_references().collect::<Vec<_>>(),
         ))?)
         .to_hex()
     ))

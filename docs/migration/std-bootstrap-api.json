@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "01f37062ebb2030801f708490d16153877df7d07",
-    "frontend": "ef6eb0435cca813db59046976868c14c77146802",
-    "interpreter": "599acb475c8048d50e298ec8af29b1f35b9d0b47",
-    "std_version": "0.2.17",
-    "compiler_version": "0.11.16",
-    "native_binding_abi": "blake3:d8d962d8de1e69242dd8c0c68a3f4e38026823d3e0b40230bc2a07673db74bf3",
-    "source_payload_hash": "blake3:4018e694fcdaa71dd4394bb235b66d3dd213524ff76b5d653c27ad4ad559c232",
+    "core": "16d3491f61182061f87064d663c20c945b501b60",
+    "frontend": "7155eaf5435794f11b8282d11d6e76f824ec4630",
+    "interpreter": "ef01ad64ce289938c3c51209ba3d49932580723b",
+    "std_version": "0.2.18",
+    "compiler_version": "0.11.17",
+    "native_binding_abi": "blake3:0a8aeb226df5ead76dabff0044f02a01cd86dda4a76267790947c7cc2227c20f",
+    "source_payload_hash": "blake3:6a2557cc925ebfa829fa4c4eb31ceb804eb004cde6816ea08013ab6d4b74175b",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:a4b1d1aeb6846bfb2341fd3ac41db0a8b67de80928209d61c9d4be311fb69de5",
-    "registry_schema": 4
+    "artifact_hash": "blake3:49168e1e10467817d13f5e6ba5ba74ae8bb70e15fd79287f45fbe2ba00aaf226",
+    "registry_schema": 5
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 187,
-  "missing_symbols": 484,
+  "candidate_symbols": 205,
+  "missing_symbols": 466,
   "pending_contract_difference": {
     "symbols": [
       "std.collections.Array",
@@ -36,8 +36,18 @@
       "std.collections.list_pop",
       "std.collections.list_push",
       "std.collections.list_tail",
+      "std.fs.FsEntry",
+      "std.fs.FsStat",
       "std.fs.IOError",
+      "std.fs.atomic_replace",
+      "std.fs.list",
+      "std.fs.list_limited",
       "std.fs.read_bytes",
+      "std.fs.read_bytes_limited",
+      "std.fs.relative_name",
+      "std.fs.root",
+      "std.fs.stat",
+      "std.fs.write_bytes",
       "std.option.None",
       "std.option.Some",
       "std.option.is_none",
@@ -49,7 +59,7 @@
       "std.result.is_ok",
       "std.result.unwrap"
     ],
-    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass."
+    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution."
   },
   "report": {
     "compatibility_matches": true,
@@ -754,23 +764,17 @@
         "missing_module": false,
         "added_module": false,
         "covered": [
-          "std.effects.actions.Fs.read"
-        ],
-        "missing": [
           "std.effects.actions.Fs.atomic_replace",
           "std.effects.actions.Fs.list",
+          "std.effects.actions.Fs.read",
           "std.effects.actions.Fs.stat",
           "std.effects.actions.Fs.write"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
         "implementation_changes": [],
-        "export_changes": [
-          "atomic_replace",
-          "list",
-          "stat",
-          "write"
-        ]
+        "export_changes": []
       },
       "std.effects.actions.Memory": {
         "missing_module": true,
@@ -856,51 +860,55 @@
         "missing_module": false,
         "added_module": false,
         "covered": [
-          "std.fs.IOError",
-          "std.fs.Region",
-          "std.fs.WorkspacePath",
-          "std.fs.path",
-          "std.fs.read_bytes"
-        ],
-        "missing": [
           "std.fs.FsEntry",
           "std.fs.FsStat",
+          "std.fs.IOError",
           "std.fs.ListLimitError",
           "std.fs.ListLimitError.LimitExceeded",
           "std.fs.ReadLimitError",
           "std.fs.ReadLimitError.LimitExceeded",
+          "std.fs.Region",
+          "std.fs.WorkspacePath",
           "std.fs.atomic_replace",
           "std.fs.list",
           "std.fs.list_limited",
+          "std.fs.path",
+          "std.fs.read_bytes",
           "std.fs.read_bytes_limited",
           "std.fs.relative_name",
           "std.fs.root",
           "std.fs.stat",
           "std.fs.write_bytes"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [
+          "std.fs.FsEntry",
+          "std.fs.FsStat",
           "std.fs.IOError",
-          "std.fs.read_bytes"
+          "std.fs.atomic_replace",
+          "std.fs.list",
+          "std.fs.list_limited",
+          "std.fs.read_bytes",
+          "std.fs.read_bytes_limited",
+          "std.fs.relative_name",
+          "std.fs.root",
+          "std.fs.stat",
+          "std.fs.write_bytes"
         ],
         "implementation_changes": [
+          "std.fs.atomic_replace",
+          "std.fs.list",
+          "std.fs.list_limited",
           "std.fs.path",
-          "std.fs.read_bytes"
+          "std.fs.read_bytes",
+          "std.fs.read_bytes_limited",
+          "std.fs.relative_name",
+          "std.fs.root",
+          "std.fs.stat",
+          "std.fs.write_bytes"
         ],
-        "export_changes": [
-          "FsEntry",
-          "FsStat",
-          "ListLimitError",
-          "ReadLimitError",
-          "atomic_replace",
-          "list",
-          "list_limited",
-          "read_bytes_limited",
-          "relative_name",
-          "root",
-          "stat",
-          "write_bytes"
-        ]
+        "export_changes": []
       },
       "std.host.command": {
         "missing_module": true,
@@ -2376,8 +2384,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 183,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The remaining 105-contract static catalog and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
+  "covered_baseline_symbols": 201,
+  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The 117-entry compiler/host catalog (including 28 primitive contracts) and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2396,14 +2404,15 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 105,
+    "static_contracts": 117,
     "explicit_source_roles": 19,
-    "query_symbols_before_source_publication": 124,
-    "primitives": 20,
+    "query_symbols_before_source_publication": 136,
+    "primitives": 28,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
-    "native_enum_references": 1,
-    "native_opaque_references": 1
+    "native_enum_references": 3,
+    "native_opaque_references": 1,
+    "native_record_references": 1
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2613,5 +2622,64 @@
     "typed_host_error_fact_retained_in_library_body": true,
     "registry_image_schema": 4,
     "minimality_accepted": false
+  },
+  "source_filesystem_complete_batch": {
+    "declarations": [
+      "std.fs.FsEntry",
+      "std.fs.FsStat",
+      "std.fs.ReadLimitError",
+      "std.fs.ListLimitError"
+    ],
+    "additional_bindings": [
+      "std.fs.root",
+      "std.fs.relative_name",
+      "std.fs.read_bytes_limited",
+      "std.fs.write_bytes",
+      "std.fs.list",
+      "std.fs.list_limited",
+      "std.fs.stat",
+      "std.fs.atomic_replace"
+    ],
+    "fs_baseline_symbols": 19,
+    "fs_covered": 19,
+    "fs_missing": 0,
+    "extra_existing_primitive_contracts": 8,
+    "extra_action_descriptors": 4,
+    "new_os_primitives": 0,
+    "new_language_roles": 0,
+    "source_only_extra_read_limit_variant_verified": true,
+    "native_enum_payloads": {
+      "std.fs.ReadLimitError.LimitExceeded": [
+        "usize"
+      ],
+      "std.fs.ListLimitError.LimitExceeded": [
+        "usize",
+        "usize"
+      ]
+    },
+    "native_record_payload": {
+      "path": "std.fs.FsStat",
+      "fields": {
+        "is_file": "bool",
+        "is_dir": "bool",
+        "len": "u64"
+      }
+    },
+    "native_import_shares_completed_source_nominal_identity": true,
+    "host_decode_wraps_checked_source_record": true,
+    "positive_io_and_limit_sample_actions": [
+      "Fs.stat",
+      "Fs.read",
+      "Fs.list",
+      "Fs.list",
+      "Fs.read",
+      "Fs.list",
+      "Fs.write",
+      "Fs.atomic_replace",
+      "Fs.read"
+    ],
+    "readonly_write_rejected_with_content_preserved": true,
+    "registry_schema": 5,
+    "whole_bootstrap_minimality_accepted": false
   }
 }
