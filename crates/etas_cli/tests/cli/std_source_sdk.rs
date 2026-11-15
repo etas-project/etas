@@ -28,6 +28,13 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
             ],
         ),
         (
+            "fs/mod.es",
+            vec![(
+                "public type WorkspacePath<R ~ Region>;",
+                "public type WorkspacePath<Authority ~ Region>;",
+            )],
+        ),
+        (
             "option/mod.es",
             vec![(
                 "public enum Option<T> { Some(T), None, }",

@@ -31,6 +31,15 @@ impl Fixture {
             root.join("library/std/text/errors.es"),
         )
         .unwrap();
+        fs::create_dir_all(root.join("library/std/fs")).unwrap();
+        fs::copy(
+            etas_std::library::source_checkout_manifest()
+                .parent()
+                .unwrap()
+                .join("library/std/fs/mod.es"),
+            root.join("library/std/fs/mod.es"),
+        )
+        .unwrap();
         fs::write(
             root.join("library/std/text/base.es"),
             "module std.text; public flow identity(value: string) -> string { return value; }",
@@ -70,7 +79,7 @@ fn manifest_source_root_discovers_new_std_parts_with_canonical_package_and_sourc
     );
     assert_eq!(
         before.response.output.sources.as_ref().unwrap().files.len(),
-        3
+        4
     );
     fs::write(fixture.0.join("library/std/text/extra.es"), "module std.text; import std.text.char_count; public flow width(value: string) -> usize { return char_count(identity(value)); }").unwrap();
     let after = check();
@@ -82,8 +91,8 @@ fn manifest_source_root_discovers_new_std_parts_with_canonical_package_and_sourc
     assert_eq!(after.manifest.source.root, PathBuf::from("library"));
     assert_eq!(before.definition_origin, after.definition_origin);
     let sources = after.response.output.sources.as_ref().unwrap();
-    assert_eq!(sources.files.len(), 4);
-    assert_eq!(sources.stable_source_keys.len(), 4);
+    assert_eq!(sources.files.len(), 5);
+    assert_eq!(sources.stable_source_keys.len(), 5);
     let old_sources = before.response.output.sources.as_ref().unwrap();
     for old_file in &old_sources.files {
         let new_file = sources

@@ -2,17 +2,17 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "22c9bb4ee50ebc272f941cc6db8e4478280d2474",
-    "frontend": "40dc291703ca1da850fb27aecf26a45f33b62971",
-    "interpreter": "8c6da5788613d206d874339948523aebefb22d03",
-    "std_version": "0.2.16",
-    "compiler_version": "0.11.15",
-    "native_binding_abi": "blake3:ea1e80e9db6e1c676928ccda62b76b6448311f716734c18714ae840880c5c9d4",
-    "source_payload_hash": "blake3:981b88c2a05e0d5b31c6a910b457b9568922faf1c1f3386f06d5e57fce8338c8",
+    "core": "01f37062ebb2030801f708490d16153877df7d07",
+    "frontend": "ef6eb0435cca813db59046976868c14c77146802",
+    "interpreter": "599acb475c8048d50e298ec8af29b1f35b9d0b47",
+    "std_version": "0.2.17",
+    "compiler_version": "0.11.16",
+    "native_binding_abi": "blake3:d8d962d8de1e69242dd8c0c68a3f4e38026823d3e0b40230bc2a07673db74bf3",
+    "source_payload_hash": "blake3:4018e694fcdaa71dd4394bb235b66d3dd213524ff76b5d653c27ad4ad559c232",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:329bd85b7e7e7027fb088bbbc2045facd209cee2aeaa6d721ca5dd14031a9375",
-    "registry_schema": 3
+    "artifact_hash": "blake3:a4b1d1aeb6846bfb2341fd3ac41db0a8b67de80928209d61c9d4be311fb69de5",
+    "registry_schema": 4
   },
   "baseline_symbols": 667,
   "candidate_symbols": 187,
@@ -36,6 +36,8 @@
       "std.collections.list_pop",
       "std.collections.list_push",
       "std.collections.list_tail",
+      "std.fs.IOError",
+      "std.fs.read_bytes",
       "std.option.None",
       "std.option.Some",
       "std.option.is_none",
@@ -47,7 +49,7 @@
       "std.result.is_ok",
       "std.result.unwrap"
     ],
-    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle."
+    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass."
   },
   "report": {
     "compatibility_matches": true,
@@ -877,8 +879,14 @@
           "std.fs.write_bytes"
         ],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
+        "contract_changes": [
+          "std.fs.IOError",
+          "std.fs.read_bytes"
+        ],
+        "implementation_changes": [
+          "std.fs.path",
+          "std.fs.read_bytes"
+        ],
         "export_changes": [
           "FsEntry",
           "FsStat",
@@ -2244,6 +2252,7 @@
       1103,
       1104,
       1105,
+      1106,
       1107,
       1108,
       1109,
@@ -2260,6 +2269,7 @@
       1120,
       1121,
       1122,
+      1123,
       1124,
       1125,
       1126,
@@ -2367,7 +2377,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 183,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Seventeen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The remaining 108-contract static catalog and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
+  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The remaining 105-contract static catalog and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2386,13 +2396,14 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 108,
-    "explicit_source_roles": 17,
-    "query_symbols_before_source_publication": 125,
+    "static_contracts": 105,
+    "explicit_source_roles": 19,
+    "query_symbols_before_source_publication": 124,
     "primitives": 20,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
-    "native_enum_references": 1
+    "native_enum_references": 1,
+    "native_opaque_references": 1
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2488,6 +2499,8 @@
   "source_role_abi": {
     "roles": [
       "std.core.Index",
+      "std.fs.Region",
+      "std.fs.WorkspacePath",
       "std.option.Option",
       "std.option.Some",
       "std.option.None",
@@ -2510,7 +2523,7 @@
     "public_role_declarations_in_static_catalog": 0,
     "constructor_alias_primitives_in_bootstrap": 0,
     "native_abi_note": "Source role query parameter spellings are excluded. The native fingerprint includes the explicit compiler contract identity and all remaining transitional native bindings/impl facts. Source payload and artifact identities still capture source declaration changes.",
-    "positive_acceptance": "Complete maintained source tree is built in the SDK fixture. Task<Output,effect Remaining>, Continuation<ActionOutput>, Option<Payload>, Result<Success,Failure> and collection Element/Key/Value/Position declarations retain independently named constructor/function/method binders. Source prelude aliases bind to checked source exports. Compiler role checks use no copied public registry declaration."
+    "positive_acceptance": "Complete maintained source tree is built in the SDK fixture. Task<Output,effect Remaining>, Continuation<ActionOutput>, Option<Payload>, Result<Success,Failure> and collection Element/Key/Value/Position declarations retain independently named constructor/function/method binders. Source prelude aliases bind to checked source exports. Compiler role checks use no copied public registry declaration. WorkspacePath<Authority ~ Region> retains its source-owned parameter name and checked Region bound. Native binding aliases keep primitive identity even under same-path wrappers."
   },
   "std_lock_upgrade": {
     "command": "etas pkg lock <project> --std-provider artifact --sysroot <sdk>",
@@ -2572,5 +2585,33 @@
     "host_primitives_added": 0,
     "language_roles_added": 0,
     "remaining": "Lazy text iterator APIs, additional module batches and whole-library performance remain required."
+  },
+  "source_filesystem_batch": {
+    "declarations": [
+      "std.fs.Region",
+      "std.fs.WorkspacePath",
+      "std.fs.IOError"
+    ],
+    "bindings": [
+      "std.fs.path",
+      "std.fs.read_bytes"
+    ],
+    "removed_copied_declarations": 3,
+    "new_runtime_roles": 0,
+    "source_binding_roles": [
+      "std.fs.Region",
+      "std.fs.WorkspacePath"
+    ],
+    "native_opaque_reference": {
+      "path": "std.fs.IOError",
+      "generic_parameters": 0,
+      "exposed_representation": false,
+      "language_role": false
+    },
+    "source_parameter_rename_verified": true,
+    "native_requested_actions_retained": true,
+    "typed_host_error_fact_retained_in_library_body": true,
+    "registry_image_schema": 4,
+    "minimality_accepted": false
   }
 }
