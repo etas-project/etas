@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "0b4ed320a39981c8710cec2f143560e9f55039bd",
-    "frontend": "2e49e770378f5edf818e01351af6ec6abc299e8a",
-    "interpreter": "747c976e2233272c16c1f6a432fab478cf221982",
-    "std_version": "0.2.20",
-    "compiler_version": "0.11.20",
-    "native_binding_abi": "blake3:2a315658e50c5df66227028eea960294c4141f7cf51765dfe4fe37e027ae0b2f",
-    "source_payload_hash": "blake3:dd1bc576d9d2d61b3deb668a5a3e585114eb87a41ff6788e5a101a1cc4c38745",
+    "core": "d01c54d198d524ddec49bf9b8d2fc2f82e0e1e7b",
+    "frontend": "a18ca29f9f02d4c9e183d8d36cc565813e26218a",
+    "interpreter": "4ca2e351491b0a167047bbdcc3862c3c2a607860",
+    "std_version": "0.2.21",
+    "compiler_version": "0.11.21",
+    "native_binding_abi": "blake3:037549d648c88a4400490cf1cd234c11d987794545f343e9291617b50e93d861",
+    "source_payload_hash": "blake3:4911c02c6c8658b64c8f563326592f0cb4a0798f2c79e75926a437ed0408d2d8",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:65128e30009aa92438b5c2cc8e1cdfcb3b504f8b929757bf2b0b261ca82f7c28",
+    "artifact_hash": "blake3:851e316298c4aada2bbf68c7f61d4ba357bbe42e277a175a9bb4d2c7cc4fa8a5",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 220,
-  "missing_symbols": 451,
+  "candidate_symbols": 222,
+  "missing_symbols": 449,
   "pending_contract_difference": {
     "symbols": [
       "std.codec.text.utf8_decode",
@@ -37,6 +37,21 @@
       "std.collections.list_pop",
       "std.collections.list_push",
       "std.collections.list_tail",
+      "std.compiler.AnnotationArgumentInfo",
+      "std.compiler.AnnotationInfo",
+      "std.compiler.ChangeReport",
+      "std.compiler.CheckReport",
+      "std.compiler.DefinitionBindingInfo",
+      "std.compiler.DependencyArtifactInfo",
+      "std.compiler.DependencyInfo",
+      "std.compiler.EffectSummary",
+      "std.compiler.GenericParameterInfo",
+      "std.compiler.ModuleOriginInfo",
+      "std.compiler.ParameterInfo",
+      "std.compiler.RevisionInfo",
+      "std.compiler.RuntimeCheckInfo",
+      "std.compiler.SignatureInfo",
+      "std.compiler.SpecInfo",
       "std.fs.FsEntry",
       "std.fs.FsStat",
       "std.fs.IOError",
@@ -60,7 +75,7 @@
       "std.result.is_ok",
       "std.result.unwrap"
     ],
-    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution. UTF-8 declarations are now source-owned. Raw codec declaration differences retain enum layout metadata and fully qualified malformed-input/error paths instead of the original short-name legacy baseline. Strict success/error and replacement behavior are compared across both providers; the original baseline has not been replaced."
+    "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution. UTF-8 declarations are now source-owned. Raw codec declaration differences retain enum layout metadata and fully qualified malformed-input/error paths instead of the original short-name legacy baseline. Strict success/error and replacement behavior are compared across both providers; the original baseline has not been replaced. Compiler report types now use ordinary checked source record representations; legacy projected-field metadata differences remain visible. Native record layout constraints preserve every produced field and nested checked nominal identity. Installed acceptance projects reflected RevisionInfo/SignatureInfo/ParameterInfo values and passes a source-owned revision through separately compiled std bodies; parser/formatter bindings execute from source declarations."
   },
   "report": {
     "compatibility_matches": true,
@@ -515,25 +530,42 @@
           "std.compiler.TraceSummary",
           "std.compiler.TraceWitness",
           "std.compiler.TypeInfo",
-          "std.compiler.ViolatedConstraint"
+          "std.compiler.ViolatedConstraint",
+          "std.compiler.format",
+          "std.compiler.parse_body"
         ],
         "missing": [
           "std.compiler.check",
           "std.compiler.compile",
           "std.compiler.diff",
-          "std.compiler.format",
-          "std.compiler.parse_body",
           "std.compiler.with_body"
         ],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
+        "contract_changes": [
+          "std.compiler.AnnotationArgumentInfo",
+          "std.compiler.AnnotationInfo",
+          "std.compiler.ChangeReport",
+          "std.compiler.CheckReport",
+          "std.compiler.DefinitionBindingInfo",
+          "std.compiler.DependencyArtifactInfo",
+          "std.compiler.DependencyInfo",
+          "std.compiler.EffectSummary",
+          "std.compiler.GenericParameterInfo",
+          "std.compiler.ModuleOriginInfo",
+          "std.compiler.ParameterInfo",
+          "std.compiler.RevisionInfo",
+          "std.compiler.RuntimeCheckInfo",
+          "std.compiler.SignatureInfo",
+          "std.compiler.SpecInfo"
+        ],
+        "implementation_changes": [
+          "std.compiler.format",
+          "std.compiler.parse_body"
+        ],
         "export_changes": [
           "check",
           "compile",
           "diff",
-          "format",
-          "parse_body",
           "with_body"
         ]
       },
@@ -2390,8 +2422,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 216,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and explicit host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations. The 124-entry compiler/host catalog (including 35 primitive contracts), plus19 source role bindings and transitional prelude references, is not yet accepted as minimal. Generated StdRegistry query structures may remain after handwritten public API/signature/algorithm duplication is removed.",
+  "covered_baseline_symbols": 218,
+  "source_ownership_note": "Etas owns public declarations, generic/effect names and expressible algorithms. Rust retains execution rules and explicit primitive/payload ABI constraints. The 103-entry transitional catalog includes 37 primitive contracts; 19 source roles and 24 native record layout constraints are separate. Seventeen compiler execution type declarations remain transitional. Whole-bootstrap minimality is not accepted. Generated StdRegistry query structures remain supported.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2410,15 +2442,15 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 124,
+    "static_contracts": 103,
     "explicit_source_roles": 19,
-    "query_symbols_before_source_publication": 143,
-    "primitives": 35,
+    "query_symbols_before_source_publication": 122,
+    "primitives": 37,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 5,
     "native_opaque_references": 1,
-    "native_record_references": 1
+    "native_record_references": 24
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2701,8 +2733,8 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 26,
-    "source_modules": 13,
+    "source_files": 28,
+    "source_modules": 14,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
     "private_generic_record_and_callback_preserved": true,
@@ -2711,7 +2743,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "6fdbacf7ae8d0d2d83abfdc314054a15388739e5ded02bfb8dba84aa03f9f3a1",
+    "manifest_sha256": "6b153871adca26b873b6796a32d6f842629a4c352ceb42ecb99f4e26e1149afd",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -2774,7 +2806,7 @@
     ],
     "remaining_failures": [],
     "whole_compiler_service_compatibility_accepted": true,
-    "remaining": "This compiler_service suite is green. Whole-library source coverage, bootstrap minimality, wider compatibility/performance and release/default-switch gates remain incomplete.",
+    "remaining": "Compiler_service remains green on this exact published graph. Whole-library source coverage, bootstrap minimality, wider compatibility/performance and release/default-switch gates remain open.",
     "previous_batch": {
       "passed": 475,
       "failed": 6,
@@ -2846,7 +2878,54 @@
       "std.codec.text.InvalidUtf8"
     ],
     "classification": "All three public constructor aliases are available through source re-exports and pass installed SDK import/execution. Source uses the canonical nested enum variant identity, while the legacy baseline has a separate symbol record for each alias. Keep these three raw query-symbol differences visible; do not allocate duplicate source identities merely to increase coverage counts.",
-    "raw_missing_query_symbols": 451,
-    "other_unrepresented_query_symbols": 448
+    "raw_missing_query_symbols": 449,
+    "other_unrepresented_query_symbols": 446
+  },
+  "compiler_report_source_batch": {
+    "source_records": [
+      "std.compiler.DiagnosticLocation",
+      "std.compiler.RelatedLocation",
+      "std.compiler.DiagnosticDetails",
+      "std.compiler.ViolatedConstraint",
+      "std.compiler.AnalysisStep",
+      "std.compiler.DiagnosticRecord",
+      "std.compiler.ParseError",
+      "std.compiler.AnnotationArgumentInfo",
+      "std.compiler.AnnotationInfo",
+      "std.compiler.SpecInfo",
+      "std.compiler.GenericParameterInfo",
+      "std.compiler.ParameterInfo",
+      "std.compiler.SignatureInfo",
+      "std.compiler.RevisionInfo",
+      "std.compiler.ModuleOriginInfo",
+      "std.compiler.DefinitionBindingInfo",
+      "std.compiler.DependencyArtifactInfo",
+      "std.compiler.DependencyInfo",
+      "std.compiler.EffectSummary",
+      "std.compiler.RuntimeCheckInfo",
+      "std.compiler.ChangeReport",
+      "std.compiler.CheckReport",
+      "std.compiler.CompileError"
+    ],
+    "public_declarations_removed_from_static_catalog": 23,
+    "native_record_payload_layouts_added": 23,
+    "native_record_payload_fields": 91,
+    "source_bindings": [
+      "std.compiler.parse_body",
+      "std.compiler.format"
+    ],
+    "existing_primitive_contracts_added": 2,
+    "new_os_primitives": 0,
+    "new_language_roles": 0,
+    "source_files": 28,
+    "source_modules": 14,
+    "record_fields_checked_by_canonical_declaration_type_id": true,
+    "registry_and_bundle_native_record_constructor_shared": true,
+    "verified_std_origins_bound_separately_from_project_dependencies": true,
+    "prepared_environment_compared_with_verified_toolchain_library": true,
+    "project_std_namespace_guard_unchanged": true,
+    "runtime_nominal_checks_unchanged": true,
+    "positive_acceptance": "Installed source-only SDK reflects a flow revision/signature, copies RevisionInfo through std bodies, checks ParameterInfo and calls source-declared parse_body/format. Complete normal/forbidden SDK lifecycle and fresh-revision checkpoint acceptance pass.",
+    "whole_bootstrap_minimality_accepted": false
   }
 }

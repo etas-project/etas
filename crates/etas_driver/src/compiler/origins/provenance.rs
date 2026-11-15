@@ -22,6 +22,7 @@ pub(crate) struct SourceDefinitionProvenance {
     single_file_root: Option<PathBuf>,
     single_files: HashMap<SourceId, (PathBuf, PackageKey)>,
     dependencies: HashMap<ExternalPackageId, DependencyOrigin>,
+    standard_library: Option<std::sync::Arc<etas_frontend::StandardLibrary>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +32,28 @@ struct DependencyOrigin {
 }
 
 impl SourceDefinitionProvenance {
+    pub(crate) fn with_standard_library(
+        mut self,
+        provider: &crate::std_library::provider::StdProvider,
+    ) -> Self {
+        if let crate::std_library::provider::StdProvider::Artifact(provider) = provider {
+            self.standard_library = Some(provider.library.clone());
+        }
+        self
+    }
+
+    pub(crate) fn uses_environment(
+        &self,
+        checked: &etas_frontend::CheckedProgramData,
+        prepared: &etas_frontend::ProjectEnvironmentInput,
+    ) -> bool {
+        let mut environment = prepared.clone();
+        if let Some(library) = &self.standard_library {
+            library.append_environment(&mut environment);
+        }
+        checked.uses_environment(&environment)
+    }
+
     #[cfg(test)]
     pub(crate) fn single_file_root(&self) -> Option<&Path> {
         self.single_file_root.as_deref()
@@ -62,6 +85,16 @@ impl SourceDefinitionProvenance {
         checked: &etas_frontend::CheckedProgramData,
     ) -> Result<(), DriverError> {
         for input in checked.external_definition_origins() {
+            // Artifact std is supplied by the verified toolchain provider,
+            // independently of the project's locked source dependencies.
+            if !self.dependencies.contains_key(&input.package)
+                && self.standard_library.as_ref().is_some_and(|library| {
+                    input.origins == library.origins
+                        && input.descriptors.as_ref() == Some(library.descriptors.as_ref())
+                })
+            {
+                continue;
+            }
             let origin = self
                 .dependencies
                 .get(&input.package)
@@ -185,6 +218,7 @@ pub(crate) fn capture_source_definition_provenance(
         single_file_root,
         single_files,
         dependencies,
+        standard_library: None,
     })
 }
 

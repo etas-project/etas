@@ -108,7 +108,12 @@ public flow checkpoint_apply<T>(action: (T) -> T ![], value: T) -> T {
         r#"module std.extra;
 import std.fs.IOError;
 import std.core.Index;
+import std.compiler.RevisionInfo;
 public import std.extra.Reply.{Empty, Item, Named};
+public flow revision_key(value: RevisionInfo) -> string ![] { return value.key; }
+public flow copy_revision(value: RevisionInfo) -> RevisionInfo ![] {
+    return RevisionInfo { key = value.key, content = value.content, parent = value.parent };
+}
 public flow index_identity<I ~ Index>(index: I) -> I ![] { return index; }
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
@@ -772,6 +777,7 @@ flow main(args: Array<string>) -> i32 {
     verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
+    verify_source_compiler_report_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
@@ -1053,6 +1059,53 @@ flow main(args: Array<string>) -> i32 {
     for index in 0..3 {
         assert_eq!(execute(Some(index)), 2 - index);
     }
+}
+
+fn verify_source_compiler_report_sdk(binary: &Path, root: &Path) {
+    let application = root.join("compiler-reports.es");
+    fs::write(&application, r#"module compiler_reports;
+import std.compiler.{RevisionInfo, parse_body, format};
+import std.extra.{revision_key, copy_revision};
+flow original(value: string) -> string ![] { return value; }
+flow main(args: Array<string>) -> i32 {
+    let definition = ^original;
+    let revision: RevisionInfo = definition.revision;
+    let copied = copy_revision(revision);
+    if revision_key(copied) != revision.key || copied.content != revision.content || copied.parent != revision.parent { return 1; }
+    if copied.key == "" || copied.content == "" { return 2; }
+    var parameters: usize = 0;
+    for parameter in definition.signature.parameters limit Iterations(8) {
+        if parameter.name != Some("value") { return 3; }
+        parameters = parameters + 1;
+    }
+    if parameters != 1 { return 4; }
+    let syntax = match parse_body("return 1;") { Ok(body) => body, Err(_) => { return 5; } };
+    if format(syntax) == "" { return 6; }
+    return 0;
+}
+"#).unwrap();
+    let output = Command::new(binary)
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&application),
+            "--std-provider",
+            "artifact",
+            "--format",
+            "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["value"]["value"], "0", "{report}");
 }
 
 fn verify_source_codec_sdk(binary: &Path) {

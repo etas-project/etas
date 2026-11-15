@@ -17,12 +17,12 @@ pub fn source_definition_origins(
     loaded: &LoadedDriverProject,
     checked: &CheckedProgramData,
 ) -> Result<HashMap<HirModuleId, SourceModuleOrigin>, DriverError> {
-    if !checked.uses_environment(&loaded.loaded.input.environment) {
+    let provenance = &loaded.source_definition_provenance;
+    if !provenance.uses_environment(checked, &loaded.loaded.input.environment) {
         return Err(invalid(
             "checked environment differs from the prepared driver input",
         ));
     }
-    let provenance = &loaded.source_definition_provenance;
     let sources = loaded
         .loaded
         .input

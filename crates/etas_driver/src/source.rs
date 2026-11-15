@@ -130,7 +130,8 @@ fn finish_loaded_project(
             .map(PathBuf::as_path),
         local_project.package_environment.as_ref(),
         &loaded.input,
-    )?;
+    )?
+    .with_standard_library(&options.std_provider);
     loaded.input.environment.local_source_package =
         source_definition_provenance.local_package_key();
     loaded.input.environment.dependency_source_packages = source_definition_provenance
