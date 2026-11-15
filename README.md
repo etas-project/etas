@@ -480,11 +480,11 @@ legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
 Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
-registry declaration/signature lookup. Its thirty-six roles define only the recognized
+registry declaration/signature lookup. Its forty-seven roles define only the recognized
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 86 compiler/host catalog entries
+are removed from the static catalog, which still has 75 compiler/host catalog entries
 including 37 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
@@ -515,6 +515,15 @@ from record storage; Rust retains three explicit getter ABI layouts and opaque
 compiler-managed values. Generic definitions cross separately compiled std bodies
 without losing their backend lease or program ownership checks. Registry and
 container schemas are 6 and 49. This does not establish whole-bootstrap minimality.
+
+Eleven runtime effect declarations now live in Etas source. Source owns generic
+names and inheritance, including Error<Failure> and Fs extending FileIO; Rust
+retains their existing execution IDs and host capability requirements. The bundle
+and generated query view preserve those declarations and canonical identities.
+The SDK fixture adds an ordinary effect and a flow only in .es, then imports and
+executes the installed body. Eight native action contracts and seven limit
+requirement contracts remain transitional and require further migration. Effect
+role ABI fingerprint format is 3; this does not establish bootstrap minimality.
 
 Array get/push/pop/extend and List head/tail/pop/push/extend methods are authored
 in Etas. Array get/push retain minimal storage primitives; iteration, list

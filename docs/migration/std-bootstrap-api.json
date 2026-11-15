@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "4058ff5a707e06bdfda163a395b7b3ffce3b946f",
-    "frontend": "b873b70a4089d85df48aa54e44caee6393389eb1",
-    "interpreter": "feddefcf8bb4bd24f679b6b5a33ade1a96b5a369",
-    "std_version": "0.2.23",
-    "compiler_version": "0.11.23",
-    "native_binding_abi": "blake3:8ee7f1ff4fcaf84343e759d5c8139aadae1633d5f6031e58964d1a4035617122",
-    "source_payload_hash": "blake3:dd85b265c54c44221a68bf83c3e2e17f9d2a9f6d2fdcc1a2599835b1cf94d287",
+    "core": "de85cddc5d6e4ee0d0c9e735a21aa74b427fa3d0",
+    "frontend": "938be9889ff482c17669722b28590c0bfab38eb0",
+    "interpreter": "39fe94c073e5eb902c402a3d0ded1143dd5ffd83",
+    "std_version": "0.2.24",
+    "compiler_version": "0.11.24",
+    "native_binding_abi": "blake3:a743361652dbf38974d876afa31828c881a06ebf1962c73cfbbf66ef1ec6ed17",
+    "source_payload_hash": "blake3:13449281042b84f6d6e98166a14b743e4fcc5d76b04e86893892bb7733471786",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:608c90271436b3634ebdee9fa93f73f80569e9358fdb1e69f00f03a9fc0384e4",
+    "artifact_hash": "blake3:fb994aa44ccfe114da62e8c764ce92691812fc418f3b8203ce8452e58aa0dbac",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -54,6 +54,8 @@
       "std.compiler.RuntimeCheckInfo",
       "std.compiler.SignatureInfo",
       "std.compiler.SpecInfo",
+      "std.effects.Error",
+      "std.effects.Fs",
       "std.fs.FsEntry",
       "std.fs.FsStat",
       "std.fs.IOError",
@@ -658,7 +660,10 @@
           "std.effects.Tls"
         ],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.effects.Error",
+          "std.effects.Fs"
+        ],
         "implementation_changes": [],
         "export_changes": [
           "Approval",
@@ -2427,7 +2432,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 218,
-  "source_ownership_note": "Etas owns public declarations, generic names, getter signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/role ABI. The transitional catalog has86 entries including37 primitives,36 source roles,24 record layouts and3 getter layouts (21 fields). AgentDef/CallableDef/SyntaxBlock declarations now live in source; opaque storage and compiler-only construction remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
+  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has75 entries including37 primitives,47 source roles,24 record layouts and3 getter layouts. Eleven effect declarations now come from source; stable execution IDs and capability requirements remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2446,8 +2451,8 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 86,
-    "explicit_source_roles": 36,
+    "static_contracts": 75,
+    "explicit_source_roles": 47,
     "query_symbols_before_source_publication": 122,
     "primitives": 37,
     "spec_impl_facts": 0,
@@ -2456,7 +2461,8 @@
     "native_opaque_references": 1,
     "native_record_references": 24,
     "native_projection_references": 3,
-    "native_projection_fields": 21
+    "native_projection_fields": 21,
+    "source_effect_roles": 11
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2739,8 +2745,8 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 30,
-    "source_modules": 14,
+    "source_files": 31,
+    "source_modules": 15,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
     "private_generic_record_and_callback_preserved": true,
@@ -2749,7 +2755,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "eabe90e1978ea6416e0aa7cd2fb9f1a886155b3243cf980bd06bb8ae04bebffa",
+    "manifest_sha256": "567779c77e4f300eff814ee90863eb92a716a2ef636ffdfa347c2feb05ae2399",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -2998,5 +3004,44 @@
     "positive_acceptance": "SyntaxBlock.text, CallableDef<Function>.revision and AgentDef<Actor>.revision cross separately compiled std bodies in normal and complete-legacy-forbidden installed SDKs. External imports reuse checked compiler role constructors; applied CallableDef values retain native backend leases and strict program ownership.",
     "whole_bootstrap_minimality_accepted": false,
     "raw_contract_difference_note": "Two additional raw contract differences are the source-owned AgentDef<Actor> and CallableDef<Callable> generic binder spellings; the original report is preserved. Installed generic calls pass without relaxing matching by canonical identity."
+  },
+  "effect_declaration_source_batch": {
+    "source_declarations": [
+      "std.effects.Agentic",
+      "std.effects.Command",
+      "std.effects.Error",
+      "std.effects.FileIO",
+      "std.effects.Fs",
+      "std.effects.Human",
+      "std.effects.Memory",
+      "std.effects.Network",
+      "std.effects.Secret",
+      "std.effects.Time",
+      "std.task.Async"
+    ],
+    "count": 11,
+    "source_files": [
+      "library/std/effects/mod.es",
+      "library/std/task/mod.es"
+    ],
+    "source_generic_binders": "std.effects.Error<Failure>",
+    "source_inheritance": "std.effects.Fs extends std.effects.FileIO",
+    "static_contracts_removed": 11,
+    "static_contracts_remaining": 75,
+    "source_roles": 47,
+    "role_abi_fingerprint_format": 3,
+    "new_os_primitives": 0,
+    "new_native_execution_tags": 0,
+    "execution_rules_retained": "Existing stable effect IDs, core classifications and host capability requirements.",
+    "public_signature_or_inheritance_tables_added_to_roles": false,
+    "remaining_native_action_contracts": 8,
+    "remaining_limit_requirement_contracts": 7,
+    "ordinary_source_effect_acceptance": "SDK adds public effect Delivery extends std.effects.Network and delivery_value() ![Delivery] only in .es. An external application executes the installed body and checks41 without any Rust role or API registration.",
+    "source_action_bridge": "Validated source effect owners bind the still-native action contracts; Handler/perform references retain checked native targets. This transitional bridge is deterministic and does not invoke legacy registry construction.",
+    "canonical_action_metadata": "Native action references use the checked native declaration identity instead of concatenating the source effect namespace and member name.",
+    "ordinary_effect_identity": "Generated ordinary std effects use their checked canonical declaration key when publishing descriptor identities, without gaining native stable IDs or host capabilities.",
+    "source_files_total": 31,
+    "source_modules_total": 15,
+    "whole_bootstrap_minimality_accepted": false
   }
 }

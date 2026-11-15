@@ -110,6 +110,8 @@ import std.fs.IOError;
 import std.core.Index;
 import std.compiler.{RevisionInfo, TypeInfo, CallableId, SyntaxBlock, CallableDef, AgentDef};
 public import std.extra.Reply.{Empty, Item, Named};
+public effect Delivery extends std.effects.Network;
+public flow delivery_value() -> i32 ![Delivery] { return 41; }
 public flow syntax_text(value: SyntaxBlock) -> string ![] { return value.text; }
 public flow callable_revision<Function>(value: CallableDef<Function>) -> RevisionInfo ![] { return value.revision; }
 public flow agent_revision<Actor>(value: AgentDef<Actor>) -> RevisionInfo ![] { return value.revision; }
@@ -308,6 +310,7 @@ flow collection_checks() -> bool ![] {
     return true;
 }
 flow main(args: Array<string>) -> i32 {
+    if std.extra.delivery_value() != 41 { return 87; }
     if !collection_checks() { return 86; }
     let policy = text_policy_checks();
     if policy != 0 { return 100 + policy; }

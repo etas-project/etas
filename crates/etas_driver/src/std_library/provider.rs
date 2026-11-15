@@ -7,6 +7,7 @@ use etas_std::{StdRegistry, StdRegistryBuilder, StdType};
 use super::sdk::{LoadedStdSdk, STD_TOOLCHAIN_ID, load_standard_library_sdk};
 use crate::DriverError;
 
+mod effects;
 mod specs;
 mod types;
 
@@ -269,6 +270,14 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .iter()
         .map(|export| (export.exported.clone(), export.from.clone()))
         .collect();
+    effects::publish(
+        sdk,
+        &mut builder,
+        &mut modules,
+        &mut symbols,
+        &declarations,
+        &aliases,
+    )?;
     specs::publish(
         sdk,
         &mut builder,
