@@ -131,6 +131,8 @@ pub(super) fn publish(
                         ok: Box::new(StdType::Var(params[0].name.clone())),
                         err: Box::new(StdType::Var(params[1].name.clone())),
                     }
+                } else if source_role.is_some() && canonical == ["std", "option", "Option"] {
+                    StdType::Option(Box::new(StdType::Var(params[0].name.clone())))
                 } else if params.is_empty() {
                     StdType::Named(canonical.join("."))
                 } else {

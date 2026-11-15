@@ -30,6 +30,8 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
     fs::write(
         source.join("library/std/core/mod.es"),
         r#"module std.core;
+@std.binding("std.core.abort")
+public flow abort(message: string) -> never ![] {}
 @std.role("std.core.Index")
 public spec Index;
 impl i8 ~ Index;
@@ -47,8 +49,41 @@ impl usize ~ Index;
 "#,
     )
     .unwrap();
+    fs::create_dir_all(source.join("library/std/option")).unwrap();
+    fs::write(source.join("library/std/option/mod.es"), r#"module std.option;
+
+import std.core.abort;
+
+@std.role("std.option.Option")
+public enum Option<T> { Some(T), None, }
+
+@std.role("std.option.Some")
+public flow Some<T>(value: T) -> Option<T> ![] { return Option.Some(value); }
+
+@std.role("std.option.None")
+public flow None<T>() -> Option<T> ![] { return Option.None; }
+
+public flow is_some<T>(value: Option<T>) -> bool ![] {
+    return match value { Option.Some(_) => true, Option.None => false };
+}
+
+public flow is_none<T>(value: Option<T>) -> bool ![] {
+    return match value { Option.Some(_) => false, Option.None => true };
+}
+
+public flow unwrap<T>(value: Option<T>) -> T ![] {
+    return match value { Option.Some(inner) => inner, Option.None => abort("unwrap encountered None") };
+}
+
+impl Option<T> {
+    public flow is_some(self) -> bool ![] { return is_some(self); }
+    public flow is_none(self) -> bool ![] { return is_none(self); }
+    public flow unwrap(self) -> T ![] { return unwrap(self); }
+}
+"#).unwrap();
     fs::create_dir_all(source.join("library/std/result")).unwrap();
     fs::write(source.join("library/std/result/mod.es"), r#"module std.result;
+import std.core.abort;
 @std.role("std.result.Result")
 public enum Result<T, E> { Ok(T), Err(E), }
 public flow is_ok<T, E>(value: Result<T, E>) -> bool ![] {
@@ -63,9 +98,14 @@ public flow Ok<T, E>(value: T) -> Result<T, E> ![] { return Result.Ok(value); }
 @std.role("std.result.Err")
 public flow Err<T, E>(error: E) -> Result<T, E> ![] { return Result.Err(error); }
 
+public flow unwrap<T, E>(value: Result<T, E>) -> T ![] {
+    return match value { Result.Ok(inner) => inner, Result.Err(_) => abort("unwrap encountered Err") };
+}
+
 impl Result<T, E> {
     public flow is_ok(self) -> bool ![] { return match self { Result.Ok(_) => true, Result.Err(_) => false }; }
     public flow is_err(self) -> bool ![] { return match self { Result.Ok(_) => false, Result.Err(_) => true }; }
+    public flow unwrap(self) -> T ![] { return unwrap(self); }
 }
 "#).unwrap();
     fs::write(source.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.0'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
@@ -140,16 +180,80 @@ public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOErro
     fs::create_dir_all(source.join("library/std/prelude")).unwrap();
     fs::write(
         source.join("library/std/prelude/mod.es"),
-        "module std.prelude; public import std.extra.sdk_echo as bundled_echo; public import std.result.{Result, Ok, Err}; public import std.core.Index;",
+        "module std.prelude; public import std.option.{Option, Some, None}; public import std.extra.sdk_echo as bundled_echo; public import std.result.{Result, Ok, Err}; public import std.core.Index;",
     )
     .unwrap();
     fs::write(
         source.join("library/std/text/native.es"),
         r#"module std.text;
-@std.binding("std.text.trim")
-public flow trim(value: string) -> string ![] {}
+
+import std.char.is_whitespace;
+import std.text.{chars, from_char};
+
+// Keep text policy in Etas. Only the Unicode scalar property is primitive.
+public flow trim(value: string) -> string ![] {
+    var output = "";
+    var pending = "";
+    var started = false;
+    for scalar in chars(value) limit Iterations(18446744073709551615) {
+        if is_whitespace(scalar) {
+            if started { pending = pending + from_char(scalar); }
+        } else {
+            output = output + pending + from_char(scalar);
+            pending = "";
+            started = true;
+        }
+    }
+    return output;
+}
+@std.binding("std.text.uppercase")
+public flow case_text(value: string) -> string ![] {}
 @std.binding("std.collections.array_push")
 public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(source.join("library/std/char")).unwrap();
+    fs::write(
+        source.join("library/std/char/mod.es"),
+        r#"module std.char;
+
+// Unicode property tables are provided by the host character primitive.
+@std.binding("std.char.is_whitespace")
+public flow is_whitespace(value: char) -> bool ![] {}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(source.join("library/std/collections")).unwrap();
+    fs::write(
+        source.join("library/std/collections/algorithms.es"),
+        r#"module std.collections;
+import std.collections.array_push;
+
+public flow array_extend<T>(values: Array<T>, appended: Array<T>) -> Array<T> ![] {
+    var output = values;
+    for value in appended limit Iterations(18446744073709551615) {
+        output = array_push(output, value);
+    }
+    return output;
+}
+
+public flow list_push<T>(values: List<T>, value: T) -> List<T> ![] {
+    return value :: values;
+}
+
+// List.extend prepends the second list, preserving its order.
+public flow list_extend<T>(values: List<T>, prepended: List<T>) -> List<T> ![] {
+    var reversed: List<T> = [];
+    for value in prepended limit Iterations(18446744073709551615) {
+        reversed = value :: reversed;
+    }
+    var output = values;
+    for value in reversed limit Iterations(18446744073709551615) {
+        output = value :: output;
+    }
+    return output;
+}
 "#,
     )
     .unwrap();
@@ -157,10 +261,11 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
     fs::write(
         &app,
         r#"module app.main;
-import std.text.{join, trim, append};
+import std.text.{join, trim, append, case_text};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
 import std.task.{run, execute, Scheduler};
 import std.result.{is_ok, is_err};
+import std.collections.{array_extend, list_push, list_extend};
 import std.extra.index_identity;
 type CallerParcel<T> = { value: T };
 impl CallerParcel<T> ~ Reader {
@@ -175,11 +280,39 @@ impl CallerTransformer<A> ~ Transformer {
     }
 }
 flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
+effect Wrapped { action read() -> i32; }
+flow deferred() -> i32 ![Wrapped] { return perform Wrapped.read(); }
+flow increment(value: i32) -> i32 ![] { return value + 1; }
+flow option_checks() -> bool ![] {
+    let callable = std.option.unwrap(Some(increment));
+    if callable(4) != 5 { return false; }
+    let Handle: ![Wrapped => [] for i32] = handler {
+        Wrapped.read() => { resume 13; }
+    };
+    let answer = handle { std.option.unwrap(Some(deferred))() } with Handle;
+    if answer != 13 { return false; }
+    let some: Option<i32> = Some(7);
+    let none: Option<i32> = None;
+    let empty: Option<i32> = None<i32>();
+    let variant = Option.Some;
+    let copied: Option<i32> = variant(9);
+    let constructor = Some;
+    let wrapped: Option<i32> = constructor(11);
+    let payload = match copied { Option.Some(value) => value, Option.None => 0 };
+    let old = match wrapped { Some(value) => value, None => 0 };
+    return some.is_some() && !some.is_none() && none.is_none() && empty.is_none()
+        && some.unwrap() == 7 && payload == 9 && old == 11;
+}
 flow main(args: Array<string>) -> i32 {
+    if !option_checks() { return 76; }
+    if array_extend([1, 2], [3, 4]) != [1, 2, 3, 4] { return 71; }
+    if list_push([1; 2], 0) != [0; 1; 2] { return 72; }
+    if list_extend([1; 2], [3; 4]) != [3; 4; 1; 2] { return 73; }
+    if trim("　 a \t b \n　") != "a \t b" || trim("　 \n\t") != "" { return 74; }
     let good: Result<i32, string> = Result.Ok(7);
     let bad: Result<i32, string> = Err("failed");
     if !is_ok(good) || is_err(good) || !is_err(bad) { return 79; }
-    if !good.is_ok() || good.is_err() || !bad.is_err() { return 77; }
+    if !good.is_ok() || good.is_err() || !bad.is_err() || good.unwrap() != 7 { return 77; }
     let constructor = Ok;
     let copied: Result<i32, string> = constructor(9);
     let payload = match copied { Result.Ok(value) => value, Result.Err(_) => 0 };
@@ -205,8 +338,10 @@ flow main(args: Array<string>) -> i32 {
     if parcel.read() != text { return 96; }
     if read_reply(Reply.Item(text)) != text { return 98; }
     if read_reply(Reply.Empty) != "" { return 97; }
-    if text == "a|b" { return 0; }
-    if text == " A | B " { return 3; }
+    if text == "a|b" {
+        if case_text("x") == "x" { return 3; }
+        return 0;
+    }
     if text == "rebuilt:a|b" { return 2; }
     return 99;
 }
@@ -259,6 +394,38 @@ flow main(args: Array<string>) -> i32 {
         .unwrap()
     };
     build();
+    let methods_only = root.join("methods-only.es");
+    fs::write(
+        &methods_only,
+        r#"module app.main;
+effect Wrapped { action read() -> i32; }
+flow deferred() -> i32 ![Wrapped] { return perform Wrapped.read(); }
+flow main(args: Array<string>) -> i32 {
+    let Handle: ![Wrapped => [] for i32] = handler {
+        Wrapped.read() => { resume 13; }
+    };
+    let value = Option.Some(deferred);
+    let answer = handle { value.unwrap()() } with Handle;
+    if answer == 13 { return 0; }
+    return 1;
+}
+"#,
+    )
+    .unwrap();
+    let methods_report: serde_json::Value = serde_json::from_str(&invoke(&[
+        "--cache",
+        "off",
+        "run",
+        path(&methods_only),
+        "--std-provider",
+        "artifact",
+        "--sysroot",
+        path(&sdk),
+        "--format",
+        "json",
+    ]))
+    .unwrap();
+    assert_eq!(methods_report["value"]["value"], "0");
     let before = execute();
     assert_eq!(before["value"]["value"], "0");
     let first_manifest = fs::read(sdk.join("std/manifest.json")).unwrap();
@@ -349,7 +516,7 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
     let binding = fs::read_to_string(&native).unwrap();
     fs::write(
         &native,
-        binding.replace("std.text.trim", "std.text.uppercase"),
+        binding.replace("std.text.uppercase", "std.text.lowercase"),
     )
     .unwrap();
     build();

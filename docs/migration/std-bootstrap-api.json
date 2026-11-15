@@ -2,25 +2,37 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "160d3509cfbdc866778b711ad8c6bfe6ab3772f8",
-    "frontend": "28a5d20ca8fc7c1e3bfd94e8ca40a131eae45887",
-    "std_version": "0.2.10",
-    "compiler_version": "0.11.9",
-    "native_binding_abi": "blake3:65790979039513d7b8b3ee34ca25abb9fb5075b08a70eb29cfa1a629d2bf952c",
-    "source_payload_hash": "blake3:7f8fb9e264eb5862fe37ec853a965a05aafebb8292a2f1e6bbafcdcbac79989d",
-    "body_schema": 10
+    "core": "8c1d366cdcce9e9f5bca257ea1f7bd154e193b8f",
+    "frontend": "0827350a882952ce8b09f7e0459f408e6cc3b2ee",
+    "interpreter": "97a08dc4b04b615980f58a87d7c0dd5da7f13a8a",
+    "std_version": "0.2.11",
+    "compiler_version": "0.11.10",
+    "native_binding_abi": "blake3:855e20146fa84c3a8cf54831f04a74f5adca9eb157e2dd599d3d49f62f7b6a62",
+    "source_payload_hash": "blake3:b9d5b8d800a5b8800493d4bcc370211a1d045ede142485b3d540bcc488b4a327",
+    "body_schema": 11,
+    "descriptor_schema": 13,
+    "artifact_hash": "blake3:cfa574eb6a278bdf81a879974fca345176b4ed5f069e45fbd240081187c77cb5"
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 143,
-  "missing_symbols": 526,
+  "candidate_symbols": 155,
+  "missing_symbols": 516,
   "pending_contract_difference": {
     "symbols": [
-      "std.result.Ok",
+      "std.collections.array_extend",
+      "std.collections.list_extend",
+      "std.collections.list_push",
+      "std.option.None",
+      "std.option.Some",
+      "std.option.is_none",
+      "std.option.is_some",
+      "std.option.unwrap",
       "std.result.Err",
+      "std.result.Ok",
+      "std.result.is_err",
       "std.result.is_ok",
-      "std.result.is_err"
+      "std.result.unwrap"
     ],
-    "classification": "Declaration representation differs: Ok/Err are checked source flows; predicate methods are published as source impl methods rather than intrinsic method aliases. Independent legacy/artifact samples agree for constructors, first-class Ok, matching and predicate functions/methods; broader behavior parity remains a full std gate."
+    "classification": "Option/Result constructor aliases are checked source flows; their predicates/unwrap publish methods through source impls instead of intrinsic method aliases. Collection array_extend/list_push/list_extend currently publish ordinary flow declarations; their value methods remain pending. The common legacy/artifact sample agrees for direct constructors, predicates, unwrap, array/list contents and Unicode trim. The SDK process fixture additionally covers source enum patterns/first-class constructors, Option/Result methods and callable payloads with the original caller Handler. Raw declaration differences stay visible until whole-library API/behavior parity is accepted."
   },
   "report": {
     "compatibility_matches": true,
@@ -231,28 +243,30 @@
         ]
       },
       "std.char": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
+        "covered": [
+          "std.char.is_whitespace"
+        ],
         "missing": [
           "std.char.from_u32",
           "std.char.is_alphabetic",
           "std.char.is_alphanumeric",
           "std.char.is_ascii_digit",
           "std.char.is_control",
-          "std.char.is_whitespace",
           "std.char.to_u32"
         ],
         "added": [],
         "contract_changes": [],
-        "implementation_changes": [],
+        "implementation_changes": [
+          "std.char.is_whitespace"
+        ],
         "export_changes": [
           "from_u32",
           "is_alphabetic",
           "is_alphanumeric",
           "is_ascii_digit",
           "is_control",
-          "is_whitespace",
           "to_u32"
         ]
       },
@@ -296,8 +310,11 @@
           "std.collections.Range",
           "std.collections.Set",
           "std.collections.Slice",
+          "std.collections.array_extend",
           "std.collections.array_get",
-          "std.collections.array_push"
+          "std.collections.array_push",
+          "std.collections.list_extend",
+          "std.collections.list_push"
         ],
         "missing": [
           "std.collections.Deque",
@@ -309,7 +326,6 @@
           "std.collections.Queue",
           "std.collections.Stack",
           "std.collections.array_at",
-          "std.collections.array_extend",
           "std.collections.array_pop",
           "std.collections.closed",
           "std.collections.contains_key",
@@ -321,11 +337,9 @@
           "std.collections.is_empty",
           "std.collections.len",
           "std.collections.list_at",
-          "std.collections.list_extend",
           "std.collections.list_get",
           "std.collections.list_head",
           "std.collections.list_pop",
-          "std.collections.list_push",
           "std.collections.list_tail",
           "std.collections.map_get",
           "std.collections.open",
@@ -353,8 +367,16 @@
           "std.collections.to_array"
         ],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
+        "contract_changes": [
+          "std.collections.array_extend",
+          "std.collections.list_extend",
+          "std.collections.list_push"
+        ],
+        "implementation_changes": [
+          "std.collections.array_extend",
+          "std.collections.list_extend",
+          "std.collections.list_push"
+        ],
         "export_changes": [
           "Deque",
           "EmptinessInput",
@@ -365,7 +387,6 @@
           "Queue",
           "Stack",
           "array_at",
-          "array_extend",
           "array_pop",
           "closed",
           "contains_key",
@@ -377,11 +398,9 @@
           "is_empty",
           "len",
           "list_at",
-          "list_extend",
           "list_get",
           "list_head",
           "list_pop",
-          "list_push",
           "list_tail",
           "map_get",
           "open",
@@ -479,6 +498,7 @@
         "added_module": false,
         "covered": [
           "std.core.Index",
+          "std.core.abort",
           "std.core.bool",
           "std.core.bytes",
           "std.core.char",
@@ -501,14 +521,14 @@
           "std.core.usize"
         ],
         "missing": [
-          "std.core.abort",
           "std.core.assert"
         ],
         "added": [],
         "contract_changes": [],
-        "implementation_changes": [],
+        "implementation_changes": [
+          "std.core.abort"
+        ],
         "export_changes": [
-          "abort",
           "assert"
         ]
       },
@@ -1266,21 +1286,31 @@
         "covered": [
           "std.option.None",
           "std.option.Option",
-          "std.option.Some"
-        ],
-        "missing": [
+          "std.option.Some",
           "std.option.is_none",
           "std.option.is_some",
           "std.option.unwrap"
         ],
-        "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "is_none",
-          "is_some",
-          "unwrap"
-        ]
+        "missing": [],
+        "added": [
+          "std.option.Option.None",
+          "std.option.Option.Some"
+        ],
+        "contract_changes": [
+          "std.option.None",
+          "std.option.Some",
+          "std.option.is_none",
+          "std.option.is_some",
+          "std.option.unwrap"
+        ],
+        "implementation_changes": [
+          "std.option.None",
+          "std.option.Some",
+          "std.option.is_none",
+          "std.option.is_some",
+          "std.option.unwrap"
+        ],
+        "export_changes": []
       },
       "std.prelude": {
         "missing_module": false,
@@ -1293,8 +1323,12 @@
         "export_changes": [
           "Err",
           "Index",
+          "None",
           "Ok",
-          "Result"
+          "Option",
+          "Result",
+          "Some",
+          "abort"
         ]
       },
       "std.result": {
@@ -1305,11 +1339,10 @@
           "std.result.Ok",
           "std.result.Result",
           "std.result.is_err",
-          "std.result.is_ok"
-        ],
-        "missing": [
+          "std.result.is_ok",
           "std.result.unwrap"
         ],
+        "missing": [],
         "added": [
           "std.result.Result.Err",
           "std.result.Result.Ok"
@@ -1318,17 +1351,17 @@
           "std.result.Err",
           "std.result.Ok",
           "std.result.is_err",
-          "std.result.is_ok"
+          "std.result.is_ok",
+          "std.result.unwrap"
         ],
         "implementation_changes": [
           "std.result.Err",
           "std.result.Ok",
           "std.result.is_err",
-          "std.result.is_ok"
+          "std.result.is_ok",
+          "std.result.unwrap"
         ],
-        "export_changes": [
-          "unwrap"
-        ]
+        "export_changes": []
       },
       "std.runtime": {
         "missing_module": true,
@@ -1711,6 +1744,7 @@
           "std.text.format",
           "std.text.from_char",
           "std.text.join",
+          "std.text.lowercase",
           "std.text.pad_end",
           "std.text.pad_start",
           "std.text.parse_usize",
@@ -1755,7 +1789,6 @@
           "std.text.is_empty",
           "std.text.len",
           "std.text.lines",
-          "std.text.lowercase",
           "std.text.parse_bool",
           "std.text.parse_f32",
           "std.text.parse_f64",
@@ -1834,7 +1867,6 @@
           "is_empty",
           "len",
           "lines",
-          "lowercase",
           "parse_bool",
           "parse_f32",
           "parse_f64",
@@ -2030,7 +2062,6 @@
       "Value:Logical",
       "Value:SummaryPlusRecent",
       "Value:VirtualStages",
-      "Value:abort",
       "Value:approve",
       "Value:assert",
       "Value:continue_or_new",
@@ -2043,7 +2074,6 @@
       1,
       2,
       3,
-      4,
       6,
       7,
       8,
@@ -2058,6 +2088,7 @@
       18,
       22,
       23,
+      24,
       25,
       26,
       27,
@@ -2067,6 +2098,7 @@
       32,
       33,
       34,
+      35,
       37,
       38,
       39,
@@ -2312,8 +2344,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 141,
-  "source_ownership_note": "Public declarations/algorithms belong to Etas; Rust retains execution/host primitive contracts. A successful build with the complete legacy factory disabled does not prove the 132-entry transitional catalog minimal or the entire std migrated.",
+  "covered_baseline_symbols": 151,
+  "source_ownership_note": "Public declarations/algorithms belong to Etas; Rust retains execution/host primitive contracts. A successful build with the complete legacy factory disabled does not prove the 134-entry transitional catalog minimal or the entire std migrated.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2324,5 +2356,33 @@
     "bootstrap_implementations": 0
   },
   "provider_note": "Package resolver records builtin identity only. Package and IDE type projection use the selected registry and canonicalize its prelude aliases; immutable source restoration preserves parent std mode and artifact identity. Source compilation selects explicit bootstrap before package preparation. Forbidden-factory acceptance covers single-file, application package and path dependency calls.",
-  "determinism_note": "Body type materialization traverses checked facts and generic applications in source-ID order; same-input cross-process std outputs are compared by complete manifest."
+  "determinism_note": "Body type materialization traverses checked facts and generic applications in source-ID order; two independent normal builds and a build with the full legacy factory compiled out have byte-identical complete manifests and artifact hashes.",
+  "added_symbols": [
+    "std.option.Option.None",
+    "std.option.Option.Some",
+    "std.result.Result.Err",
+    "std.result.Result.Ok"
+  ],
+  "transitional_bootstrap": {
+    "contracts": 134,
+    "primitives": 25,
+    "spec_impl_facts": 0,
+    "minimality_accepted": false
+  },
+  "source_algorithm_batch": {
+    "flows": [
+      "std.option.is_some",
+      "std.option.is_none",
+      "std.option.unwrap",
+      "std.result.unwrap",
+      "std.text.trim",
+      "std.collections.array_extend",
+      "std.collections.list_push",
+      "std.collections.list_extend"
+    ],
+    "trim_native_contract_removed": true,
+    "trim_host_dependency": "Unicode scalar whitespace property and existing character/text storage primitives",
+    "collection_value_methods_migrated": false
+  },
+  "callable_boundary_note": "Checked Option/Result payload provenance is retained across source constructors, unwrap flows and methods. Caller-defined Effect tags are carried by canonical checked identity into SDK specialization, and direct external methods can prepare an SDK body without an ordinary std flow root. This does not yet prove arbitrary generic collection payloads, foreign action-selector closure or the full cross-package callable matrix."
 }

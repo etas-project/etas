@@ -446,8 +446,9 @@ does not transfer ownership of that declaration to Rust. A `StdRegistry` query
 view generated from the checked bundle is compatible with source ownership.
 The migration must remove manually duplicated public API/signature/algorithm
 tables, including transitional bootstrap declarations as they move to source.
-A retained primitive such as `trim` is an acceleration choice, not a requirement
-that its algorithm stay native.
+Native acceleration is a performance choice. The maintained `trim` algorithm is
+now Etas source; Rust supplies the Unicode scalar whitespace property. Its
+public declaration is absent from the native bootstrap catalog.
 
 Package preparation records only the builtin std dependency identity; it does
 not project another Rust std interface. Driver and IDE dependency type projection
@@ -485,8 +486,10 @@ cargo run -p etas_driver --example std_sdk_inventory -- /tmp/etas-sdk \
 ```
 
 The release default remains `--std-provider legacy`. The source batch covers
-text flows, opaque task roles, the source Result enum/predicates/methods, and
-Index declarations/implementations. Remaining roles/modules, full API
+text flows, opaque task roles, source Option/Result enums, constructors,
+predicates and unwrap methods, and Index declarations/implementations. Array
+extend and list push/extend have source flow bodies; collection type and value
+method migration remains pending. Remaining roles/modules, full API
 and runtime parity, artifact checkpoint/resume and release gates remain required
 before the default changes.
 
