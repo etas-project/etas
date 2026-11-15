@@ -1121,6 +1121,18 @@ flow main(args: Array<string>) -> i32 {
         String::from_utf8_lossy(&denied.stdout),
         String::from_utf8_lossy(&denied.stderr)
     );
+    let denied_report: serde_json::Value = serde_json::from_slice(&denied.stdout).unwrap();
+    assert_eq!(
+        denied_report["diagnostics"][0]["code"], "Analysis(UnhandledRuntimeError)",
+        "{denied_report}"
+    );
+    assert!(
+        denied_report["diagnostics"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("missing its region-scoped action grant"),
+        "{denied_report}"
+    );
     assert_eq!(
         fs::read(project.join("workspace/created.txt")).unwrap(),
         b"after"

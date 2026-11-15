@@ -4,7 +4,7 @@
   "producers": {
     "core": "16d3491f61182061f87064d663c20c945b501b60",
     "frontend": "7155eaf5435794f11b8282d11d6e76f824ec4630",
-    "interpreter": "ef01ad64ce289938c3c51209ba3d49932580723b",
+    "interpreter": "42e50ccb170fa8e140442c1b29e161816b06106d",
     "std_version": "0.2.18",
     "compiler_version": "0.11.17",
     "native_binding_abi": "blake3:0a8aeb226df5ead76dabff0044f02a01cd86dda4a76267790947c7cc2227c20f",
@@ -2680,6 +2680,8 @@
     ],
     "readonly_write_rejected_with_content_preserved": true,
     "registry_schema": 5,
-    "whole_bootstrap_minimality_accepted": false
+    "whole_bootstrap_minimality_accepted": false,
+    "terminal_permission_diagnostic_preserved": true,
+    "cross_revision_enclosing_retry_remains_pending": true
   }
 }

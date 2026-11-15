@@ -531,7 +531,9 @@ Bounded reads/listings, OS operations and permission enforcement remain host
 capabilities. Eight existing primitives and four action descriptors were added
 to the explicit catalog for these bindings; this does not establish whole-catalog
 minimality. Native binding aliases retain the primitive identity even when the public wrapper has
-the same path, preserving requested actions and caller Handler error handling.
+the same path, preserving requested actions and caller Handler error handling. Terminal host failures keep the original permission diagnostic when no
+retry surrounds the source call. Retry transitions across checked program
+revisions remain a whole-library execution gate.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,
