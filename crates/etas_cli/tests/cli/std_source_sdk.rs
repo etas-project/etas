@@ -61,11 +61,24 @@ public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
     )
     .unwrap();
     fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
+    // Ordinary error declarations belong to source. An extra constructor needs
+    // no compiler role or native registry entry, and native parse errors keep
+    // their source-owned nominal type.
+    let errors = source.join("library/std/text/errors.es");
+    fs::write(
+        &errors,
+        fs::read_to_string(&errors).unwrap().replace(
+            "public enum TextError {",
+            "public enum TextError { SdkOnly,",
+        ),
+    )
+    .unwrap();
     fs::write(
         source.join("library/std/extra/mod.es"),
         r#"module std.extra;
 import std.fs.IOError;
 import std.core.Index;
+public import std.extra.Reply.{Empty, Item, Named};
 public flow index_identity<I ~ Index>(index: I) -> I ![] { return index; }
 public flow sdk_echo<T>(value: T) -> T { return value; }
 public type Parcel<T> = { value: T };
@@ -95,6 +108,10 @@ public flow load_through<L ~ Loader>(loader: L) -> bytes ![Error<IOError>] {
     return loader.load();
 }
 public enum Reply<T> { Empty, Item(T), Named { value: T }, }
+public flow pack_reply(value: string) -> Reply<string> {
+    let first: Reply<string> = Item(value);
+    return match first { Reply.Item(text) => Named { value = text }, _ => Empty };
+}
 public flow pack(value: string) -> Parcel<string> { return Parcel { value = value }; }
 public flow read_reply(value: Reply<string>) -> string {
     return match value { Reply.Empty => "", Reply.Item(text) => text, Reply.Named { value } => value };
@@ -143,7 +160,8 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
         &app,
         r#"module app.main;
 import std.text.{join, trim, append, case_text};
-import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
+import std.text.{TextError, ParseFailure, NumericOverflow};
+import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, pack_reply, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
 import std.task.{run, execute, Scheduler};
 import std.result.{is_ok, is_err};
 import std.collections.{array_extend, list_push, list_extend};
@@ -222,6 +240,13 @@ flow collection_checks() -> bool ![] {
 flow main(args: Array<string>) -> i32 {
     if !collection_checks() { return 86; }
     if !option_checks() { return 76; }
+    let custom: TextError = TextError.SdkOnly;
+    if match custom { TextError.SdkOnly => false, _ => true } { return 57; }
+    let parsed: Result<usize, TextError> = std.text.parse_usize("42");
+    if parsed != Ok(42) { return 58; }
+    if std.text.parse_usize("words") != Err(ParseFailure) { return 59; }
+    if std.text.parse_bool("TRUE") != Err(ParseFailure) { return 54; }
+    if std.text.parse_usize("999999999999999999999999999999999999999") != Err(NumericOverflow) { return 60; }
     if std.text.parse_bool(std.text.from_bool(true)) != Ok(true) { return 61; }
     if std.text.parse_bool(std.text.from_bool(false)) != Ok(false) { return 62; }
     if !std.text.starts_with("世界😀", "世界") { return 63; }
@@ -256,7 +281,7 @@ flow main(args: Array<string>) -> i32 {
     let strip = trim;
     let values = append([strip(" a ")], strip(" b "));
     let parcel: Parcel<string> = sdk_echo(pack(bundled_echo(assemble(values, "|"))));
-    let text = read_reply(Reply.Named { value = via_reader(parcel) });
+    let text = read_reply(pack_reply(via_reader(parcel)));
     let constructed: Constructed<string> = Constructed { value = text };
     if constructed.read() != text { return 95; }
     if parcel.read() != text { return 96; }

@@ -2,16 +2,17 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "e0b4694cdd1519d8efc873a4330ec816304dea1b",
-    "frontend": "81d8c8186a8598c2d6582b1114f7e79a3642a805",
-    "interpreter": "4a2a3f39912ebb0360d57b09ad4719bb04045306",
-    "std_version": "0.2.14",
-    "compiler_version": "0.11.13",
-    "native_binding_abi": "blake3:0c72befdf3398be487407c56f5736c8acda71764906548677c4c2d5692b7878f",
-    "source_payload_hash": "blake3:fe1d20b450dd52a6074e27728d143289a54171ac8d13af81de6ff35e7ffd5d72",
-    "body_schema": 11,
+    "core": "28e1bd4c612e8ad0b98ef2a9e4642e7792ee9667",
+    "frontend": "35db375750fd8f98849c2c43b1df5fa1ef7736dc",
+    "interpreter": "754020fa81442638dc0942e672932bcd91480444",
+    "std_version": "0.2.15",
+    "compiler_version": "0.11.14",
+    "native_binding_abi": "blake3:ea1e80e9db6e1c676928ccda62b76b6448311f716734c18714ae840880c5c9d4",
+    "source_payload_hash": "blake3:a30ab5b6b5007f6578896b0c0526ebfdb4418951380608e8b1f1c6fed0b17ec4",
+    "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:d19d2f60992e134b400863733f0f2d70beab3ac3a3906c86070c3283d5ba4efe"
+    "artifact_hash": "blake3:93ba4c34d487c644e56a7a058f6f78fd58643148115a5ac0aac1ccc5e44eb3b2",
+    "registry_schema": 3
   },
   "baseline_symbols": 667,
   "candidate_symbols": 170,
@@ -1933,24 +1934,6 @@
           "splitn"
         ]
       },
-      "std.text.TextError": {
-        "missing_module": false,
-        "added_module": true,
-        "covered": [],
-        "missing": [],
-        "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "InvalidFormat",
-          "InvalidIndex",
-          "InvalidRange",
-          "LengthOverflow",
-          "NotCharBoundary",
-          "NumericOverflow",
-          "ParseFailure"
-        ]
-      },
       "std.text.unicode": {
         "missing_module": true,
         "added_module": false,
@@ -2382,7 +2365,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 166,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Seventeen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The remaining 116-contract static catalog and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
+  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Seventeen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The remaining 108-contract static catalog and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2401,12 +2384,13 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 116,
+    "static_contracts": 108,
     "explicit_source_roles": 17,
-    "query_symbols_before_source_publication": 133,
+    "query_symbols_before_source_publication": 125,
     "primitives": 20,
     "spec_impl_facts": 0,
-    "minimality_accepted": false
+    "minimality_accepted": false,
+    "native_enum_references": 1
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2514,5 +2498,30 @@
     "validation": "Manifest requirement is checked when locking/preparing; consumer uses the selected provider only when explicit root/transitive std records match its version and ABI. Check/run never edit locks.",
     "cache": "Stable lock across same-version/ABI source body rebuilds. Full provider identity stamps source dependency metadata and participates in compilation/execution caches.",
     "acceptance": "Full real-version SDK lifecycle passes in ordinary and full-legacy-disabled exact-Git dependency builds. It rejects old records without rewriting, explicitly upgrades via pkg lock, verifies selected version/native ABI, checks an exact manifest version requirement and executes root/path dependency packages."
+  },
+  "source_nominal_batch": {
+    "types": [
+      "std.text.TextError"
+    ],
+    "constructors": [
+      "InvalidIndex",
+      "InvalidRange",
+      "NotCharBoundary",
+      "ParseFailure",
+      "NumericOverflow",
+      "LengthOverflow",
+      "InvalidFormat"
+    ],
+    "native_reference": {
+      "path": "std.text.TextError",
+      "required_unit_variants": [
+        "ParseFailure",
+        "NumericOverflow"
+      ],
+      "special_language_role": false
+    },
+    "namespace_and_reexports": "Ordinary source enum constructor group/wildcard/public imports retain generic/named payload layouts and canonical definition origins.",
+    "closed_provider": "Primitive ABI references resolve to checked source declarations before std provider publication. Partial compiler images may retain imports. ABI fingerprint includes the actual reference constraints.",
+    "minimality_accepted": false
   }
 }

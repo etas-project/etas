@@ -400,7 +400,11 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         builder.re_export(module, name, target).map_err(invalid)?;
         symbols.insert(export.exported.clone(), target);
     }
-    builder.try_finish().map_err(invalid)
+    let registry = builder.try_finish().map_err(invalid)?;
+    registry
+        .validate_resolved_native_enum_references()
+        .map_err(invalid)?;
+    Ok(registry)
 }
 
 fn canonical_export(

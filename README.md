@@ -484,7 +484,7 @@ registry declaration/signature lookup. Its seventeen roles define only the recog
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 116 transitional contracts
+are removed from the static catalog, which still has 108 transitional contracts
 and 20 primitives. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result and collections to exercise this ownership
@@ -503,6 +503,16 @@ strip_suffix policies are also source flows. Their private character matching
 helpers travel in the bundle; no additional compiler role or native signature
 is needed. The text search implementation currently materializes character
 arrays; whole-library performance comparison remains a release gate.
+
+`TextError` and its constructor exports are ordinary Etas declarations. Native
+numeric parsing references that canonical enum and requires only the two unit
+variants it can return; the other variants and additional source variants belong
+to the source package. This ABI reference grants no language role. Source enum
+constructor imports/re-exports retain canonical identities, generic payloads and
+checked execution layouts. The published std provider resolves every native enum
+reference to its checked declaration. Partial compiler library images may retain
+ABI imports until that publication step. The bundle uses body schema 12 and
+registry image schema 3.
 
 Verify the existing SDK process fixture with the complete legacy factory
 compiled out (the ordinary configuration also runs the legacy comparison):
