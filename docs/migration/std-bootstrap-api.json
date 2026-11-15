@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "16d3491f61182061f87064d663c20c945b501b60",
-    "frontend": "7155eaf5435794f11b8282d11d6e76f824ec4630",
-    "interpreter": "42e50ccb170fa8e140442c1b29e161816b06106d",
-    "std_version": "0.2.18",
-    "compiler_version": "0.11.17",
-    "native_binding_abi": "blake3:0a8aeb226df5ead76dabff0044f02a01cd86dda4a76267790947c7cc2227c20f",
-    "source_payload_hash": "blake3:6a2557cc925ebfa829fa4c4eb31ceb804eb004cde6816ea08013ab6d4b74175b",
+    "core": "53f7570806299f4313baa984546e4ceb808a2abe",
+    "frontend": "ebb17d5e391a3583202f025664db108e70293823",
+    "interpreter": "491655be69d67cd5e4ed65f8e2bb0ea9aa837fbb",
+    "std_version": "0.2.19",
+    "compiler_version": "0.11.18",
+    "native_binding_abi": "blake3:f2460fdc458d8ee2556b7f7c88266bc870f6dcfaf17863ad76e08766bcd98dc3",
+    "source_payload_hash": "blake3:09214e8f0e9c853da6d2ef32d11a57e1c1dd322eea2b2a93221e1de6dc1c6454",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:49168e1e10467817d13f5e6ba5ba74ae8bb70e15fd79287f45fbe2ba00aaf226",
+    "artifact_hash": "blake3:c9e1e2337519afd3aead214e7852152c85ef486de13e1c9b1bbac225d3c1fdb0",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 205,
-  "missing_symbols": 466,
+  "candidate_symbols": 207,
+  "missing_symbols": 464,
   "pending_contract_difference": {
     "symbols": [
       "std.collections.Array",
@@ -1417,18 +1417,18 @@
         "export_changes": []
       },
       "std.runtime": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.runtime.checkpoint"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "checkpoint"
-        ]
+        "implementation_changes": [
+          "std.runtime.checkpoint"
+        ],
+        "export_changes": []
       },
       "std.runtime.approval": {
         "missing_module": true,
@@ -1467,18 +1467,18 @@
         ]
       },
       "std.runtime.checkpoint": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.runtime.checkpoint.checkpoint"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "checkpoint"
-        ]
+        "implementation_changes": [
+          "std.runtime.checkpoint.checkpoint"
+        ],
+        "export_changes": []
       },
       "std.runtime.error": {
         "missing_module": false,
@@ -2384,8 +2384,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 201,
-  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The 117-entry compiler/host catalog (including 28 primitive contracts) and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
+  "covered_baseline_symbols": 203,
+  "source_ownership_note": "Public declarations and algorithms belong to Etas; Rust retains execution rules and host primitive contracts. Nineteen source roles have an explicit compiler ABI; role checking does not look up copied public declarations, and source prelude aliases bind to source exports. The 118-entry compiler/host catalog (including 29 primitive contracts) and transitional prelude references are not yet accepted as minimal. The generated StdRegistry query structure may remain after all handwritten public API/signature/algorithm tables are removed.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2404,10 +2404,10 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 117,
+    "static_contracts": 118,
     "explicit_source_roles": 19,
-    "query_symbols_before_source_publication": 136,
-    "primitives": 28,
+    "query_symbols_before_source_publication": 137,
+    "primitives": 29,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 3,
@@ -2682,6 +2682,47 @@
     "registry_schema": 5,
     "whole_bootstrap_minimality_accepted": false,
     "terminal_permission_diagnostic_preserved": true,
-    "cross_revision_enclosing_retry_remains_pending": true
+    "cross_revision_enclosing_retry_remains_pending": false
+  },
+  "source_checkpoint_batch": {
+    "declarations": [
+      "std.runtime.checkpoint",
+      "std.runtime.checkpoint.checkpoint"
+    ],
+    "existing_primitive_contract": "std.runtime.checkpoint",
+    "existing_primitive_id": 1001,
+    "new_os_primitives": 0,
+    "new_language_roles": 0,
+    "source_files": 23,
+    "source_modules": 11,
+    "runtime_checkpoint_schema": 78,
+    "checked_standard_library_program_and_type_bridge_preserved": true,
+    "private_generic_record_and_callback_preserved": true,
+    "original_caller_handler_preserved": true,
+    "source_checkpoint_cross_process_resume_verified": true,
+    "new_process_with_fresh_prepared_code_revision_verified": true,
+    "legacy_registry_forbidden_process_verified": true,
+    "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
+    "manifest_sha256": "a91c658157b105203e69f78d826b04db9012b4823c96324fdca1482f863ba091",
+    "whole_library_checkpoint_compatibility_accepted": false,
+    "whole_bootstrap_minimality_accepted": false,
+    "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
+  },
+  "compiler_service_compatibility_audit": {
+    "current": {
+      "passed": 445,
+      "failed": 36
+    },
+    "prior": {
+      "main_commit": "ba4e4d0727d836d74a46bd527bc35faf437d1616",
+      "original_dependency_graph": true,
+      "passed": 444,
+      "failed": 36
+    },
+    "new_failures": [],
+    "resolved_failures": [],
+    "failure_set_matches_prior": true,
+    "whole_compiler_service_compatibility_accepted": false,
+    "remaining": "Existing failures cover cross-package method definition conflicts, callback parametric determinism, escaped Choice effects, type bridges and outcome containment. The complete compatibility gate remains open."
   }
 }
