@@ -145,7 +145,7 @@ host execution is needed only for the specified primitive endpoints.
 | `Memory` | `read<R>`, `write<R>` | Typed memory regions and stores |
 | `Secret` | `read<K>`, `use<K>` | Host-mediated secret handles and non-revealing secret-backed operations |
 | `Command` | `run<S>` | Sandboxed process execution scoped by sandbox profile |
-| `Agentic` | `infer<C, O>` | Agent-scoped model inference requested action, where `C` is an agent method identity |
+| `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
 | `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
 
@@ -154,13 +154,8 @@ execution; custom handlers can bind `as k` and use checked scheduler transfer.
 Handling these control actions does not hide child-work effects or create a
 new broad authority root. See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
 
-The current implementation-facing `etas_std` does not yet provide every
-substrate API needed by EDK. It currently covers console I/O, typed memory
-support, host command/path/url/sandbox support, thin bytes/text helpers,
-security/trust helpers, and an effect/action registry for broad roots such as
-`Network`, `FileIO`, and `Secret`. The following low-level modules are intended
-standard-library substrate, but should be treated as design targets until they
-exist in the implementation:
+The following modules define the standard substrate contracts. Their inclusion
+in the SPEC does not imply that every backend already implements them:
 
 | API module | Standard effect/action owner | Intended substrate |
 |---|---|---|
@@ -373,11 +368,18 @@ Users should not have to write
 `![Agentic.infer<C, O>]` on normal flow signatures just because a flow runs an
 agent.
 
+`Agentic.step<C, O>` is the single-generation substrate used when Etas code
+controls the loop. Its public wrapper is `std.agent.step(conversation, schema)`.
+The same default-handling rule applies: the action remains in requested/default
+metadata without becoming an ordinary escaping obligation. A step does not
+invoke tools, retry, or repair output by making another model request.
+
 The standard declaration should be equivalent to:
 
 ```etas
 effect Agentic {
     action infer<C, O>(prompt: Prompt, schema: Schema<O>) -> O;
+    action step<C, O>(conversation: Conversation, schema: Schema<O>) -> StepResult<C, O>;
 }
 ```
 
@@ -387,6 +389,13 @@ constructs the full provider request from the prompt plus the current agent
 method's model profile, tool surface, context and session metadata, limits,
 runtime policy context, trace parent id, and stable hashes needed for replay and
 caching.
+
+For `step`, the conversation supplies the current protocol messages, while the
+same checked agent context supplies configuration and authority constraints.
+`C` is not inferred from a model-provided tool name or chosen from a string. A
+handler interpreting an existing `infer<C, O>` request may reuse that request's
+context to perform steps; transparent conversation/call records cannot grant
+another agent's identity or tools.
 
 Users normally write:
 
@@ -447,12 +456,28 @@ Agentic.infer<C, O>
   -> resolve agent method C
   -> check effect boundary, trace specs, runtime policy, limits, secret flow, and prompt trust
   -> check replay/resample mode
-  -> build provider payload
-  -> call provider or local model runtime
-  -> decode and validate O
-  -> record trace, usage, latency, hashes, and finish reason
+  -> run the standard controller using Agentic.step<C, O>
+  -> dispatch requested tools through std.tool.invoke under current checks
+  -> continue until validated O or the configured failure/limit outcome
   -> return O
+
+Agentic.step<C, O>
+  -> restore the checked agent request context and recheck current constraints
+  -> build one provider payload, including the output schema
+  -> call the provider or local model runtime once
+  -> return Final(O), CallTools(requests), or Stopped(reason), with the assistant turn
+  -> record trace, usage, latency, hashes, and finish reason
 ```
+
+The controller and protocol assembly can be Etas library code; only the actual
+model execution needs the declared provider substrate. Both levels retain
+requested-action identity. A model's returned tool request is not an execution
+event: actual tool dispatch contributes its ordinary effects and ordered action
+events. `std.tool.invoke<C>` conservatively preserves the summaries of the
+tools exposed by `C`, rather than hiding their effects behind `Agentic`.
+Transparent records are validated at invocation, not treated as proof of prior
+validation, permission, or execution. See the authoritative
+[types, APIs, and complete controller example](19-standard-library.md#4-single-step-agent-interaction).
 
 The runtime provider is not a grant of authority. It runs only after active
 effect boundaries, trace specs, runtime policies, deployment grants, limits,
@@ -538,7 +563,7 @@ swallow errors by default.
 
 The wrapper is the ergonomic API; the action is the semantic authority boundary visible to trace specs, runtime policy, trace, replay, and handlers.
 
-### 1.2 Parameterized Effects
+### 1.3 Parameterized Effects
 
 Etas supports parameterized effects and action references. A parameterized effect is still an effect-system fact, not an ordinary generic value type. The parameter narrows the observable authority scope:
 
@@ -721,7 +746,9 @@ effect Approval {
 }
 ```
 
-This keeps the tag/action split while making the common declaration compact. The `effect` name is the static tag. Each `action` inside the block is the action interface owned by that tag. The action body is not written in Etas source; it is interpreted by a handler or by a runtime-provided implementation.
+The `effect` name is the static tag, and each `action` declares an operation
+signature. The declaration has no body; its implementation is handler code or
+a declared runtime endpoint. Handler logic may itself be Etas code.
 
 An empty tag remains valid, and its actions may be declared later with `impl`:
 
@@ -756,12 +783,12 @@ The rules are:
 3. `impl Name { action op(...) -> ...; }` is the separated form for declaring actions on an existing effect tag.
 4. `impl` targets are kind-checked. `impl TypeName` may contain only `flow` methods, while `impl EffectName` may contain only `action` signatures.
 5. An `action` signature has no body. It is interpreted by a handler or by a runtime-provided implementation.
-6. `perform EffectName.actionName(...)` invokes an effect operation boundary and contributes the owning effect tag to inference.
+6. `perform EffectName.actionName(...)` records that concrete requested action. Its escaping obligation remains unless a matching explicit/default handler consumes it; inference does not automatically widen it to every action under the owning tag.
 7. Handler arms match concrete actions such as `Approval.request(req)`, not bare effect tags.
 8. Tag effects appear in effect rows, manifests, trace-spec summaries, and audit summaries.
 9. Action boundaries appear in AIR, trace, replay, resample, and handler dispatch.
 10. Minimal runtime boundaries such as memory, sandboxed command execution, model use, approval, console I/O, and time are standard effect actions with default action implementations where appropriate.
-11. Web search, HTTP, workspace I/O, email, payment, databases, browsers, object stores, deployment, identity, and other domain/platform adapters are package-defined or host-defined effect actions. Their declared effects use the same fine-grained effect/action vocabulary.
+11. Web search, HTTP clients, workspace workflows, email, payment, databases, browser automation, and other high-level integrations use package-defined actions over the standard substrate. Low-level `Net`, `Fs`, and `Browser` actions remain standard contracts.
 12. A handler may recover from a denied operation, but it cannot bypass the active effect boundary, trace specs, runtime policy, sandbox, approval, or limit checks.
 
 ### 2.1 Effect Actions Versus Tools
@@ -1506,7 +1533,9 @@ actions.
 
 ## 5. Effects And Determinism
 
-Effects do not decide whether a flow is deterministic. A flow may have effects without being non-deterministic:
+Escaping effects and determinism are separate summaries; neither is derived
+solely from the other. External observations make the following flow
+non-deterministic:
 
 ```etas
 flow read_paper(url: Url) -> Paper {
@@ -1526,11 +1555,9 @@ Etas uses two determinism classes:
 
 ```text
 Deterministic        = depends only on explicit inputs and deterministic computation
-NonDeterministic     = may observe or change external state, call runtime-provided primitives,
-                       call Etas tools whose bodies are non-deterministic,
-                       read time or randomness,
-                       use typed memory APIs, call agents, perform model inference, request human approval,
-                       call a non-deterministic subflow, or use runtime choice
+NonDeterministic     = may observe or change external state, perform model inference,
+                       read time or randomness, request human approval, use runtime choice,
+                       or call a primitive, flow, tool, or agent method with such behavior
 ```
 
 For stage composition, determinism is ordered and combined by maximum:
@@ -1574,7 +1601,7 @@ Pure deterministic helpers also use `flow`:
 
 ```etas
 flow normalize_title(title: string) {
-    trim(lowercase(title))
+    std.text.trim(std.text.lowercase(title))
 }
 ```
 
@@ -1588,6 +1615,18 @@ The source language uses `flow` for ordinary callables and `tool` for
 model-callable action boundaries. The implementation may still use multiple
 lowering targets for deterministic flows, orchestrated flows, Etas-implemented
 tools, and host-provided primitive symbols.
+
+Receiver updates and suspension are separate contracts as well. `var self`
+updates a local caller binding, not persistent memory, so it does not introduce
+a `Memory.write` or other external effect solely for that writeback. A method
+may have `![]` and still update its receiver; the receiver mode and resulting
+value dependency must not disappear in effect-based optimization. Conversely,
+an empty escaping row does not prove non-suspension: default-handled actions,
+callbacks, and handlers may still suspend. Updating methods require a checked
+transitive non-suspension summary under the applicable handler context. This
+summary is compiler/package metadata, not a new source keyword, effect, or
+unchecked annotation. See
+[the receiver rules](02-general-programming-constructs.md#322-no-suspension-while-updating).
 
 ## 6. Declaration Defaults
 
@@ -1714,6 +1753,12 @@ tool safe_search(q: string) -> Array<Trusted<Snippet>>
 ```
 
 For exported flows, exported agents, and public package APIs, the implementation should require either an explicit effect signature or a generated signature that is checked into package metadata. Public effect contracts should be visible during review.
+
+[Default parameters](02-general-programming-constructs.md#41-default-parameters)
+are action-free, deterministic, and non-suspending. Omission does not install
+a handler, grant authority, or hide an extra request. Bind the complete argument
+payload before an action/tool boundary is checked or recorded; supplied
+argument effects retain ordinary evaluation order and inference.
 
 High-impact actions such as `Command.run<S>`, `StripePayment.charge<A>`,
 `CompanyEmail.send<A>`, `ProjectWorkspace.write<P>`, and `Secret.read<K>` should require

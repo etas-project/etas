@@ -10,7 +10,10 @@ The examples use the current agent model: an `agent` is a nominal component, the
 ergonomic body form defines its default `run` method, and model inference is
 written with agent-scoped `perform infer<T>(prompt)`. The elaborated
 `Agentic.infer<Agent.method, T>` action remains visible in summaries and traces,
-but it is not exposed as an escaping effect to ordinary callers.
+but it is not exposed as an escaping effect to ordinary callers. Explicit
+single-step controllers use the [standard protocol APIs](19-standard-library.md#4-single-step-agent-interaction).
+Bodyless tool signatures below are interface sketches for resolved package or
+runtime bindings, not standalone implementations.
 
 ## 1. Research Paper Assistant
 
@@ -961,8 +964,8 @@ flow Debate(question: Question) -> Answer {
     while !mentions_final(transcript)
         limit Iterations(6), Tokens(60_000), WallTime(minutes(5))
     {
-        transcript.turns = transcript.turns.push(Researcher.run(transcript));
-        transcript.turns = transcript.turns.push(Critic.run(transcript));
+        transcript = Transcript { turns = transcript.turns.push(Researcher.run(transcript)) };
+        transcript = Transcript { turns = transcript.turns.push(Critic.run(transcript)) };
     }
 
     return Synthesizer.run(transcript);

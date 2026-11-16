@@ -96,17 +96,19 @@ where:
 
 ### 1.5 Agent Call Rule
 
-Informally:
+An agent call executes its resolved method body in the agent's checked context.
+For the default entry, the core elaboration is schematically:
 
 ```text
-⟨agentcall A v, σ, μ, κ, β, τ⟩
-  ↦
-⟨v', σ, μ', κ, β', τ · AgentCall(A, v, v')⟩
+agentcall A v  ~~>  flowcall A.run v
+                   with A's checked agent/request context
 ```
 
-where `v'` is one possible output satisfying the declared schema, active trace specs, and runtime policy, and `β'` is the remaining budget after token, context, cost, and time accounting.
-
-Because the model is non-deterministic, the transition relation is non-deterministic.
+This does not sample a model merely because `A` is an agent. A method may be
+deterministic. Model sampling occurs at `Agentic.step<C, O>`; the default
+`Agentic.infer<C, O>` controller combines steps and checked tool invocations.
+Those boundaries perform schema, policy, trace, and budget checks as specified
+in [Agentic Runtime Actions](06-effect-system-and-inference.md#12-agentic-runtime-actions).
 
 ### 1.6 Tool Call Rule
 
@@ -121,6 +123,11 @@ only if:
 ```text
 κ ⊢ allowed(t)
 ```
+
+This predicate abbreviates checks of the resolved tool contract, arguments,
+transitive actions, active trace specs/policy, and runtime grants. It is not a
+second tool-name-based permission mechanism. Calling a helper flow cannot
+bypass the same checks on the actions it requests.
 
 Otherwise:
 
@@ -182,14 +189,19 @@ Computes the set of possible source-level escaping effects and the broader set
 of requested actions.
 
 ```text
-Effects(e) = {Network, FileIO, Command, Memory.read<R>, Memory.write<R>, ...}
-RequestedActions(e) = Effects(e) ∪ {Agentic.infer<C, O>, compiler-generated runtime actions, ...}
+Effects(e)          = may-escaping-effect summary after handling
+RequestedActions(e) = may-requested-action summary, including handled/default actions
 ```
+
+These summaries are computed separately. Handling an action can remove its
+escaping obligation without removing its requested-action metadata. Neither set
+records order; temporal checks use control flow and trace/transfer summaries,
+not set inclusion alone.
 
 Reject if:
 
 ```text
-Effects(body) ⊄ DeclaredEffects(declaration)
+Effects(body) ⊄ DeclaredEffects(declaration)   // when an explicit bound is present
 ```
 
 For each source `flow`, infer a determinism class:
@@ -200,9 +212,9 @@ Determinism(body) =
   | NonDeterministic
 ```
 
-Agent calls use the callee method summary. `Agentic.infer<C, O>` requested
+Agent calls use the callee method summary. `Agentic.infer<C, O>`/`step<C, O>` requested
 actions, approval gates, non-deterministic subflows, runtime choice,
-runtime-provided primitive calls, Etas tool calls whose bodies are
+non-deterministic runtime primitive calls, Etas tool calls whose bodies are
 non-deterministic, typed memory API calls, file I/O, network, time, command
 effects, and other external state observations force `NonDeterministic`. Pure
 local computation, including an agent method with no non-deterministic operation,
@@ -228,11 +240,11 @@ Sanitized -> user prompt       allowed
 
 ### 2.4 Memory Access Analysis
 
-Checks whether agents access only allowed typed memory regions or stores. Memory access facts come from parameterized effects, as defined in [Effect System and Inference](06-effect-system-and-inference.md#11-parameterized-effects):
+Checks whether agents access only allowed typed memory regions or stores. Memory access facts come from parameterized actions, as defined in [Effect System and Inference](06-effect-system-and-inference.md#13-parameterized-effects):
 
 ```text
-Read(A)  = { R | Memory.read<R>  ∈ Effects(A) }
-Write(A) = { R | Memory.write<R> ∈ Effects(A) }
+Read(A)  = { R | Memory.read<R>  ∈ RequestedActions(A) }
+Write(A) = { R | Memory.write<R> ∈ RequestedActions(A) }
 
 Read(A)  ⊆ AllowedRead(A)
 Write(A) ⊆ AllowedWrite(A)
@@ -257,10 +269,14 @@ Checks temporal properties over traces.
 Examples:
 
 ```text
-G(CompanyEmail.send<WorkAccount> -> previously Approval.request)
+G(CompanyEmail.send<WorkAccount> -> previously accepted-matching-approval)
 G(Command -> has SandboxProfile)
 G(ClaimCreated -> eventually CitationVerified)
 ```
+
+Here `accepted-matching-approval` is a predicate over successful, relevant
+approval evidence, not a new source action. A request that was denied, failed,
+or concerned another payload does not establish it.
 
 ### 2.7 Cost Analysis
 
@@ -273,7 +289,9 @@ MaxTime(W)
 MaxIterations(W)
 ```
 
-For loops, require bounded iteration, explicit budget, widening in abstract interpretation, or runtime enforcement.
+A loop needs a proven finite bound or an enforceable budget when termination
+cannot be proved. Widening makes abstract analysis converge; it is not itself
+evidence that the concrete loop terminates or stays within a resource bound.
 
 ### 2.8 Loop Limit Analysis
 

@@ -496,7 +496,7 @@ public flow request(req: HttpRequest) -> HttpResponse
 }
 ```
 
-### 7.1 Implementing `edk.http`
+### 8.1 Implementing `edk.http`
 
 The reference `edk.http` implementation should be ordinary Etas source layered
 over public `std` substrate. The package owns user-facing HTTP types and the

@@ -224,8 +224,15 @@ schemes or reconstruct static binders from runtime descriptor data.
 
 `SignatureInfo` contains type and effect-parameter binder descriptions,
 `Array<ParameterInfo>`, and a return-type descriptor. `ParameterInfo` records the
-parameter name and its `TypeInfo`. Resolved types must remain distinguishable
-from any original annotation, including when the return type was inferred.
+parameter name, its `TypeInfo`, and any method receiver mode (`self` or
+`var self`), plus whether the declaration supplies a default. Default
+descriptions preserve declaration/revision identity and available descriptive
+content; they are not caller-executable expressions or permission to alter a
+frozen default contract. A descriptive mode does not grant access to a caller's binding or
+make a bound updating method escapable. Resolved types must remain
+distinguishable from any original annotation, including when the return type
+was inferred. Checked method/package contracts retain their suspension facts;
+reading reflection data cannot manufacture a non-suspension proof.
 
 `TypeInfo`, `SpecInfo`, and effect-row descriptors are ordinary descriptive data.
 Reading a return-type descriptor does not make it legal to use that runtime

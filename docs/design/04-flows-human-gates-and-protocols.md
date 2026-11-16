@@ -17,7 +17,7 @@ flow PaperWriting(topic: string) -> PaperDraft
         () => Evaluator.run(plan),
     ));
 
-    let draft = Writer.run({ plan, related, formal, eval });
+    var draft = Writer.run({ plan, related, formal, eval });
 
     let review = Reviewer.run(draft);
 
@@ -102,7 +102,9 @@ B ~ Stage<M, O, E2>
 A | B : I -> O ![E1 + E2]
 ```
 
-The result is always a flow value, not an `agent`. A composition such as `Researcher | Writer | Publisher` represents multiple runtime steps with separate prompts, model calls, schema validation, trace events, effect/action checks, trace-spec checks, and runtime-policy checks.
+The result is a flow value, not a new nominal `agent`. Composition preserves
+the selected stage methods and their behavior summaries; prompts and model
+calls occur only where those methods actually request them.
 
 Examples:
 

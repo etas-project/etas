@@ -346,6 +346,30 @@ impl Report ~ PromptEncode {
 }
 ```
 
+Behavioral type specs may require the restricted updating receiver:
+
+```etas
+public spec Resettable {
+    flow reset(var self) -> unit;
+}
+```
+
+Receiver mode is part of the required method contract. An implementation must
+match `self` versus `var self` exactly, as well as the ordinary parameter,
+result, and effect contracts. An updating implementation must prove the
+non-suspension rule; generic/spec dispatch and imported evidence preserve that
+fact. There is no implicit receiver-mode coercion. Such a method is not erased
+to an ordinary `Self -> R` or bound `() -> R` flow, and cannot satisfy a callable
+spec by hiding its updating receiver. A normal flow wrapper may update its own
+local copy and return the new value. See
+[Restricted Updating Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
+
+Defaults on behavioral method signatures belong to the spec's call interface.
+Implementations inherit them rather than providing competing defaults. An
+optional argument still binds the declared parameter type; it does not add an
+implicit `Option` or alter the method's arrow-type arity. See
+[Default Parameters](02-general-programming-constructs.md#41-default-parameters).
+
 Generic APIs use `~` bounds:
 
 ```etas
@@ -459,6 +483,13 @@ runtime. The compiler still knows the allowed spec surface and effect row of eac
 operation; it simply does not know the concrete implementation type after the
 value has been packed.
 
+An object-safe updating method retains its `var self` mode through existential
+dispatch. It requires a direct local `var`; writeback preserves the hidden
+concrete type and its spec evidence. For example, the run-local value
+`policy: ? ~ Scheduler` can invoke the standard `Scheduler.select` contract
+without becoming a shared mutable reference. Its non-suspension and purity
+evidence must survive packing and package boundaries.
+
 #### 1.5.3 Callable Specs
 
 Callable specs target computations: flows, agents, tools, and composed flows.
@@ -477,7 +508,7 @@ must be declared in `<...>`; otherwise names such as `Brief`, `Draft`, and
 If a callable spec omits `![...]`, it imposes no effect constraint. The
 implementation still has its own inferred effect row, but the spec does not
 restrict it. To require an effect-free computation, write `![]` explicitly, as
-in `Pure<I, O> I => O ![]`.
+in `Pure<I, O>` above.
 
 When a flow, agent, or tool writes `~ SpecName`, the compiler may infer the
 spec's type and effect arguments from the declaration signature:
@@ -512,10 +543,10 @@ Trace-spec operators are kinded:
 | `A >> B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `A` evidence before every `B` |
 | `A << B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `B` evidence before every `A`; equivalent to `B >> A` |
 | `S & T` | `Spec<K> x Spec<K> -> Spec<K>` | Both specs must hold |
-| `S | T` | `TraceSpec x TraceSpec -> TraceSpec` | Either trace spec may accept; MVP reserves this for trace specs only |
+| `S \| T` | `TraceSpec x TraceSpec -> TraceSpec` | Either trace spec may accept; MVP reserves this for trace specs only |
 
-`A >> B` includes the local permissions previously written separately as `+A`
-and `+B`. It normalizes to the following internal components, not another
+`A >> B` includes local permissions for both `A` and `B`. It normalizes to the
+following internal components, not another
 source-level `>>` expression:
 
 ```text
@@ -557,9 +588,8 @@ spec Bad =
     ByteStream & +CompanyEmail.send<WorkAccount>; // rejected
 ```
 
-Trace specs replace the old policy-block surface syntax. The language may still
-use "policy" informally for the runtime/enforcement concept, but the source
-constraint is a `trace` spec consumed through `~`.
+The source constraint is a trace spec consumed through `~`; runtime policy is
+the corresponding deployment/enforcement context, not a separate source block.
 
 #### 1.5.5 Spec Targets And Kind Checking
 
@@ -694,7 +724,7 @@ Source code should refer to typed effect actions, trace specs, and runtime
 policy rules, not raw permission strings. `ProjectWorkspace` is a host/project
 package effect, not a core standard-library effect.
 
-### 1.7 Bottom Type
+### 1.8 Bottom Type
 
 `never` is the bottom type. An expression of type `never` never produces a
 runtime value, so the type checker accepts it wherever a value of any type is
@@ -721,7 +751,7 @@ The `else` branch has type `never`, so it does not force the `if` expression to
 return a different type. This is a type rule only; no value of type `never` is
 constructed at runtime.
 
-### 1.8 Provenance Types
+### 1.9 Provenance Types
 
 For factual claims:
 
@@ -733,8 +763,7 @@ type Claim = {
 }
 ```
 
-Evidence requirements should be expressed with ordinary types, specs, and
-validators rather than the old `policy { ... }` source block. For example, a
+Evidence requirements use ordinary types, specs, and validators. For example, a
 publishing flow can require an evidence-bearing value:
 
 ```etas

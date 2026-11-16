@@ -362,7 +362,7 @@ must be declared in `<...>`; otherwise names such as `Brief`, `Draft`, and
 If a callable spec omits `![...]`, it imposes no effect constraint. The
 implementation still has its own inferred effect row, but the spec does not
 restrict it. To require an effect-free computation, write `![]` explicitly, as
-in `Pure<I, O> I => O ![]`.
+in `Pure<I, O>` above.
 
 Trace specs are compile-time spec expressions over action patterns:
 
@@ -532,10 +532,30 @@ ReturnType    ::= "->" TypeExpr EffectSuffix?
 
 ParamList     ::= "(" ParamListInner? ")"
 ParamListInner::= Param ("," Param)* ","?
-Param         ::= Ident ":" TypeExpr
+                | ReceiverParam ("," Param)* ","?
+Param         ::= Ident ":" TypeExpr DefaultArg?
+DefaultArg    ::= "=" Expr
+ReceiverParam ::= "self" | "var" "self"
 
 FlowClause    ::= DeclarationConformance
 ```
+
+`self` is a contextual receiver name, not a new global keyword. A receiver is
+allowed only first in a method or behavioral type-spec method signature, with
+its type supplied by the enclosing declaration. `var self` is further limited
+to ordinary type methods; it is not an agent/tool entry parameter or a general
+`var name: T` parameter form. Callers must use a direct local `var` binding
+(including an enclosing `var self` for nested updates). Receiver-mode matching,
+exclusive access, normal-return writeback, non-suspension, and the ban on bound
+updating method values follow
+[Restricted Updating Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
+
+Defaulted parameters form a trailing ordinary-parameter suffix. Named callable
+declarations, effect-action signatures, and behavioral-spec method signatures
+may use them; receivers and anonymous flows may not. Named calls may omit those
+arguments, but arrow types retain full arity. Definition-site resolution,
+evaluation order, pure/non-suspending defaults, and checked model-tool binding
+are specified in [Default Parameters](02-general-programming-constructs.md#41-default-parameters).
 
 `requested_actions`, `default_actions`, and `escaping_effects` are analysis or
 package-interface metadata fields, not additional `FlowClause` forms. Examples
@@ -555,21 +575,10 @@ flow f(...) ~ SafetyTraceSpec  => trace spec conformance over requested actions
 flow f(...) ~ (+A & -B)        => inline trace spec conformance
 ```
 
-Specs are kinded. Etas MVP has three spec kinds:
-
-| Kind | Constrains | Examples |
-|---|---|---|
-| `type` | Types, type-level markers, resource markers, and effect-row/static entities | `ByteStream`, `Region`, `Within<Root>`, `ReadOnlyEffects` |
-| `callable` | Flow, tool, and agent-method call shape | `Stage<I, O, E>`, `Pure<I, O>` |
-| `trace` | Requested-action traces, authority, and temporal constraints | `SafeEmail`, `+Email.send`, `Approval.request >> Email.send` |
-
-Effect-row specs are `type` specs because effect rows are static entities rather
-than runtime values. Protocols are not a spec kind in the MVP; the optional
-`protocol` declaration remains a separate advanced construct.
-
-Spec expressions are kind-checked. `&` composes specs of the same kind. `|` is
-reserved for trace specs in the MVP. Prefix `+`, prefix `-`, `>>`, and `<<`
-construct only trace specs:
+Spec kinds and their inference rules are defined in
+[Types](#12-types). Effect-row constraints use type specs; protocols remain a
+separate advanced construct. Prefix `+`, prefix `-`, `>>`, and `<<` construct
+only trace specs:
 
 ```text
 +A      allow action pattern A
@@ -596,7 +605,7 @@ The return type may be omitted. In that case, the compiler infers it from explic
 
 ```etas
 flow normalize_title(title: string) {
-    trim(lowercase(title))
+    std.text.trim(std.text.lowercase(title))
 }
 ```
 
@@ -604,7 +613,7 @@ This is equivalent to:
 
 ```etas
 flow normalize_title(title: string) -> string {
-    return trim(lowercase(title));
+    return std.text.trim(std.text.lowercase(title));
 }
 ```
 
@@ -660,7 +669,7 @@ directly in their declarations with `~ SpecName`. Effect actions can also be
 declared directly inside an `effect` block. An effect action can be invoked with
 `perform` and intercepted by `handle`.
 
-### 1.4 Tools, Agents, Persistent Resources
+### 1.5 Tools, Agents, Persistent Resources
 
 ```ebnf
 ToolDecl      ::= "tool" Path ParamList "->" TypeExpr EffectSuffix? ToolClause* ToolBody
@@ -688,7 +697,7 @@ let ProjectMemory =
     );
 ```
 
-Store API calls are ordinary calls whose signatures carry parameterized, region-sensitive effects such as `Memory.read<ProjectMemory.Papers>` and `Memory.write<ProjectMemory.Decisions>`. The legal memory places, containment relation, and read/write inference rules are defined in [Effect System and Inference](06-effect-system-and-inference.md#11-parameterized-effects). Backend binding, namespace, retention, and migration policy belong in the manifest/runtime configuration, not in source syntax.
+Store API calls are ordinary calls whose signatures carry parameterized, region-sensitive effects such as `Memory.read<ProjectMemory.Papers>` and `Memory.write<ProjectMemory.Decisions>`. The legal memory places, containment relation, and read/write inference rules are defined in [Effect System and Inference](06-effect-system-and-inference.md#13-parameterized-effects). Backend binding, namespace, retention, and migration policy belong in the manifest/runtime configuration, not in source syntax.
 
 Agent runtime metadata uses annotations before the declaration. For example,
 `@model("gpt-5.5")`, `@tools([latex.check])`, and
@@ -797,7 +806,7 @@ time, memory, sandboxed command execution, secrets, errors, and internal
 agentic inference support. Host/runtime adapter bindings belong in package
 metadata or compiler/runtime registries, not in source syntax.
 
-### 1.5 Trace Specs And Protocols
+### 1.6 Trace Specs And Protocols
 
 ```ebnf
 EffectPattern ::= Path EffectPatternArgs?
@@ -851,7 +860,7 @@ runtime action event. The effect row should say `ProjectWorkspace.write<_>` or a
 known static selector such as `ProjectWorkspace.write<"reports/**">`; it should
 not say `ProjectWorkspace.write<path>`.
 
-### 1.6 Statements
+### 1.7 Statements
 
 ```ebnf
 Block         ::= "{" Stmt* FinalExpr? "}"
@@ -934,7 +943,7 @@ preserves `|` alternatives and independently composed spec/scope boundaries;
 denials and outer authority checks remain effective. See
 [Trace Specs](05-type-system-and-errors.md#154-trace-specs) for the full rules.
 
-### 1.7 Expressions
+### 1.8 Expressions
 
 ```ebnf
 Expr          ::= Literal
@@ -1289,7 +1298,7 @@ search. `as` reuses the existing keyword; `async`, `await`, `yield`, and
 `suspend` are not added as keywords. `Async.await` and `Async.yield` are
 standard action names.
 
-### 1.8 Names And Patterns
+### 1.9 Names And Patterns
 
 ```ebnf
 Path          ::= Ident ("." Ident)*
@@ -1358,9 +1367,11 @@ schema boundary, and exhaustive matching requirements are defined in
 
 ## 2. Key Design Principles
 
-### 2.1 Agents Are Not Deterministic Flows
+### 2.1 Agents Carry Nominal Identity And Checked Behavior
 
-Agents are non-deterministic, effectful, trace-producing computations.
+Agents are nominal components with flow-like methods. Their determinism follows
+the method body: model inference is non-deterministic, but an agent method with
+only deterministic local computation remains deterministic.
 
 ### 2.2 Tools Are Not Ordinary Flows
 
@@ -1380,7 +1391,10 @@ Agent input values are not converted to prompts through subclassing or `toString
 
 Records, tuples, arrays, lists, maps, and sets use value semantics. Passing them to another flow, agent, or tool does not let that callee mutate the caller's value. The implementation may share structure internally, but shared mutable object identity is not part of the source-language semantics.
 
-Persistent mutation must go through typed runtime resources such as `Store<K, V>`, and local mutation must remain explicit through `var` rebinding or visible mutable APIs.
+Persistent mutation goes through typed runtime resources such as `Store<K, V>`.
+Local values can be rebound with `var` or updated through a restricted `var self`
+call; independent value copies remain unchanged. Ordinary parameters and plain
+`self` do not provide implicit mutable access to the caller.
 
 ### 2.6 Messages Are Not Raw Strings
 

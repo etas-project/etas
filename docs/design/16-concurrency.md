@@ -70,12 +70,23 @@ Etas concurrency is structured:
 - no background task is silently detached by default.
 
 The program entry and combinators provide managed execution with default async
-handling. `std.task.run(scheduler => { ... })` creates an explicit owned scope
-when code needs the scheduler handle. `std.task.start` is permitted only in a
+handling. `std.task.run(scheduler => { ... }, implementation = DefaultScheduler)`
+creates an explicit owned scope with the selected implementation. The default
+value belongs to std; callers need not import it for the one-argument form.
+The callback's `scheduler` is a fresh running `SchedulerHandle`, not that
+reusable implementation value. `std.task.start` is permitted only in a
 managed scope; it is not unrestricted process/thread creation. Tasks inherit
 the active handler environment, trace specs, runtime policy, limits, cancellation
 scope, and trace links at their start site. Owner/lifetime requirements must
 survive helper calls and package interfaces.
+
+Combinators inside a run inherit its selected policy while retaining their own
+child-group lifetime and cancellation boundaries. An explicit nested `run`
+selects its own implementation; omitting its argument selects the std default,
+not an ambient mutable global. The root managed execution uses that default
+when there is no explicit selection. The behavioral `Scheduler` spec, default
+value, and protected execution contract are specified in
+[Scheduler Spec And Default Value](19-standard-library.md#24-scheduler-spec-and-default-value).
 
 This matches agent-system needs better than free `spawn`: side effects, model
 calls, approvals, and budget consumption must remain attributable to a source
@@ -437,8 +448,11 @@ they must not be busy-polled by repeatedly yielding.
 Waiting suspends the current task, not the whole scheduler thread. Models,
 streams, and other host operations need non-blocking adapters or managed
 blocking offload. Yielding cannot turn a blocking host function into async I/O.
-Default handlers perform ordinary scheduling; a custom handler changes policy,
-not the validity of task results or the authorization of protected host work.
+The standard handler adapter transfers work to the scope's selected policy.
+`DefaultScheduler` chooses FIFO ready order; a custom `Scheduler` implementation
+can choose another order without replacing wait-registration or result checks.
+A custom handler can also change control behavior through the protected
+transfer APIs, not the validity of task results or authorization of host work.
 
 ### 12.4 Handler Lifetime And Early Finish
 
@@ -485,12 +499,23 @@ introduced by this extension.
 
 This design example uses the standard task protocol and optional `as k`. It is
 not a claim that the current interpreter implements these APIs. The two jobs
-are started before either is awaited. The handler demonstrates explicit
-scheduling; business code normally uses `join` with default handling instead.
+are started before either is awaited. It explicitly selects a custom ready
+policy and writes the handler adapter; business code normally omits both and
+uses the standard default.
 
 ```etas
 import std.task;
 import std.task.Async;
+import std.task.scheduler.{Scheduler, ReadyTask};
+
+type NewestFirst = {};
+
+impl NewestFirst ~ Scheduler {
+    flow select(var self, ready: Array<ReadyTask>) -> usize ![] {
+        // The scheduler contract supplies a non-empty snapshot.
+        return ready.len() - 1;
+    }
+}
 
 @model("gpt-5.5")
 agent Reviewer(request: string) -> string {
@@ -527,7 +552,7 @@ flow main(args: Array<string>) -> i32 {
                 scheduler.park(task, k);
             }
         }
-    });
+    }, NewestFirst {});
 }
 ```
 
@@ -538,6 +563,11 @@ continuation as a fake string. Unhandled task or output errors fail execution
 instead of returning the normal exit code `0`; application-specific recovery
 can use ordinary outer handlers. The example does not add an aborting `?` or
 change the existing Error-to-Result semantics.
+
+Omitting `NewestFirst {}` uses `DefaultScheduler` without an extra import.
+Omitting the explicit `handle ... with ...` layer uses the standard handler
+adapter automatically. Ready-order selection is independent of that adapter;
+neither choice grants authority or permits a task/continuation to escape.
 
 ## 13. Trace And Replay
 
@@ -557,6 +587,8 @@ JoinExit(scope_id)
 Trace events must preserve:
 
 - source span and stable AIR node id;
+- selected scheduler implementation/revision, configuration fingerprint, and
+  ready-selection decisions for each run;
 - branch/task id;
 - parent concurrent scope id;
 - park, runnable-queue, wakeup, and continuation transfer/consumption events;

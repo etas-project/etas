@@ -335,8 +335,7 @@ flow Prefix(input: string) -> Result<string, TextError> {
 ## 2. Task And Scheduling APIs
 
 These APIs specify structured task execution and handler-based scheduling.
-They are design contracts, not a claim of current interpreter support. Their
-scope, cancellation, and continuation semantics are defined in
+Their scope, cancellation, and continuation semantics are defined in
 [Concurrency](16-concurrency.md#121-handler-based-scheduling).
 
 ### 2.1 Standard Types And Actions
@@ -349,8 +348,10 @@ erase those facts. Package interfaces and helper calls must preserve them.
 Task handles may be shared inside their valid lifetime; repeated awaits observe
 the same completed result and do not execute the job again.
 
-The callback to `std.task.run` receives an opaque, scope-bound scheduler handle.
-The handle's owner is inferred, not chosen by a runtime string. Neither tasks
+The callback to `std.task.run` receives an opaque, scope-bound `SchedulerHandle`
+from `std.task.scheduler`. This running handle is distinct from the reusable
+implementation value selected by the caller. The handle's owner is inferred,
+not chosen by a runtime string. Neither tasks
 nor scheduler handles may escape their owning execution scope, including via
 returned closures or aggregate values. They are not model-schema values or
 ordinary serializable checkpoint data. Managed execution is supplied by the
@@ -378,11 +379,12 @@ matches the generic action; the arm must work for its matched type parameters.
 
 | API | Result | Required Contract |
 |---|---|---|
-| `std.task.run(body)` | The callback result `R` | Call `body(scheduler)` in a new structured scope with default async handlers. Wait for owned children and cleanup before returning. Neither the scheduler nor an owned task/continuation may be returned as part of `R`. |
+| `std.task.run(body, implementation = DefaultScheduler)` | The callback result `R` | Create fresh scope-local policy/queue state for the selected implementation, install the standard async handlers, and call `body(scheduler)`. Wait for owned children and cleanup before returning. No owned task, continuation, running scheduler, or handler capturing it may escape in `R`. |
 | `std.task.start<T, effect E>(job: () -> T ![E])` | `Task<T, E>` | Schedule a child in the active scope and return its handle without waiting for completion. Preserve the job's effects, requested actions, trace behavior, and inherited context. |
 | `std.task.await<T, effect E>(task: Task<T, E>)` | `T` | Request `Async.await(task)`. Deliver its result or propagate failure through the task protocol; waiting must not block the whole scheduler thread. |
 | `scheduler.requeue(k, value)` | `never` | Consume a live continuation owned by this scheduler, attach a value of its action's result type, queue it as runnable, and transfer control out of the current arm. |
 | `scheduler.park(task, k)` | `never` | Consume the continuation from the matching `Async.await(task)` request and register a completion dependency. Deliver success, failure, or cancellation without losing a concurrent completion event. |
+| `std.task.scheduler.handlers(scheduler: SchedulerHandle)` | `![Async => []]` | Construct the standard scope-bound `yield`/`await` handler adapter. Construction is pure; applying it uses checked transfer primitives and the policy bound to this handle. |
 
 `run` and `start` are compiler-recognized std contracts over task-execution
 primitives. They need no new source keyword or exposed `spawn` syntax. A
@@ -390,7 +392,8 @@ same-named user flow cannot acquire their lifetime or scheduling obligations
 by spelling alone. The scheduler is an ordinary bound value with restricted
 operations; `requeue` and `park` are registered control-transfer primitives,
 not arbitrary callbacks made special by their method names. Scheduling policy
-can be Etas code over this public substrate.
+is Etas code implementing the `Scheduler` spec below; the running handle is
+created by `run`, not by importing a live singleton.
 
 `requeue` normally handles `Async.yield` with the unit value `()`. It can only
 resume the original suspended computation with a correctly typed value; it
@@ -437,3 +440,456 @@ handlers do not gain permission to forge completion of protected host work.
 
 See the [complete scheduling example](16-concurrency.md#126-complete-example)
 for `as k`, `start`, `await`, and handler transfer used together.
+
+### 2.4 Scheduler Spec And Default Value
+
+`std.task.scheduler.Scheduler` is a behavioral type spec, not the type of a
+running scheduler. An implementation is a reusable value whose ordinary local
+state can evolve through `var self` during one run:
+
+```etas
+module std.task.scheduler;
+
+public type SchedulerHandle;
+
+public type ReadyTask = {
+    id: u64,
+    enqueue_order: u64,
+}
+
+public spec Scheduler {
+    flow select(var self, ready: Array<ReadyTask>) -> usize ![];
+}
+
+public type FifoScheduler = {};
+
+impl FifoScheduler ~ Scheduler {
+    flow select(var self, ready: Array<ReadyTask>) -> usize ![] {
+        return 0;
+    }
+}
+
+public let DefaultScheduler = FifoScheduler {};
+```
+
+`ReadyTask` is a copyable scheduling snapshot, not `Task<T, E>`, a continuation,
+or authority to execute work. Its id is scoped to the run. Every runnable-queue
+entry gets a new enqueue order; snapshots are sorted oldest first. `select`
+receives a non-empty snapshot and returns its chosen index. A policy may retain
+ordinary value-semantic counters/configuration through `var self`; it never
+owns a continuation through this record or stores one in an ordinary array.
+
+Implementations must have empty escaping/requested-action summaries and be
+deterministic and proven non-suspending. These are checked obligations of the
+resolved standard spec, not facts inferred from `![]` alone or assertions a user
+annotation can grant. Unknown imports/callbacks cannot satisfy the proof.
+Selection runs under the existing receiver exclusivity and budget rules.
+
+The `std.task` implementation imports `DefaultScheduler`, `Scheduler`, and
+`SchedulerHandle` from `std.task.scheduler`. Its public call shape is:
+
+```text
+run<R, effect E>(
+    body: SchedulerHandle -> R ![E],
+    implementation: ? ~ Scheduler = DefaultScheduler
+) -> R
+```
+
+This uses an existing object-safe existential bound, not general subtyping or
+an assumed default generic type parameter. Defaults follow the ordinary
+[default-parameter rules](02-general-programming-constructs.md#41-default-parameters).
+Thus `task.run(body)` needs no caller import of `DefaultScheduler`;
+`task.run(body, CustomScheduler)` or
+`task.run(body, implementation = CustomScheduler)` explicitly selects another
+value satisfying `Scheduler`. Callers import their custom implementation, not
+a live running handle. The result's escaping row is inferred after async
+handling, while all child-work summaries remain preserved.
+
+Each `run` creates a fresh local copy of the implementation value and fresh
+owned queue/wait state. Updating that copy never changes the supplied value or
+another run's copy. Implementations cannot carry live task/continuation/scheduler
+state across runs or smuggle it into a global constant. A factory flow may
+construct a configuration value before passing it to `run`; no separate
+factory protocol is required. Runtime worker pools and I/O drivers may be
+shared physically without sharing logical scope ownership or queue state.
+Combinators use the active run's selected policy for their owned child groups.
+An explicit nested `run` creates a new policy instance; its omitted argument
+uses `DefaultScheduler` according to normal default-parameter binding.
+
+### 2.5 Standard Handlers And Runtime Responsibilities
+
+The standard handler adapter is expressible in Etas:
+
+```etas
+import std.task.Async;
+
+public flow handlers(scope: SchedulerHandle) -> ![Async => []] {
+    return handler {
+        Async.yield() as k => {
+            scope.requeue(k, ());
+        }
+
+        Async.await(job) as k => {
+            scope.park(job, k);
+        }
+    };
+}
+```
+
+The adapter handles the task protocol; the selected implementation supplies the
+ready-selection policy. A custom policy therefore need not reimplement task
+completion, cancellation, or lost-wakeup prevention. An explicit inner handler
+may still customize `Async` handling through the same checked transfer APIs.
+It cannot detach work, forge results, or bypass the selected scope's ownership.
+The handler value captures the handle's lifetime and cannot escape that owner.
+
+| Layer | Responsibility |
+|---|---|
+| `Scheduler` implementation | Select a ready entry and maintain private value-semantic policy state. It may not suspend, request external authority, or operate on raw continuations. |
+| `std.task` / `std.task.scheduler` | Own the default value and common handlers; establish the selected policy's run, install handlers, coordinate structured completion/failure, and invoke checked execution primitives. |
+| Runtime primitives | Own live frames/continuations and protected queue/wait registrations; validate owner, readiness, result types, one-shot transfer, wakeup/cancellation races, and cleanup. Supply non-blocking I/O completion or managed offload. |
+| Application | Choose an implementation when needed; write ordinary jobs and optional scoped handlers. It does not import active global queue state. |
+
+`run` resolves the implementation and binds its scope-local copy before
+executing the callback. New tasks, explicit yields, and completed waits enqueue
+runnable work. For each dispatch, the coordinator obtains a non-empty snapshot,
+calls the local policy's `select`, and dispatches the chosen still-live entry
+through Runtime primitives. A cancellation/completion race may invalidate an
+entry after the snapshot; refresh readiness rather than resume a dead task.
+An out-of-range index is a scheduler contract violation: fail and unwind the
+affected scope rather than execute an arbitrary task or silently choose another.
+No-ready-work with outstanding waits parks the coordinator for completion;
+it is not a busy-yield loop. Scope closure drains or cancels owned work before
+releasing live handlers and continuations.
+
+The default FIFO policy selects index zero. New, yielded, and woken tasks enter
+the tail, so older runnable work is chosen first. This is cooperative fairness,
+not a guarantee of CPU preemption or bounded model/provider latency. Existing
+limits and cancellation still apply. Custom implementations can choose another
+ready order or maintain local policy state; this contract does not claim to
+replace OS scheduling, I/O drivers, or protected task-execution primitives.
+
+## 3. JSON Values
+
+`std.json` owns the shared JSON value type and deterministic codecs. EDK JSON
+helpers use or re-export this type; they must not introduce a second incompatible
+JSON tree solely for HTTP or model-tool payloads.
+
+The public data model is a transparent recursive ADT:
+
+```etas
+module std.json;
+
+public enum JsonValue {
+    Null,
+    Bool(bool),
+    Number(f64),
+    String(string),
+    Array(Array<JsonValue>),
+    Object(Map<string, JsonValue>),
+}
+
+public enum JsonError {
+    InvalidJson(string),
+}
+```
+
+The payload types `Array<T>` and `Map<K, V>` above resolve to the standard
+collection types, not to the same-named JSON variants. Applications may construct
+and match these variants directly. JSON values retain ordinary immutable value
+semantics. Object keys are strings; array order is significant, while object
+member order is not part of this data model. Parsing duplicate object keys keeps
+the last value. Source spelling, whitespace, and duplicate occurrences are not
+preserved as a lossless syntax tree.
+
+| API | Return Type | Contract |
+|---|---|---|
+| `std.json.parse(text: string)` | `Result<JsonValue, JsonError>` | Parse one complete JSON value, allowing surrounding JSON whitespace but no trailing non-whitespace content. Reject malformed input and numbers outside the supported finite numeric range. |
+| `std.json.stringify(value: JsonValue)` | `Result<string, JsonError>` | Encode JSON without performing I/O. Reject non-finite numeric values. Object output order is not a canonical-signing contract. |
+
+Both APIs have empty escaping effect rows. Codec failures are explicit `Err`
+values, not `Error<JsonError>` actions; `?` is neither needed nor redefined for
+them. Constructors cover all JSON value categories, but `Number(f64)` does not
+promise arbitrary-precision decimals or exact large-integer round trips. Parsing
+may round a representable numeric value. Neither encoding nor decoding preserves
+its original numeric spelling.
+
+## 4. Single-Step Agent Interaction
+
+### 4.1 Purpose And Ownership
+
+`Agentic.step<C, O>` performs one model generation and returns control to Etas
+code. It does not execute requested tools, issue a second model request to
+repair output, retry, or continue an agent loop. `Agentic.infer<C, O>` remains
+the complete-loop convenience action; its standard controller can be expressed
+using step, checked tool invocation, and conversation assembly.
+
+The public wrapper is `std.agent.step`. `std.agent` exports the transparent
+protocol types below; `std.tool.reference` and `std.tool.invoke` operate on those
+same types. These are std types and APIs, not new language keywords. They do not
+require opaque checked-call wrappers, execution receipts, or a second JSON type.
+The existing `Conversation`, `Prompt`, and compiler-derived `Schema<O>` contracts
+are reused rather than replaced by a new session or schema abstraction.
+
+### 4.2 Transparent Types
+
+```etas
+module std.agent;
+
+import std.json.JsonValue;
+
+public type StepResult<C, O> = {
+    turn: AssistantTurn,
+    decision: StepDecision<C, O>,
+    usage: Option<Usage>,
+}
+
+public enum StepDecision<C, O> {
+    Final(O),
+    CallTools(Array<ToolCall<C>>),
+    Stopped(StopReason),
+}
+
+public type AssistantTurn = {
+    request_id: Option<string>,
+    content: Array<MessageContent>,
+    provider_data: Map<string, JsonValue>,
+}
+
+public enum MessageContent {
+    Text(string),
+    Value(JsonValue),
+}
+
+public type ToolRef = {
+    id: string,
+    revision: string,
+}
+
+public type ToolCall<C> = {
+    id: string,
+    tool: ToolRef,
+    args: JsonValue,
+}
+
+public type ToolResult<C> = {
+    call_id: string,
+    result: Result<JsonValue, StepDiagnostic>,
+}
+
+public enum StopReason {
+    Truncated,
+    Refused(string),
+    InvalidOutput(StepDiagnostic),
+    InvalidToolCall(StepDiagnostic),
+}
+
+public type StepDiagnostic = {
+    code: string,
+    message: string,
+    path: Option<string>,
+}
+
+public type Usage = {
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    cost: Option<{ micros: u128, currency: string }>,
+}
+```
+
+`C` is the resolved agent method identity, including its applicable revision and
+declared tool surface, not a user-supplied runtime string. It is a checked
+contract parameter, as in `Agentic.infer<C, O>`, rather than an ordinary data
+type parameter chosen to acquire authority. It allows a call/result to retain
+the relevant upper-bound summary; it is not evidence that a transparent record
+has already been validated or executed.
+
+`ToolRef.id` encodes a resolved package/module/item identity, not just a display
+name. `revision` identifies the registered implementation snapshot. The same
+`ToolRef` is used by reflection metadata. `std.tool.reference` constructs its
+normal value from a resolved native tool declaration. Manually constructing or
+editing the record is allowed, but never registers a tool or grants authority.
+`step` resolves provider tool names against `C` to create these references;
+an unresolvable name produces `Stopped(InvalidToolCall(...))`. This does not
+replace argument or authorization checks at `invoke`, which must also work
+safely on caller-constructed records.
+
+`AssistantTurn` represents the assistant side of one protocol turn, not an
+application `Message<T>` with sender/session provenance. Tool requests occur
+only in `StepDecision.CallTools`, avoiding a second independently editable copy
+in `AssistantTurn`. `provider_data` retains provider continuation metadata that
+must survive the next request; it cannot override the model profile, tool
+surface, policy, or budget. Adapters must preserve required continuation data
+through the public protocol instead of relying on an inaccessible host object.
+The initial content alternatives are text and structured JSON; this does not
+claim a complete multimodal media API.
+
+When produced by `step`, `Final(value)` guarantees successful decoding and
+validation against `Schema<O>`, and `CallTools` is non-empty and contains
+requests, not executed operations. A step does not both return a final answer
+and request tools. These are API guarantees, not restrictions on constructing
+transparent values: a caller-built `Final` is not proof of a model response,
+and assembly must reject an empty `CallTools` or another invalid transition.
+Invalid model output or tool-call syntax produces the corresponding `Stopped`
+case without hidden repair. `StepDiagnostic.code` is a stable machine-readable
+category, `message` is explanatory text, and `path` optionally identifies the
+invalid schema field or tool argument; applications must not branch on message
+wording.
+
+An absent `usage`, token field, or cost means unknown, not zero. A provider that
+does report usage must not have its cost discarded by the standard projection.
+Unknown usage still follows conservative admission/accounting rules and cannot
+disable parent limits. Fabricated protocol usage is not authoritative runtime
+resource-accounting evidence.
+
+### 4.3 Public APIs
+
+The result column below describes returned values, not an implicit `![]`
+annotation. Effectful entries preserve their inferred errors and behavioral
+summaries as specified in section 4.4.
+
+| API | Return Type | Contract |
+|---|---|---|
+| `std.agent.step<C, O>(conversation: Conversation, schema: Schema<O>)` | `StepResult<C, O>` | Request one `Agentic.step<C, O>` under the current agent execution context. Use the supplied output schema for this request without invoking tools or adding a repair request. |
+| `std.tool.reference(tool)` | `ToolRef` | Describe a resolved Etas `tool` or imported native tool symbol, including its revision. Pure; a flow or raw name is not a substitute for a tool declaration. |
+| `std.tool.invoke<C>(call: ToolCall<C>)` | `ToolResult<C>` | Resolve and validate the requested native tool, then dispatch its Etas body or declared primitive binding under the current checks. Validate and encode its result; return feedback correlated by `call_id`. |
+| `std.agent.conversation.from_prompt(prompt: Prompt)` | `Conversation` | Construct an in-memory conversation while preserving prompt channels and trust information. Pure; do not implicitly load or write persistent session history. |
+| `std.agent.conversation.append_step<C, O>(conversation: Conversation, step: StepResult<C, O>)` | `Result<Conversation, StepDiagnostic>` | Return a new conversation containing the complete assistant turn, including the decision's tool requests and required provider metadata. Pure; validate the protocol transition without executing anything. |
+| `std.agent.conversation.append_results<C>(conversation: Conversation, results: Array<ToolResult<C>>)` | `Result<Conversation, StepDiagnostic>` | Return a new conversation with one correlated result for each pending call. Reject missing, duplicate, or foreign call ids and invalid protocol order. Pure; do not certify that tools actually ran. |
+
+`O` is normally inferred from the schema/expected result; `C` is supplied by the
+active agent method or the original inference request being handled. A handler
+for `Agentic.infer<C, O>` can call `step` using that request's context even when
+the handler itself was defined in an ordinary flow. Merely naming another `C`
+does not switch identity or obtain its tools. With no applicable agent request
+context, these APIs cannot fabricate one from protocol data.
+
+Before contacting a provider, `step` checks that the conversation is a valid
+next request, including that pending tool calls have results. Caller-built
+history and provider metadata remain input data: they cannot upgrade trust,
+prove an approval happened, or supply protected execution/usage evidence.
+
+After `CallTools`, append the assistant step before appending its tool results.
+Results can be supplied in a different array order when call ids identify them
+unambiguously; assembly follows the pending-call order required by the provider.
+The pending set is completed once, not partially replaced on each append.
+`Final` and `Stopped` have no pending tool-result slots. Supplying a previously
+constructed `ToolResult` is useful for mocks or simulations but records only
+caller-provided feedback, never a genuine tool-execution event.
+
+### 4.4 Effects, Execution Checks, And Failures
+
+The default step handler consumes `Agentic.step<C, O>`, so it remains a requested
+and default action rather than an ordinary escaping effect. The step remains
+`NonDeterministic`; handling an action does not make real model execution pure.
+It inherits the active model configuration, tool surface, trace specs, runtime
+policy, limits, cancellation, and trace/replay mode. None is granted by the
+conversation, schema, or transparent output records.
+
+Before `std.tool.invoke` executes anything, it must:
+
+1. resolve the tool identity and revision against the registered native tools
+   exposed by `C`, rejecting stale or out-of-surface references;
+2. decode arguments against the actual declaration's input schema, not schema
+   claims supplied in the record;
+3. enforce the tool boundary, caller boundary, current trace specs/policy,
+   approval, sandbox, limits, and cancellation across transitive calls;
+4. dispatch the registered Etas body or declared binding, and validate its
+   output before encoding model-facing feedback.
+
+Boundary diagnostics such as malformed arguments or a rejected tool request
+may be returned as `Err(StepDiagnostic)` without executing the rejected tool.
+This is not an implicit handler for every `Error<E>` raised inside a tool.
+Ordinary typed failures remain escaping obligations unless the tool/controller
+explicitly handles and translates them. Likewise, `Stopped` is a model-turn
+outcome, not a catch-all for transport failures, cancellation, budget exhaustion,
+or policy termination. Those retain the normal failure/unwind behavior. The
+postfix `?` still captures exactly one residual `Error<E>` into `Result<T, E>`;
+it is not needed to inspect the already value-level `ToolResult.result`.
+
+Static analysis of `invoke<C>` includes the conservative union of the exposed
+tools' effect, requested-action, determinism, and temporal summaries. Runtime
+checking narrows the actual selected call. A default handler must not erase tool
+authority behind the handled `Agentic.step`/`infer` action. Receiving a request
+does not itself count as execution of the requested tool for approval ordering
+or trace-spec satisfaction; the checked dispatch and actual actions supply
+those events.
+
+Invocation and replay records correlate request id, call id, tool revision, and
+current execution context. A repeated record must not silently become permission
+to execute a non-idempotent tool again; use the existing replay/deduplication
+contract or report an uncertain outcome. This is not a promise of exactly-once
+external effects. Multiple calls in one model turn are not automatically safe
+to run in parallel; normal dependency, policy-order, and resource checks apply.
+
+### 4.5 Complete Controller Example
+
+This example replaces the full-loop handler with an explicit, bounded controller.
+Its only exposed tool is a pure Etas tool, so the example introduces no external
+authority actions or application-specific error types.
+
+```etas
+import std.agent.{StepDecision, ToolResult};
+import std.agent.conversation;
+import std.runtime.effects.Agentic;
+import std.tool;
+
+tool uppercase(text: string) -> string ![] {
+    return std.text.uppercase(text);
+}
+
+@model("configured-model")
+@tools([uppercase])
+agent Writer(input: string) -> string {
+    let prompt = Prompt.new()
+        .system(Trusted("Use uppercase when needed, then return the final text."))
+        .data(input);
+    return perform infer<string>(prompt);
+}
+
+flow RunControlled(input: string) -> string {
+    handle Writer.run(input) with {
+        Agentic.infer<Writer.run, string>(prompt, schema) => {
+            var history = conversation.from_prompt(prompt);
+
+            for _ in [0, 8) {
+                let step = std.agent.step(history, schema);
+                history = match conversation.append_step(history, step) {
+                    Ok(next) => next,
+                    Err(error) => abort(error.message),
+                };
+
+                match step.decision {
+                    Final(answer) => {
+                        resume answer;
+                    },
+                    CallTools(calls) => {
+                        var results: Array<ToolResult<Writer.run>> = [];
+                        for call in calls {
+                            results = results.push(tool.invoke(call));
+                        }
+                        history = match conversation.append_results(history, results) {
+                            Ok(next) => next,
+                            Err(error) => abort(error.message),
+                        };
+                    },
+                    Stopped(_) => {
+                        abort("Model step stopped without a final answer");
+                    },
+                };
+            }
+
+            abort("Model step limit reached");
+        }
+    }
+}
+```
+
+`Final`, `CallTools`, and `Stopped` are the variants of the imported
+`StepDecision`. The handler resumes its original inference request at most once;
+the loop performs separate step requests, not multi-shot resumption. The bound
+of eight turns is controller logic, not a reset of inherited token, cost, or
+wall-time limits. This deliberately fail-fast example aborts on a stopped turn;
+an application may instead explicitly repair context, delegate, or return a
+typed failure. Such choices remain ordinary Etas code, not hidden behavior of
+`step`.

@@ -248,6 +248,10 @@ Public metadata should include:
 - public modules and exported item names;
 - public type, enum, spec, flow, agent, tool, effect, action, and protocol
   signatures;
+- parameter names, required/defaulted status, and checked default expressions
+  or executable references with declaration-site bindings and fingerprints;
+- method receiver modes and checked transitive may-suspend summaries, including
+  behavioral-spec evidence; omission is unknown, not a non-suspension proof;
 - generated effect/action summaries for exported flows, agents, and tools;
 - tool schemas for model-callable public tools;
 - trace-spec summaries that affect exported APIs;
@@ -484,6 +488,10 @@ All modes must expose the same semantic surface to the current package:
 - public modules and items;
 - exported type, spec, flow, agent, tool, effect, action, and protocol
   signatures;
+- checked default-argument contracts, including definition-site bindings and
+  fingerprints, not caller-reinterpreted source strings;
+- method receiver modes and transitive suspension facts required for checked
+  `var self` calls;
 - generated effect/action summaries;
 - tool schemas and binding requirements;
 - re-export expansion;
