@@ -1634,7 +1634,7 @@ fn verify_caller_task_handler(binary: &Path, root: &Path) {
     fs::write(
         &app,
         r#"module app.main;
-import std.task.{Scheduler, dispatch};
+import std.task.{Scheduler, dispatch, run, start, await};
 import std.runtime.checkpoint.checkpoint;
 import std.extra.sdk_echo;
 effect Probe { action<T> value<Key>(key: Key, value: T) -> T; }
@@ -1647,8 +1647,16 @@ flow main(args: Array<string>) -> i32 ![] {
         Probe.value<string>(key, value) => { checkpoint("caller-handler"); resume sdk_echo(value); }
     };
     if answer + 1 != 43 { return 1; }
-    let nested = dispatch((scheduler: Scheduler) => {
-        let inner = handle { dispatch(scheduled) } with {
+    let nested = run((scheduler: Scheduler) => {
+        let inner = handle {
+            let ready = start(() => { return 1; });
+            let requesting = start(() => {
+                let value = perform Probe.value<string>("key", 40);
+                return value + 1;
+            });
+            let first = await(ready);
+            first + await(requesting)
+        } with {
             Probe.value<string>(key, value) => { checkpoint("nested-handler"); resume sdk_echo(value); }
         };
         return inner + 1;

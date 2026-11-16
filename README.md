@@ -626,8 +626,12 @@ and single-shot continuation; separate processes resume the root, nested and
 Action parameters cross the bundle boundary by canonical Effect/action identity
 and parameter position. Known request instances materialize the Handler's body
 types and generic calls without restricting its parametric type-checking rule.
-Host-wait completion routing and the full budget/cancellation/trace compatibility
-matrix remain migration gates.
+A parent whose child has just completed still intercepts requests from another
+child before its own body resumes. The coordinator commits queued completion
+inputs without executing source or changing FIFO/resource admission, and the
+checkpoint retains that completed wait once. Continuation transfer values are
+checked in the continuation's declaring program. Host-wait completion routing
+and the full budget/cancellation/trace compatibility matrix remain migration gates.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,

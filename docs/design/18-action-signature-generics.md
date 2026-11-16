@@ -233,9 +233,14 @@ Portable generic type parameters use canonical Effect identity, action name and
 parameter position; no session-local symbol or type ID becomes a portable binder.
 Known checked requests materialize contextual body types and native generic calls,
 while parametric Handler checking remains independent of request enumeration.
+Queued task/scope completions are committed before the next task body executes,
+so a ready parent's lexical Handler stays available to another child. The
+installed fixture saves and restores this completed wait while the generic arm
+calls source std. Continuation transfer validation uses the checked program that
+owns the token's ABI.
 
 This evidence does not close the full std migration gate. Remaining work includes
-Host-wait completion and Ready-wakeup routing at task Handler boundaries, broader
+Host-wait completion routing at task Handler boundaries, broader
 budget/cancellation/trace compatibility, the remaining std modules, minimal
 bootstrap contract review and whole-library compatibility and performance
 acceptance. Release continues to default to legacy.
