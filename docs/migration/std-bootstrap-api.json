@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "113a5e01f3719bc5c0e1c1706300656a98cf186c",
-    "frontend": "d2e6840e34a33b43e1581854c596bb77930656e4",
-    "interpreter": "a30cfc03581545b1ef1e5dad61ec2d55f0dc2d6a",
-    "std_version": "0.3.0",
-    "compiler_version": "0.12.0",
-    "native_binding_abi": "blake3:1dda07b1d67ed7dc37e3a4745e4570ad7829d91d37ff871a330b1b317a4900a8",
-    "source_payload_hash": "blake3:566b5659eef269495947b3fc62214f82fd51e2486af3247d451812b0c28df072",
-    "body_schema": 12,
-    "descriptor_schema": 13,
-    "artifact_hash": "blake3:0d13f9a0d64672f5be8982b3911a5ecc9e5af14088e32aa9bdde7a9bfafe9c28",
+    "core": "5b3b0e7585afd0d7a015fd5409ea93c12ef7ed42",
+    "frontend": "a0c049b38b2b81b7d4f46ed75766167cab4bc2f4",
+    "interpreter": "5d27c56dfa99502887a3478b90372c67a76e95b9",
+    "std_version": "0.3.1",
+    "compiler_version": "0.12.2",
+    "native_binding_abi": "blake3:9c5e55c076e43a85fa944ddc61b9f45bcc6292a8f06159289ada2a3c1cf01454",
+    "source_payload_hash": "blake3:47d919d02b2c47e744593c40ce05a6ba1a87abd1b31fd7a7b6ab920f6a236248",
+    "body_schema": 13,
+    "descriptor_schema": 14,
+    "artifact_hash": "blake3:547acee555e025c9a0646b44a8a68af844abd9a65666dbcc75685c1ce4f4b131",
     "registry_schema": 6
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 227,
-  "missing_symbols": 444,
+  "candidate_symbols": 238,
+  "missing_symbols": 433,
   "pending_contract_difference": {
     "symbols": [
       "std.codec.text.utf8_decode",
@@ -54,6 +54,7 @@
       "std.compiler.RuntimeCheckInfo",
       "std.compiler.SignatureInfo",
       "std.compiler.SpecInfo",
+      "std.effects.Console",
       "std.effects.Error",
       "std.effects.Fs",
       "std.effects.actions.Fs.atomic_replace",
@@ -73,6 +74,12 @@
       "std.fs.root",
       "std.fs.stat",
       "std.fs.write_bytes",
+      "std.io.IOError",
+      "std.io.eprintln",
+      "std.io.print",
+      "std.io.println",
+      "std.io.read_all",
+      "std.io.read_line",
       "std.option.None",
       "std.option.Some",
       "std.option.is_none",
@@ -656,6 +663,7 @@
         "covered": [
           "std.effects.Agentic",
           "std.effects.Command",
+          "std.effects.Console",
           "std.effects.Error",
           "std.effects.FileIO",
           "std.effects.Fs",
@@ -670,13 +678,13 @@
           "std.effects.Browser",
           "std.effects.Clock",
           "std.effects.Code",
-          "std.effects.Console",
           "std.effects.Net",
           "std.effects.Stream",
           "std.effects.Tls"
         ],
         "added": [],
         "contract_changes": [
+          "std.effects.Console",
           "std.effects.Error",
           "std.effects.Fs"
         ],
@@ -686,10 +694,24 @@
           "Browser",
           "Clock",
           "Code",
-          "Console",
           "Net",
           "Stream",
           "Tls"
+        ]
+      },
+      "std.effects.Console": {
+        "missing_module": false,
+        "added_module": true,
+        "covered": [],
+        "missing": [],
+        "added": [],
+        "contract_changes": [],
+        "implementation_changes": [],
+        "export_changes": [
+          "stderr_write",
+          "stdin_read_all",
+          "stdin_read_line",
+          "stdout_write"
         ]
       },
       "std.effects.Error": {
@@ -827,24 +849,19 @@
         ]
       },
       "std.effects.actions.Console": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.effects.actions.Console.stderr_write",
           "std.effects.actions.Console.stdin_read_all",
           "std.effects.actions.Console.stdin_read_line",
           "std.effects.actions.Console.stdout_write"
         ],
+        "missing": [],
         "added": [],
         "contract_changes": [],
         "implementation_changes": [],
-        "export_changes": [
-          "stderr_write",
-          "stdin_read_all",
-          "stdin_read_line",
-          "stdout_write"
-        ]
+        "export_changes": []
       },
       "std.effects.actions.Fs": {
         "missing_module": false,
@@ -1198,10 +1215,9 @@
         ]
       },
       "std.io": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.io.IOError",
           "std.io.eprintln",
           "std.io.print",
@@ -1209,17 +1225,24 @@
           "std.io.read_all",
           "std.io.read_line"
         ],
+        "missing": [],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "IOError",
-          "eprintln",
-          "print",
-          "println",
-          "read_all",
-          "read_line"
-        ]
+        "contract_changes": [
+          "std.io.IOError",
+          "std.io.eprintln",
+          "std.io.print",
+          "std.io.println",
+          "std.io.read_all",
+          "std.io.read_line"
+        ],
+        "implementation_changes": [
+          "std.io.eprintln",
+          "std.io.print",
+          "std.io.println",
+          "std.io.read_all",
+          "std.io.read_line"
+        ],
+        "export_changes": []
       },
       "std.json": {
         "missing_module": true,
@@ -1464,6 +1487,7 @@
           "ContextTokens",
           "Cost",
           "Err",
+          "IOError",
           "Index",
           "Iter",
           "Iterations",
@@ -2126,7 +2150,6 @@
     "prelude_changes": [
       "Effect:Approval",
       "Effect:Code",
-      "Effect:Console",
       "Type:BudgetExceeded",
       "Type:ConfirmedOutcome",
       "Type:ContextPolicy",
@@ -2134,7 +2157,6 @@
       "Type:Deque",
       "Type:EffectBoundaryViolation",
       "Type:HumanRejected",
-      "Type:IOError",
       "Type:IndexError",
       "Type:MemoryConflict",
       "Type:MemoryCursor",
@@ -2491,8 +2513,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 223,
-  "source_ownership_note": "Etas owns public declarations, binder names and kinds, signatures and expressible algorithms/policy. All eight retained native actions now have source declarations, including selector-free generic Async.await. Rust retains execution rules, scheduler mechanisms, protected host primitives and value/role ABI. The transitional catalog has 49 contracts (41 primitives), 69 source roles, 24 record layouts, three getter layouts and two opaque references. Generated StdRegistry is supported. Whole-bootstrap minimality remains unaccepted.",
+  "covered_baseline_symbols": 234,
+  "source_ownership_note": "Etas owns public declarations, binders, effects and expressible algorithms/policy. All twelve retained native actions now have source declarations, including Console and selector-free generic Async.await. Rust retains execution rules, scheduler mechanisms, protected OS primitives and value/role ABI. The transitional catalog has57 contracts (45 primitives),70 source roles,24 record layouts,three getter layouts and three opaque references. Generated StdRegistry is supported. Whole-bootstrap minimality and remaining library migration remain unaccepted; raw query coverage is not source ownership.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2511,18 +2533,18 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 49,
-    "explicit_source_roles": 69,
-    "query_symbols_before_source_publication": 118,
-    "primitives": 41,
+    "static_contracts": 57,
+    "explicit_source_roles": 70,
+    "query_symbols_before_source_publication": 127,
+    "primitives": 45,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 5,
-    "native_opaque_references": 2,
+    "native_opaque_references": 3,
     "native_record_references": 24,
     "native_projection_references": 3,
     "native_projection_fields": 21,
-    "source_effect_roles": 11,
+    "source_effect_roles": 12,
     "source_primitive_type_roles": 20
   },
   "source_algorithm_batch": {
@@ -2951,8 +2973,8 @@
       "std.codec.text.InvalidUtf8"
     ],
     "classification": "All three public constructor aliases are available through source re-exports and pass installed SDK import/execution. Source uses the canonical nested enum variant identity, while the legacy baseline has a separate symbol record for each alias. Keep these three raw query-symbol differences visible; do not allocate duplicate source identities merely to increase coverage counts.",
-    "raw_missing_query_symbols": 448,
-    "other_unrepresented_query_symbols": 445
+    "raw_missing_query_symbols": 433,
+    "other_unrepresented_query_symbols": 430
   },
   "compiler_report_source_batch": {
     "source_records": [
@@ -3313,5 +3335,57 @@
       "std.task.scheduler.requeue"
     ],
     "raw_difference_note": "Source await is an Etas body and exposes its checked row contract. Source action/native-flow signatures retain their own binder names. Raw differences remain visible pending full compatibility acceptance."
+  },
+  "console_source_batch": {
+    "public_paths": [
+      "std.io.IOError",
+      "std.io.read_all",
+      "std.io.read_line",
+      "std.io.print",
+      "std.io.println",
+      "std.io.eprintln",
+      "std.effects.Console"
+    ],
+    "source_actions": [
+      "stdin_read_line",
+      "stdin_read_all",
+      "stdout_write",
+      "stderr_write"
+    ],
+    "source_files": [
+      "library/std/io/mod.es",
+      "library/std/effects/mod.es",
+      "library/std/prelude/mod.es"
+    ],
+    "source_algorithm": "println appends a newline and invokes print in checked Etas source.",
+    "host_bindings": [
+      "std.io.read_all",
+      "std.io.read_line",
+      "std.io.print",
+      "std.io.eprintln"
+    ],
+    "host_scope": "Existing OS input/output, cancellation, budget, trace and opaque IOError payload; existing eprintln binding retains its newline write shape.",
+    "new_os_primitives": 0,
+    "existing_primitive_contracts_added": 4,
+    "existing_action_contracts_added": 4,
+    "opaque_error_has_language_role": false,
+    "effect_role": "Existing Console stable ID9 and Console capability requirement; source owns extends FileIO and all signatures.",
+    "canonical_identity_fix": "Trusted source opaque re-exports use their canonical registry identity, including prelude IOError; no duplicate nominal identity for checkpointed function values.",
+    "runtime_error_transport": "Console opaque variant payload uses the same existing constructor contract during cross-program value conversion and snapshot validation.",
+    "positive_acceptance": "Installed moved SDK executes println as a function value, task I/O and Console Handler arms; three independent run/resume processes preserve two Handler checkpoints. Actual stdin/stdout/stderr are checked byte-for-byte; a native invalid-UTF8 read becomes a source-captured Result error across the SDK boundary. Trace policy denial retains its permission diagnostic.",
+    "covered_baseline_symbols": 234,
+    "raw_missing_baseline_symbols": 433,
+    "raw_contract_differences": 82,
+    "raw_implementation_differences": 90,
+    "source_files_total": 37,
+    "source_modules_total": 20,
+    "whole_bootstrap_minimality_accepted": false
+  },
+  "declaration_batch_pending": {
+    "std_version": "0.4.0",
+    "inventory": "std-source-declaration-inventory.json",
+    "status": "All remaining public declarations written; consolidated compiler integration and validation pending. Query report above describes the last compiled0.3.1 SDK, not this uncompiled declaration batch.",
+    "compiled": false,
+    "new_module_tests_added": false
   }
 }

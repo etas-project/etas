@@ -477,6 +477,13 @@ loading, so even package preparation does not invoke the legacy factory.
 Index implementations are absent from the bootstrap catalog and come only from
 checked Etas source when building and loading the SDK.
 
+The next std 0.4.0 declaration batch writes the remaining legacy API surface
+before consolidated compiler integration and tests. Its source inventory is in
+[std-source-declaration-inventory.json](docs/migration/std-source-declaration-inventory.json).
+It is not a passing source SDK: typed value selectors, overloads, native constants
+and declaration-only flows still need compiler integration. The compiled API
+report below remains the 0.3.1 checkpoint until that unified validation passes.
+
 Independent source ownership requires both a new ordinary API added only in
 `.es` and a std build process that avoids the complete legacy registry and uses
 an explicitly reviewed minimal compiler/host contract set. Compiling out the
@@ -484,15 +491,27 @@ legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
 Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
-registry declaration/signature lookup. Its sixty-nine roles define only the recognized
+registry declaration/signature lookup. Its seventy roles define only the recognized
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 49 compiler/host catalog entries
-including 41 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 57 compiler/host catalog entries
+including 45 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
+
+
+`std.io` now owns its IOError declaration and five public flows in Etas.
+Console inheritance and all four action signatures also come from source.
+`println` appends its newline in Etas and delegates to the existing print binding;
+four existing bindings retain actual OS I/O (including eprintln's newline write).
+The installed SDK verifies byte-for-byte stdio, caller Handlers, scheduled calls,
+function values, checkpoint/resume, native error capture and trace policy denial.
+Opaque prelude re-exports retain canonical type identity across checked programs.
+This batch covers eleven more legacy query symbols: 234 of 667 are represented,
+with 433 raw query differences still missing. These are API query counts, not a
+source-ownership percentage; full std migration and bootstrap review remain open.
 
 The scalar/codec batch completes source declarations for `std.char`, `std.bytes`
 and `std.codec.text`, including UTF-8 mode/error enums. ASCII digit and control
@@ -548,9 +567,11 @@ also live in source. Their generic binders, selectors, payloads and result types
 are checked against the retained host ABI and published from bundle metadata.
 The action adapters bind selectors by checked type identity, so source binder
 names need not match helper-flow binders. Rust retains stable action IDs,
-authority and default-handler execution rules. Async.await still needs a source declaration with separate payload/effect
-generic binders; all eight native action ABI contracts remain in the transitional
-catalog pending minimum-contract review. The seven native limit contracts now serve as primitive ABI for source
+authority and default-handler execution rules. Async.await uses the proposed
+prefix generic declaration `action<T, effect E> await(...)`, inferred without a
+static selector. Console and its four action signatures now also live in source;
+twelve native action ABI contracts remain in the transitional catalog pending
+minimum-contract review. The seven native limit contracts now serve as primitive ABI for source
 declarations and require minimum-contract review. Current role ABI fingerprint
 format is 5; this does not establish bootstrap minimality.
 

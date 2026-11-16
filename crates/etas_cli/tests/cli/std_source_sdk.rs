@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes() {
     let root = temp_path(
-        &format!("std-source-sdk-{}", std::process::id()),
+        &format!("std-source-sdk-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()),
         "workspace",
     );
     let source = root.join("std-source");
@@ -57,6 +58,9 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         }
         fs::write(path, text).unwrap();
     }
+    fs::write(source.join("library/std/io/sdk.es"), r#"module std.io;
+public flow sdk_try_line() -> Result<string, IOError> ![] { return read_line()?; }
+"#).unwrap();
     let actions = source.join("library/std/effects/mod.es");
     fs::write(&actions, fs::read_to_string(&actions).unwrap()
         .replace("<R ~ Region>", "<Scope ~ Region>")
@@ -827,6 +831,7 @@ flow main(args: Array<string>) -> i32 {
     verify_source_action_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_task_provider_parity(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_caller_task_handler(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_source_console_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_compiler_report_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     fs::remove_dir_all(protected).unwrap();
@@ -1471,6 +1476,125 @@ flow main(args: Array<string>) -> i32 {
 // The custom action and its forwarding body were compiled into a different
 // process's std bundle. Capture while source await is parked and resume using
 // a fresh process, preserving its inferred type/row and continuation ownership.
+fn verify_source_console_sdk(binary: &Path, root: &Path) {
+    let app = root.join("console-source.es");
+    let checkpoints = root.join("console-checkpoints");
+    let keys = root.join("console-checkpoint-keys");
+    fs::write(&app, r#"module app.main;
+import std.effects.Console;
+import std.io.{print, println, eprintln, read_line, read_all};
+import std.runtime.checkpoint.checkpoint;
+import std.task.{Scheduler, run, start, await};
+flow main(args: Array<string>) -> i32 ![] {
+    var captured = "";
+    let answer = handle {
+        let write = println;
+        write("first");
+        run((scheduler: Scheduler) => {
+            let child = start(() => { println(read_line()); return 7; });
+            return await(child);
+        })
+    } with {
+        Console.stdout_write(text) => {
+            captured = captured + text;
+            checkpoint("console-handler");
+            resume ();
+        }
+        Console.stdin_read_line() => { resume "second"; }
+        Error<IOError>.raise(error) => { finish 91; }
+    };
+    if answer != 7 || captured != "first\nsecond\n" { return 1; }
+    let tail = handle { eprintln("error"); print(read_all()); 0 } with {
+        Console.stderr_write(text) => { if text != "error\n" { finish 2; } resume (); }
+        Console.stdin_read_all() => { resume "remaining"; }
+        Console.stdout_write(text) => { if text != "remaining" { finish 3; } resume (); }
+        Error<IOError>.raise(error) => { finish 92; }
+    };
+    return tail;
+}
+"#).unwrap();
+    for resume in [None, Some(0), Some(1)] {
+        let mut command = Command::new(binary);
+        command.args(["--cache", "off"]);
+        if let Some(index) = resume {
+            command.args(["resume", &index.to_string()]);
+        } else {
+            command.args(["run", path(&app)]);
+        }
+        let output = command.args([
+            "--std-provider", "artifact",
+            "--checkpoint-dir", path(&checkpoints),
+            "--checkpoint-key-dir", path(&keys),
+            "--format", "json",
+        ]).current_dir(std::env::temp_dir()).output().unwrap();
+        assert!(output.status.success(), "{}\n{}",
+            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{report}");
+        assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
+        assert_eq!(report["checkpoints"].as_array().unwrap().len(),
+            resume.map_or(2, |index| 1 - index), "{report}");
+    }
+    let project = package_fixture("std-source-console", &[
+        ("etas.toml", r#"[package]
+name = "std-source-console"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "app"
+module = "app.main"
+flow = "main"
+profile = "stdio"
+[runtime.profiles.stdio.policy]
+mode = "local-static"
+rules = ["console=allow"]
+[runtime.profiles.denied.policy]
+mode = "local-static"
+rules = ["model=allow"]
+"#),
+        ("src/app/main.es", r#"module app.main;
+import std.effects.Console;
+import std.io.{sdk_try_line, read_all, print, println, eprintln};
+spec Gate: trace = +Console;
+flow main(args: Array<string>) -> i32 ![] ~ Gate {
+    let first = match sdk_try_line() { Ok(text) => text, Err(error) => { return 9; } };
+    return handle {
+        print("<" + first + ">"); println(read_all()); eprintln("done"); 0
+    } with { Error<IOError>.raise(error) => { finish 91; } };
+}
+"#),
+    ]);
+    for (profile, input, expected) in [
+        ("stdio", b"alpha\nbeta".as_slice(), "0"),
+        ("stdio", b"\xff\n".as_slice(), "9"),
+        ("denied", b"alpha\nbeta".as_slice(), "denied"),
+    ] {
+        let trace = root.join(format!("console-{expected}.json"));
+        let mut child = Command::new(binary).args([
+            "--cache", "off", "run", path(&project), "--profile", profile,
+            "--std-provider", "artifact", "--trace-out", path(&trace),
+        ]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
+            .current_dir(std::env::temp_dir()).spawn().unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&fs::read(trace).unwrap()).unwrap();
+        if expected == "denied" {
+            assert_eq!(output.status.code(), Some(3), "{report}");
+            assert!(output.stdout.is_empty());
+            assert!(report["diagnostics"][0]["message"].as_str().unwrap()
+                .contains("console policy denied request"), "{report}");
+        } else {
+            assert!(output.status.success(), "{report}\n{}", String::from_utf8_lossy(&output.stderr));
+            assert_eq!(report["value"]["value"], expected, "{report}");
+            assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
+            assert_eq!(output.stdout, if expected == "0" { b"<alpha\n>beta\n".as_slice() } else { b"" });
+            assert_eq!(output.stderr, if expected == "0" { b"done\n".as_slice() } else { b"" });
+        }
+    }
+}
+
 fn verify_source_action_sdk(binary: &Path, root: &Path) {
     let app = root.join("generic-action-app.es");
     let checkpoints = root.join("action-checkpoints");
