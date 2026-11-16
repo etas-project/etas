@@ -57,6 +57,11 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         }
         fs::write(path, text).unwrap();
     }
+    let actions = source.join("library/std/effects/mod.es");
+    fs::write(&actions, fs::read_to_string(&actions).unwrap()
+        .replace("<R ~ Region>", "<Scope ~ Region>")
+        .replace("WorkspacePath<R>", "WorkspacePath<Scope>"))
+        .unwrap();
     let limits = source.join("library/std/runtime/limits/mod.es");
     fs::write(&limits, fs::read_to_string(&limits).unwrap()
         .replace("public enum Limit {", "public enum Limit { SdkOnly,")).unwrap();
@@ -211,7 +216,7 @@ public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
 import std.text.{join, trim, append, case_text};
 import std.text.{TextError, ParseFailure, NumericOverflow};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, pack_reply, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
-import std.task.{run, execute, Scheduler};
+import std.task.{run, execute, Scheduler, Async};
 import std.result.{is_ok, is_err};
 import std.collections.{array_extend, list_push, list_extend};
 import std.extra.index_identity;
@@ -227,7 +232,10 @@ impl CallerTransformer<A> ~ Transformer {
         return sdk_echo(box.value);
     }
 }
-flow scheduled(scheduler: Scheduler) -> i32 ![] { return 7; }
+flow scheduled(scheduler: Scheduler) -> i32 ![] {
+    let Cooperative = handler { Async.yield() => { resume (); } };
+    return handle { perform Async.yield(); 7 } with Cooperative;
+}
 effect Wrapped { action read() -> i32; }
 flow deferred() -> i32 ![Wrapped] { return perform Wrapped.read(); }
 flow increment(value: i32) -> i32 ![] { return value + 1; }

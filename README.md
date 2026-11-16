@@ -539,8 +539,14 @@ names and inheritance, including Error<Failure> and Fs extending FileIO; Rust
 retains their existing execution IDs and host capability requirements. The bundle
 and generated query view preserve those declarations and canonical identities.
 The SDK fixture adds an ordinary effect and a flow only in .es, then imports and
-executes the installed body. Eight native action declarations still need source
-migration. The seven native limit contracts now serve as primitive ABI for source
+executes the installed body. Error.raise, all five Fs action signatures and Async.yield now
+also live in source. Their generic binders, selectors, payloads and result types
+are checked against the retained host ABI and published from bundle metadata.
+The action adapters bind selectors by checked type identity, so source binder
+names need not match helper-flow binders. Rust retains stable action IDs,
+authority and default-handler execution rules. Async.await still needs a source declaration with separate payload/effect
+generic binders; all eight native action ABI contracts remain in the transitional
+catalog pending minimum-contract review. The seven native limit contracts now serve as primitive ABI for source
 declarations and require minimum-contract review. Current role ABI fingerprint
 format is 5; this does not establish bootstrap minimality.
 

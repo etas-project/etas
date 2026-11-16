@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "ea81734275b4db4e21dc9afc201c961306e2f1b5",
-    "frontend": "95e6f50e8da8a04e472694e02e2bfa6af052fecf",
-    "interpreter": "c1a7236356aba3418e4e93dc5dfb485154ac8443",
-    "std_version": "0.2.26",
-    "compiler_version": "0.11.26",
+    "core": "0c90607d26d88f2f0c5fa9cca4fb88bc813dc836",
+    "frontend": "e1257db20a0b7c589977e2555350d392dbc88f88",
+    "interpreter": "9587faf016e876bef491de49658961e1ee4629b2",
+    "std_version": "0.2.27",
+    "compiler_version": "0.11.27",
     "native_binding_abi": "blake3:38ac94dfcec82edf7500c830bdfe89dffda2f5dbcfd56a68de7af02fb3811696",
-    "source_payload_hash": "blake3:b383f284398cce44765e162c0c78dd6eb24639f40d5ab0c9ac5618d53fe06f02",
+    "source_payload_hash": "blake3:3c0288d610650920207381b5aecd53df6bac71b748d85af69a801b0f480012bd",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:907de43bd9030e78ccf283b95bcd8b2c7e2bde39dc5f9fa3b69f8b4d056b83d8",
+    "artifact_hash": "blake3:18daa654f9ded11edfbe98ecbf1738b0500f951443759004fa04507485d5de5c",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -56,6 +56,11 @@
       "std.compiler.SpecInfo",
       "std.effects.Error",
       "std.effects.Fs",
+      "std.effects.actions.Fs.atomic_replace",
+      "std.effects.actions.Fs.list",
+      "std.effects.actions.Fs.read",
+      "std.effects.actions.Fs.stat",
+      "std.effects.actions.Fs.write",
       "std.fs.FsEntry",
       "std.fs.FsStat",
       "std.fs.IOError",
@@ -683,6 +688,34 @@
           "Tls"
         ]
       },
+      "std.effects.Error": {
+        "missing_module": false,
+        "added_module": true,
+        "covered": [],
+        "missing": [],
+        "added": [],
+        "contract_changes": [],
+        "implementation_changes": [],
+        "export_changes": [
+          "raise"
+        ]
+      },
+      "std.effects.Fs": {
+        "missing_module": false,
+        "added_module": true,
+        "covered": [],
+        "missing": [],
+        "added": [],
+        "contract_changes": [],
+        "implementation_changes": [],
+        "export_changes": [
+          "atomic_replace",
+          "list",
+          "read",
+          "stat",
+          "write"
+        ]
+      },
       "std.effects.actions.Agentic": {
         "missing_module": true,
         "added_module": false,
@@ -821,7 +854,13 @@
         ],
         "missing": [],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.effects.actions.Fs.atomic_replace",
+          "std.effects.actions.Fs.list",
+          "std.effects.actions.Fs.read",
+          "std.effects.actions.Fs.stat",
+          "std.effects.actions.Fs.write"
+        ],
         "implementation_changes": [],
         "export_changes": []
       },
@@ -1798,6 +1837,18 @@
           "try_join"
         ]
       },
+      "std.task.Async": {
+        "missing_module": false,
+        "added_module": true,
+        "covered": [],
+        "missing": [],
+        "added": [],
+        "contract_changes": [],
+        "implementation_changes": [],
+        "export_changes": [
+          "yield"
+        ]
+      },
       "std.task.actions.Async": {
         "missing_module": false,
         "added_module": false,
@@ -2438,7 +2489,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 219,
-  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 46 entries including 38 primitives, 69 source roles, 24 record layouts, 3 getter layouts and 2 opaque references. Money, Duration, Limit, seven enum constructors and eight public flow signatures now come from source. Money private value representation and compiler limit semantics remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
+  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 46 entries including 38 primitives, 69 source roles, 24 record layouts, 3 getter layouts and 2 opaque references. Money, Duration, Limit, seven enum constructors and eight public flow signatures now come from source. Money private value representation and compiler limit semantics remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted. Error.raise, the five Fs actions and Async.yield public signatures are now checked and published from source. All eight native action ABI contracts are retained for execution constraints and still require minimum-contract review; Async.await source declaration remains open.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -3162,5 +3213,44 @@
       },
       "whole_library_parity_accepted": false
     }
+  },
+  "action_declaration_source_batch": {
+    "source_actions": [
+      "std.effects.Error.raise",
+      "std.effects.Fs.read",
+      "std.effects.Fs.write",
+      "std.effects.Fs.list",
+      "std.effects.Fs.stat",
+      "std.effects.Fs.atomic_replace",
+      "std.task.Async.yield"
+    ],
+    "source_action_count": 7,
+    "remaining_source_action_declarations": [
+      "std.task.Async.await"
+    ],
+    "native_action_contracts_retained": 8,
+    "static_contracts_remaining": 46,
+    "source_roles": 69,
+    "native_primitives": 38,
+    "new_native_execution_ids": 0,
+    "signature_ownership": "Generic binders, bounds, selectors and payload/result types come from checked source and bundle metadata. Retained host ABI signatures validate these declarations before publication.",
+    "execution_boundary": "Rust retains stable IDs, default-handler execution rules, host authority and acknowledgment. Runtime value correspondence checks typed signatures; helper adapters bind source selectors by checked TypeId rather than helper binder spelling. Non-type static selectors retain their existing behavior.",
+    "determinism": "HIR actions register in source symbol order, including their ordered per-owner indices.",
+    "acceptance": "Installed SDK lifecycle changes action generic binders only in .es and exercises filesystem operations, errors/Handlers, permissions, budget and checkpoint/resume. A local Handler handles source-declared Async.yield inside a scheduled task.",
+    "new_raw_declaration_differences": [
+      "std.effects.actions.Fs.atomic_replace",
+      "std.effects.actions.Fs.list",
+      "std.effects.actions.Fs.read",
+      "std.effects.actions.Fs.stat",
+      "std.effects.actions.Fs.write"
+    ],
+    "raw_difference_note": "Source signatures use full canonical WorkspacePath and FsStat nominal paths; whole-library compatibility review remains open.",
+    "whole_bootstrap_minimality_accepted": false,
+    "source_files": [
+      "library/std/effects/mod.es",
+      "library/std/task/mod.es"
+    ],
+    "normal_sdk_manifest_sha256": "aa069267d0a8793ae072c177b03bc6c48482e6c9d783738f0d9f07759caf2714",
+    "known_task_handler_boundary": "An outer caller Handler crossing task.run fails in both the pre-batch legacy binary and the artifact provider. Local task Handlers work. This remains a whole-Goal execution-chain repair."
   }
 }

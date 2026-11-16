@@ -79,5 +79,95 @@ pub(super) fn publish(
             symbols.insert(canonical, id);
         }
     }
+    publish_actions(sdk, builder, modules, symbols, declarations)
+}
+
+fn publish_actions(
+    sdk: &LoadedStdSdk,
+    builder: &mut StdRegistryBuilder,
+    modules: &mut BTreeMap<Vec<String>, StdModuleId>,
+    symbols: &mut BTreeMap<Vec<String>, StdSymbolId>,
+    declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
+) -> Result<(), DriverError> {
+    for action in &sdk.public.public_metadata.actions {
+        if action.visibility != metadata::Visibility::Public {
+            continue;
+        }
+        let (name, owner) = action
+            .path
+            .split_last()
+            .ok_or_else(|| invalid("source action has no owner"))?;
+        let key = *declarations
+            .get(owner)
+            .ok_or_else(|| invalid("source action has no checked effect owner"))?;
+        let item = sdk.image.declarations[key];
+        let etas_hir::HirItem::Effect(effect) = &sdk.image.program.items[item] else {
+            return Err(invalid("source action owner is not an effect"));
+        };
+        let source = effect
+            .body
+            .actions()
+            .iter()
+            .find(|source| {
+                sdk.image
+                    .program
+                    .symbols
+                    .get(source.symbol)
+                    .unwrap()
+                    .name
+                    .rsplit('.')
+                    .next()
+                    == Some(name.as_str())
+            })
+            .ok_or_else(|| invalid("source action has no checked declaration"))?;
+        let Some(native) = sdk
+            .image
+            .program
+            .standard_action_targets
+            .get(&source.symbol)
+        else {
+            // Ordinary source actions are carried by the package interface and
+            // executable image, without a host primitive query entry.
+            continue;
+        };
+        let projector = TypeProjector {
+            owner: key,
+            params: &action.generic_params,
+        };
+        let selectors = action
+            .effect_args
+            .iter()
+            .map(|kind| match kind {
+                metadata::ActionArgKind::Type => Ok(etas_std::EffectActionArgKind::Type),
+                _ => Err(invalid(
+                    "native source action has an unsupported static selector",
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        builder.source_action_signature(
+            *native,
+            action
+                .generic_params
+                .iter()
+                .map(|p| projector.param(p))
+                .collect::<Result<_, _>>()?,
+            selectors,
+            action.selector_param_names.clone(),
+            action
+                .params
+                .iter()
+                .map(|p| projector.ty(p))
+                .collect::<Result<_, _>>()?,
+            projector.ty(action
+                .output
+                .as_ref()
+                .ok_or_else(|| invalid("source action has no checked result"))?)?,
+        );
+        let module = *modules.entry(owner.to_vec()).or_insert_with(|| {
+            builder.module(&owner.iter().map(String::as_str).collect::<Vec<_>>(), "")
+        });
+        builder.re_export(module, name, *native).map_err(invalid)?;
+        symbols.insert(action.path.clone(), *native);
+    }
     Ok(())
 }
