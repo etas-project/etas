@@ -120,16 +120,11 @@ fn publish_actions(
                     == Some(name.as_str())
             })
             .ok_or_else(|| invalid("source action has no checked declaration"))?;
-        let Some(native) = sdk
+        let native = sdk
             .image
             .program
             .standard_action_targets
-            .get(&source.symbol)
-        else {
-            // Ordinary source actions are carried by the package interface and
-            // executable image, without a host primitive query entry.
-            continue;
-        };
+            .get(&source.symbol);
         let projector = TypeProjector {
             owner: key,
             params: &action.generic_params,
@@ -144,30 +139,49 @@ fn publish_actions(
                 )),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        builder.source_action_signature(
-            *native,
-            action
-                .generic_params
-                .iter()
-                .map(|p| projector.param(p))
-                .collect::<Result<_, _>>()?,
-            selectors,
-            action.selector_param_names.clone(),
-            action
-                .params
-                .iter()
-                .map(|p| projector.ty(p))
-                .collect::<Result<_, _>>()?,
-            projector.ty(action
-                .output
-                .as_ref()
-                .ok_or_else(|| invalid("source action has no checked result"))?)?,
-        );
+        let parameters = action
+            .generic_params
+            .iter()
+            .map(|p| projector.param(p))
+            .collect::<Result<_, _>>()?;
+        let inputs = action
+            .params
+            .iter()
+            .map(|p| projector.ty(p))
+            .collect::<Result<_, _>>()?;
+        let output = projector.ty(action
+            .output
+            .as_ref()
+            .ok_or_else(|| invalid("source action has no checked result"))?)?;
         let module = *modules.entry(owner.to_vec()).or_insert_with(|| {
             builder.module(&owner.iter().map(String::as_str).collect::<Vec<_>>(), "")
         });
-        builder.re_export(module, name, *native).map_err(invalid)?;
-        symbols.insert(action.path.clone(), *native);
+        let symbol = if let Some(native) = native {
+            builder.source_action_signature(
+                *native,
+                parameters,
+                selectors,
+                action.selector_param_names.clone(),
+                inputs,
+                output,
+            );
+            builder.re_export(module, name, *native).map_err(invalid)?;
+            *native
+        } else {
+            let mut declaration =
+                etas_std::EffectActionDecl::typed(&owner.join("."), name, inputs, output);
+            declaration.type_params = parameters;
+            declaration.effect_args = selectors;
+            declaration.selector_param_names = action.selector_param_names.clone();
+            builder.symbol(
+                module,
+                name,
+                StdSymbolKind::EffectAction,
+                StdDecl::EffectAction(declaration),
+                "",
+            )
+        };
+        symbols.insert(action.path.clone(), symbol);
     }
     Ok(())
 }

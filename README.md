@@ -342,6 +342,10 @@ etas pkg lock ./project --std-provider artifact --sysroot /tmp/etas-sdk
 etas run ./project --std-provider artifact --sysroot /tmp/etas-sdk
 ```
 
+The generic-action SDK advances std to 0.3.0. Projects selecting that SDK
+must update their std requirement to `version = "0.3"` before locking. The legacy
+provider keeps its 0.2 builtin identity and accepts existing 0.2 requirements.
+
 This explicitly upgrades old `builtin:std` records to the selected SDK's version
 and native ABI. Manifest version requirements apply to that selected version.
 Check/run reject a different installed version or ABI and leave the lockfile

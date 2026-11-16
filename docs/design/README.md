@@ -21,3 +21,4 @@ Etas is an agent-native general-purpose programming language design for multi-ag
 15. [Package Management](15-package-management.md)
 16. [Concurrency](16-concurrency.md)
 17. [EDK Official Packages](17-edk-official-packages.md)
+18. [Action Signature Generics](18-action-signature-generics.md)

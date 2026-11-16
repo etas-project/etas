@@ -259,6 +259,9 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .filter(|symbol| matches!(symbol.decl, etas_std::StdDecl::Requirement(_)))
         .map(|symbol| (symbol.qualified_path.clone(), symbol.id))
         .collect::<BTreeMap<_, _>>();
+    let task_bindings = native.symbols().filter(|symbol| {
+        matches!(&symbol.intrinsic, Some(intrinsic) if matches!(intrinsic.lowering, etas_std::LoweringHint::Task(_)))
+    }).map(|symbol| (symbol.qualified_path.clone(), symbol.id)).collect::<BTreeMap<_,_>>();
     let mut builder = StdRegistryBuilder::from_registry(native);
     let declarations = sdk
         .image
@@ -376,7 +379,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             requested_action_tail: requests.tail,
             source_method: None,
         };
-        if let Some(native) = source_limit_binding(sdk, key, &requirements) {
+        if let Some(native) = source_native_binding(sdk, key, &requirements) {
             let symbol = *symbols.get(&canonical).expect("bootstrap limit contract");
             if symbol != native {
                 return Err(invalid(
@@ -389,6 +392,14 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             }
             symbols.insert(flow.path.clone(), symbol);
             symbols.insert(canonical, symbol);
+            continue;
+        }
+        // Task primitives execute in the caller's scheduler and lexical
+        // scope; their checked declarations still belong to the source SDK.
+        if let Some(native) = source_native_binding(sdk, key, &task_bindings) {
+            builder.source_primitive_flow(native, declaration, key.clone());
+            symbols.insert(flow.path.clone(), native);
+            symbols.insert(canonical, native);
             continue;
         }
         let symbol = builder.source_flow(
@@ -445,8 +456,8 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     Ok(registry)
 }
 
-/// Only a checked native binding grants the compiler's limit semantics.
-fn source_limit_binding(
+/// Only a checked canonical binding retains the primitive execution identity.
+fn source_native_binding(
     sdk: &LoadedStdSdk,
     definition: &DefinitionKey,
     requirements: &BTreeMap<Vec<String>, etas_std::StdSymbolId>,

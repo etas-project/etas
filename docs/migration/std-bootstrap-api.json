@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "0c90607d26d88f2f0c5fa9cca4fb88bc813dc836",
-    "frontend": "e1257db20a0b7c589977e2555350d392dbc88f88",
-    "interpreter": "9587faf016e876bef491de49658961e1ee4629b2",
-    "std_version": "0.2.27",
-    "compiler_version": "0.11.27",
-    "native_binding_abi": "blake3:38ac94dfcec82edf7500c830bdfe89dffda2f5dbcfd56a68de7af02fb3811696",
-    "source_payload_hash": "blake3:3c0288d610650920207381b5aecd53df6bac71b748d85af69a801b0f480012bd",
+    "core": "113a5e01f3719bc5c0e1c1706300656a98cf186c",
+    "frontend": "d2e6840e34a33b43e1581854c596bb77930656e4",
+    "interpreter": "a30cfc03581545b1ef1e5dad61ec2d55f0dc2d6a",
+    "std_version": "0.3.0",
+    "compiler_version": "0.12.0",
+    "native_binding_abi": "blake3:1dda07b1d67ed7dc37e3a4745e4570ad7829d91d37ff871a330b1b317a4900a8",
+    "source_payload_hash": "blake3:566b5659eef269495947b3fc62214f82fd51e2486af3247d451812b0c28df072",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:18daa654f9ded11edfbe98ecbf1738b0500f951443759004fa04507485d5de5c",
-    "registry_schema": 5
+    "artifact_hash": "blake3:0d13f9a0d64672f5be8982b3911a5ecc9e5af14088e32aa9bdde7a9bfafe9c28",
+    "registry_schema": 6
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 223,
-  "missing_symbols": 448,
+  "candidate_symbols": 227,
+  "missing_symbols": 444,
   "pending_contract_difference": {
     "symbols": [
       "std.codec.text.utf8_decode",
@@ -89,7 +89,11 @@
       "std.runtime.limits.Limit.Cost",
       "std.runtime.limits.Limit.WallTime",
       "std.runtime.limits.WallTime",
-      "std.runtime.time.Duration"
+      "std.runtime.time.Duration",
+      "std.task.actions.Async.await",
+      "std.task.await",
+      "std.task.scheduler.park",
+      "std.task.scheduler.requeue"
     ],
     "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution. UTF-8 declarations are now source-owned. Raw codec declaration differences retain enum layout metadata and fully qualified malformed-input/error paths instead of the original short-name legacy baseline. Strict success/error and replacement behavior are compared across both providers; the original baseline has not been replaced. Compiler report types now use ordinary checked source record representations; legacy projected-field metadata differences remain visible. Native record layout constraints preserve every produced field and nested checked nominal identity. Installed acceptance projects reflected RevisionInfo/SignatureInfo/ParameterInfo values and passes a source-owned revision through separately compiled std bodies; parser/formatter bindings execute from source declarations."
   },
@@ -1809,31 +1813,31 @@
           "std.task.Continuation",
           "std.task.Scheduler",
           "std.task.Task",
-          "std.task.run"
+          "std.task.await",
+          "std.task.run",
+          "std.task.start"
         ],
         "missing": [
-          "std.task.await",
           "std.task.collect",
           "std.task.join",
           "std.task.map_concurrent",
           "std.task.map_concurrent_collect",
           "std.task.race",
-          "std.task.start",
           "std.task.try_join"
         ],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.task.await"
+        ],
         "implementation_changes": [
-          "std.task.run"
+          "std.task.await"
         ],
         "export_changes": [
-          "await",
           "collect",
           "join",
           "map_concurrent",
           "map_concurrent_collect",
           "race",
-          "start",
           "try_join"
         ]
       },
@@ -1846,6 +1850,7 @@
         "contract_changes": [],
         "implementation_changes": [],
         "export_changes": [
+          "await",
           "yield"
         ]
       },
@@ -1858,25 +1863,27 @@
         ],
         "missing": [],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.task.actions.Async.await"
+        ],
         "implementation_changes": [],
         "export_changes": []
       },
       "std.task.scheduler": {
-        "missing_module": true,
+        "missing_module": false,
         "added_module": false,
-        "covered": [],
-        "missing": [
+        "covered": [
           "std.task.scheduler.park",
           "std.task.scheduler.requeue"
         ],
+        "missing": [],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.task.scheduler.park",
+          "std.task.scheduler.requeue"
+        ],
         "implementation_changes": [],
-        "export_changes": [
-          "park",
-          "requeue"
-        ]
+        "export_changes": []
       },
       "std.text": {
         "missing_module": false,
@@ -2425,11 +2432,7 @@
       1312,
       1320,
       1321,
-      1400,
-      1401,
       1402,
-      1403,
-      1404,
       1405,
       1407,
       1408,
@@ -2488,8 +2491,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 219,
-  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 46 entries including 38 primitives, 69 source roles, 24 record layouts, 3 getter layouts and 2 opaque references. Money, Duration, Limit, seven enum constructors and eight public flow signatures now come from source. Money private value representation and compiler limit semantics remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted. Error.raise, the five Fs actions and Async.yield public signatures are now checked and published from source. All eight native action ABI contracts are retained for execution constraints and still require minimum-contract review; Async.await source declaration remains open.",
+  "covered_baseline_symbols": 223,
+  "source_ownership_note": "Etas owns public declarations, binder names and kinds, signatures and expressible algorithms/policy. All eight retained native actions now have source declarations, including selector-free generic Async.await. Rust retains execution rules, scheduler mechanisms, protected host primitives and value/role ABI. The transitional catalog has 49 contracts (41 primitives), 69 source roles, 24 record layouts, three getter layouts and two opaque references. Generated StdRegistry is supported. Whole-bootstrap minimality remains unaccepted.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2508,14 +2511,14 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 46,
+    "static_contracts": 49,
     "explicit_source_roles": 69,
-    "query_symbols_before_source_publication": 115,
-    "primitives": 38,
+    "query_symbols_before_source_publication": 118,
+    "primitives": 41,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 5,
-    "native_opaque_references": 1,
+    "native_opaque_references": 2,
     "native_record_references": 24,
     "native_projection_references": 3,
     "native_projection_fields": 21,
@@ -3252,5 +3255,63 @@
     ],
     "normal_sdk_manifest_sha256": "aa069267d0a8793ae072c177b03bc6c48482e6c9d783738f0d9f07759caf2714",
     "known_task_handler_boundary": "An outer caller Handler crossing task.run fails in both the pre-batch legacy binary and the artifact provider. Local task Handlers work. This remains a whole-Goal execution-chain repair."
+  },
+  "generic_action_source_batch": {
+    "language_status": "proposal implemented on draft migration branch; full acceptance/release pending",
+    "syntax": "action<T, effect E> await(task: Task<T, ![E]>) -> T; signature binders precede name; suffix binders remain selectors",
+    "source_action_count": 8,
+    "remaining_native_action_source_declarations": [],
+    "source_flows": [
+      "std.task.start",
+      "std.task.await",
+      "std.task.scheduler.park",
+      "std.task.scheduler.requeue"
+    ],
+    "retained_task_primitive_roles": "start creates runtime-managed tasks; park transfers continuations to the scheduler wait set; requeue restores runnable continuations. Etas owns their public declarations and task composition.",
+    "native_execution_ids_added": 0,
+    "bootstrap_contracts": 49,
+    "primitive_contracts": 41,
+    "source_roles": 69,
+    "signature_ownership": "Source owns Type/Effect binders, payload, result and zero await selectors; checked ABI maps renamed row binders by position and kind.",
+    "row_materialization": "A typed phase handoff interns solved request ABI types before publishing Effect facts. Task-valued source forwarding calls preserve inferred rows and incremental body reuse.",
+    "execution": "Checked Task handles and Continuation tokens retain scheduler ownership across source callable bridges. Generic callable snapshots use their checked declaration scope; concrete invocation still validates row bindings.",
+    "acceptance": "Installed, moved, offline SDK imports a generic action and forwarding body added only in .es. Integer/string await, an unannotated yielding task, an already parked await checkpoint and fresh-process resume return 0. Common legacy/artifact scheduler programs agree. Both normal and full-legacy-forbidden SDK lifecycle checks pass.",
+    "api_counts": {
+      "covered": 223,
+      "missing": 444,
+      "added": 4,
+      "contract_changes": 75,
+      "implementation_changes": 85
+    },
+    "normal_sdk_manifest_sha256": "a2e087492e744b6eca9bd0a0b1c4276b93ee345179cbca357d6ff9305bb3564b",
+    "schemas": {
+      "registry": 6,
+      "container": 49,
+      "body": 12,
+      "descriptor": 13,
+      "checkpoint": 78,
+      "frontend_cache": 122
+    },
+    "versions": {
+      "std": "0.3.0",
+      "syntax": "0.3.0",
+      "hir": "0.3.0",
+      "frontend": "0.12.0",
+      "types": "0.4.0",
+      "effects": "0.4.0",
+      "runtime": "0.15.0",
+      "driver": "0.3.0",
+      "cli": "0.15.0",
+      "ide": "0.5.0"
+    },
+    "whole_bootstrap_minimality_accepted": false,
+    "remaining": "Outer caller Handler across task.run, remaining std modules and policies, minimum ABI review, whole-library API/behavior/performance and release automation. Release stays legacy; paired PRs remain draft/unmerged.",
+    "new_raw_declaration_differences": [
+      "std.task.actions.Async.await",
+      "std.task.await",
+      "std.task.scheduler.park",
+      "std.task.scheduler.requeue"
+    ],
+    "raw_difference_note": "Source await is an Etas body and exposes its checked row contract. Source action/native-flow signatures retain their own binder names. Raw differences remain visible pending full compatibility acceptance."
   }
 }

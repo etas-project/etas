@@ -119,6 +119,13 @@ import std.core.Index;
 import std.compiler.{RevisionInfo, TypeInfo, CallableId, SyntaxBlock, CallableDef, AgentDef};
 public import std.extra.Reply.{Empty, Item, Named};
 public effect Delivery extends std.effects.Network;
+public effect Echo {
+    action<Payload> echo(value: Payload) -> Payload;
+    action<Payload> select<Key>(key: Key, value: Payload) -> Payload;
+}
+public flow request_echo<Value>(value: Value) -> Value ![Echo.echo] {
+    return perform Echo.echo(value);
+}
 public flow delivery_value() -> i32 ![Delivery] { return 41; }
 public flow primitive_value(value: std.core.i32) -> i32 ![] { return value; }
 public flow money_value(value: f64) -> std.runtime.budget.Money ![] { return std.runtime.budget.usd(value); }
@@ -527,7 +534,7 @@ edition = "2026"
 [source]
 root = "src"
 [dependencies]
-std = { version = "0.2" }
+std = { version = ">=0.2" }
 "#,
     )
     .unwrap();
@@ -813,6 +820,8 @@ flow main(args: Array<string>) -> i32 {
     );
     verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_source_action_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_task_provider_parity(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_compiler_report_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     fs::remove_dir_all(protected).unwrap();
@@ -1452,4 +1461,161 @@ flow main(args: Array<string>) -> i32 {
         assert_eq!(fs::read(project.join("workspace/created.txt")).unwrap(), b"after");
     }
     fs::remove_dir_all(project).unwrap();
+}
+
+// The custom action and its forwarding body were compiled into a different
+// process's std bundle. Capture while source await is parked and resume using
+// a fresh process, preserving its inferred type/row and continuation ownership.
+fn verify_source_action_sdk(binary: &Path, root: &Path) {
+    let app = root.join("generic-action-app.es");
+    let checkpoints = root.join("action-checkpoints");
+    let keys = root.join("action-checkpoint-keys");
+    fs::write(
+        &app,
+        r#"module app.main;
+import std.extra.{Echo, request_echo};
+import std.runtime.checkpoint.checkpoint;
+import std.task.{Async, Scheduler, run, start, await};
+import std.task.scheduler.{park, requeue};
+flow greeting() -> string ![] { return "hello"; }
+flow main(args: Array<string>) -> i32 ![] {
+    let Uniform = handler {
+        Echo.echo(value) => { resume value; }
+        Echo.select(key, value) => { resume value; }
+    };
+    let values = handle {
+        (request_echo(7), request_echo("hello"), perform Echo.select<string>("key", 11))
+    } with Uniform;
+    if values != (7, "hello", 11) { return 2; }
+    return run((scheduler: Scheduler) => {
+        let first = start(() => {
+            return handle { perform Async.yield(); checkpoint("generic-task"); 7 }
+                with { Async.yield() as continuation => { requeue(scheduler, continuation, ()); } };
+        });
+        let second = start(greeting);
+        return handle {
+            let n: i32 = await(first);
+            let text: string = await(second);
+            if n == 7 && text == "hello" { 0 } else { 1 }
+        } with {
+            Async.await(task) as continuation => { park(scheduler, task, continuation); }
+            Async.yield() as continuation => { requeue(scheduler, continuation, ()); }
+        };
+    });
+}
+
+"#,
+    )
+    .unwrap();
+    for resume in [false, true] {
+        let mut command = Command::new(binary);
+        command.args(["--cache", "off"]);
+        if resume {
+            command.args(["resume", "0"]);
+        } else {
+            command.args(["run", path(&app), "--cpu-threads", "4"]);
+        }
+        let output = command
+            .args([
+                "--std-provider",
+                "artifact",
+                "--checkpoint-dir",
+                path(&checkpoints),
+                "--checkpoint-key-dir",
+                path(&keys),
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{report}");
+        assert!(
+            report["diagnostics"].as_array().unwrap().is_empty(),
+            "{report}"
+        );
+        assert_eq!(
+            report["checkpoints"].as_array().unwrap().len(),
+            usize::from(!resume)
+        );
+        if !resume {
+            let events = report["events"].as_array().unwrap();
+            let parked = events
+                .iter()
+                .position(|event| event["kind"] == "task_parked")
+                .unwrap();
+            let saved = events
+                .iter()
+                .position(|event| event["kind"] == "checkpoint_created")
+                .unwrap();
+            assert!(
+                parked < saved,
+                "checkpoint must retain an already parked source await: {report}"
+            );
+        }
+    }
+}
+
+fn verify_task_provider_parity(binary: &Path, root: &Path) {
+    let app = root.join("task-provider-parity.es");
+    fs::write(
+        &app,
+        r#"module app.main;
+import std.task.{Async, Scheduler, run, start, await};
+import std.task.scheduler.{park, requeue};
+flow number() -> i32 ![] { return 7; }
+flow greeting() -> string ![] { return "hello"; }
+flow main(args: Array<string>) -> i32 {
+    return run((scheduler: Scheduler) => {
+        let first = start(number);
+        let second = start(greeting);
+        return handle {
+            let n: i32 = await(first);
+            let text: string = await(second);
+            if n == 7 && text == "hello" { 0 } else { 1 }
+        } with {
+            Async.await(task) as continuation => { park(scheduler, task, continuation); }
+            Async.yield() as continuation => { requeue(scheduler, continuation, ()); }
+        };
+    });
+}
+"#,
+    )
+    .unwrap();
+    let providers: &[&str] = if cfg!(feature = "forbid-legacy-std") {
+        &["artifact"]
+    } else {
+        &["legacy", "artifact"]
+    };
+    for provider in providers {
+        let output = Command::new(binary)
+            .args([
+                "--cache",
+                "off",
+                "run",
+                path(&app),
+                "--std-provider",
+                provider,
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{provider}: {report}");
+    }
 }

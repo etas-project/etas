@@ -510,6 +510,16 @@ The wrapper is the ergonomic API; the action is the semantic authority boundary 
 
 ### 1.2 Parameterized Effects
 
+The action signature generics proposal adds inferred signature parameters before
+the action name, as in `action<T, effect E> await(task: Task<T, ![E]>) -> T;`. This syntax is not yet implemented. These binders
+describe payload and result types. Each request receives fresh type and row
+variables, while action coverage, handler selection, trace-spec patterns and
+runtime policy use the declared selector list after the action name. For
+`Async.await`, that list is empty. Its standard default handler instantiates the
+task's `E` as its produced effect row. Explicit handlers use their checked
+effect transformer. The declaration, inference and handler rules are defined in
+[Action Signature Generics](18-action-signature-generics.md).
+
 Etas supports parameterized effects and action references. A parameterized effect is still an effect-system fact, not an ordinary generic value type. The parameter narrows the observable authority scope:
 
 ```etas

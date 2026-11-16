@@ -271,9 +271,11 @@ Delimiter roles are intentionally separated:
 - `[...]` remains expression syntax for arrays, indexing, slicing, and value
   lists passed to annotations such as `@tools([repo.read])`.
 
-Effect/action `<...>` arguments are static selectors, not runtime argument
-captures. They may name types, stable resource paths, literals, compile-time
-constants, or `_`. A local variable such as `path`, `stream`, `topic`, or
+Effect/action reference `<...>` arguments are static selectors. Signature
+generics in `action<T, effect E> name(...)` are declared before the action name
+and are inferred at each request. Static selectors may name types, stable
+resource paths, literals, compile-time constants, or `_`. A local variable
+such as `path`, `stream`, `topic`, or
 `req.host` is rejected in an effect row or action reference unless it resolves
 as a compile-time constant. Runtime values are carried by the action call
 payload and recorded in trace events.
@@ -479,12 +481,43 @@ arm uses `finish` instead of resuming:
 
 The `flow` keyword is used for named declarations, not for type expressions.
 
+The prefix action signature parameter syntax below is a language extension
+proposal and is not yet implemented. Existing suffix selector syntax retains
+its current meaning.
+
 ```ebnf
 EffectDecl    ::= "effect" Ident TypeParams? ("extends" Effect)? (";" | EffectBlock)
 EffectBlock   ::= "{" EffectActionDecl* "}"
 EffectActionDecl
-              ::= "action" Ident TypeParams? ParamList ReturnType ";"
+              ::= "action" ActionSignatureParams? Ident ActionSelectorParams?
+                  ParamList ReturnType ";"
+ActionSignatureParams
+              ::= "<" TypeParam ("," TypeParam)* ","? ">"
+ActionSelectorParams
+              ::= "<" ActionSelectorParam ("," ActionSelectorParam)* ","? ">"
+ActionSelectorParam
+              ::= Ident TypeParamBound?
 ```
+
+Signature parameters support ordinary type binders and `effect` row binders.
+Selectors after the action name support the existing type/static selector
+semantics. Parameter names must be unique across both lists. Both forms are
+available in effect blocks and effect-target `impl` blocks.
+
+```etas
+effect Async {
+    action<T, effect E> await(task: Task<T, ![E]>) -> T;
+}
+
+effect Query {
+    action choose<Output>(schema: Schema<Output>) -> Output;
+}
+```
+
+`perform Async.await(task)` infers `T` and `E` from the task. Its action
+reference is `Async.await`, with an empty selector list. `Query.choose<Output>`
+keeps its existing selector meaning. The language extension proposal and implementation
+acceptance criteria are specified in [Action Signature Generics](18-action-signature-generics.md).
 
 ### 1.3 Top-Level Bindings
 
