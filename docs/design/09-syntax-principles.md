@@ -482,7 +482,8 @@ arm uses `finish` instead of resuming:
 The `flow` keyword is used for named declarations, not for type expressions.
 
 The prefix action signature parameter syntax below is a language extension
-proposal and is not yet implemented. Existing suffix selector syntax retains
+proposal implemented on the std source migration draft branch. Release
+acceptance remains pending. Existing suffix selector syntax retains
 its current meaning.
 
 ```ebnf

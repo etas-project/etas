@@ -225,7 +225,17 @@ handoff. The frontend appends those solved types and reruns analysis before
 publishing facts; unresolved rows retain their constraints. Generic callable
 templates preserve their checked declaration scope during checkpoint projection.
 
+Caller Handler interception across a source std task wrapper now retains the
+lexical owning task and single-shot continuation. Root and nested generic arms
+can save state, call another source std generic flow and resume after a fresh
+process restores the checkpoint. The `finish` case returns to the lexical owner.
+Portable generic type parameters use canonical Effect identity, action name and
+parameter position; no session-local symbol or type ID becomes a portable binder.
+Known checked requests materialize contextual body types and native generic calls,
+while parametric Handler checking remains independent of request enumeration.
+
 This evidence does not close the full std migration gate. Remaining work includes
-the pre-existing outer caller Handler boundary across `task.run`, the remaining
-std modules, minimal bootstrap contract review and whole-library compatibility
-and performance acceptance. Release continues to default to legacy.
+Host-wait completion and Ready-wakeup routing at task Handler boundaries, broader
+budget/cancellation/trace compatibility, the remaining std modules, minimal
+bootstrap contract review and whole-library compatibility and performance
+acceptance. Release continues to default to legacy.

@@ -72,6 +72,10 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
             + r#"
 @std.binding("std.task.run")
 public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
+
+public flow dispatch<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {
+    return run(body);
+}
 "#,
     )
     .unwrap();
@@ -822,6 +826,7 @@ flow main(args: Array<string>) -> i32 {
     verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_source_action_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_task_provider_parity(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_caller_task_handler(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_compiler_report_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
     fs::remove_dir_all(protected).unwrap();
@@ -1617,5 +1622,74 @@ flow main(args: Array<string>) -> i32 {
         );
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["value"]["value"], "0", "{provider}: {report}");
+    }
+}
+
+// A source std wrapper carries a caller's generic action and static selector.
+// Handler arms stay with their lexical task, including a nested scheduled owner.
+fn verify_caller_task_handler(binary: &Path, root: &Path) {
+    let app = root.join("caller-task-handler.es");
+    let checkpoints = root.join("caller-handler-checkpoints");
+    let keys = root.join("caller-handler-checkpoint-keys");
+    fs::write(
+        &app,
+        r#"module app.main;
+import std.task.{Scheduler, dispatch};
+import std.runtime.checkpoint.checkpoint;
+import std.extra.sdk_echo;
+effect Probe { action<T> value<Key>(key: Key, value: T) -> T; }
+flow scheduled(scheduler: Scheduler) -> i32 ![Probe.value<string>] {
+    let value = perform Probe.value<string>("key", 40);
+    return value + 2;
+}
+flow main(args: Array<string>) -> i32 ![] {
+    let answer = handle { dispatch(scheduled) } with {
+        Probe.value<string>(key, value) => { checkpoint("caller-handler"); resume sdk_echo(value); }
+    };
+    if answer + 1 != 43 { return 1; }
+    let nested = dispatch((scheduler: Scheduler) => {
+        let inner = handle { dispatch(scheduled) } with {
+            Probe.value<string>(key, value) => { checkpoint("nested-handler"); resume sdk_echo(value); }
+        };
+        return inner + 1;
+    });
+    if nested != 43 { return 2; }
+    let finished = dispatch((scheduler: Scheduler) => {
+        let answer = handle { dispatch(scheduled); "unreached" } with {
+            Probe.value<string>(key, value) => { checkpoint("finish-handler"); finish "finished"; }
+        };
+        if answer == "finished" { return "continued"; }
+        return "unreached";
+    });
+    if finished != "continued" { return 3; }
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    for resume in [None, Some(0), Some(1), Some(2)] {
+        let mut command = Command::new(binary);
+        command.args(["--cache", "off"]);
+        if let Some(index) = resume {
+            command.args(["resume", &index.to_string()]);
+        } else {
+            command.args(["run", path(&app)]);
+        }
+        let output = command.args([
+            "--std-provider", "artifact",
+            "--checkpoint-dir", path(&checkpoints),
+            "--checkpoint-key-dir", path(&keys),
+            "--format", "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+        assert!(output.status.success(), "{}\n{}",
+            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], "0", "{report}");
+        assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
+        assert_eq!(report["checkpoints"].as_array().unwrap().len(),
+            resume.map_or(3, |index| 2 - index), "{report}");
     }
 }

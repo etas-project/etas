@@ -488,8 +488,8 @@ registry declaration/signature lookup. Its sixty-nine roles define only the reco
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 46 compiler/host catalog entries
-including 38 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 49 compiler/host catalog entries
+including 41 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
@@ -575,8 +575,9 @@ to the source package. This ABI reference grants no language role. Source enum
 constructor imports/re-exports retain canonical identities, generic payloads and
 checked execution layouts. The published std provider resolves every native enum
 reference to its checked declaration. Partial compiler library images may retain
-ABI imports until that publication step. The bundle uses body schema 12 and
-registry image schema 5.
+ABI imports until that publication step. The bundle uses body schema 13 and
+registry image schema 6. Action generic binders use descriptor schema 14; the
+package container uses schema 50.
 
 `std.fs.Region`, `WorkspacePath<R ~ Region>` and `IOError` are also source
 owned. Region supplies the compiler's static authority-selector identity;
@@ -602,7 +603,7 @@ the caller's checked program before starting the next attempt. Installed SDK
 acceptance compares two denied write attempts and their exhaustion diagnostic
 against legacy; a separate checked-revision test verifies transient Host failure
 recovery and caller continuation. Pending retry failures are portable in
-checkpoint schema v78. Source std now declares both checkpoint import paths,
+checkpoint schema v79. Source std now declares both checkpoint import paths,
 backed by the existing runtime checkpoint primitive. Saved std callables refer
 to the current caller's verified bundle and checked type bridge; executable
 code and invocation permissions are not taken from checkpoint data.
@@ -616,6 +617,17 @@ library-owned checkpoint. Frozen body recompilation strips the previously
 injected std dependency projection before namespace checks, then attaches the
 same selected provider again. Whole-library compatibility and performance
 validation remain migration gates.
+
+The task fixture also runs a source std wrapper under an implicit generic caller
+Handler. Child requests reach their lexical Handler in the root or an enclosing
+scheduled task. Checkpoints retain the checked request ABI, arm substitutions
+and single-shot continuation; separate processes resume the root, nested and
+`finish` cases. A Handler can call a source std generic flow after saving state.
+Action parameters cross the bundle boundary by canonical Effect/action identity
+and parameter position. Known request instances materialize the Handler's body
+types and generic calls without restricting its parametric type-checking rule.
+Host-wait completion routing and the full budget/cancellation/trace compatibility
+matrix remain migration gates.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,

@@ -128,7 +128,7 @@ let summaries = join([
 ## 5. Type And Effect Rules
 
 The proposed scheduler action source signature is
-`action<T, effect E> await(task: Task<T, ![E]>) -> T;`; this syntax is not yet implemented. A request written as
+`action<T, effect E> await(task: Task<T, ![E]>) -> T;`; the proposal is implemented on the std source migration draft branch; release acceptance remains pending. A request written as
 `perform Async.await(task)` infers both binders from its task argument. The
 action has zero static selectors. The standard scheduler handler carries the
 instantiated `E` into its produced-effect summary. A handler around the request

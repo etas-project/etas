@@ -511,7 +511,7 @@ The wrapper is the ergonomic API; the action is the semantic authority boundary 
 ### 1.2 Parameterized Effects
 
 The action signature generics proposal adds inferred signature parameters before
-the action name, as in `action<T, effect E> await(task: Task<T, ![E]>) -> T;`. This syntax is not yet implemented. These binders
+the action name, as in `action<T, effect E> await(task: Task<T, ![E]>) -> T;`. The proposal is implemented on the std source migration draft branch; release acceptance remains pending. These binders
 describe payload and result types. Each request receives fresh type and row
 variables, while action coverage, handler selection, trace-spec patterns and
 runtime policy use the declared selector list after the action name. For
