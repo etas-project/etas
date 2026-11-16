@@ -82,7 +82,7 @@ repository = "https://github.com/org/research-assistant"
 root = "src"
 
 [dependencies]
-std = { version = "0.2" }
+std = { version = "0.1" }
 company_agents = { package = "company-agents", version = "1.2", import = "company.agents" }
 web_search = { package = "web-search", version = "0.4", import = "web.search" }
 local_prompts = { path = "../local-prompts", import = "prompts" }
@@ -104,6 +104,14 @@ Manifest fields:
 | `[source].root` | Source root for the current package. Defaults to `src`. |
 | `[dependencies]` | Package dependencies from registry, local path, Git, or built-in source. |
 | `[[bin]]` | Runnable entry points. Each entry names a module and a flow. |
+| `[reflection].retain_bodies` | Optional list of fully qualified items in this package whose source bodies are retained; defaults to `[]`. |
+| `[reflection].export_bodies` | Optional list of public items in this package whose bodies may be reflected across packages; implies retention and defaults to `[]`. |
+
+Reflection lists contain logical item names, not paths. Entries must resolve to
+items owned by the package; `export_bodies` cannot expose a private item or a
+dependency's unexported source. `public` visibility alone does not export a body.
+See [reflection configuration](18-reflection-and-checked-code-generation.md#33-code-representation-and-visibility)
+for the configuration example and runtime-revision rules.
 
 A dependency key is a local manifest name. It does not need to match the
 registry package name or import root:
@@ -128,7 +136,7 @@ Etas should support these dependency source forms:
 
 ```toml
 [dependencies]
-std = { version = "0.2" }
+std = { version = "0.1" }
 local = { path = "../local-package", import = "local" }
 tools = { git = "https://github.com/org/tools.git", rev = "abc123", import = "tools" }
 tools_tag = { git = "https://github.com/org/tools.git", tag = "v0.3.0", import = "tools" }
@@ -145,13 +153,20 @@ Rules:
   normal package metadata;
 - source code only sees logical import roots, not dependency source forms.
 
+The [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts)
+bind to resolved standard package/item identities, not local import roots or
+unqualified names. Aliases and re-exports preserve recognition; a different
+package or local declaration with the same spelling does not acquire it.
+Standard declarations and algorithms may be Etas source. Compiler recognition
+does not require a bodyless host implementation for every std export.
+
 ## 6. Version Requirements
 
 Etas package versions use SemVer. The package manager should support:
 
 ```toml
 [dependencies]
-std = { version = "0.2" }          # compatible with 0.2.x
+std = { version = "0.1" }          # compatible with 0.1.x
 foo = { version = "^1.2.0" }       # >=1.2.0, <2.0.0
 bar = { version = "=1.2.3" }       # exactly 1.2.3
 baz = { version = ">=1.2,<1.5" }
@@ -233,11 +248,33 @@ Public metadata should include:
 - public modules and exported item names;
 - public type, enum, spec, flow, agent, tool, effect, action, and protocol
   signatures;
+- parameter names, required/defaulted status, and checked default expressions
+  or executable references with declaration-site bindings and fingerprints;
+- method receiver modes and checked transitive may-suspend summaries, including
+  behavioral-spec evidence; omission is unknown, not a non-suspension proof;
 - generated effect/action summaries for exported flows, agents, and tools;
 - tool schemas for model-callable public tools;
 - trace-spec summaries that affect exported APIs;
 - re-export expansion for wildcard public imports;
 - fingerprints for incremental compilation and LSP invalidation.
+- resolved body-retention/export entries, body availability, and source
+  fingerprints for reflection; unexported retained bodies remain private.
+
+The std-contract section identifies the resolved standard symbols, their
+contract versions, and required backend bindings for primitives. The toolchain
+must validate these against the selected standard library and target; arbitrary
+package metadata cannot self-assign a compiler-recognized role or runtime
+authority. Ordinary Etas bodies remain checked code, while a primitive without
+a source body must expose its type, effects/actions, failures, and runtime
+contract. Missing or incompatible required contracts/bindings are diagnostics,
+not permission to substitute an unchecked same-named implementation. Merely
+belonging to std or appearing in a prelude does not authorize external actions.
+
+Effect summaries such as `requested_actions` and `default_actions` belong to
+this generated metadata, not to source declaration syntax. Etas implementations
+and contract-preserving backend optimizations expose the same public semantic
+contract; standard-library self-implementation does not require changing
+callers' imports.
 
 ## 9. Import Resolution
 
@@ -286,7 +323,7 @@ members = [
 ]
 
 [workspace.dependencies]
-std = { version = "0.2" }
+std = { version = "0.1" }
 ```
 
 Workspace configuration is tooling-level metadata. It does not change source
@@ -451,6 +488,10 @@ All modes must expose the same semantic surface to the current package:
 - public modules and items;
 - exported type, spec, flow, agent, tool, effect, action, and protocol
   signatures;
+- checked default-argument contracts, including definition-site bindings and
+  fingerprints, not caller-reinterpreted source strings;
+- method receiver modes and transitive suspension facts required for checked
+  `var self` calls;
 - generated effect/action summaries;
 - tool schemas and binding requirements;
 - re-export expansion;

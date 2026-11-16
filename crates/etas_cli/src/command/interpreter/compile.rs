@@ -45,7 +45,7 @@ pub fn compile_project(
     let definitions = output
         .checked
         .as_ref()
-        .filter(|checked| compiler_config.is_some() || !checked.types.reflections.is_empty())
+        .filter(|checked| compiler_config.is_some() || checked.requires_definition_catalog())
         .map(|checked| {
             etas_driver::compiler::prepare_native_definitions(
                 &response.loaded,

@@ -84,6 +84,12 @@ pub(super) fn publish(
             }
             builder.bind_declaration(*native, key.clone());
             builder.source_type_parameters(*native, params.clone());
+            if etas_std::StdSourceRole::from_path(&canonical.join("."))
+                .is_some_and(etas_std::StdSourceRole::is_represented_type)
+                && let Some(representation) = ty.children.first()
+            {
+                builder.source_type_representation(*native, projector.ty(representation)?);
+            }
             if !ty.projected_fields.is_empty() {
                 builder.source_type_projected_fields(
                     *native,

@@ -442,6 +442,9 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     }
     let registry = builder.try_finish().map_err(invalid)?;
     registry
+        .validate_resolved_native_type_references()
+        .map_err(invalid)?;
+    registry
         .validate_resolved_native_enum_references()
         .map_err(invalid)?;
     registry
@@ -652,7 +655,7 @@ impl TypeProjector<'_> {
                 },
                 inner: child(0)?,
             },
-            K::Existential | K::Var | K::Handler | K::ResourceHandle => {
+            K::Existential | K::Var | K::Handler | K::ResourceHandle | K::AgentContext => {
                 return Err(invalid(format!(
                     "std query type {:?} requires its declaration contract before publication",
                     ty.kind

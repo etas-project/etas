@@ -17,7 +17,7 @@ flow PaperWriting(topic: string) -> PaperDraft
         () => Evaluator.run(plan),
     ));
 
-    let draft = Writer.run({ plan, related, formal, eval });
+    var draft = Writer.run({ plan, related, formal, eval });
 
     let review = Reviewer.run(draft);
 
@@ -102,7 +102,9 @@ B ~ Stage<M, O, E2>
 A | B : I -> O ![E1 + E2]
 ```
 
-The result is always a flow value, not an `agent`. A composition such as `Researcher | Writer | Publisher` represents multiple runtime steps with separate prompts, model calls, schema validation, trace events, effect/action checks, trace-spec checks, and runtime-policy checks.
+The result is a flow value, not a new nominal `agent`. Composition preserves
+the selected stage methods and their behavior summaries; prompts and model
+calls occur only where those methods actually request them.
 
 Examples:
 
@@ -323,36 +325,33 @@ if approved {
 
 Trace specs can require human approval before certain effects. `>>` is a
 trace-spec temporal operator over typed guards and targets, not a general
-expression operator.
+expression operator. It includes local permission for both operands, so no
+separate `+` declarations are needed for them.
 
 ```etas
 spec SafeAction: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & +StripePayment.charge<BillingAccount>
-    & +WorkCalendar.write<WorkCalendar>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>)
+    (Approval.request >> CompanyEmail.send<WorkAccount>)
     & (Approval.request >> StripePayment.charge<BillingAccount>)
     & (Approval.request >> WorkCalendar.write<WorkCalendar>);
 ```
 
-If a flow attempts to perform one of these effects without an approval event dominating it in the control-flow graph, the compiler or runtime rejects the program.
+If a flow attempts one of these actions without matching accepted approval
+evidence before it, the compiler or runtime rejects the action. Calling
+`Approval.request` alone is insufficient: denial, failure, or approval for an
+unrelated request does not open the gate. The implicit permissions cannot
+override an outer denial or runtime authority boundary.
 
 The same shape can express other gates:
 
 ```etas
 spec PublishingSafety: trace =
-    +HumanReview
-    & +PublicPublish
-    & +Sanitized
-    & +PromptSystemWrite
-    & (HumanReview >> PublicPublish)
+    (HumanReview >> PublicPublish)
     & (Sanitized >> PromptSystemWrite);
 ```
 
-These normalize to trace-spec terms such as
-`trace.before(HumanReview, PublicPublish)` and
-`trace.before(Sanitized, PromptSystemWrite)`.
+Each clause normalizes to local permissions for its operands and a typed
+`Before` constraint, following the [Trace Specs](05-type-system-and-errors.md#154-trace-specs)
+rules. Permissions do not remove the review or sanitization prerequisite.
 
 ### 2.3 Human as a Typed Actor
 

@@ -1,5 +1,5 @@
 {
-  "phase": "all declarations written; compilation and tests intentionally deferred until this phase is complete",
+  "phase": "Legacy definitions and latest-spec additions written; unified compilation/fixes in progress, whole std not accepted",
   "legacy_symbols": 667,
   "previous_query_covered": 234,
   "raw_missing_before": 433,
@@ -685,5 +685,11 @@
   "tests_run_for_bulk_definitions": false,
   "compilation_attempted": true,
   "whole_build_diagnostic_count": 605,
-  "consolidated_validation_status": "First whole-library build exposes pending selector/prototype/constant syntax and role/binding integration; no per-module tests have been added or run."
+  "consolidated_validation_status": "First whole-library build exposes pending selector/prototype/constant syntax and role/binding integration; no per-module tests have been added or run.",
+  "latest_spec_inventory": "std-latest-spec-api-inventory.json",
+  "bootstrap_only_declarations_now_explicit": [
+    "std.text.chars",
+    "std.text.from_char",
+    "std.text.parse_usize"
+  ]
 }

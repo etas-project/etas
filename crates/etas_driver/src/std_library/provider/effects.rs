@@ -133,12 +133,18 @@ fn publish_actions(
             .effect_args
             .iter()
             .map(|kind| match kind {
-                metadata::ActionArgKind::Type => Ok(etas_std::EffectActionArgKind::Type),
-                _ => Err(invalid(
-                    "native source action has an unsupported static selector",
-                )),
+                metadata::ActionArgKind::Type => etas_std::EffectActionArgKind::Type,
+                metadata::ActionArgKind::MemoryPlace => etas_std::EffectActionArgKind::MemoryPlace,
+                metadata::ActionArgKind::StringPattern => {
+                    etas_std::EffectActionArgKind::StringPattern
+                }
+                metadata::ActionArgKind::StaticResourcePath { ty } => {
+                    etas_std::EffectActionArgKind::StaticResourcePath {
+                        ty: ty.clone().into(),
+                    }
+                }
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Vec<_>>();
         let parameters = action
             .generic_params
             .iter()

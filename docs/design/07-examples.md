@@ -10,7 +10,10 @@ The examples use the current agent model: an `agent` is a nominal component, the
 ergonomic body form defines its default `run` method, and model inference is
 written with agent-scoped `perform infer<T>(prompt)`. The elaborated
 `Agentic.infer<Agent.method, T>` action remains visible in summaries and traces,
-but it is not exposed as an escaping effect to ordinary callers.
+but it is not exposed as an escaping effect to ordinary callers. Explicit
+single-step controllers use the [standard protocol APIs](19-standard-library.md#4-single-step-agent-interaction).
+Bodyless tool signatures below are interface sketches for resolved package or
+runtime bindings, not standalone implementations.
 
 ## 1. Research Paper Assistant
 
@@ -176,9 +179,7 @@ tool support.create_ticket(title: string, body: string) -> TicketId
     ![SupportHttp.request<"support.internal">];
 
 spec ExternalEmailPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 @model("gpt-5.5")
 agent EmailWriter(input: EmailRequest) -> EmailDraft {
@@ -535,9 +536,7 @@ effect CompanyEmail extends Network {
 type CustomerNotice = { to: EmailAddress, body: string }
 
 spec CustomerContactPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 @model("gpt-5.5")
 agent NoticeWriter(input: Ticket) -> CustomerNotice {
@@ -774,9 +773,7 @@ effect Cms extends Network {
 tool cms.publish(draft: PublishDraft) -> PublishReceipt ![Cms.publish<Site>];
 
 spec PublishPolicy: trace =
-    +Approval.request
-    & +Cms.publish<Site>
-    & (Approval.request >> Cms.publish<Site>);
+    Approval.request >> Cms.publish<Site>;
 
 flow PublishDraftFlow(draft: PublishDraft) -> PublishReceipt
     ~ PublishPolicy
@@ -967,8 +964,8 @@ flow Debate(question: Question) -> Answer {
     while !mentions_final(transcript)
         limit Iterations(6), Tokens(60_000), WallTime(minutes(5))
     {
-        transcript.turns = transcript.turns.push(Researcher.run(transcript));
-        transcript.turns = transcript.turns.push(Critic.run(transcript));
+        transcript = Transcript { turns = transcript.turns.push(Researcher.run(transcript)) };
+        transcript = Transcript { turns = transcript.turns.push(Critic.run(transcript)) };
     }
 
     return Synthesizer.run(transcript);
@@ -1619,9 +1616,7 @@ type LaunchPacket = {
 }
 
 spec PublishPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 flow StaticInstructions(cfg: LaunchConfig) -> Trusted<string> {
     if cfg.publish {
@@ -1842,9 +1837,7 @@ high-impact actions behind policy gates.
 
 ```etas
 spec EmailPolicy: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 
 flow SendReport(report: Report) -> EmailReceipt
     ~ EmailPolicy

@@ -780,6 +780,10 @@ fn action_arg_kind_to_metadata(
 fn type_to_metadata(ty: &PackageTypeMetadata) -> Result<etas_package_metadata::Type, PackageError> {
     let mut metadata = etas_package_metadata::Type::default();
     match ty {
+        PackageTypeMetadata::AgentContext { method } => {
+            metadata.kind = etas_package_metadata::TypeKind::AgentContext;
+            metadata.agent_context = Some(method.clone());
+        }
         PackageTypeMetadata::Existential { bounds } => {
             metadata.kind = etas_package_metadata::TypeKind::Existential;
             metadata.bounds = bounds
@@ -1069,6 +1073,7 @@ fn effect_summary_to_metadata(
             .as_ref()
             .map(|effects| {
                 Ok::<_, PackageError>(etas_package_metadata::DefaultHandlerEffects {
+                    behavior: effects.behavior.clone(),
                     direct_effects: effect_row_to_metadata(&effects.direct_effects)?,
                     default_actions: effect_row_to_metadata(&effects.default_actions)?,
                     handlers: effects
@@ -1147,6 +1152,15 @@ fn action_trace_to_metadata(
                     .map(action_trace_to_metadata)
                     .collect::<Result<Vec<_>, _>>()?,
             )
+        }
+        PackageActionTraceMetadata::DefaultHandler { guards, child } => {
+            etas_package_metadata::ActionTrace::DefaultHandler {
+                guards: guards
+                    .iter()
+                    .map(effect_ref_to_metadata)
+                    .collect::<Result<_, _>>()?,
+                body: Box::new(action_trace_to_metadata(child)?),
+            }
         }
         PackageActionTraceMetadata::Repeat { child } => {
             etas_package_metadata::ActionTrace::Repeat(Box::new(action_trace_to_metadata(child)?))

@@ -18,7 +18,7 @@ The first case study is Harness Engineering, but it should not be the only one. 
 | AgentOps / Observability Engineering | AgentOps, agent observability, lifecycle tracing, run monitoring | Governs how production agent runs are traced, inspected, replayed, debugged, and audited. | Turn AIR nodes, effect summaries, agent/tool/message events, determinism, and replay metadata into a stable observability surface. |
 | Evaluation Engineering | agent evaluation, trajectory evaluation, eval harnesses | Governs how agent systems are tested beyond final-answer matching: tool use, planning, handoff, safety, cost, robustness, and trace quality. | Support mock tools/models, golden traces, policy simulation, effect coverage, and typed evaluation flows. |
 | Tool Governance / Authority Engineering | agentic AI security, tool governance, least privilege, guardrails | Governs which external actions an agent may perform and how authority, sandboxing, approval, and audit are enforced. | Keep `tool`, effect actions, sandbox policy, approval dominance, and manifests separate but connected. |
-| Orchestration / Protocol Engineering | multi-agent orchestration, graph/swarm/workflow/handoff, agent protocols | Governs how agents interact: sequence, graph, handoff, delegation, shared state, retries, cancellation, and failure propagation. | Clarify `flow`, `~>`, `|`, `join([...])`, typed messages, session semantics, and whether `protocol` needs first-class syntax. |
+| Orchestration / Protocol Engineering | multi-agent orchestration, graph/swarm/workflow/handoff, agent protocols | Governs how agents interact: sequence, graph, handoff, delegation, shared state, retries, cancellation, and failure propagation. | Exercise `flow`, `~>`, `\|`, structured concurrency, typed messages, and sessions; `protocol` remains an optional advanced contract. |
 | Recovery / Replay Engineering | replay, checkpointing, idempotency, recovery semantics | Governs how failed or resumed runs avoid repeating approvals, model calls, and high-impact tool side effects. | Define determinism, trace, checkpoint, idempotency, replay, recompute, deduplicate, and resample behavior. |
 
 Recommended first batch:
@@ -65,18 +65,20 @@ In ordinary framework code, the harness is often spread across Python or TypeScr
 | Evaluation harness | Tests can mock tools/models, compare traces, simulate policy, and replay failures. |
 | Deployment manifest | A platform can review required effects and actions, tools, models, limits, approvals, and trace policy before a run. |
 
-### 2.2 What Etas Models Well Today
+### 2.2 Current Design Coverage
+
+The status column describes SPEC coverage, not implementation completeness.
 
 | Harness concern | Etas mechanism | Status |
 |---|---|---|
-| Agent boundary | `agent` declaration with nominal identity, typed `run` method, model config, tool exposure, analyzable context code before `perform infer`, and policy requirements | Strong |
+| Agent boundary | Nominal `agent`, flow-like methods, annotations, declared tools, and explicit `infer`/`step` boundaries | Strong |
 | Tool authority | `tool` declarations with `![...]` effect/action contracts and typed policy requirements | Strong |
-| Human approval | `approve(...)`, `Approval.request`, `policy`, `handle`, and approval dominance analysis | Strong |
+| Human approval | `std.ui.approve(...)`, `Approval.request`, trace specs, handlers, and approval-evidence analysis | Strong |
 | Sandboxed commands | `Command` effect plus default `DefaultCommandSandbox` runtime support | Strong |
 | Structured output | ordinary `type`, `Schema<T>`, `ResponseDecode` evidence, validation flows, `ValidationError` | Strong enough for MVP |
 | Prompt trust | `Prompt`, `PromptEncode` evidence, `Trusted<T>`, `Untrusted<T>`, `Sanitized<T>`, explicit prompt channels | Strong |
 | Bounded loops | `for`, `while`, `retry`, and `limit` with typed `Limit` values | Strong |
-| Flow composition | `|`, `~>`, first-class flow values, `join([...])` stdlib combinator | Strong for code-first harnesses |
+| Flow composition | `\|`, `~>`, first-class flow values, structured-concurrency combinators | Strong for code-first harnesses |
 | Non-determinism | inferred `Deterministic` / `NonDeterministic` flow facts | Strong conceptually |
 | Trace planning | AIR nodes, effect summaries, memory versions, approval ids, checkpoint metadata | Strong design direction |
 
@@ -109,26 +111,24 @@ agent ResearchWriter(input: { req: ResearchRequest, pages: Array<Sanitized<WebPa
     return perform infer<Report>(BuildResearchPrompt(input));
 }
 
-flow SafeResearch(req: ResearchRequest) -> Result<Report, HarnessError> {
-    return {
-        let raw_pages = web.search(req.topic);
-        let pages = sanitize_pages(raw_pages);
+flow SafeResearch(req: ResearchRequest) -> Report {
+    let raw_pages = web.search(req.topic);
+    let pages = sanitize_pages(raw_pages);
 
-        var report = ResearchWriter.run({ req, pages });
+    var report = ResearchWriter.run({ req, pages });
 
-        while !validate_report(report).ok
-            limit Iterations(3), Tokens(60_000)
-        {
-            let feedback = validate_report(report).error;
-            report = ResearchWriter.run({ req, pages = apply_feedback(pages, feedback) });
-        }
+    while !validate_report(report).ok
+        limit Iterations(3), Tokens(60_000)
+    {
+        let feedback = validate_report(report).error;
+        report = ResearchWriter.run({ req, pages = apply_feedback(pages, feedback) });
+    }
 
-        if approve("Publish report?", report, risk = High) {
-            cms.publish(report);
-        }
+    if std.ui.approve("Publish report?", report, risk = High) {
+        cms.publish(report);
+    }
 
-        report
-    }?;
+    return report;
 }
 ```
 
@@ -154,10 +154,10 @@ Etas can express a harness-shaped program, but the current design is not yet a c
 | Golden trace tests | Reliability tests should compare semantic traces, not only final strings. | Tooling |
 | Policy simulation | CI should answer "would this flow be deployable under policy X?" without executing side effects. | Compiler/tooling |
 | Context slicing policy | Etas needs standard rules for selecting messages, typed memory API results, retrieval results, summaries, and prompt parts. | Stdlib/runtime |
-| Conversation retention | `Message<T>`, `Conversation`, and `SessionConfig` need concrete truncation, summarization, and replay contracts. | Stdlib/runtime |
+| Conversation retention and derived context | Apply the Session contract for history, retention, version-checked publication, receipts, and replay. Application/EDK code explicitly generates summaries; context selection never triggers inference. | Application/EDK + stdlib/runtime |
 | Retry and feedback combinators | Users should not hand-write every validation/revision loop. | Stdlib |
 | Recovery profiles | Replay, recompute, deduplicate, and resample behavior must be specified per AIR node/tool/model call class. | AIR/runtime |
-| Concurrent merge rules | `join([...])` needs clear failure, cancellation, partial result, and memory-write merge semantics. | Stdlib/runtime |
+| Concurrency conformance and shared writes | Implement the specified failure/cancellation contracts; coordinate shared-store writes without assuming that `join` makes them atomic. | Stdlib/runtime |
 | Interop code generation | OpenAPI, MCP, JSON Schema, protobuf, and package registries should generate `tool` and schema declarations. | Tooling |
 | Dashboard/visualization metadata | Platforms need trace and AIR metadata for UI, but this should not add language keywords. | Platform |
 
@@ -167,9 +167,9 @@ Harness engineering should not become a pile of new keywords. The core source la
 
 | Need | Source syntax? | Recommended representation |
 |---|---:|---|
-| Tool boundary | Yes | `tool`, `effect`, `require` |
+| Tool boundary | Yes | `tool`, effect/action contracts, and `~` trace specs |
 | Agent boundary | Yes | `agent` |
-| Flow orchestration | Yes | `flow`, `|`, `~>`, `if`, `match`, loops, `limit` |
+| Flow orchestration | Yes | `flow`, `\|`, `~>`, `if`, `match`, loops, `limit` |
 | Human gate | No special expression | `approve(...)` support flow, `Approval.request` action, trace specs/runtime policy |
 | Checkpoint | No keyword | `runtime.checkpoint(...)` stdlib/runtime support |
 | Parallelism | No keyword | `join([...])` stdlib combinator |
@@ -186,7 +186,7 @@ Harness engineering suggests these priorities for Etas:
 2. Specify trace schema and golden trace comparison.
 3. Specify runtime tool binding metadata and code generation from external schemas.
 4. Add stdlib harness combinators for validation, retry-with-feedback, fallback, evaluation, and context selection.
-5. Define `join([...])` merge/failure semantics.
+5. Validate the [structured-concurrency contracts](16-concurrency.md) and explicit shared-store coordination.
 6. Define recovery behavior for model calls, tool calls, approval, memory reads/writes, checkpoints, and handlers.
 7. Keep source syntax small unless a harness concept must participate in static analysis and cannot be represented as a type, flow, effect, policy, or stdlib combinator.
 

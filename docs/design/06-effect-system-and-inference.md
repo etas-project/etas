@@ -32,7 +32,12 @@ CoreEffectRoot = Agentic | Network | FileIO | Command | Memory | Secret | Time |
 EffectSet      = Set<EffectRef>
 ```
 
-The core root set should stay small. Roots are broad categories used for
+The core root set should stay small. These are standard declarations with
+specified compiler/runtime contracts, not additional keywords or a requirement
+to implement their entire API in the host. Effect declaration/extension, rows,
+inference, and handling are language mechanisms; concrete standard names and
+platform execution follow the [five-layer model](01-overview.md#53-feature-map-by-layer).
+Roots are broad categories used for
 effect-root extension, trace-spec/runtime-policy coverage, and high-level
 summaries. This is not value subtyping.
 
@@ -42,11 +47,18 @@ summaries. This is not value subtyping.
 | `Network` | Accesses external network resources |
 | `FileIO` | Reads or writes files visible to the runtime |
 | `Command` | Executes a sandboxed command or child process |
-| `Memory` | Reads, writes, migrates, or compacts typed persistent memory resources |
+| `Memory` | Reads, writes, migrates, or performs storage compaction on typed persistent memory resources |
 | `Secret` | Reads, decrypts, or reveals secret material |
 | `Time` | Reads wall-clock time, sleeps, schedules, or uses timers |
 | `Human` | Requests human input, approval, notification, or UI-mediated decisions |
 | `Error<E>` | Raises a typed recoverable failure |
+
+Session history reads and context publication are memory operations. Generating
+a summary through a model is an explicit application/EDK computation that records
+its own `Agentic.infer` requested action under the ordinary default-handler
+rules; it must not be hidden inside a memory read, publication, or retention
+operation. Selecting an existing summary does not itself request inference.
+See [Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
 
 Fine-grained authority is represented by effect actions. Some actions are
 defined by the core prelude, while most external authorities are defined by
@@ -119,9 +131,11 @@ spec ReadOnlyWeb: trace =
 
 ### 1.1 Minimal Standard Actions
 
-The core standard library should define only orthogonal actions needed by the
+The standard library should define only orthogonal actions needed by the
 language runtime and common local programs. These names are not keywords; they
-are prelude or standard-library effect/action names.
+are standard-library effect/action names, possibly re-exported by a prelude.
+Their declarations, wrappers, and expressible handler logic can be Etas source;
+host execution is needed only for the specified primitive endpoints.
 
 | Root / effect | Minimal standard actions | Typical authority |
 |---|---|---|
@@ -131,19 +145,21 @@ are prelude or standard-library effect/action names.
 | `Memory` | `read<R>`, `write<R>` | Typed memory regions and stores |
 | `Secret` | `read<K>`, `use<K>` | Host-mediated secret handles and non-revealing secret-backed operations |
 | `Command` | `run<S>` | Sandboxed process execution scoped by sandbox profile |
-| `Agentic` | `infer<C, O>` | Agent-scoped model inference requested action, where `C` is an agent method identity |
+| `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
+| `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
 
-The current implementation-facing `etas_std` does not yet provide every
-substrate API needed by EDK. It currently covers console I/O, typed memory
-support, host command/path/url/sandbox support, thin bytes/text helpers,
-security/trust helpers, and an effect/action registry for broad roots such as
-`Network`, `FileIO`, and `Secret`. The following low-level modules are intended
-standard-library substrate, but should be treated as design targets until they
-exist in the implementation:
+`Async` is exported by `std.task`. Default handlers support ordinary managed
+execution; custom handlers can bind `as k` and use checked scheduler transfer.
+Handling these control actions does not hide child-work effects or create a
+new broad authority root. See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
+
+The following modules define the standard substrate contracts. Their inclusion
+in the SPEC does not imply that every backend already implements them:
 
 | API module | Standard effect/action owner | Intended substrate |
 |---|---|---|
+| `std.task` | `Async` and recognized task-execution contracts | Structured start/wait, scoped scheduler handles, single-shot transfer, cancellation, and cleanup |
 | `std.net.tcp` | `Net extends Network` | TCP connect, socket identity, cancellation, timeout metadata |
 | `std.stream` | `Stream` | Bounded byte-stream read, write, flush, close, EOF, timeout, and cancellation over typed stream handles |
 | `std.tls` | `Tls extends Network` | TLS client session setup, server-name binding, certificate validation, TLS errors |
@@ -352,11 +368,18 @@ Users should not have to write
 `![Agentic.infer<C, O>]` on normal flow signatures just because a flow runs an
 agent.
 
+`Agentic.step<C, O>` is the single-generation substrate used when Etas code
+controls the loop. Its public wrapper is `std.agent.step(conversation, schema)`.
+The same default-handling rule applies: the action remains in requested/default
+metadata without becoming an ordinary escaping obligation. A step does not
+invoke tools, retry, or repair output by making another model request.
+
 The standard declaration should be equivalent to:
 
 ```etas
 effect Agentic {
     action infer<C, O>(prompt: Prompt, schema: Schema<O>) -> O;
+    action step<C, O>(conversation: Conversation, schema: Schema<O>) -> StepResult<C, O>;
 }
 ```
 
@@ -366,6 +389,13 @@ constructs the full provider request from the prompt plus the current agent
 method's model profile, tool surface, context and session metadata, limits,
 runtime policy context, trace parent id, and stable hashes needed for replay and
 caching.
+
+For `step`, the conversation supplies the current protocol messages, while the
+same checked agent context supplies configuration and authority constraints.
+`C` is not inferred from a model-provided tool name or chosen from a string. A
+handler interpreting an existing `infer<C, O>` request may reuse that request's
+context to perform steps; transparent conversation/call records cannot grant
+another agent's identity or tools.
 
 Users normally write:
 
@@ -426,12 +456,28 @@ Agentic.infer<C, O>
   -> resolve agent method C
   -> check effect boundary, trace specs, runtime policy, limits, secret flow, and prompt trust
   -> check replay/resample mode
-  -> build provider payload
-  -> call provider or local model runtime
-  -> decode and validate O
-  -> record trace, usage, latency, hashes, and finish reason
+  -> run the standard controller using Agentic.step<C, O>
+  -> dispatch requested tools through std.tool.invoke under current checks
+  -> continue until validated O or the configured failure/limit outcome
   -> return O
+
+Agentic.step<C, O>
+  -> restore the checked agent request context and recheck current constraints
+  -> build one provider payload, including the output schema
+  -> call the provider or local model runtime once
+  -> return Final(O), CallTools(requests), or Stopped(reason), with the assistant turn
+  -> record trace, usage, latency, hashes, and finish reason
 ```
+
+The controller and protocol assembly can be Etas library code; only the actual
+model execution needs the declared provider substrate. Both levels retain
+requested-action identity. A model's returned tool request is not an execution
+event: actual tool dispatch contributes its ordinary effects and ordered action
+events. `std.tool.invoke<C>` conservatively preserves the summaries of the
+tools exposed by `C`, rather than hiding their effects behind `Agentic`.
+Transparent records are validated at invocation, not treated as proof of prior
+validation, permission, or execution. See the authoritative
+[types, APIs, and complete controller example](19-standard-library.md#4-single-step-agent-interaction).
 
 The runtime provider is not a grant of authority. It runs only after active
 effect boundaries, trace specs, runtime policies, deployment grants, limits,
@@ -478,15 +524,24 @@ the runtime or standard library. A default implementation is still subject to
 the active effect boundary, trace specs, runtime policy, approval, sandbox, and
 limit checks. It is not a grant of authority by itself.
 
-Standard library APIs are thin flow wrappers over minimal standard actions:
+Effectful standard APIs can be ordinary Etas flow wrappers over minimal standard
+actions. Pure standard algorithms do not need an action solely because they
+belong to std. Under the standard default console handler:
 
 ```etas
-flow std.io.println(text: string) -> unit ![Error<IOError>]
-  requested_actions = [Console.stdout_write]
-  default_actions = [Console.stdout_write]
-{
+module std.io;
+
+flow println(text: string) -> unit ![Error<IOError>] {
     perform Console.stdout_write(text + "\n");
 }
+```
+
+Its inferred interface metadata is separate from that source declaration:
+
+```text
+escaping_effects  = [Error<IOError>]
+requested_actions = [Console.stdout_write]
+default_actions   = [Console.stdout_write]
 ```
 
 Package APIs use the same shape, but the actions are owned by the package:
@@ -508,17 +563,7 @@ swallow errors by default.
 
 The wrapper is the ergonomic API; the action is the semantic authority boundary visible to trace specs, runtime policy, trace, replay, and handlers.
 
-### 1.2 Parameterized Effects
-
-The action signature generics proposal adds inferred signature parameters before
-the action name, as in `action<T, effect E> await(task: Task<T, ![E]>) -> T;`. The proposal is implemented on the std source migration draft branch; release acceptance remains pending. These binders
-describe payload and result types. Each request receives fresh type and row
-variables, while action coverage, handler selection, trace-spec patterns and
-runtime policy use the declared selector list after the action name. For
-`Async.await`, that list is empty. Its standard default handler instantiates the
-task's `E` as its produced effect row. Explicit handlers use their checked
-effect transformer. The declaration, inference and handler rules are defined in
-[Action Signature Generics](18-action-signature-generics.md).
+### 1.3 Parameterized Effects
 
 Etas supports parameterized effects and action references. A parameterized effect is still an effect-system fact, not an ordinary generic value type. The parameter narrows the observable authority scope:
 
@@ -645,19 +690,26 @@ flow approve<T>(title: string, content: T, risk: Risk) -> bool ![Approval.reques
 
 The public `approve(...)` flow is the ergonomic wrapper. The semantic boundary is the `Approval.request` action.
 
-Approval requirements use `>>`, a trace-spec temporal operator:
+Approval requirements use `>>`, which supplies local permissions for its two
+operands as well as their temporal prerequisite:
 
 ```etas
 Approval.request >> CompanyEmail.send<WorkAccount>;
 Approval.request >> StripePayment.charge<BillingAccount>;
 ```
 
-Internally this normalizes to a typed trace-spec term:
+For example, the email clause normalizes to these internal trace-spec components:
 
-```etas
-trace.before(Approval.request, CompanyEmail.send<WorkAccount>)
-trace.before(Approval.request, StripePayment.charge<BillingAccount>)
+```text
+Allow(Approval.request)
+Allow(CompanyEmail.send<WorkAccount>)
+Before(guard = Approval.request, target = CompanyEmail.send<WorkAccount>)
 ```
+
+The guard requires matching accepted approval evidence, not merely an attempted
+request. Repeated `+` permissions are optional; denials, enclosing specs, and
+runtime authority checks still apply. This expansion preserves each `|`
+alternative and does not contribute actions to a flow's inferred may-effects.
 
 The same operator can express non-approval guards:
 
@@ -694,7 +746,9 @@ effect Approval {
 }
 ```
 
-This keeps the tag/action split while making the common declaration compact. The `effect` name is the static tag. Each `action` inside the block is the action interface owned by that tag. The action body is not written in Etas source; it is interpreted by a handler or by a runtime-provided implementation.
+The `effect` name is the static tag, and each `action` declares an operation
+signature. The declaration has no body; its implementation is handler code or
+a declared runtime endpoint. Handler logic may itself be Etas code.
 
 An empty tag remains valid, and its actions may be declared later with `impl`:
 
@@ -729,12 +783,12 @@ The rules are:
 3. `impl Name { action op(...) -> ...; }` is the separated form for declaring actions on an existing effect tag.
 4. `impl` targets are kind-checked. `impl TypeName` may contain only `flow` methods, while `impl EffectName` may contain only `action` signatures.
 5. An `action` signature has no body. It is interpreted by a handler or by a runtime-provided implementation.
-6. `perform EffectName.actionName(...)` invokes an effect operation boundary and contributes the owning effect tag to inference.
+6. `perform EffectName.actionName(...)` records that concrete requested action. Its escaping obligation remains unless a matching explicit/default handler consumes it; inference does not automatically widen it to every action under the owning tag.
 7. Handler arms match concrete actions such as `Approval.request(req)`, not bare effect tags.
 8. Tag effects appear in effect rows, manifests, trace-spec summaries, and audit summaries.
 9. Action boundaries appear in AIR, trace, replay, resample, and handler dispatch.
 10. Minimal runtime boundaries such as memory, sandboxed command execution, model use, approval, console I/O, and time are standard effect actions with default action implementations where appropriate.
-11. Web search, HTTP, workspace I/O, email, payment, databases, browsers, object stores, deployment, identity, and other domain/platform adapters are package-defined or host-defined effect actions. Their declared effects use the same fine-grained effect/action vocabulary.
+11. Web search, HTTP clients, workspace workflows, email, payment, databases, browser automation, and other high-level integrations use package-defined actions over the standard substrate. Low-level `Net`, `Fs`, and `Browser` actions remain standard contracts.
 12. A handler may recover from a denied operation, but it cannot bypass the active effect boundary, trace specs, runtime policy, sandbox, approval, or limit checks.
 
 ### 2.1 Effect Actions Versus Tools
@@ -758,11 +812,7 @@ effect AcademicSearch extends Network {
 }
 
 tool safe_search(q: string) -> Array<Trusted<Snippet>> ![AcademicSearch.search]
-    ~ (
-        +AcademicSearch.search
-        & +Sanitized
-        & (AcademicSearch.search >> Sanitized)
-    )
+    ~ (AcademicSearch.search >> Sanitized)
 {
     let pages = perform AcademicSearch.search(q);
     return sanitize(extract_snippets(pages));
@@ -868,10 +918,19 @@ does not call an ordinary flow. It performs an effect action. If an enclosing `h
 The first version intentionally restricts handlers:
 
 1. `resume` is available only inside a handler arm for an action whose return type is not `never`.
-2. A handler arm may resume at most once.
-3. A resume continuation cannot be stored, returned, copied, or passed as a value.
-4. A resume continuation cannot cross `join`, detached task, or runtime thread boundaries.
-5. Actions returning `never`, such as `Error.raise`, cannot resume and must either `finish` the handled expression, abort, or perform another effect.
+2. Each captured continuation is single-shot. Immediate resume and deferred scheduler resumption share the same one-use ownership obligation.
+3. An optional `as k` exposes a scope-bound, non-copyable continuation handle. It may be transferred to helpers and scheduler queues that preserve its owning task scope, but cannot escape, be serialized, or enter an ordinary copying container.
+4. Structured task boundaries permit controlled transfer to the owning scheduler, including for a child of `join`; they do not permit detachment, resumption as another task, or arbitrary cross-thread use. Resume restores the original task and handler context.
+5. Actions returning `never`, such as `Error.raise`, cannot use `resume` or bind a resumable `k`. They must finish the handled expression or take another non-returning path.
+
+For custom scheduling, an arm can use `Async.await(task) as k => { ... }`.
+The standard `scheduler.park(task, k)` and `scheduler.requeue(k, value)`
+operations consume the handle and return `never` to that arm while transferring
+control to the scheduler. They do not execute the rest of the arm or abort the
+program. A normal enqueue returning `unit` is insufficient. The full lifetime,
+waiting, failure, and cleanup rules are in
+[Concurrency](16-concurrency.md#121-handler-based-scheduling); the public API is
+in [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
 
 ### 2.2 Handler Scope
 
@@ -882,7 +941,7 @@ Etas borrows the surface shape of algebraic effect handlers, but it does not aim
 | Main goal | General-purpose control abstraction | Agent runtime safety, approval, recovery, trace, replay |
 | Operation/action role | A programmable semantic operation | A runtime-observable action boundary |
 | Handler role | Interprets effects and can encode many control patterns | Handles approval, fallback, recovery, pause/resume, and runtime mediation |
-| Continuation model | Can support richer delimited continuation behavior | Single-resume, scoped continuation only |
+| Continuation model | Can support richer delimited continuation behavior | Single-shot, scope-bound continuation with optional controlled scheduler transfer |
 | Multi-shot behavior | May be supported by language design | Not supported in the MVP |
 | External authority | Usually outside the core effect-handler model | Central: effect actions, sandbox, trace specs, runtime policy, approval, and limits are checked before execution |
 | Durability | Not the primary semantic target | Core target: checkpoint, replay, deduplication, and audit |
@@ -897,7 +956,7 @@ Relative to general-purpose effect-handler languages:
 | Effect shape | Tag plus optional `action` declarations | Algebraic operations | Effects and operations | Extensible effect constructors | Abilities and requests |
 | Handler form | `handler { ... }` values, `expr with h`, and `expr with { ... }` | Language-level handlers | Language-level handlers | `match ... with effect ...` style handling | Ability handlers |
 | First-class handlers | Yes: handlers can be parameters, return values, and record fields | Supported through ordinary abstraction patterns | Supported through language abstraction patterns | More limited by OCaml's surface model | Supported through ability abstraction patterns |
-| Continuation model | Scoped `resume`, single-use, not a value | General delimited-continuation model | Structured continuation model | Explicit captured continuations | Request handling with continuation semantics |
+| Continuation model | Scoped `resume`; optional `as k` binds a non-copyable, scope-bound scheduling handle | General delimited-continuation model | Structured continuation model | Explicit captured continuations | Request handling with continuation semantics |
 | Multi-shot continuation | Not supported in the MVP | Supported or expressible in richer designs | Supported or controlled by the design | Usually one-shot | More general than Etas, depending on ability use |
 | Host-provided actions | Standard authority is modeled as effect actions; non-standard host adapters use package metadata with action-based effect rows | Usually modeled as language effects or library effects | Usually modeled as effects/abilities | Usually library/runtime concern | Can be modeled as abilities |
 | Agentic inference action | `Agentic.infer<C, O>(Prompt, Schema<O>)` carries agent method identity, model profile, prompt/messages, tool surface, schema, limits, trace, replay, and runtime policy context | Can encode an operation, but the language does not know agent-runtime semantics | Can encode an operation, but agent semantics are library-level | Can encode via effects/callbacks, but agent semantics are library-level | Can encode via abilities, but agent semantics are library-level |
@@ -923,7 +982,10 @@ mock or replay them using handlers, check trace specs, runtime policy, and secre
 coordinate limits, and preserve audit semantics without treating model calls as
 opaque library callbacks.
 
-Etas treats `resume` as a scoped control statement, not as a first-class continuation value. Agent programs need predictable runtime mediation more than maximal control-flow expressiveness:
+Etas keeps `resume` as a scoped control statement. The optional `as k` exposes
+a restricted scheduling handle, not an unrestricted callable continuation.
+Agent programs need predictable runtime mediation rather than maximal
+control-flow expressiveness:
 
 ```text
 Allowed:
@@ -932,11 +994,13 @@ Allowed:
   - finish the handled expression with a fallback value
   - route an action to a default action implementation
   - record the action in trace for replay or audit
+  - transfer a single-shot continuation to its owning structured scheduler
+  - park a task awaiting completion, or requeue a runnable task
 
 Not MVP goals:
   - use handlers as generators
   - encode arbitrary coroutines
-  - store continuations
+  - store continuations outside their owning task scope or in copying data structures
   - resume a continuation multiple times
   - use handlers to grant denied effect actions
   - use handlers to bypass sandbox, trace specs, runtime policy, approval, or limit checks
@@ -954,12 +1018,13 @@ effects(expr with h)
     union effects(handler_arms)
 ```
 
-Handler arms have two explicit completion forms:
+Handler arms have explicit completion and transfer forms:
 
 | Form | Target | Type requirement | Control flow |
 |---|---|---|---|
 | `resume value;` | Current effect action | `value` has the action's declared return type | Continue the handled expression at the suspended `perform` site |
 | `finish value;` | Whole handled expression | `value` has the handled expression's answer type `R` | Stop the handled expression and make `expr with h` evaluate to `value` |
+| Standard scheduler transfer returning `never` | Owning scheduler | Consumes a matching scope-bound continuation and any typed resume value | End the current arm; the original task remains parked or queued |
 | `abort(...)` or another `never` expression | Current control path | Expression type is `never`, accepted for any required arm result | Terminate the path; no value is produced |
 | `return value;` | Current `flow` | `value` has the flow's return type | Flow-level return; not a handler completion form |
 
@@ -973,6 +1038,16 @@ answer of the handled expression.
 uses a block, all reachable paths through that block must complete in one of
 those ways. This keeps handler control flow explicit and makes effect analysis
 and AIR lowering straightforward.
+
+With `as k`, `resume`, `finish`, transfer, and non-returning unwinding must
+account for the same suspended computation without duplication. A transfer
+invalidates the arm's local handle. The original handler environment is restored
+when the task resumes (deep resumption); operations performed by a handler arm
+continue to follow ordinary enclosing-handler rules. Delaying a continuation
+does not detach active trace specs, runtime authorization, cancellation, or
+budget accounting. Multiple arms may interleave; this does not authorize hidden
+shared mutation of captured values. See the concurrency chapter for `finish`
+across child tasks and cancellation/completion races.
 
 For example, if `Cache.get : string -> Option<string>`, then a
 `Cache.get(key)` arm must resume with `Option<string>`. If the handled
@@ -1458,7 +1533,9 @@ actions.
 
 ## 5. Effects And Determinism
 
-Effects do not decide whether a flow is deterministic. A flow may have effects without being non-deterministic:
+Escaping effects and determinism are separate summaries; neither is derived
+solely from the other. External observations make the following flow
+non-deterministic:
 
 ```etas
 flow read_paper(url: Url) -> Paper {
@@ -1478,11 +1555,9 @@ Etas uses two determinism classes:
 
 ```text
 Deterministic        = depends only on explicit inputs and deterministic computation
-NonDeterministic     = may observe or change external state, call runtime-provided primitives,
-                       call Etas tools whose bodies are non-deterministic,
-                       read time or randomness,
-                       use typed memory APIs, call agents, perform model inference, request human approval,
-                       call a non-deterministic subflow, or use runtime choice
+NonDeterministic     = may observe or change external state, perform model inference,
+                       read time or randomness, request human approval, use runtime choice,
+                       or call a primitive, flow, tool, or agent method with such behavior
 ```
 
 For stage composition, determinism is ordered and combined by maximum:
@@ -1526,7 +1601,7 @@ Pure deterministic helpers also use `flow`:
 
 ```etas
 flow normalize_title(title: string) {
-    trim(lowercase(title))
+    std.text.trim(std.text.lowercase(title))
 }
 ```
 
@@ -1540,6 +1615,18 @@ The source language uses `flow` for ordinary callables and `tool` for
 model-callable action boundaries. The implementation may still use multiple
 lowering targets for deterministic flows, orchestrated flows, Etas-implemented
 tools, and host-provided primitive symbols.
+
+Receiver updates and suspension are separate contracts as well. `var self`
+updates a local caller binding, not persistent memory, so it does not introduce
+a `Memory.write` or other external effect solely for that writeback. A method
+may have `![]` and still update its receiver; the receiver mode and resulting
+value dependency must not disappear in effect-based optimization. Conversely,
+an empty escaping row does not prove non-suspension: default-handled actions,
+callbacks, and handlers may still suspend. Updating methods require a checked
+transitive non-suspension summary under the applicable handler context. This
+summary is compiler/package metadata, not a new source keyword, effect, or
+unchecked annotation. See
+[the receiver rules](02-general-programming-constructs.md#322-no-suspension-while-updating).
 
 ## 6. Declaration Defaults
 
@@ -1658,11 +1745,7 @@ or bind an inline trace spec:
 
 ```etas
 tool safe_search(q: string) -> Array<Trusted<Snippet>>
-    ~ (
-        +AcademicSearch.search
-        & +Sanitized
-        & (AcademicSearch.search >> Sanitized)
-    )
+    ~ (AcademicSearch.search >> Sanitized)
 {
     let pages = perform AcademicSearch.search(q);
     return sanitize(extract_snippets(pages));
@@ -1670,6 +1753,12 @@ tool safe_search(q: string) -> Array<Trusted<Snippet>>
 ```
 
 For exported flows, exported agents, and public package APIs, the implementation should require either an explicit effect signature or a generated signature that is checked into package metadata. Public effect contracts should be visible during review.
+
+[Default parameters](02-general-programming-constructs.md#41-default-parameters)
+are action-free, deterministic, and non-suspending. Omission does not install
+a handler, grant authority, or hide an extra request. Bind the complete argument
+payload before an action/tool boundary is checked or recorded; supplied
+argument effects retain ordinary evaluation order and inference.
 
 High-impact actions such as `Command.run<S>`, `StripePayment.charge<A>`,
 `CompanyEmail.send<A>`, `ProjectWorkspace.write<P>`, and `Secret.read<K>` should require
@@ -1806,10 +1895,8 @@ Trace specs can impose additional constraints:
 ```etas
 spec Production: trace =
     +AcademicSearch.search
-    & +CompanyEmail.send<WorkAccount>
     & -StripePayment.charge<_>
     & -Command.run<_>
-    & +Approval.request
     & (Approval.request >> CompanyEmail.send<WorkAccount>);
 ```
 
@@ -2002,9 +2089,7 @@ sent:
 
 ```etas
 spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
 The runtime may then perform an approval action:

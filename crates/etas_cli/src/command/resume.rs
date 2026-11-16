@@ -95,17 +95,18 @@ pub(crate) fn run(
                     .to_owned(),
             )
         })?;
-    let host_config = super::interpreter::runtime_config_for_run(
-        &source_paths,
-        Some(&flow),
-        requested_profile,
-        args.runtime_config.as_deref(),
-        &[],
-        args.max_call_depth.or(Some(checkpoint_max_call_depth)),
-        args.max_tool_rounds.or(Some(checkpoint_max_tool_rounds)),
-        Some(&checkpoint_cpu_threads),
-        args.model_output_encoding.as_deref(),
-    )?;
+    let host_config =
+        super::interpreter::runtime_config_for_run(super::interpreter::RuntimeConfigRequest {
+            inputs: &source_paths,
+            flow: Some(&flow),
+            requested_profile,
+            runtime_config: args.runtime_config.as_deref(),
+            allow_net: &[],
+            max_call_depth: args.max_call_depth.or(Some(checkpoint_max_call_depth)),
+            max_tool_rounds: args.max_tool_rounds.or(Some(checkpoint_max_tool_rounds)),
+            cpu_threads: Some(&checkpoint_cpu_threads),
+            model_output_encoding: args.model_output_encoding.as_deref(),
+        })?;
     let current_profile = host_config.runtime_profile_json();
     if checkpoint_profile != &current_profile {
         return Err(CliError::InvalidUsage(

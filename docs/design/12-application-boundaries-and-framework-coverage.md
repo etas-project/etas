@@ -273,8 +273,9 @@ Therefore Etas should make three agent properties language-visible:
    redacted, summarized, and placed into which prompt channel;
 2. tool surface and effect contract: what model-callable actions may be requested
    and what ordinary effects may escape from generated `Agent.run`;
-3. `Agentic.infer<C, O>` as a semantic boundary: every agent call is traceable,
-   mockable, replayable, resample-aware, trace-checkable, and optimizable.
+3. explicit `Agentic.infer<C, O>`/`step<C, O>` boundaries: model interaction is
+   traceable, mockable, replayable, resample-aware, and available to checked
+   optimizations, without making every agent method an implicit model call.
 
 ## 3. Framework Feature Comparison
 
@@ -447,7 +448,7 @@ Production agent systems repeatedly expose the same gaps:
 | Structured audit chain | AIR node ids and trace events | AIR/runtime |
 | Checkpoint and resume | `runtime.checkpoint(...)`, trace, memory versions | Runtime |
 | Retry and fallback | `Result<T, E>`, `retry`, branching, handlers | Core language/runtime |
-| Multi-provider routing | agent `model` declarations and backend metadata | Runtime/tooling |
+| Multi-provider routing | agent `@model(...)` annotations and backend metadata | Runtime/tooling |
 | Tenant isolation | ordinary `TenantContext`, memory scoping, effect/action trace specs and runtime policy | Library/runtime policy |
 | Session state machine | `enum`, private fields, `impl` methods | General language |
 | Domain events and outbox | records, memory writes, event bus tools | Library pattern |
@@ -457,48 +458,15 @@ These requirements do not justify new keywords by themselves. They mostly requir
 
 ### 6.1 Session Object Pattern
 
-A session should not be modeled as a plain public mutable struct. It is a lifecycle-bearing domain object with guarded transitions, identity checks, and recovery semantics:
-
-```etas
-enum SessionState {
-    Running,
-    Waiting,
-    Completed,
-    Failed(reason: string),
-    Cancelled(by: string),
-}
-
-type Session = {
-    private id: SessionId,
-    private tenant_id: TenantId,
-    private user_id: UserId,
-    private state: SessionState,
-    private events: Array<DomainEvent>,
-}
-
-impl Session {
-    flow pause(self, interrupt: Interrupt) -> Result<unit, SessionError> {
-        match self.transit_to(Waiting) {
-            Ok(_) => {},
-            Err(err) => return Err(err),
-        }
-
-        self.emit(InterruptRaised { session_id = self.id, interrupt });
-        return Ok(unit);
-    }
-
-    private flow transit_to(self, to: SessionState) -> Result<unit, SessionError> {
-        if !valid_transition(self.state, to) {
-            return Err(InvalidStateTransition { from = self.state, to });
-        }
-
-        self.state = to;
-        return Ok(unit);
-    }
-}
-```
-
-This is a language pattern built from records, enums, private fields, methods, and result types. It does not require a `session` keyword.
+A library can model session lifecycle using enums, private record fields, and
+validated methods that return updated session values. Ordinary `self` is not a
+mutable reference. A restricted `var self` method may instead update a direct
+local variable on normal return, without changing independent session copies;
+it cannot hold that update access across asynchronous work. See the value-semantic
+[Session example](02-general-programming-constructs.md#8-encapsulation-and-methods).
+Persistent conversation history and context publication follow the separate
+[Session support contract](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
+Neither pattern requires a `session` keyword.
 
 ### 6.2 Tenant, Domain Event, And Outbox Patterns
 
@@ -512,25 +480,11 @@ type TenantContext = {
 }
 ```
 
-Domain events and outboxes should be library/runtime patterns:
-
-```etas
-type ProjectMemorySchema = MemoryRegion<{
-    Sessions: Store<SessionId, Session>,
-}>;
-
-let ProjectMemory =
-    std.memory.region<ProjectMemorySchema>(
-        stable_id = "project_memory",
-        store = "project"
-    );
-
-flow PersistSession(session: Session) -> unit {
-    ProjectMemory.Sessions.write(session);
-    EventBus.publish(session.events());
-    session.clear_events();
-}
-```
+Domain events and outboxes remain library/storage patterns. Writing state,
+publishing events, and clearing a local value are not an atomic transaction.
+An outbox implementation must coordinate durable state and pending events using
+its backend's transaction/version contract, then publish and reconcile them
+explicitly; ordinary method calls do not provide that guarantee.
 
 The runtime trace schema should standardize metadata such as tenant id, user id, request id, flow id, session id, model token usage, tool latency, approval actor, checkpoint id, and memory version.
 
@@ -553,15 +507,17 @@ Features such as checkpoints, group chat teams, triggers, domain events, outboxe
 
 ### 7.2 Add Runtime-Level Session Semantics
 
-Existing frameworks expose strong multi-turn conversation patterns. Etas currently models this through typed memory APIs, traces, and flows, but the user-facing story is still implicit.
+Existing frameworks expose strong multi-turn conversation patterns. Etas models
+these through typed history access, explicit context publication, traces, and
+flows. The normative contract is in [Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
 
-Recommended addition:
+Session selection and retention use the existing support type:
 
 ```etas
 type SessionConfig = {
     id: SessionId,
     retention: RetentionPolicy,
-    context_policy: ContextPolicy,
+    context: ContextPolicy,
 }
 
 flow SupportConversation(input: UserMessage) {
@@ -569,8 +525,8 @@ flow SupportConversation(input: UserMessage) {
         Message.new(input),
         SessionConfig {
             id = current_session(),
-            retention = RetainSummaries,
-            context_policy = LastTurns(12),
+            retention = Days(90),
+            context = LastTurns(12),
         }
     );
 
@@ -579,6 +535,11 @@ flow SupportConversation(input: UserMessage) {
 ```
 
 This should be a runtime support type and stage option, not a `session` keyword. The compiler/runtime can still make session use visible in AIR and traces.
+
+Summary generation and retrieval orchestration belong to application/EDK code.
+`SummaryPlusRecent` only selects already published context. The runtime retains
+bounded history access, retry-safe append, version checks, context publication,
+receipts, and storage retention; it does not implicitly generate summaries.
 
 ### 7.3 Provide Group Chat Combinators
 
@@ -713,7 +674,7 @@ These are runtime/tooling features, not source-language keywords.
 
 | Gap | Layer | Suggested direction |
 |---|---|---|
-| Conversation/session semantics are specified but not implemented | Runtime support | Implement `Message<T>`, `SessionConfig`, `Conversation`, context-selection policies, retry-safe append, and trace events |
+| Conversation/session contract conformance | Runtime support | Verify bounded history access, selection of existing context, retry-safe append, version-checked publication, receipts, and trace events against the Session contract |
 | Group chat boilerplate | Standard library | Add `group.round_robin`, `group.selector`, `group.swarm` with limits |
 | Handoff visibility | AIR/trace | Implement explicit `Handoff` trace events inferred from typed message routing |
 | Durable resume rules | Runtime semantics | Formalize recompute/replay/dedup/idempotency |
@@ -721,7 +682,7 @@ These are runtime/tooling features, not source-language keywords.
 | Deployment manifest | Compiler/runtime | Emit manifest from typed AST/AIR |
 | Tool discovery and MCP | Runtime/tooling | Import MCP/OpenAPI tools into typed `tool` declarations and effect/action metadata |
 | Tool-choice behavior | Runtime support | Specify stage options for forced tool use, allowed tool subsets, and stop-on-tool behavior |
-| Context window policy | Runtime support | Add runtime policies for last-N turns, summarization, retrieval, compression, and session retention |
+| Context window management | Application/EDK + runtime support | Application/EDK explicitly retrieves and summarizes context; runtime selects existing context, enforces budgets, publishes with version checks, and manages retention/storage compaction |
 | Lifecycle hooks | Runtime support | Expose hooks as effect-governed runtime extension points |
 | Trace redaction | Runtime/security | Define `Secret<T>` redaction and export runtime policies in trace schema |
 | Trigger/schedule integration | Runtime/platform | Use manifest plus adapters, not keywords |

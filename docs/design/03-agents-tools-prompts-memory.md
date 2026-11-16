@@ -36,6 +36,14 @@ default `run` implementation. Its body is checked like a flow body, except that
 agent-scoped `perform infer(prompt)` is available. Effect contracts remain in the
 `![...]` position after the output type, not in annotations.
 
+`infer` is the full-loop convenience action. An agent method or a handler for
+its inference request may instead control individual generations through
+`std.agent.step`, receive tool requests without executing them, and dispatch
+selected calls with `std.tool.invoke`. This uses the same agent identity, tool
+surface, effects, policy, limits, and trace checks, not a second untyped tool
+registry. The transparent protocol types and APIs are specified in
+[Single-Step Agent Interaction](19-standard-library.md#4-single-step-agent-interaction).
+
 The purpose of `agent` is not to copy SDK object configuration into source
 syntax. Frameworks such as LangChain, Google ADK, and AutoGen already model
 agents as host-language objects with a model, instructions, tools, and runtime
@@ -72,7 +80,7 @@ type Review = {
 @model("gpt-5.5-thinking")
 @tools([latex.check])
 @limits([ContextTokens(32_000), Tokens(8_000)])
-agent Reviewer(input: Draft) -> Review ![FileIO] {
+agent Reviewer(input: Draft) -> Review ![FileIO, Memory.read<ProjectMemory.Papers>] {
     let papers =
         ProjectMemory.Papers
             .related_to(input)
@@ -114,7 +122,7 @@ callable `run` method:
 
 ```text
 Reviewer : AgentComponent<ReviewerConfig>
-Reviewer.run : Draft -> Review ![FileIO]
+Reviewer.run : Draft -> Review ![FileIO, Memory.read<ProjectMemory.Papers>]
 ```
 
 The generated `run` entrypoint is what participates in ordinary calls and stage
@@ -190,6 +198,11 @@ An agent call may:
 7. emit a trace;
 8. retry or fail.
 
+These describe the complete-loop path. A single `std.agent.step` stops after
+one model generation; the Etas controller owns tool execution, continuation,
+validation/repair strategy, and delegation. Returned `ToolCall` and `ToolResult`
+records are ordinary data, not permission tokens or execution evidence.
+
 Therefore, an agent is not semantically equivalent to a plain SDK object. Its
 methods still use the same effect and determinism analysis as flows, with
 agent-specific requested actions added at explicit model-inference boundaries.
@@ -206,15 +219,15 @@ The inferred source-level effect of `Reviewer.run(input)` is:
 
 ```text
 effects(agent run body)
-∪ possible effects of exposed tools in config.tools
+∪ possible effects of tools exposed by @tools(...)
 ∪ context/session/typed-memory support effects
 ```
 
-At each `perform infer` inside `Reviewer.run`, the compiler records
-`Agentic.infer<Reviewer.run, Review>` as requested-action metadata for trace-spec, runtime-policy, limit,
-trace, replay, and host-support checks. The agent declaration itself does not
-record that action, and the metadata does not escape as a user-visible effect
-obligation of ordinary `Reviewer.run(input)`.
+Explicit inference/step operations contribute their corresponding
+`Agentic.infer<C, O>` or `Agentic.step<C, O>` requested actions for analysis,
+trace, replay, and runtime checks. Declaring an agent alone contributes neither
+action. The default-handled action does not become an escaping effect obligation
+of ordinary callers.
 
 If an agent declaration includes an explicit `![...]` effect contract after the output type, the inferred ordinary escaping effect set must be a subset of that declared upper bound. If no explicit effect contract is present, the compiler infers the ordinary escaping effects and public package metadata records them.
 
@@ -250,9 +263,9 @@ trace visibility, argument validation, and output-leakage restrictions.
 
 Effect actions are the primitive runtime authority boundary. Minimal standard
 operations such as console I/O, approval, command execution, memory access, and
-time are standard actions. External services such as web search, workspace
-writes, email sends, database queries, browser automation, and payments should
-be modeled as package-defined or host-defined effect actions. Library APIs then
+time are standard actions. High-level integrations such as web search, workspace
+workflows, email, databases, browser automation, and payments use package-defined
+actions over that substrate. Library APIs then
 provide ergonomic flow wrappers over `perform`.
 
 ```etas
@@ -274,11 +287,7 @@ inferred body effects.
 
 ```etas
 tool safe_web_lookup(query: string) -> Array<Trusted<Snippet>> ![AcademicSearch.search]
-    ~ (
-        +AcademicSearch.search
-        & +Sanitized
-        & (AcademicSearch.search >> Sanitized)
-    )
+    ~ (AcademicSearch.search >> Sanitized)
 {
     let pages = perform AcademicSearch.search(query);
     let snippets = extract_snippets(pages);
@@ -299,7 +308,7 @@ mandatory in metadata because the compiler cannot inspect the implementation.
 
 The compiler enforces additional rules for model-callable tools:
 
-1. tool input and output types must be schema-encodable for model tool calling;
+1. tool input and output types must be schema-encodable; optional defaulted inputs are filled and the full effective arguments validated at the checked invocation entry, not by assuming the model applied a JSON Schema default;
 2. body effects are inferred and must fit the explicit or trace-spec/runtime-policy-derived effect boundary;
 3. omitted tool boundaries default to no effects;
 4. high-impact effects may require approval, trace-spec, runtime-policy, sandbox, or limit guards;
@@ -400,9 +409,10 @@ Standard input/output belongs in the standard library. Its low-level authority
 is modeled as effect actions, while the user-facing API is ordinary stdlib
 flows.
 
-The user-facing API should be ordinary stdlib flows exported from module
-`std.io`. Their formal signatures include both the console action and the
-possible host I/O error:
+The user-facing API should be ordinary Etas flows exported from module `std.io`.
+Under the standard default console handler, their signatures expose the possible
+host I/O error. Console requests remain in separate analysis/interface metadata,
+not extra source declaration clauses:
 
 ```text
 std.io.print(text: string)    -> unit   ![Error<IOError>]
@@ -446,22 +456,20 @@ enum IOError {
 }
 ```
 
-For example:
+For example, these are Etas implementations under the standard default console
+handler. The wrapper bodies are source code; only the final platform write/read
+requires a runtime endpoint:
 
 ```etas
 module std.io;
 
 flow println(text: string) -> unit ![Error<IOError>]
-  requested_actions = [Console.stdout_write]
-  default_actions = [Console.stdout_write]
 {
     perform Console.stdout_write(text);
     perform Console.stdout_write("\n");
 }
 
 flow read_line() -> string ![Error<IOError>]
-  requested_actions = [Console.stdin_read_line]
-  default_actions = [Console.stdin_read_line]
 {
     return perform Console.stdin_read_line();
 }
@@ -470,7 +478,21 @@ flow read_line() -> string ![Error<IOError>]
 The public stdlib flows expose only residual effects such as possible host
 failure. The performed console action remains visible as requested/default
 action metadata for trace-spec checking, runtime-policy checking, trace, replay, and runtime mediation.
-For example:
+The analysis metadata for these wrappers is:
+
+```text
+println:
+    escaping_effects  = [Error<IOError>]
+    requested_actions = [Console.stdout_write]
+    default_actions   = [Console.stdout_write]
+read_line:
+    escaping_effects  = [Error<IOError>]
+    requested_actions = [Console.stdin_read_line]
+    default_actions   = [Console.stdin_read_line]
+```
+
+These fields are compiler output, not syntax accepted after a flow signature.
+The value-level result types remain:
 
 ```text
 std.io.read_line()  : string ![Error<IOError>]
@@ -487,9 +509,13 @@ discipline:
 | Layer | Role |
 |---|---|
 | `std.io.println` | Convenient stdlib flow used by programs |
-| `Console.stdout_write` | Runtime action and authority fact |
-| `Console` | Observable effect category, narrower than `FileIO` |
-| Host/default implementation | Platform implementation selected by the runtime |
+| `Console.stdout_write` | Standard action declaration with a runtime execution contract; remains visible as a requested action |
+| `Console` | Standard effect category, narrower than `FileIO`, not a source keyword |
+| Default handler / platform endpoint | Handles the standard action and performs the actual I/O under runtime enforcement |
+
+This follows the [five-layer model](01-overview.md#53-feature-map-by-layer).
+Neither standard-library membership nor installation of a default handler grants
+authority, and compiler recognition does not require hard-coding the wrapper.
 
 The MVP should keep these APIs string-based. Generic printing through `Display`, `Format`, or `ToString` can be added after the spec story is stable.
 
@@ -514,117 +540,21 @@ wrap those flows only when console access should be exposed to the model.
 
 ### 2.5 Standard Substrate API Shape
 
-The current `etas_std` does not yet provide every low-level runtime substrate
-needed by the official EDK packages. The implemented surface is closer to:
+Std supplies orthogonal substrate; EDK supplies high-level integrations written
+in Etas over that substrate. Runtime execution enforces the same action, policy,
+sandbox, limit, cancellation, and trace contracts for both layers.
 
-| Current area | Current role |
-|---|---|
-| `std.io` | Console I/O wrappers backed by `Console.*` requested/default actions |
-| `std.memory` | Typed memory support and compiler-known resource constructors |
-| `std.host.command`, `std.host.path`, `std.host.url`, `std.host.sandbox` | Command, path, URL, and sandbox support types and wrappers |
-| `std.bytes`, `std.text` | Small pure helpers such as length, split, join, and integer parsing |
-| `std.security.*` | Trust, declassification, and runtime-policy support helpers |
-| Effect/action registry | Broad roots such as `Network`, `FileIO`, and `Secret`, with many low-level wrappers still missing |
+The authoritative substrate module table, signatures, stream provenance,
+`ByteStream` bounds, wire-level HTTP types, and secret-backed crypto rules are in
+[Minimal Standard Actions](06-effect-system-and-inference.md#11-minimal-standard-actions).
+Public text, JSON, task, and single-step model APIs are in
+[Standard Library](19-standard-library.md). These are design contracts, not an
+implementation-status inventory.
 
-The SPEC should distinguish these layers:
-
-```text
-std substrate = low-level, orthogonal, trace/runtime-policy-visible runtime primitives
-EDK           = high-level production integrations written in Etas
-runtime       = executes substrate actions and enforces sandbox, trace specs, runtime policy, trace,
-                replay, secret redaction, timeout, and cancellation
-```
-
-The API path uses lowercase modules, while the effect/action owner is uppercase
-without a `Std` prefix:
-
-| API | Effect/action owner |
-|---|---|
-| `std.net.tcp.connect(...)` | `Net.tcp_connect<...>` |
-| `std.stream.read(...)` | `Stream.read<...>` |
-| `std.tls.connect(...)` | `Tls.handshake<...>` |
-| `std.fs.read_bytes(...)` | `Fs.read<...>` |
-| `std.secret.read(...)` | `Secret.read<...>` |
-| `std.browser.protocol.send(...)` | `Browser.send<...>` |
-
-`Stream` actions are tied to typed stream-handle provenance. Reading from a TLS
-stream remains network authority; reading from a file stream remains file
-authority. Policies can also mention `Stream.read<_>` or `Stream.write<_>`
-directly when byte movement itself is the concern.
-
-`Browser` is a standard substrate effect under `Network`, not a separate core
-broad root. `std.browser.protocol` exposes session attach/create, protocol
-transport, event receive, screenshot bytes, and session/origin binding; high
-level browser actions such as navigate, click, and DOM extraction belong in
-`edk.browser`.
-
-EDK-facing substrate APIs should expose their authority actions directly in the
-public effect row:
-
-```etas
-std.net.tcp.connect(host: Host, port: Port, options: TcpOptions)
-    -> TcpStream ![Net.tcp_connect<_, _>, Error<NetworkError>]
-
-std.stream.read<S ~ ByteStream>(stream: S, max_bytes: usize, timeout: Timeout?)
-    -> StreamRead ![Stream.read<S>, Error<StreamError>]
-
-std.stream.read_until_limit<S ~ ByteStream>(stream: S, limit: ByteLimit, timeout: Timeout?)
-    -> bytes ![Stream.read<S>, Error<StreamError>]
-
-std.tls.connect(stream: TcpStream, server_name: Host, config: TlsConfig)
-    -> TlsStream ![Tls.handshake<_>, Error<TlsError>]
-
-std.fs.read_bytes<R ~ Region>(path: WorkspacePath<R>)
-    -> bytes ![Fs.read<R>, Error<IOError>]
-
-std.fs.write_bytes<R ~ Region>(path: WorkspacePath<R>, body: bytes)
-    -> unit ![Fs.write<R>, Error<IOError>]
-```
-
-`ByteStream` is a standard marker spec satisfied by opaque stream-handle
-types such as `TcpStream`, `TlsStream`, `FileStream`, and `BrowserStream`. It is
-not a concrete supertype, so `std.stream.*` uses spec-bound polymorphism rather
-than general subtyping.
-
-Filesystem paths use the same pattern. `WorkspacePath<R>` is indexed by a
-region marker type, and specs such as `Within<Parent>` express region
-relationships. This lets trace specs and runtime policy match constrained action patterns such as
-`Fs.read<R ~ Within<ReportsRoot>>` by typed resource region instead of by ad-hoc
-path strings.
-
-Pure data APIs stay ordinary functions or flows with no runtime action:
-
-```etas
-std.http.codec.encode_request(req: HttpWireRequest) -> bytes
-std.http.codec.decode_response_head(body: bytes) -> Result<HttpWireResponseHead, HttpCodecError>
-std.codec.text.utf8_decode(body: bytes, malformed: MalformedInput)
-    -> Result<string, TextCodecError>
-std.crypto.sha256(body: bytes) -> Digest
-std.crypto.constant_time_eq(a: bytes, b: bytes) -> bool
-```
-
-Secret-backed crypto is not pure because it consumes opaque secret material:
-
-```etas
-std.crypto.hmac_sha256<K>(key: SecretValue<K>, body: bytes)
-    -> Digest ![Secret.use<K>, Error<CryptoError>]
-```
-
-`std.http.codec` owns wire-level types such as `HttpWireRequest` and
-`HttpWireResponseHead`. EDK HTTP packages must translate between their
-user-facing request/response records and these wire-level codec types.
-
-`StreamRead` returns either `Data(bytes)` or `Eof`. Timeout, cancellation,
-closed streams, host failures, and byte-limit violations are represented as
-`Error<StreamError>`, not as EOF.
-
-High-level APIs remain outside core `std`. For example,
-`edk.http.client.request` should be implemented in Etas over `std.net`,
-`std.stream`, `std.tls`, and `std.http.codec`;
-`edk.workspace.files.read/write` should be implemented over `std.fs`; and
-`edk.browser.navigate/click/read` should be implemented over
-`std.browser.protocol`. EDK must not hide missing substrate behind
-package-private host calls.
+API paths use lowercase names such as `std.net.tcp.connect`; effect/action
+owners use uppercase names such as `Net.tcp_connect`, without a `Std` prefix.
+EDK wrappers must use the public substrate rather than private host escape
+hatches. See [EDK Packages](17-edk-official-packages.md).
 
 ---
 
@@ -668,7 +598,8 @@ The generated public entrypoint has the ordinary typed shape:
 Reviewer.run : Draft -> Review
 ```
 
-but it is not lowered as a plain method call. An agent call is a typed runtime pipeline:
+and executes the checked method body in the agent's context. For the example
+above, the model-interaction path is:
 
 ```text
 Draft
@@ -680,7 +611,8 @@ Draft
   -> Review
 ```
 
-The corresponding AIR keeps the intermediate boundaries visible:
+The corresponding lowering keeps these boundaries visible when they occur in
+the body; arbitrary agent methods are not restricted to this fixed pipeline:
 
 ```text
 PromptBuild(Reviewer.run, draft) -> Prompt
@@ -727,6 +659,13 @@ keyword. It is an agent-scoped action shorthand. It is accepted only inside an
 agent body or `impl agent` method and elaborates to
 `perform Agentic.infer<CurrentAgent.method, O>(prompt, Schema<O>)`.
 
+For explicit controller code, `std.agent.step(conversation, schema)` requests
+the corresponding single-generation `Agentic.step<C, O>` action. Its `Final(O)`
+case is schema-validated; `CallTools` returns native-tool requests that still
+require checked invocation. `Conversation` assembly does not implicitly read,
+append, or publish persistent session history. See the
+[standard protocol APIs](19-standard-library.md#43-public-apis).
+
 The runtime must not automatically place user input into the system channel. If
 the input should be included, the body should place it explicitly through APIs
 that require the input type to satisfy `PromptEncode`.
@@ -757,14 +696,14 @@ The `~>` operator does not need special surface syntax for messages. When the va
 
 ### 3.3 Sessions And Conversations
 
-`SessionConfig` describes how conversation history is selected and retained:
+`SessionConfig` describes how existing conversation history and published
+context are selected and retained. It does not schedule summary generation:
 
 ```etas
 type SessionConfig = {
     id: SessionId,
     context: ContextPolicy,
     retention: RetentionPolicy,
-    compaction: CompactionPolicy,
 }
 ```
 
@@ -776,7 +715,6 @@ flow SupportTurn(msg: Message<CustomerRequest>) -> Message<CustomerReply> {
         id = msg.session.unwrap_or(current_session()),
         context = SummaryPlusRecent(recent = 8),
         retention = Days(90),
-        compaction = SummarizeWhen(ContextTokens(24_000)),
     };
 
     return Message.with_session(msg, session) ~> TriageAgent;
@@ -784,6 +722,55 @@ flow SupportTurn(msg: Message<CustomerRequest>) -> Message<CustomerReply> {
 ```
 
 The runtime uses the session to load relevant history, append new messages, deduplicate retry writes, connect traces across runs, and enforce context-window policy. This should be recognized by the compiler, AIR, and runtime, but it should not become a `session` keyword in the MVP.
+
+`SummaryPlusRecent(recent = 8)` selects an already published summary and recent
+turns; it never invokes a model or creates a summary. With no published summary,
+it selects recent turns only, with the absence of a summary visible to the
+caller. The selected context is a view, not a claim to contain the full history.
+Selecting a view does not delete the underlying messages.
+
+Applications or EDK packages explicitly read history, generate and validate a
+summary, and publish the resulting context through `std.agent.session`:
+
+| API | Contract |
+|---|---|
+| `history_page` | Read a bounded history page with a backend-issued cursor and `SessionHistoryFence`, plus any published context. |
+| `prepare_context` | Bind caller-produced `SessionContextContent` and its history fence to a `StorageOperationRef`; preparing does not publish or generate content. |
+| `publish_context` | Conditionally publish that content, checking its session generation, history fence, and context version; return a confirmed outcome or an explicitly unknown outcome. |
+| `reconcile_context` | Resolve an uncertain publication using the same operation reference and backend evidence. |
+
+The application/EDK owns the trigger, model/provider choice, model-specific
+token counting, prompt, validation, and retry strategy. Summary generation uses
+ordinary Etas flows/agents; model calls remain visible as requested inference
+actions and obey normal trace-spec, runtime-policy, cancellation, and budget
+checks. `ContextTokens(...)` remains a context budget bound, not an instruction
+to summarize. Exceeding it follows the limit failure rules; session loading or
+publication must not silently launch an inference call to make the input fit.
+
+Publication must preserve these guarantees:
+
+- Context content carries provenance for its source history and producer. A
+  summary is derived content; publication does not certify its semantic accuracy
+  or upgrade its trust level.
+- Publication atomically validates the expected history/context state and
+  installs a new context version. A conflicting append, replacement, or session
+  generation change rejects a stale publication without overwriting newer
+  context. The caller may explicitly reload and regenerate.
+- `SessionContextReceipt` identifies the operation, session generation,
+  published context version, and backend-confirmed durability. Retrying the
+  same operation must reuse its confirmed outcome rather than publish twice.
+- Failure or cancellation during generation leaves published context unchanged.
+  A confirmed publication rejection also leaves it unchanged. If publication
+  may already have committed, timeout or cancellation is not proof of rollback:
+  reconcile the operation before deciding whether to retry.
+- Publishing a summary does not remove source messages. Retention, archival,
+  deletion, and storage compaction remain separate runtime/storage operations,
+  preserving required provenance and making any loss of replay data explicit.
+
+This contract requires history access, version validation, context publication,
+and receipts from the standard substrate. It does not require a built-in
+production summarizer or a host callback that generates summaries during
+session maintenance.
 
 ### 3.4 Handoff
 

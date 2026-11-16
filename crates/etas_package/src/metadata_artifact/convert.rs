@@ -796,6 +796,14 @@ fn type_from_metadata(
         })
     };
     match ty.kind {
+        etas_package_metadata::TypeKind::AgentContext => Ok(PackageTypeMetadata::AgentContext {
+            method: ty.agent_context.ok_or_else(|| {
+                missing(
+                    Path::new(".etas/package.etasmeta"),
+                    "agent context method identity is missing",
+                )
+            })?,
+        }),
         etas_package_metadata::TypeKind::Existential => Ok(PackageTypeMetadata::Existential {
             bounds: ty
                 .bounds
@@ -1081,6 +1089,7 @@ fn effect_summary_from_metadata(
             .default_handler_effects
             .map(|effects| {
                 Ok::<_, PackageError>(crate::PackageDefaultHandlerEffectsMetadata {
+                    behavior: effects.behavior,
                     direct_effects: effect_row_from_metadata(effects.direct_effects)?,
                     default_actions: effect_row_from_metadata(effects.default_actions)?,
                     handlers: effects
@@ -1153,6 +1162,15 @@ fn action_trace_from_metadata(
                     .into_iter()
                     .map(action_trace_from_metadata)
                     .collect::<Result<Vec<_>, _>>()?,
+            }
+        }
+        etas_package_metadata::ActionTrace::DefaultHandler { guards, body } => {
+            PackageActionTraceMetadata::DefaultHandler {
+                guards: guards
+                    .into_iter()
+                    .map(effect_ref_from_metadata)
+                    .collect::<Result<_, _>>()?,
+                child: Box::new(action_trace_from_metadata(*body)?),
             }
         }
         etas_package_metadata::ActionTrace::Repeat(child) => PackageActionTraceMetadata::Repeat {

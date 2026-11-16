@@ -1,0 +1,76 @@
+{
+  "spec_repository": "https://github.com/etas-project/etas",
+  "spec_branch": "fix/checked-adt-fast-paths",
+  "spec_revision": "e69e257ae3fbaed628e85a36eb410c189053a5eb",
+  "source_root": "crates/etas_std/library/std (etas-core)",
+  "new_api_paths": [
+    "std.text.len",
+    "std.text.contains",
+    "std.io.eprint",
+    "std.task.scheduler.SchedulerHandle",
+    "std.task.scheduler.ReadyTask",
+    "std.task.scheduler.Scheduler",
+    "std.task.scheduler.FifoScheduler",
+    "std.task.scheduler.DefaultScheduler",
+    "std.task.scheduler.handlers",
+    "std.agent.step",
+    "std.agent.StepResult",
+    "std.agent.StepDecision",
+    "std.agent.AssistantTurn",
+    "std.agent.MessageContent",
+    "std.agent.ToolRef",
+    "std.agent.ToolCall",
+    "std.agent.ToolResult",
+    "std.agent.StopReason",
+    "std.agent.StepDiagnostic",
+    "std.agent.Usage",
+    "std.tool.reference",
+    "std.tool.invoke",
+    "std.agent.conversation.from_prompt",
+    "std.agent.conversation.append_step",
+    "std.agent.conversation.append_results",
+    "std.effects.actions.Agentic.step",
+    "std.command.run"
+  ],
+  "changed_contracts": [
+    "JSON is transparent recursive ADT",
+    "task.run accepts optional Scheduler implementation value",
+    "SchedulerHandle is distinct from the policy spec",
+    "mutable scheduler select receiver",
+    "compiler ToolRef re-exports the protocol identity",
+    "text.is_empty uses constant-time length",
+    "Conversation.session is optional for in-memory conversations"
+  ],
+  "status": "Latest spec definitions written; compiler/runtime integration builds locally. Whole std bundle and delivery are not accepted.",
+  "tests_added_or_run_for_new_spec": false,
+  "existing_backend_reference": {
+    "repository": "https://github.com/etas-project/etas-core",
+    "branch": "codex/agent-step-v1",
+    "revision": "7230ca03b1250bb45eebe726785f95432cdf67a9",
+    "frontend_revision": "1e6ea323783f3d37891cbb74477179943985818c",
+    "runtime_revision": "f6516caf7f2a81406b4bfdef9456fe9f22327e0f"
+  },
+  "source_files": 79,
+  "text_declarations": {
+    "std.text": 78,
+    "std.text.unicode": 8,
+    "std.char": 7,
+    "std.codec.text": 2
+  },
+  "validation": {
+    "cli_local_build": "passed; /tmp/etas-latest-spec-cli-local-final.log",
+    "whole_std_build": "failed; 259 diagnostics (including cascades), /tmp/etas-latest-spec-std-diagnostics3.json",
+    "unit_tests": "not run; no tests added",
+    "release_provider": "legacy",
+    "drafts_merged": false
+  },
+  "remaining_integration": [
+    "Native constant and declaration-only flow syntax",
+    "Source overloads and namespace-aware Secret prelude exports",
+    "Default parameters and restricted updating receiver support",
+    "Checked scheduler policy execution; current runtime still uses FIFO",
+    "Whole-source native binding type/effect ABI alignment",
+    "Independent minimum-bootstrap acceptance, full runtime/IDE/install/release gates"
+  ],
+  "source_modules": 50
+}
