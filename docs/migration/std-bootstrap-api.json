@@ -2,21 +2,21 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "0f5db553b687185b471c3561a0d07109b03d7c09",
-    "frontend": "9ef6733d48dff8f2ecbfd887388db85346a06002",
-    "interpreter": "23d6d049fd5bf1667914d8b23c34ac6234311ba4",
-    "std_version": "0.2.25",
-    "compiler_version": "0.11.25",
-    "native_binding_abi": "blake3:bf529f32400e6e643d448efb6d8838a3ccae0e98f3a3c880c99157eb7555d0fe",
-    "source_payload_hash": "blake3:94e76cd6bdee0b9490b93ef25ae05e227cc6bbc45e7bca3c2fee693f5b7f7ec1",
+    "core": "ea81734275b4db4e21dc9afc201c961306e2f1b5",
+    "frontend": "95e6f50e8da8a04e472694e02e2bfa6af052fecf",
+    "interpreter": "c1a7236356aba3418e4e93dc5dfb485154ac8443",
+    "std_version": "0.2.26",
+    "compiler_version": "0.11.26",
+    "native_binding_abi": "blake3:38ac94dfcec82edf7500c830bdfe89dffda2f5dbcfd56a68de7af02fb3811696",
+    "source_payload_hash": "blake3:b383f284398cce44765e162c0c78dd6eb24639f40d5ab0c9ac5618d53fe06f02",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:747bb23d16bb62c35d0810d1d0be58d2c4ae4d27dbcb197a47fd0fe481da8bdc",
+    "artifact_hash": "blake3:907de43bd9030e78ccf283b95bcd8b2c7e2bde39dc5f9fa3b69f8b4d056b83d8",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
-  "candidate_symbols": 222,
-  "missing_symbols": 449,
+  "candidate_symbols": 223,
+  "missing_symbols": 448,
   "pending_contract_difference": {
     "symbols": [
       "std.codec.text.utf8_decode",
@@ -77,7 +77,14 @@
       "std.result.Ok",
       "std.result.is_err",
       "std.result.is_ok",
-      "std.result.unwrap"
+      "std.result.unwrap",
+      "std.runtime.budget.Money",
+      "std.runtime.budget.usd",
+      "std.runtime.limits.Cost",
+      "std.runtime.limits.Limit.Cost",
+      "std.runtime.limits.Limit.WallTime",
+      "std.runtime.limits.WallTime",
+      "std.runtime.time.Duration"
     ],
     "classification": "Source collection declarations use source-owned generic binder names. Nine Array/List methods and Option/Result methods publish checked source impl metadata instead of legacy intrinsic source-method aliases. Raw declaration differences remain visible pending whole-library API/behavior parity. The common legacy/artifact sample agrees on collection order, persistence, optional values, Unicode text and assertion failure. The complete SDK fixture additionally verifies generic function payloads added to empty arrays/lists and invocation under the original caller Handler, source methods with an Index-bounded own generic, protected Fs permissions and trace, moved packages and body/binding cache edits. List.get now publishes a checked source method and a source free-flow signature; its generic Index binder and caller Handler callback are verified in the SDK lifecycle. Filesystem raw differences retain source opaque IOError as Struct rather than legacy Support and use the canonical std.fs.WorkspacePath parameter path in read_bytes. Its public Error<IOError> and requested Fs.read<R> rows agree; protected success/error/permission/trace checks pass. The complete fs module has source declarations for all19 baseline symbols and no missing exports. FsEntry is a source opaque nominal, while FsStat now declares the three fields already returned by its host payload. This exposes a checked source representation absent from legacy Support metadata. Remaining filesystem helper differences use canonical WorkspacePath names. These raw declaration differences remain visible and gated; ordinary FsStat field access is verified in artifact execution. UTF-8 declarations are now source-owned. Raw codec declaration differences retain enum layout metadata and fully qualified malformed-input/error paths instead of the original short-name legacy baseline. Strict success/error and replacement behavior are compared across both providers; the original baseline has not been replaced. Compiler report types now use ordinary checked source record representations; legacy projected-field metadata differences remain visible. Native record layout constraints preserve every produced field and nested checked nominal identity. Installed acceptance projects reflected RevisionInfo/SignatureInfo/ParameterInfo values and passes a source-owned revision through separately compiled std bodies; parser/formatter bindings execute from source declarations."
   },
@@ -1409,9 +1416,15 @@
         "implementation_changes": [],
         "export_changes": [
           "Array",
+          "Attempts",
+          "Concurrency",
+          "ContextTokens",
+          "Cost",
           "Err",
           "Index",
           "Iter",
+          "Iterations",
+          "Limit",
           "List",
           "Map",
           "None",
@@ -1422,6 +1435,8 @@
           "Set",
           "Slice",
           "Some",
+          "Tokens",
+          "WallTime",
           "abort",
           "assert"
         ]
@@ -1496,17 +1511,19 @@
         "missing_module": false,
         "added_module": false,
         "covered": [
-          "std.runtime.budget.Money"
-        ],
-        "missing": [
+          "std.runtime.budget.Money",
           "std.runtime.budget.usd"
         ],
+        "missing": [],
         "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "usd"
-        ]
+        "contract_changes": [
+          "std.runtime.budget.Money",
+          "std.runtime.budget.usd"
+        ],
+        "implementation_changes": [
+          "std.runtime.budget.usd"
+        ],
+        "export_changes": []
       },
       "std.runtime.checkpoint": {
         "missing_module": false,
@@ -1590,27 +1607,14 @@
         ],
         "missing": [],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.runtime.limits.Cost",
+          "std.runtime.limits.Limit.Cost",
+          "std.runtime.limits.Limit.WallTime",
+          "std.runtime.limits.WallTime"
+        ],
         "implementation_changes": [],
         "export_changes": []
-      },
-      "std.runtime.limits.Limit": {
-        "missing_module": false,
-        "added_module": true,
-        "covered": [],
-        "missing": [],
-        "added": [],
-        "contract_changes": [],
-        "implementation_changes": [],
-        "export_changes": [
-          "Attempts",
-          "Concurrency",
-          "ContextTokens",
-          "Cost",
-          "Iterations",
-          "Tokens",
-          "WallTime"
-        ]
       },
       "std.runtime.time": {
         "missing_module": false,
@@ -1623,7 +1627,9 @@
           "std.runtime.time.now"
         ],
         "added": [],
-        "contract_changes": [],
+        "contract_changes": [
+          "std.runtime.time.Duration"
+        ],
         "implementation_changes": [],
         "export_changes": [
           "Time",
@@ -2431,8 +2437,8 @@
     "status": "Resolved: escaping callback rows retain symbolic request provenance until the checked callback is instantiated.",
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
-  "covered_baseline_symbols": 218,
-  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 55 entries including 37 primitives, 67 source roles, 24 record layouts and 3 getter layouts. All 20 builtin core type declarations now come from source; their roles map only to compiler primitive representations. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
+  "covered_baseline_symbols": 219,
+  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 46 entries including 38 primitives, 69 source roles, 24 record layouts, 3 getter layouts and 2 opaque references. Money, Duration, Limit, seven enum constructors and eight public flow signatures now come from source. Money private value representation and compiler limit semantics remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2451,10 +2457,10 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 55,
-    "explicit_source_roles": 67,
-    "query_symbols_before_source_publication": 122,
-    "primitives": 37,
+    "static_contracts": 46,
+    "explicit_source_roles": 69,
+    "query_symbols_before_source_publication": 115,
+    "primitives": 38,
     "spec_impl_facts": 0,
     "minimality_accepted": false,
     "native_enum_references": 5,
@@ -2746,8 +2752,8 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 32,
-    "source_modules": 15,
+    "source_files": 35,
+    "source_modules": 18,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
     "private_generic_record_and_callback_preserved": true,
@@ -2756,7 +2762,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "c62b0d8ffc7e2ae4d969f0dde0bcebf5fb79b737ca1d096481d364d9a944f211",
+    "manifest_sha256": "0bc924bea915da2569706bda1be1b0e4079132cfb1439e34c0ca2fe869ec6e7c",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -2891,8 +2897,8 @@
       "std.codec.text.InvalidUtf8"
     ],
     "classification": "All three public constructor aliases are available through source re-exports and pass installed SDK import/execution. Source uses the canonical nested enum variant identity, while the legacy baseline has a separate symbol record for each alias. Keep these three raw query-symbol differences visible; do not allocate duplicate source identities merely to increase coverage counts.",
-    "raw_missing_query_symbols": 449,
-    "other_unrepresented_query_symbols": 446
+    "raw_missing_query_symbols": 448,
+    "other_unrepresented_query_symbols": 445
   },
   "compiler_report_source_batch": {
     "source_records": [
@@ -3090,5 +3096,71 @@
     ],
     "remaining_native_action_contracts": 8,
     "remaining_limit_requirement_contracts": 7
+  },
+  "runtime_declaration_source_batch": {
+    "source_types": [
+      "std.runtime.budget.Money",
+      "std.runtime.time.Duration",
+      "std.runtime.limits.Limit"
+    ],
+    "source_type_count": 3,
+    "source_enum_constructors": [
+      "Iterations",
+      "Tokens",
+      "ContextTokens",
+      "Cost",
+      "WallTime",
+      "Attempts",
+      "Concurrency"
+    ],
+    "source_native_bound_flows": [
+      "std.runtime.budget.usd",
+      "std.runtime.limits.Iterations",
+      "std.runtime.limits.Tokens",
+      "std.runtime.limits.ContextTokens",
+      "std.runtime.limits.Cost",
+      "std.runtime.limits.WallTime",
+      "std.runtime.limits.Attempts",
+      "std.runtime.limits.Concurrency"
+    ],
+    "source_files": [
+      "library/std/runtime/budget/mod.es",
+      "library/std/runtime/time/mod.es",
+      "library/std/runtime/limits/mod.es"
+    ],
+    "static_type_and_constructor_contracts_removed": 10,
+    "static_contracts_remaining": 46,
+    "source_roles": 69,
+    "native_primitive_contracts": 38,
+    "new_native_execution_ids": 0,
+    "new_primitive_exposed_to_bootstrap": "Existing USD opaque value constructor; no new execution implementation.",
+    "role_abi_fingerprint_format": 5,
+    "native_opaque_references": 2,
+    "all_static_public_type_and_enum_constructor_declarations_removed": true,
+    "remaining_native_action_contracts": 8,
+    "limit_requirement_boundary": "Seven explicit primitive ABI contracts retain limit kind/execution semantics. The public parameter signatures and flow identities are projected from checked source.",
+    "limit_payload_validation": "Compiler-only bootstrap payload layouts are derived from existing requirement ABI signatures, without publishing native enum constructors. Source enum payloads are checked against those signatures; extra source variants are allowed.",
+    "money_value_boundary": "Verified native Money roles retain the current private amount/currency payload. Value contracts validate that payload for live values and snapshots; revision bridges rebase nominal TypeIds using checked roles without exposing storage or accepting name lookalikes.",
+    "acceptance": "Installed source-only Money/Duration/Limit use, seven limit constructors, a new source enum variant, a bounded loop and private generic checkpoint/resume carrying Money pass.",
+    "source_files_total": 35,
+    "source_modules_total": 18,
+    "whole_bootstrap_minimality_accepted": false,
+    "contract_difference_review": {
+      "new_raw_contract_differences": [
+        "std.runtime.budget.Money",
+        "std.runtime.budget.usd",
+        "std.runtime.limits.Cost",
+        "std.runtime.limits.Limit.Cost",
+        "std.runtime.limits.Limit.WallTime",
+        "std.runtime.limits.WallTime",
+        "std.runtime.time.Duration"
+      ],
+      "review_notes": {
+        "std.runtime.budget.Money": "Now carries the verified Money runtime role and intrinsic-only construction. Opaque source declaration and private value ABI are explicit; whole-library compatibility review stays open.",
+        "std.runtime.time.Duration": "An ordinary source-owned opaque nominal is published as Struct rather than legacy Support.",
+        "qualified_type_references": "USD output and Cost/WallTime primitive/enum payloads use canonical Money/Duration paths in generated queries. Installed calls and Money checkpoints execute successfully."
+      },
+      "whole_library_parity_accepted": false
+    }
   }
 }

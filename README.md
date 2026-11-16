@@ -480,12 +480,12 @@ legacy factory verifies that dependency boundary; it does not by itself prove
 that the remaining bootstrap catalog is minimal or the entire std is migrated.
 
 Source role validation uses an explicit `StdSourceRole` compiler ABI instead of
-registry declaration/signature lookup. Its sixty-seven roles define only the recognized
+registry declaration/signature lookup. Its sixty-nine roles define only the recognized
 identities, generic parameter kinds and execution shapes. The query view uses
 temporary internal binders until the checked source supplies public parameter
 names. Those role declarations and their four native constructor implementations
-are removed from the static catalog, which still has 55 compiler/host catalog entries
-including 37 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
+are removed from the static catalog, which still has 46 compiler/host catalog entries
+including 38 primitive contracts. Collection Array/List/Map/Set/Range/Slice/Iter declarations
 now join the source roles. The SDK fixture uses different source parameter names
 for Task, Continuation, Option, Result, WorkspacePath and collections to exercise this ownership
 boundary. Source-bootstrap prelude references bind to their checked source exports.
@@ -516,11 +516,22 @@ compiler-managed values. Generic definitions cross separately compiled std bodie
 without losing their backend lease or program ownership checks. Registry and
 container schemas are 6 and 49. This does not establish whole-bootstrap minimality.
 
+Money, Duration, Limit and its seven variants now have source declarations.
+The eight public native-bound flows also have source signatures; the query view
+preserves compiler limit tags while reading those checked signatures. Bootstrap
+limit payload layouts derive from existing primitive ABI contracts and are
+completed by the source enum. Money retains its private runtime value format;
+checked roles govern value conversion and snapshot validation. The installed
+SDK exercises an additional source enum variant, bounded iteration and generic
+checkpoint/resume carrying Money. There are no public type or enum constructor
+declarations left in the static catalog. Eight native action contracts remain;
+minimum-contract and whole-library acceptance remain open.
+
 All twenty builtin core type declarations now live in core/primitives.es. Trusted
 roles map them to existing compiler primitive representations. Bundle signatures
 and descriptors retain source declaration identities as transparent aliases;
 primitive targets remain structural. Qualified and aliased imports execute from
-the installed SDK. Role ABI fingerprint format is 4; the remaining 55 catalog
+the installed SDK. Role ABI fingerprint format is 5; the remaining 46 catalog
 entries still require migration and minimum-contract review.
 
 Eleven runtime effect declarations now live in Etas source. Source owns generic
@@ -528,9 +539,10 @@ names and inheritance, including Error<Failure> and Fs extending FileIO; Rust
 retains their existing execution IDs and host capability requirements. The bundle
 and generated query view preserve those declarations and canonical identities.
 The SDK fixture adds an ordinary effect and a flow only in .es, then imports and
-executes the installed body. Eight native action contracts and seven limit
-requirement contracts remain transitional and require further migration. Current
-role ABI fingerprint format is 4; this does not establish bootstrap minimality.
+executes the installed body. Eight native action declarations still need source
+migration. The seven native limit contracts now serve as primitive ABI for source
+declarations and require minimum-contract review. Current role ABI fingerprint
+format is 5; this does not establish bootstrap minimality.
 
 Array get/push/pop/extend and List head/tail/pop/push/extend methods are authored
 in Etas. Array get/push retain minimal storage primitives; iteration, list

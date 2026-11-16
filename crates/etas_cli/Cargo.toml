@@ -1,6 +1,6 @@
 [package]
 name = "etas_cli"
-version = "0.14.27"
+version = "0.14.28"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

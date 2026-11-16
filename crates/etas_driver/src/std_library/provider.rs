@@ -237,8 +237,8 @@ impl StdProvider {
 }
 
 /// Project structured checked package interfaces into the existing std query
-/// API. Every source flow keeps its canonical bundle callable, never a native
-/// intrinsic substitute or a handwritten source signature.
+/// API. Source flows keep their canonical bundle callables; compiler limit
+/// bindings retain their semantic tags and primitive execution contracts.
 fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     let native = sdk
         .image
@@ -253,6 +253,11 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
     let mut symbols = native
         .symbols()
         .map(|s| (s.qualified_path.clone(), s.id))
+        .collect::<BTreeMap<_, _>>();
+    let requirements = native
+        .symbols()
+        .filter(|symbol| matches!(symbol.decl, etas_std::StdDecl::Requirement(_)))
+        .map(|symbol| (symbol.qualified_path.clone(), symbol.id))
         .collect::<BTreeMap<_, _>>();
     let mut builder = StdRegistryBuilder::from_registry(native);
     let declarations = sdk
@@ -371,6 +376,21 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             requested_action_tail: requests.tail,
             source_method: None,
         };
+        if let Some(native) = source_limit_binding(sdk, key, &requirements) {
+            let symbol = *symbols.get(&canonical).expect("bootstrap limit contract");
+            if symbol != native {
+                return Err(invalid(
+                    "source limit binding differs from its canonical ABI",
+                ));
+            }
+            builder.source_requirement(symbol, declaration.params, key.clone());
+            if flow.path[..flow.path.len() - 1] == ["std", "prelude"] {
+                builder.prelude(name, symbol);
+            }
+            symbols.insert(flow.path.clone(), symbol);
+            symbols.insert(canonical, symbol);
+            continue;
+        }
         let symbol = builder.source_flow(
             module,
             name,
@@ -423,6 +443,33 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .validate_resolved_native_projection_references()
         .map_err(invalid)?;
     Ok(registry)
+}
+
+/// Only a checked native binding grants the compiler's limit semantics.
+fn source_limit_binding(
+    sdk: &LoadedStdSdk,
+    definition: &DefinitionKey,
+    requirements: &BTreeMap<Vec<String>, etas_std::StdSymbolId>,
+) -> Option<etas_std::StdSymbolId> {
+    let item = *sdk.image.declarations.get(definition)?;
+    sdk.image
+        .program
+        .symbols
+        .iter()
+        .filter(|symbol| symbol.defining_item == Some(item))
+        .find_map(|symbol| {
+            let etas_hir::SymbolDef::ImportAlias {
+                path,
+                origin: etas_hir::ImportAliasOrigin::NativeBinding,
+            } = &symbol.def
+            else {
+                return None;
+            };
+            let native = requirements.get(path)?;
+            path.iter()
+                .eq(definition.module().iter().chain(definition.declaration()))
+                .then_some(*native)
+        })
 }
 
 fn canonical_export(

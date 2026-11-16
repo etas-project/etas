@@ -57,6 +57,9 @@ fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_pro
         }
         fs::write(path, text).unwrap();
     }
+    let limits = source.join("library/std/runtime/limits/mod.es");
+    fs::write(&limits, fs::read_to_string(&limits).unwrap()
+        .replace("public enum Limit {", "public enum Limit { SdkOnly,")).unwrap();
     let task = source.join("library/std/task/mod.es");
     fs::write(
         &task,
@@ -113,6 +116,9 @@ public import std.extra.Reply.{Empty, Item, Named};
 public effect Delivery extends std.effects.Network;
 public flow delivery_value() -> i32 ![Delivery] { return 41; }
 public flow primitive_value(value: std.core.i32) -> i32 ![] { return value; }
+public flow money_value(value: f64) -> std.runtime.budget.Money ![] { return std.runtime.budget.usd(value); }
+public flow duration_value(value: std.runtime.time.Duration) -> std.runtime.time.Duration ![] { return value; }
+public flow limited_value(value: usize) -> std.runtime.limits.Limit ![] { return std.runtime.limits.Iterations(value); }
 public flow syntax_text(value: SyntaxBlock) -> string ![] { return value.text; }
 public flow callable_revision<Function>(value: CallableDef<Function>) -> RevisionInfo ![] { return value.revision; }
 public flow agent_revision<Actor>(value: AgentDef<Actor>) -> RevisionInfo ![] { return value.revision; }
@@ -310,7 +316,20 @@ flow collection_checks() -> bool ![] {
     if std.text.trim_end("　 a 　") != "　 a" { return false; }
     return true;
 }
+flow runtime_limit_checks() -> bool ![] {
+    let count = match std.extra.limited_value(3) { Limit.Iterations(value) => value, _ => { return false; } };
+    if count != 3 || Tokens(2) != Limit.Tokens(2) || Attempts(2) != Limit.Attempts(2) { return false; }
+    if ContextTokens(4) != Limit.ContextTokens(4) || Concurrency(2) != Limit.Concurrency(2) { return false; }
+    let cost = Cost(std.extra.money_value(1.25));
+    let money = match cost { Limit.Cost(value) => value, _ => { return false; } };
+    let again = Cost(money);
+    var total = 0;
+    for value in [1, 2, 3] limit Iterations(3) { total = total + value; }
+    let custom = match Limit.SdkOnly { Limit.SdkOnly => true, _ => false };
+    return total == 6 && custom && match again { Limit.Cost(_) => true, _ => false };
+}
 flow main(args: Array<string>) -> i32 {
+    if !runtime_limit_checks() { return 89; }
     if std.extra.primitive_value(42) != 42 { return 88; }
     if std.extra.delivery_value() != 41 { return 87; }
     if !collection_checks() { return 86; }
@@ -1019,7 +1038,9 @@ flow main(args: Array<string>) -> i32 {
         Error<i32>.raise(value) => { finish value; }
     };
     return handle {
-    let first = checkpointed(40);
+    let (first, money) = checkpointed((40, std.runtime.budget.usd(1.25)));
+    let retained = match Cost(money) { Limit.Cost(_) => true, _ => false };
+    if !retained { perform Error<i32>.raise(90); }
     let add = (value: i32) => value + 1;
     let result = checkpoint_apply(add, first);
     save("app-alias");
