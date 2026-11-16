@@ -2,16 +2,16 @@
   "schema": 1,
   "scope": "Current migrated std SDK and explicit compiler/host ABI; full std API migration remains incomplete. This report gates default changes.",
   "producers": {
-    "core": "de85cddc5d6e4ee0d0c9e735a21aa74b427fa3d0",
-    "frontend": "938be9889ff482c17669722b28590c0bfab38eb0",
-    "interpreter": "39fe94c073e5eb902c402a3d0ded1143dd5ffd83",
-    "std_version": "0.2.24",
-    "compiler_version": "0.11.24",
-    "native_binding_abi": "blake3:a743361652dbf38974d876afa31828c881a06ebf1962c73cfbbf66ef1ec6ed17",
-    "source_payload_hash": "blake3:13449281042b84f6d6e98166a14b743e4fcc5d76b04e86893892bb7733471786",
+    "core": "0f5db553b687185b471c3561a0d07109b03d7c09",
+    "frontend": "9ef6733d48dff8f2ecbfd887388db85346a06002",
+    "interpreter": "23d6d049fd5bf1667914d8b23c34ac6234311ba4",
+    "std_version": "0.2.25",
+    "compiler_version": "0.11.25",
+    "native_binding_abi": "blake3:bf529f32400e6e643d448efb6d8838a3ccae0e98f3a3c880c99157eb7555d0fe",
+    "source_payload_hash": "blake3:94e76cd6bdee0b9490b93ef25ae05e227cc6bbc45e7bca3c2fee693f5b7f7ec1",
     "body_schema": 12,
     "descriptor_schema": 13,
-    "artifact_hash": "blake3:fb994aa44ccfe114da62e8c764ce92691812fc418f3b8203ce8452e58aa0dbac",
+    "artifact_hash": "blake3:747bb23d16bb62c35d0810d1d0be58d2c4ae4d27dbcb197a47fd0fe481da8bdc",
     "registry_schema": 5
   },
   "baseline_symbols": 667,
@@ -2432,7 +2432,7 @@
     "validation": "SDK process fixture compares identical applications under both providers: caller-owned Region, Fs.read, typed IOError handler, loop budget and execution result."
   },
   "covered_baseline_symbols": 218,
-  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has75 entries including37 primitives,47 source roles,24 record layouts and3 getter layouts. Eleven effect declarations now come from source; stable execution IDs and capability requirements remain native. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
+  "source_ownership_note": "Etas owns public declarations, generic names, inheritance, signatures and expressible algorithms/policy. Rust retains execution rules and explicit primitive/payload/getter/role ABI. The transitional catalog has 55 entries including 37 primitives, 67 source roles, 24 record layouts and 3 getter layouts. All 20 builtin core type declarations now come from source; their roles map only to compiler primitive representations. Generated StdRegistry is supported. Whole-bootstrap minimality is not accepted.",
   "source_index_impls": {
     "authored": 12,
     "matches_legacy_index_impls": true,
@@ -2451,8 +2451,8 @@
     "std.result.Result.Ok"
   ],
   "transitional_bootstrap": {
-    "static_contracts": 75,
-    "explicit_source_roles": 47,
+    "static_contracts": 55,
+    "explicit_source_roles": 67,
     "query_symbols_before_source_publication": 122,
     "primitives": 37,
     "spec_impl_facts": 0,
@@ -2462,7 +2462,8 @@
     "native_record_references": 24,
     "native_projection_references": 3,
     "native_projection_fields": 21,
-    "source_effect_roles": 11
+    "source_effect_roles": 11,
+    "source_primitive_type_roles": 20
   },
   "source_algorithm_batch": {
     "flows": [
@@ -2745,7 +2746,7 @@
     "existing_primitive_id": 1001,
     "new_os_primitives": 0,
     "new_language_roles": 0,
-    "source_files": 31,
+    "source_files": 32,
     "source_modules": 15,
     "runtime_checkpoint_schema": 78,
     "checked_standard_library_program_and_type_bridge_preserved": true,
@@ -2755,7 +2756,7 @@
     "new_process_with_fresh_prepared_code_revision_verified": true,
     "legacy_registry_forbidden_process_verified": true,
     "complete_manifest_identical_across_two_normal_and_one_forbidden_builds": true,
-    "manifest_sha256": "567779c77e4f300eff814ee90863eb92a716a2ef636ffdfa347c2feb05ae2399",
+    "manifest_sha256": "c62b0d8ffc7e2ae4d969f0dde0bcebf5fb79b737ca1d096481d364d9a944f211",
     "whole_library_checkpoint_compatibility_accepted": false,
     "whole_bootstrap_minimality_accepted": false,
     "validation": "CLI std_source_sdk lifecycle runs and resumes checkpoints in separate processes after a moved-prefix source-only SDK install. Driver compiler_service std_checkpoint test compiles an existing flow into PreparedCodeRevision, snapshots from its std callback, drops the original revision, and restores in a new process with a freshly compiled revision and persisted replay keys. Both fixtures pass with the full legacy registry factory forbidden."
@@ -3043,5 +3044,51 @@
     "source_files_total": 31,
     "source_modules_total": 15,
     "whole_bootstrap_minimality_accepted": false
+  },
+  "primitive_declaration_source_batch": {
+    "source_declarations": [
+      "std.core.bool",
+      "std.core.bytes",
+      "std.core.char",
+      "std.core.f32",
+      "std.core.f64",
+      "std.core.i128",
+      "std.core.i16",
+      "std.core.i32",
+      "std.core.i64",
+      "std.core.i8",
+      "std.core.isize",
+      "std.core.never",
+      "std.core.string",
+      "std.core.u128",
+      "std.core.u16",
+      "std.core.u32",
+      "std.core.u64",
+      "std.core.u8",
+      "std.core.unit",
+      "std.core.usize"
+    ],
+    "count": 20,
+    "source_files": [
+      "library/std/core/primitives.es"
+    ],
+    "static_contracts_removed": 20,
+    "static_contracts_remaining": 55,
+    "source_roles": 67,
+    "role_abi_fingerprint_format": 4,
+    "new_os_primitives": 0,
+    "compiler_contract": "Maps trusted source declarations to existing builtin primitive representations; no public signatures or algorithms are copied into role contracts.",
+    "portable_identity": "Bundle public signatures and descriptors retain source declaration keys as transparent aliases to builtin structural types. Primitive targets do not acquire nominal reflection identities.",
+    "positive_acceptance": "Source-only primitive_value(std.core.i32) -> i32 and an external application using qualified and aliased primitives execute successfully. Installed IDE acceptance resolves all 20 declarations.",
+    "source_files_total": 32,
+    "source_modules_total": 15,
+    "whole_bootstrap_minimality_accepted": false,
+    "remaining_public_type_contracts": [
+      "std.runtime.budget.Money",
+      "std.runtime.time.Duration",
+      "std.runtime.limits.Limit"
+    ],
+    "remaining_native_action_contracts": 8,
+    "remaining_limit_requirement_contracts": 7
   }
 }

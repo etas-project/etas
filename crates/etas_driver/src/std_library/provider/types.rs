@@ -60,6 +60,13 @@ pub(super) fn publish(
             .map(|param| projector.param(param))
             .collect::<Result<Vec<_>, _>>()?;
         let kind = match ty.kind {
+            _ if source_role.is_some()
+                && etas_std::StdSourceRole::from_path(&canonical.join("."))
+                    .and_then(etas_std::StdSourceRole::primitive_type)
+                    .is_some() =>
+            {
+                TypeDeclKind::Primitive
+            }
             metadata::TypeKind::Enum => TypeDeclKind::Enum,
             metadata::TypeKind::Nominal => TypeDeclKind::Struct,
             _ => {
