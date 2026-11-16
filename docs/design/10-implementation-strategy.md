@@ -234,7 +234,7 @@ The AIR interpreter/runtime should own:
 - trace event emission;
 - sandboxing;
 - temporary value lifecycle management;
-- persistent state retention and compaction;
+- persistent state retention, storage compaction, and version-checked publication of caller-produced session context;
 - observability export.
 
 This keeps all external effects under one runtime authority boundary.
@@ -248,7 +248,7 @@ The implementation should distinguish two kinds of memory:
 | Category | Examples | Management model |
 |---|---|---|
 | Temporary runtime values | records, lists, prompts, decoded agent outputs, local flow values, AIR interpreter stack values | Automatically reclaimed by the implementation |
-| Persistent agent state | `MemoryRegion<S>` / `Store<K, V>` runtime resources, traces, checkpoints, conversation history, artifacts, cached model/tool results | Governed by explicit retention, compaction, archival, and deletion policies |
+| Persistent agent state | `MemoryRegion<S>` / `Store<K, V>` runtime resources, traces, checkpoints, conversation history, artifacts, cached model/tool results | Governed by explicit retention, storage compaction, archival, and deletion policies; derived session context is produced by application/EDK code |
 
 For compiler data structures, arena allocation is a good default. AST, typed AST, and many AIR construction objects usually share the same lifetime and can be released together after checking or lowering.
 
@@ -270,7 +270,7 @@ Persistent agent state is different. Garbage collection of heap objects does not
 ```text
 TraceRetention:
     keep full trace for 30 days
-    compact model/tool payloads after 7 days
+    compact stored model/tool payloads after 7 days under the replay retention policy
     redact Secret<T> fields before export
     keep approval records for audit policy duration
 
@@ -280,18 +280,26 @@ CheckpointRetention:
     delete expired checkpoints after durable trace commit
 
 ConversationRetention:
-    keep recent messages
-    summarize older turns
+    retain source messages for the configured duration
+    retain application-published context under its retention policy
     preserve message ids and provenance links
 ```
 
-The runtime should make retention visible in traces and manifests where it affects replay, audit, or compliance. Compaction must preserve enough metadata for safe recovery: node ids, input hashes, memory versions, prompt hashes, model profiles, tool idempotency keys, approval ids, and session/message ids.
+The runtime should make retention visible in traces and manifests where it affects replay, audit, or compliance. Storage compaction must preserve enough metadata for safe recovery: node ids, input hashes, memory versions, prompt hashes, model profiles, tool idempotency keys, approval ids, and session/message ids. Removing replay payloads must make the resulting replay limitations explicit.
+
+Storage compaction is distinct from generating a semantic summary. Applications
+or EDK packages explicitly generate summaries using ordinary flows/agents; the
+runtime supplies history access, version checks, publication, and receipts as
+specified in [Sessions And Conversations](03-agents-tools-prompts-memory.md#33-sessions-and-conversations).
+Session maintenance must not independently select a summary model/tokenizer or
+invoke one. Retention and storage compaction remain runtime responsibilities.
 
 This gives Etas the right boundary:
 
 ```text
 temporary value memory -> automatic implementation memory management
-persistent agent state -> runtime retention, compaction, audit, and deletion policy
+persistent agent state -> runtime retention, storage compaction, audit, and deletion policy
+derived session context -> application/EDK generation, runtime version-checked publication
 ```
 
 ## 9. Toplevel And REPL
@@ -364,7 +372,7 @@ Scope:
 - return type inference for flows from `return` expressions and final expressions;
 - `main`;
 - typed HIR interpreter for deterministic local execution;
-- minimal host tool registry for standard-library tool bindings such as `std.io.stdout.write`, `std.io.stderr.write`, and `std.io.stdin.read_line`;
+- minimal standard-action registry and host endpoints for `Console.stdout_write`, `Console.stderr_write`, and `Console.stdin_read_line`, used by ordinary `std.io` flows rather than model-callable tools;
 - CLI commands for `check`, `dump ast`, `dump hir`, and typed-HIR interpreter smoke execution.
 
 Goal: run small deterministic `.es` flows from typed HIR and validate source

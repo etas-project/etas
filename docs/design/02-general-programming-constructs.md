@@ -2,6 +2,12 @@
 
 Etas is a general-purpose programming language first, with agentic constructs added on top. Deterministic computation should use ordinary language features instead of agents.
 
+This chapter describes both language mechanisms and the standard APIs used with
+them. Primitive types, generics, literals, and indexing rules are language
+semantics; collection types and methods are std contracts and implementations.
+Their compiler-recognized integrations are distinguished from ordinary library
+logic in the [language layers](01-overview.md#53-feature-map-by-layer).
+
 ## 1. Lexical Style
 
 Etas source uses four spaces per indentation level. It supports `//` line comments and `/* ... */` block comments. Comments are ignored by the parser and cannot express trace specs, runtime policy, effect boundaries, limits, or other semantic constraints.
@@ -257,7 +263,7 @@ existing types or effect rows.
 If a callable spec omits `![...]`, it imposes no effect constraint. The
 implementation still has its own inferred effect row, but the spec does not
 restrict it. To require an effect-free computation, write `![]` explicitly, as
-in `Pure<I, O> I => O ![]`.
+in `Pure<I, O>` above.
 
 Flows, tools, composed flows, and generated agent entrypoints can satisfy callable
 specs. The `agent` declaration itself is a nominal component; its generated
@@ -303,9 +309,7 @@ public spec ReportsOnly: trace =
     +Fs.read<R ~ Within<ReportsRoot>>;
 
 public spec SafeEmail: trace =
-    +Approval.request
-    & +CompanyEmail.send<WorkAccount>
-    & (Approval.request >> CompanyEmail.send<WorkAccount>);
+    Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
 Trace spec operators are compile-time spec operators:
@@ -314,10 +318,16 @@ Trace spec operators are compile-time spec operators:
 |---|---|
 | `+A` | Allow requested action pattern `A`. |
 | `-A` | Deny requested action pattern `A`. |
-| `A >> B` | Require `A` before `B`. |
-| `A << B` | Require `A` after `B`, equivalent to `B >> A`. |
+| `A >> B` | Include local permissions for `A` and `B`, and require valid matching `A` evidence before every `B`. |
+| `A << B` | Include local permissions for `A` and `B`, and require valid matching `B` evidence before every `A`; equivalent to `B >> A`. It does not require `A` to occur. |
 | `S & T` | Require both trace specs. |
-| `S | T` | Reserved for trace specs; either spec may accept in the MVP. |
+| `S \| T` | Reserved for trace specs; either spec may accept in the MVP. |
+
+`>>` does not require repeated `+` declarations for its operands. Explicit `+`
+still allows independent actions. Denials and outer restrictions remain in
+force; permission and ordering checks stay within their own `|` alternative.
+See [Trace Specs](05-type-system-and-errors.md#154-trace-specs) for normalization
+and approval-evidence rules.
 
 The same type-level evidence used by ordinary values can refine action
 patterns. `+Fs.read<R ~ Within<ReportsRoot>>` means reads are allowed only for
@@ -378,12 +388,46 @@ matching.
 ## 3. Bindings and Mutation
 
 `let` creates an immutable binding. `var` creates a mutable local binding.
+In a local declaration, `var` is a binding modifier, not a reference type. It
+permits the declared name to be rebound to another value of the same type.
+The separate method-receiver form `var self` is specified in section 3.2; it
+does not introduce general mutable parameters or first-class references.
 
 ```etas
 let title: string = "Trace-aware agents";
 var retries: u32 = 0;
 
 retries = retries + 1;
+```
+
+Ordinary flow, agent, tool, and method parameters are immutable bindings. The
+only updating parameter form is the restricted receiver `var self`. Passing a
+local `var` as an ordinary argument still passes its current value, without
+transferring mutability of the caller's binding:
+
+```etas
+flow append(values: Array<i32>, value: i32) -> Array<i32> {
+    return values.push(value);
+}
+
+flow Example() {
+    var values = [1, 2];
+    let updated = append(values, 3);
+
+    // values is still [1, 2].
+    // updated is [1, 2, 3].
+}
+```
+
+Reassigning an ordinary parameter is rejected. Arbitrary `var` parameters
+remain unsupported:
+
+```etas
+flow invalid(values: Array<i32>) {
+    values = []; // rejected: parameters are immutable bindings
+}
+
+flow unsupported(var values: Array<i32>) -> unit; // rejected syntax
 ```
 
 Mutable state should remain local by default. Persistent state should go through compiler-known standard memory types such as `MemoryRegion<S>` and `Store<K, V>` so reads and writes remain auditable without adding dedicated persistent-state syntax.
@@ -465,6 +509,109 @@ import company.memory.ProjectMemory as PM;
 resource handle or a second persistent store identity. Static analyses should
 resolve both `ProjectMemory.Papers.get(...)` and `PM.Papers.get(...)` to the
 same resource symbol.
+
+### 3.2 Restricted Updating Receivers
+
+An ordinary type method may declare `var self` as its first parameter. It
+updates the caller's local binding while preserving value semantics; it does
+not expose a shared mutable object or a reference value. Plain `self` remains
+an immutable value parameter.
+
+```etas
+type Switch = { enabled: bool }
+
+impl Switch {
+    flow enable(var self) -> unit {
+        self = Switch { enabled = true };
+    }
+}
+
+flow Example() {
+    var a = Switch { enabled = false };
+    let b = a;
+    a.enable();
+    // a.enabled is true; b.enabled is still false.
+}
+```
+
+The restrictions are:
+
+- Only ordinary type methods and their behavioral type-spec signatures may
+  use `var self`. Free flows, tools, agent entrypoints/`impl agent` methods, and
+  other parameters do not gain an updating mode.
+- The receiver must be a direct local `var` binding, or the current method's
+  `var self` binding for a nested update. Reject `let`, ordinary parameters,
+  temporaries, fields, indexes, and arbitrary receiver expressions. A receiver
+  type is inferred from its enclosing `impl`/spec; `var self: T` is not a
+  second receiver syntax.
+- Resolve the target binding/method, evaluate ordinary arguments left to
+  right, then acquire exclusive access and read the receiver's current value.
+  Argument evaluation may take value snapshots; it is not part of the update
+  interval.
+- While the call holds that access, another task, callback, or reentrant path
+  cannot read or write the same caller binding. Independent value copies remain
+  usable. The method reads and updates its own local `self`; passing that value
+  to an ordinary parameter does not transfer update access.
+- Update access cannot escape, be stored, or be captured by an escaping flow.
+  Extracting a bound updating method, such as `let f = a.enable`, is rejected.
+  Returning/capturing an independent value snapshot is not a reference escape.
+- Receiver mode is part of method/spec signature checking, but not a basis for
+  overload selection: declarations with the same name/signature cannot differ
+  only by `self` versus `var self`. Existing `Array.push`/`List.push` still
+  return new values; an updating alternative needs a different name.
+
+#### 3.2.1 Commit And Failure
+
+The observable model is local computation followed by writeback. On normal
+return, commit the final `self` to the caller binding before exposing the
+method result. On error escape, cancellation, or another control transfer
+(including `finish`) that unwinds the call, discard that pending update and
+release exclusive access. A non-resumable error escaping the call releases its
+update access before an outer error handler can suspend. Ordinary arguments'
+earlier side effects are not undone.
+
+Completion and cancellation choose one outcome: a completed normal return
+commits once; cancellation that unwinds the call first discards the update.
+Cancellation after a committed return does not undo that earlier call.
+
+Returning `Err(...)` is a normal return and therefore commits. An error handled
+inside the method also commits if execution later returns normally. Nested
+updating calls commit to the enclosing method's local `self`; they do not
+commit the outer caller binding early. This rollback guarantee covers only
+the receiver value, not changes already made through files, stores, resource
+handles, or other external actions.
+
+Implementations may share immutable storage or use copy-on-write. In-place
+optimizations must preserve other value copies and the no-writeback-on-unwind
+guarantee; exclusive binding access alone is not permission to destroy the
+old value before a potentially failing call completes.
+
+#### 3.2.2 No Suspension While Updating
+
+An updating call may not hold receiver access across a suspension. The compiler
+tracks a transitive may-suspend summary separately from escaping effects and
+determinism. Model interaction, task waits/yields, delayed handler resumption,
+and unknown callback/primitive behavior prevent a non-suspension proof. Neither
+`![]`, default handling, nor `Deterministic` alone proves non-suspension.
+Handler behavior and nested calls must be included; an unhandled terminating
+error that unwinds the update is not a suspended update.
+An override that can suspend cannot reuse a proof based only on a synchronous
+default handler; reject the affected updating call unless its context is proved
+safe.
+
+Reject the updating method/call when non-suspension or exclusivity cannot be
+established. Imported methods must preserve these checked facts in package
+metadata; user annotations cannot assert them unchecked. Use a value-returning
+method for asynchronous or uncertain work. Ordinary helper flows can still
+update their own local copy and return it for higher-order use:
+
+```etas
+flow Enabled(value: Switch) -> Switch {
+    var next = value;
+    next.enable();
+    return next;
+}
+```
 
 ## 4. Flows As The Ordinary Callable Unit
 
@@ -629,6 +776,73 @@ If the stage types line up as `I -> M` and `M -> O`, the composed value has type
 
 The implementation may lower deterministic flows to ordinary internal functions. That is an optimization target, not a separate source construct.
 
+### 4.1 Default Parameters
+
+A named callable may give an ordinary parameter a default expression:
+
+```etas
+flow decorate(text: string, prefix: string = "[", suffix: string = "]") -> string {
+    return std.text.concat([prefix, text, suffix]);
+}
+
+let a = decorate("ready");
+let b = decorate("ready", suffix = "!");
+```
+
+Defaults are supported by named flows, methods, agent entrypoints, tools,
+effect-action signatures, and behavioral type-spec method signatures. They
+are not supported on `self`/`var self` or anonymous-flow parameters. Required
+ordinary parameters precede defaulted parameters. This does not add function
+overloading, variadic parameters, or keyword-only parameters.
+
+Call binding and evaluation follow these rules:
+
+1. Bind positional arguments in parameter order, then named arguments by name.
+   Reject positional arguments after a named argument, duplicate bindings,
+   unknown names, and omitted required arguments. A named argument may skip
+   defaulted parameters.
+2. Evaluate supplied argument expressions once, left to right in source order.
+   Then evaluate omitted defaults once, in parameter declaration order. Supplied
+   values never cause their corresponding defaults to execute. Passing `None`
+   is an explicit value, not omission.
+3. Resolve defaults in the defining declaration's lexical environment, not the
+   caller's. A default may refer to preceding ordinary parameters, in-scope
+   generic parameters, and permitted immutable bindings, but not later
+   parameters or either receiver form. For `var self`, argument/default
+   evaluation finishes before exclusive receiver access begins.
+4. Each default must have its declared parameter type, be deterministic,
+   action-free, and proven non-suspending, with no escaping effects. Unknown
+   behavior is rejected. `![]` alone is insufficient; default-handled actions
+   cannot hide model/I/O requests. A generic default must type-check under its
+   declared bounds, not assume a particular type argument.
+5. After all bindings succeed, enter the callable with a complete argument
+   list. If argument/default evaluation fails to complete, do not enter the
+   body; already evaluated supplied-argument effects are not rolled back.
+
+Defaults are evaluated per call, not once at module loading. Immutable
+collection defaults may share storage without sharing mutable state. The
+callee receives the declared `T`, not an implicit `Option<T>`.
+
+Defaults belong to a resolved declaration's call interface, not to its arrow
+type. Imports and re-exports preserve that interface. An ordinary first-class
+flow value still requires its full arrow-type input; defaults do not create
+automatic currying, overloads, or new stage-composition arities. Use an explicit
+wrapper to bind arguments for higher-order use.
+
+A behavioral spec may declare a method default. Its implementations inherit
+that default and cannot add or replace it independently. Dispatch through the
+spec uses the same bound default before entering the implementation. Defaults
+on actions are bound before action dispatch, so handlers receive the complete
+payload and still match full action signatures.
+
+Model tool schemas mark defaulted inputs as optional, not nullable. The checked
+tool invocation entry evaluates any missing defaults and validates the complete
+effective arguments before policy checks, body/host dispatch, or an execution
+event. JSON Schema annotations alone do not execute defaults. Package interfaces
+retain checked defaults, declaration-site bindings, and fingerprints so compiled
+dependencies behave the same as source dependencies. Defaults cannot be silently
+changed by an implementation revision whose public signature is frozen.
+
 ## 5. Determinism Inference
 
 Etas statically infers a determinism class for every flow. This is separate from effect inference:
@@ -753,6 +967,36 @@ enum ApprovalDecision {
     Rejected(reason: string),
 }
 ```
+
+Variants can also carry inline named fields, constructed and matched with
+braces:
+
+```etas
+enum Response {
+    Success(string),
+    Failure { code: i32, message: string },
+}
+
+let response: Response = Response.Failure { code = 503, message = "unavailable" };
+```
+
+ETAS supports recursive and mutually recursive ADTs, including generic trees
+and nested agent plans:
+
+```etas
+enum Plan {
+    Task(string),
+    Sequence(Array<Plan>),
+    Parallel(Array<Plan>),
+    Retry(Plan, u32),
+}
+```
+
+These are ordinary immutable data values. `Parallel` and `Retry` here are enum
+constructors, not execution primitives; a plan executor must explicitly
+interpret them under normal effect, trace-spec, and limit checks. See
+[Algebraic Data Types And Recursion](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion)
+for construction, exhaustive matching, recursive storage, and schema rules.
 
 Common generic container types:
 
@@ -887,7 +1131,7 @@ let prefix = xs[0, n);      // Slice<T>
 let middle = xs(i, j];      // Slice<T>
 ```
 
-Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. It is not positional on `Map`, `Set`, `Queue`, `Stack`, or `PriorityQueue`. Generic `string` slicing is intentionally not defined here because Unicode character offsets and byte offsets have different safety and performance properties; string slicing should use explicit text APIs such as `text.char_slice(...)` or `text.byte_slice(...)`.
+Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. It is not positional on `Map`, `Set`, `Queue`, `Stack`, or `PriorityQueue`. Generic `string` slicing is intentionally not defined here because Unicode character offsets and byte offsets have different safety and performance properties; string slicing uses explicit APIs such as `std.text.char_slice(...)` or `std.text.byte_slice(...)`, specified in [Strings And Text APIs](19-standard-library.md#16-access-and-slicing).
 
 Negative indexes and negative slice bounds are not part of the MVP:
 
@@ -996,7 +1240,11 @@ type Session = {
 }
 ```
 
-Methods are declared in an `impl` block whose target kind is an ordinary type. A method uses the same `flow` declaration form as a top-level callable; deterministic methods are lowered to direct internal methods by the compiler. Code outside the defining module cannot mutate private fields directly.
+Methods are declared in an `impl` block whose target kind is an ordinary type.
+A method uses the same `flow` form as a top-level callable. Plain `self` is an
+immutable parameter; a state-changing method may return an updated value or
+use the restricted [`var self`](#32-restricted-updating-receivers) mode. Private
+fields remain inaccessible outside the defining module.
 
 `impl` is also used by the effect system to attach `action` signatures to an effect tag, but the forms are kind-checked and cannot be mixed:
 
@@ -1014,47 +1262,30 @@ impl Session {
             return Err(MissingIdentity);
         }
 
-        var s = Session {
-            id: new_session_id(),
-            tenant_id,
-            user_id,
-            state: Running,
-            current_interrupt: None,
-            events: [],
-        };
-
-        s.emit(SessionStarted { id: s.id });
-        return Ok(s);
-    }
-
-    flow reconstruct(
-        id: SessionId,
-        tenant_id: TenantId,
-        user_id: UserId,
-        state: SessionState,
-    ) -> Session {
-        assert(not is_empty(tenant_id));
-        assert(not is_empty(user_id));
-
-        return Session {
+        let id = new_session_id();
+        return Ok(Session {
             id,
             tenant_id,
             user_id,
-            state,
-            current_interrupt: None,
-            events: [],
-        };
+            state = Running,
+            current_interrupt = None,
+            events = [SessionStarted { id }],
+        });
     }
 
-    flow pause(self, interrupt: Interrupt) -> Result<unit, SessionError> {
-        match self.transit_to(Waiting) {
-            Ok(_) => {},
-            Err(err) => return Err(err),
+    flow pause(self, interrupt: Interrupt) -> Result<Session, SessionError> {
+        if !valid_transition(self.state, Waiting) {
+            return Err(InvalidStateTransition { from = self.state, to = Waiting });
         }
 
-        self.current_interrupt = Some(interrupt);
-        self.emit(InterruptRaised { id: self.id });
-        return Ok(unit);
+        return Ok(Session {
+            id = self.id,
+            tenant_id = self.tenant_id,
+            user_id = self.user_id,
+            state = Waiting,
+            current_interrupt = Some(interrupt),
+            events = self.events.push(InterruptRaised { id = self.id }),
+        });
     }
 
     flow is_terminal(self) -> bool {
@@ -1065,23 +1296,12 @@ impl Session {
             _ => false,
         }
     }
-
-    private flow transit_to(self, to: SessionState) -> Result<unit, SessionError> {
-        if not valid_transition(self.state, to) {
-            return Err(InvalidStateTransition { from: self.state, to });
-        }
-
-        self.state = to;
-        return Ok(unit);
-    }
-
-    private flow emit(self, event: DomainEvent) -> unit {
-        self.events = self.events.push(event);
-    }
 }
 ```
 
-The important rule is that validation stays close to the data it protects. A session should not become `Completed`, `Waiting`, or `Cancelled` by direct field assignment from an HTTP handler, hook callback, timer, or flow body.
+Validation stays close to the data it protects. `pause` returns a new session;
+ignoring that return value does not update the caller. Persisting a transition
+requires an explicit typed-store operation under the usual version checks.
 
 ## 9. Control Flow
 
@@ -1319,11 +1539,11 @@ callable API of the type:
 
 ```etas
 impl Session {
-    public flow start(self) -> Result<unit, SessionError> {
+    public flow start(var self) -> Result<unit, SessionError> {
         return self.transit_to(SessionState.Started);
     }
 
-    private flow transit_to(self, to: SessionState) -> Result<unit, SessionError> {
+    private flow transit_to(var self, to: SessionState) -> Result<unit, SessionError> {
         ...
     }
 }
