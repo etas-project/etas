@@ -603,7 +603,7 @@ the caller's checked program before starting the next attempt. Installed SDK
 acceptance compares two denied write attempts and their exhaustion diagnostic
 against legacy; a separate checked-revision test verifies transient Host failure
 recovery and caller continuation. Pending retry failures are portable in
-checkpoint schema v79. Source std now declares both checkpoint import paths,
+checkpoint schema v80. Source std now declares both checkpoint import paths,
 backed by the existing runtime checkpoint primitive. Saved std callables refer
 to the current caller's verified bundle and checked type bridge; executable
 code and invocation permissions are not taken from checkpoint data.
@@ -630,8 +630,18 @@ A parent whose child has just completed still intercepts requests from another
 child before its own body resumes. The coordinator commits queued completion
 inputs without executing source or changing FIFO/resource admission, and the
 checkpoint retains that completed wait once. Continuation transfer values are
-checked in the continuation's declaring program. Host-wait completion routing
-and the full budget/cancellation/trace compatibility matrix remain migration gates.
+checked in the continuation's declaring program.
+
+Host waits retain one result slot and cancellation scope per operation, including
+while a caller serves a child's Handler request. Replies settle in the program,
+retry context and model policy that issued them. Each Handler invocation owns
+its parameters and locals while sharing outer lexical bindings. Checkpoint v80
+preserves those parent-frame identities and stores settled inputs rather than OS
+futures. A finished task retains its resource permits until abandoned Host work
+has actually settled. Native Console cases cover root and scheduled overlap,
+checkpoint restore without repeated I/O, and continuing after `finish` cancels
+an older wait. Source I/O migration and the full budget/cancellation/trace
+compatibility matrix remain migration gates.
 
 UTF-8 byte length and boundary queries, scalar indexing, byte-position search,
 non-overlapping counts, eager split/limited split, first/last partition,

@@ -239,8 +239,17 @@ installed fixture saves and restores this completed wait while the generic arm
 calls source std. Continuation transfer validation uses the checked program that
 owns the token's ABI.
 
+Host completion uses an operation-owned wait rather than one reply slot per task.
+The wait stays with the suspended Handler continuation; native replies settle in
+their issuing checked program and dynamic context without running source code.
+Independent arm-local frames prevent an interleaved request from overwriting an
+earlier request's parameters, while their shared lexical parent preserves outer
+mutation. Checkpoint v80 retains these parent identities and settled inputs.
+Task resource permits remain owned until abandoned Host supervisors settle.
+Native Console fixtures exercise root/scheduled overlap, checkpoint restore and
+`finish` followed by a new Host request.
+
 This evidence does not close the full std migration gate. Remaining work includes
-Host-wait completion routing at task Handler boundaries, broader
-budget/cancellation/trace compatibility, the remaining std modules, minimal
-bootstrap contract review and whole-library compatibility and performance
-acceptance. Release continues to default to legacy.
+source I/O Host coverage, broader budget/cancellation/trace compatibility, the
+remaining std modules, minimal bootstrap contract review and whole-library
+compatibility and performance acceptance. Release continues to default to legacy.
