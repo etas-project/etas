@@ -29,12 +29,9 @@ impl NativeCompilerService {
         self.definitions
             .resolve(&request.definition)
             .map_err(super::error::definition_error)?;
-        let std_registry = self
-            .definitions
-            .catalog()
-            .checked_program()
-            .std_registry
-            .clone();
+        let checked = self.definitions.catalog().checked_program();
+        let std_registry = checked.std_registry.clone();
+        let installed_std = checked.standard_library.clone();
         let service = self.clone();
         let work = request.clone();
         let response = operation
@@ -46,12 +43,7 @@ impl NativeCompilerService {
                     service.config.resources,
                 )?);
                 let mut session = FrontendSession::with_std_registry(std_registry);
-                if let Some(library) = &service
-                    .definitions
-                    .catalog()
-                    .checked_program()
-                    .standard_library
-                {
+                if let Some(library) = &installed_std {
                     session = session.with_standard_library(library.clone());
                 }
                 let (service, work) =
@@ -80,6 +72,7 @@ impl NativeCompilerService {
                             *candidate,
                             work.definition.clone(),
                             service.config,
+                            installed_std.as_ref(),
                         )?))
                     }
                     Err(error) => Err(super::error::compiler_failure(error)?),

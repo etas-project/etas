@@ -51,6 +51,7 @@ impl NativeCandidateStore {
         candidate: CheckedCandidate,
         definition: DefinitionRef,
         config: NativeCompilerConfig,
+        installed_std: Option<&Arc<etas_frontend::StandardLibrary>>,
     ) -> Result<CheckedCodeRef, HostError> {
         let mut objects = self.objects.lock().map_err(lock_error)?;
         objects.retain(|_, bucket| {
@@ -73,7 +74,27 @@ impl NativeCandidateStore {
             definition,
         });
         live.push(candidate.clone());
-        if MemoryFootprint::of(&live).estimated_bytes() > config.max_retained_candidate_bytes {
+        let retained = MemoryFootprint::of(&live);
+        let retained_bytes = if let Some(library) = installed_std {
+            // The installed SDK is pinned by the compiler service independent
+            // of these candidates. Charge only allocations not already owned
+            // by that same shared library.
+            let shared = MemoryFootprint::of(library);
+            retained
+                .allocations
+                .iter()
+                .fold(0_u64, |total, allocation| {
+                    let shared_bytes = shared
+                        .allocations
+                        .binary_search_by_key(&allocation.id, |item| item.id)
+                        .ok()
+                        .map_or(0, |index| shared.allocations[index].estimated_bytes);
+                    total.saturating_add(allocation.estimated_bytes.saturating_sub(shared_bytes))
+                })
+        } else {
+            retained.estimated_bytes()
+        };
+        if retained_bytes > config.max_retained_candidate_bytes {
             return Err(limit_error("retained_candidate_bytes"));
         }
         objects
