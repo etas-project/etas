@@ -32,8 +32,9 @@ etas run examples/hello.es
 
 No model provider or API key is needed for this example.
 
-The installer places `etas` in Cargo's binary directory and installs the
-matching SDK from the standard-library sources pinned by Cargo.
+The installer places `etas` in Cargo's binary directory and builds the
+matching SDK from the standard-library sources pinned by Cargo. The CLI uses
+this SDK by default. Pass `--std-provider legacy` to select the legacy registry.
 To inspect a program before running it:
 
 ```sh
@@ -66,6 +67,7 @@ are optional here: the compiler infers them from calls such as `println`.
 
 - [Examples](examples/)
 - [Language specification](docs/design/README.md)
+- [Building a standard library SDK and upgrading an existing lockfile](docs/design/15-package-management.md#71-using-the-installed-standard-library)
 - [VS Code extension](https://github.com/etas-project/etas-ide)
 - [Etas Development Kit](https://github.com/etas-project/etas-edk)
 
