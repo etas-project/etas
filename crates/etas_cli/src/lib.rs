@@ -208,6 +208,7 @@ fn is_known_subcommand(token: &str) -> bool {
             | "effects"
             | "policy"
             | "pkg"
+            | "std"
             | "run"
             | "replay"
             | "resume"
@@ -239,6 +240,8 @@ fn global_option_arity(token: &str) -> Option<usize> {
         || token.starts_with("--log-level=")
         || token.starts_with("--cache=")
         || token.starts_with("--cache-root=")
+        || token.starts_with("--std-provider=")
+        || token.starts_with("--sysroot=")
     {
         return Some(1);
     }
@@ -251,6 +254,8 @@ fn global_option_arity(token: &str) -> Option<usize> {
             | "--log-level"
             | "--cache"
             | "--cache-root"
+            | "--std-provider"
+            | "--sysroot"
     ) {
         return Some(2);
     }

@@ -89,6 +89,7 @@ fn publish_actions(
     symbols: &mut BTreeMap<Vec<String>, StdSymbolId>,
     declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
 ) -> Result<(), DriverError> {
+    let mut published = BTreeMap::new();
     for action in &sdk.public.public_metadata.actions {
         if action.visibility != metadata::Visibility::Public {
             continue;
@@ -125,6 +126,20 @@ fn publish_actions(
             .program
             .standard_action_targets
             .get(&source.symbol);
+        if let Some(native) = native {
+            // The checked image already owns every source signature of this
+            // execution action. Keep that group intact when publishing its
+            // source spelling instead of replacing it once per metadata row.
+            if !published.contains_key(&action.path) {
+                let module = *modules.entry(owner.to_vec()).or_insert_with(|| {
+                    builder.module(&owner.iter().map(String::as_str).collect::<Vec<_>>(), "")
+                });
+                builder.re_export(module, name, *native).map_err(invalid)?;
+                published.insert(action.path.clone(), *native);
+                symbols.insert(action.path.clone(), *native);
+            }
+            continue;
+        }
         let projector = TypeProjector {
             owner: key,
             params: &action.generic_params,
@@ -162,30 +177,26 @@ fn publish_actions(
         let module = *modules.entry(owner.to_vec()).or_insert_with(|| {
             builder.module(&owner.iter().map(String::as_str).collect::<Vec<_>>(), "")
         });
-        let symbol = if let Some(native) = native {
-            builder.source_action_signature(
-                *native,
-                parameters,
-                selectors,
-                action.selector_param_names.clone(),
-                inputs,
-                output,
-            );
-            builder.re_export(module, name, *native).map_err(invalid)?;
-            *native
+        let mut declaration =
+            etas_std::EffectActionDecl::typed(&owner.join("."), name, inputs, output);
+        declaration.type_params = parameters;
+        declaration.effect_args = selectors;
+        declaration.selector_param_names = action.selector_param_names.clone();
+        let symbol = if let Some(symbol) = published.get(&action.path) {
+            builder
+                .action_overload(*symbol, declaration)
+                .map_err(invalid)?;
+            *symbol
         } else {
-            let mut declaration =
-                etas_std::EffectActionDecl::typed(&owner.join("."), name, inputs, output);
-            declaration.type_params = parameters;
-            declaration.effect_args = selectors;
-            declaration.selector_param_names = action.selector_param_names.clone();
-            builder.symbol(
+            let symbol = builder.symbol(
                 module,
                 name,
                 StdSymbolKind::EffectAction,
                 StdDecl::EffectAction(declaration),
                 "",
-            )
+            );
+            published.insert(action.path.clone(), symbol);
+            symbol
         };
         symbols.insert(action.path.clone(), symbol);
     }

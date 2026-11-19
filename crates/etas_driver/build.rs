@@ -6,7 +6,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=ETAS_TOOLCHAIN_ID");
     let target = std::env::var("TARGET").unwrap();
     let registry = etas_std::compiler_contract_registry();
-    let abi = native_abi::fingerprint(&registry).unwrap();
+    let abi = native_abi::fingerprint();
     let toolchain = std::env::var("ETAS_TOOLCHAIN_ID").unwrap_or_else(|_| {
         format!(
             "etas-{}-{target}-{}",

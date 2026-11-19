@@ -5,11 +5,14 @@ use etas_package_metadata::{
 
 fn parameter_sources(positions: &[u32]) -> CallableValueGraph {
     CallableValueGraph {
+        source_projections: Vec::new(),
+        parameter_projections: Vec::new(),
         objects: Vec::new(),
         sources: positions
             .iter()
             .map(|position| {
                 CallableValueSource::Parameter(CallableValueParameter {
+                    projection: None,
                     scope: CallableValueScope::Root,
                     position: *position,
                 })

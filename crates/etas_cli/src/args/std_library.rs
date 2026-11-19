@@ -24,8 +24,9 @@ pub struct StdBuildArgs {
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct StdInstallArgs {
+    /// Source package to install. Defaults to the std pinned by this Cargo build.
     #[arg(long, value_name = "PATH")]
-    pub manifest_path: PathBuf,
+    pub manifest_path: Option<PathBuf>,
     #[arg(long, value_name = "PATH")]
     pub prefix: PathBuf,
 }

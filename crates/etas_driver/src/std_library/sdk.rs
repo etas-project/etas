@@ -21,6 +21,10 @@ pub const STD_SDK_SCHEMA: u32 = 1;
 pub const STD_TOOLCHAIN_ID: &str = env!("ETAS_TOOLCHAIN_ID");
 const ARTIFACT_PATH: &str = "artifacts/std.etasmeta";
 
+pub fn installed_sysroot(prefix: &Path) -> PathBuf {
+    prefix.join("lib/etas").join(STD_TOOLCHAIN_ID)
+}
+
 #[derive(Clone, Debug)]
 pub struct StdLibraryBuildRequest {
     pub manifest_path: PathBuf,
@@ -171,8 +175,7 @@ pub fn build_standard_library(
         compiler_version: image.compiler_version.clone(),
         body_schema: image.schema,
         metadata_schema: decoded.header.artifact_schema_version,
-        native_binding_abi: super::native_abi::fingerprint(&checked.std_registry)
-            .map_err(invalid)?,
+        native_binding_abi: super::native_abi::fingerprint(),
         std_contract: image.std_contract.clone(),
         target: env!("ETAS_STD_TARGET").into(),
         toolchain_id: STD_TOOLCHAIN_ID.into(),

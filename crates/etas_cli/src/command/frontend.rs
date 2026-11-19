@@ -70,16 +70,29 @@ pub(crate) fn driver_options(
     global: &GlobalOptions,
     profile: &ProfileHandle,
 ) -> Result<DriverOptions, CliError> {
-    Ok(DriverOptions {
-        std_provider: match global.std_provider {
-            crate::args::global::StdProviderChoice::Legacy => {
-                etas_driver::std_library::provider::StdProvider::Legacy
-            }
-            crate::args::global::StdProviderChoice::Artifact => {
-                etas_driver::std_library::provider::StdProvider::artifact(global.sysroot.as_deref())
-                    .map_err(driver_error)?
-            }
-        },
+    let mut options = base_driver_options(global, profile);
+    options.std_provider = match global.std_provider {
+        crate::args::global::StdProviderChoice::Legacy => {
+            etas_driver::std_library::provider::StdProvider::Legacy
+        }
+        crate::args::global::StdProviderChoice::Artifact => {
+            etas_driver::std_library::provider::StdProvider::artifact_profiled(
+                global.sysroot.as_deref(),
+                profile,
+            )
+            .map_err(driver_error)?
+        }
+    };
+    Ok(options)
+}
+
+/// Source bootstrap builds its own std provider from the input package.
+pub(crate) fn base_driver_options(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+) -> DriverOptions {
+    DriverOptions {
+        std_provider: etas_driver::std_library::provider::StdProvider::Legacy,
         workspace: global.workspace.clone(),
         cache_mode: match global.cache {
             CacheMode::Auto => DriverCacheMode::Auto,
@@ -95,7 +108,7 @@ pub(crate) fn driver_options(
         #[cfg(not(feature = "component-runtime"))]
         residual_target: None,
         optimization_level: None,
-    })
+    }
 }
 
 pub(crate) fn driver_options_with_optimization(

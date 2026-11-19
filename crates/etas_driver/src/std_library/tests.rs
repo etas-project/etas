@@ -12,39 +12,90 @@ impl Fixture {
             .as_nanos();
         let root =
             std::env::temp_dir().join(format!("etas-std-driver-{}-{nonce}", std::process::id()));
-        fs::create_dir_all(root.join("library/std/text")).unwrap();
-        fs::write(root.join("etas.toml"), "[package]\nname = 'std'\nversion = '0.2.2'\nedition = '2026'\n[source]\nroot = 'library'\n").unwrap();
-        let algorithms = etas_std::library::source_checkout_manifest()
+        fs::create_dir_all(&root).unwrap();
+        let maintained = etas_std::library::source_checkout_manifest()
             .parent()
+            .unwrap();
+        let version = etas_package::read_manifest(maintained)
             .unwrap()
-            .join("library/std/text/native.es");
-        fs::write(
-            root.join("library/std/text/mod.es"),
-            fs::read(algorithms).unwrap(),
-        )
-        .unwrap();
-        fs::copy(
-            etas_std::library::source_checkout_manifest()
-                .parent()
-                .unwrap()
-                .join("library/std/text/errors.es"),
-            root.join("library/std/text/errors.es"),
-        )
-        .unwrap();
-        fs::create_dir_all(root.join("library/std/fs")).unwrap();
-        fs::copy(
-            etas_std::library::source_checkout_manifest()
-                .parent()
-                .unwrap()
-                .join("library/std/fs/mod.es"),
-            root.join("library/std/fs/mod.es"),
-        )
-        .unwrap();
-        fs::write(
-            root.join("library/std/text/base.es"),
-            "module std.text; public flow identity(value: string) -> string { return value; }",
-        )
-        .unwrap();
+            .package
+            .version;
+        fs::write(root.join("etas.toml"), format!("[package]\nname = 'std'\nversion = '{version}'\nedition = '2026'\n[source]\nroot = 'library'\n")).unwrap();
+        let read =
+            |path: &str| fs::read_to_string(maintained.join("library/std").join(path)).unwrap();
+        let collections = read("collections/mod.es");
+        let headers = &collections[..collections.find("// Insertion order").unwrap()];
+        let iterator = &collections[collections.find("public type Iter<T>").unwrap()..];
+        let algorithms = read("collections/algorithms.es");
+        let get = &algorithms[algorithms.find("    public flow get<").unwrap()
+            ..algorithms.find("    public flow at<").unwrap()];
+        let iteration = read("collections/iteration.es");
+        let iteration = &iteration[..iteration.find("impl List<T>").unwrap()];
+        let collections = format!(
+            "module std.collections;\n{}\n{iterator}\nimpl Array<T> {{\n{get}\n}}\n{}",
+            headers.strip_prefix("module std.collections;").unwrap(),
+            iteration.strip_prefix("module std.collections;").unwrap()
+        );
+        let positions = read("text/positions.es");
+        let len = &positions[positions.find("public flow len(").unwrap()
+            ..positions.find("public flow is_ascii(").unwrap()];
+        let assembly = read("text/assembly.es");
+        let join = &assembly[assembly.find("public flow join(").unwrap()
+            ..assembly.find("public flow repeat(").unwrap()];
+        let errors = read("runtime/error/complete.es");
+        let effects = read("effects/mod.es");
+        let error_effect = &effects[effects.find("@std.role(\"std.effects.Error\")").unwrap()
+            ..effects.find("@std.role(\"std.effects.Fs\")").unwrap()];
+        let index_error = errors
+            .lines()
+            .find(|line| line.starts_with("public type IndexError ="))
+            .unwrap();
+        let prelude = read("prelude/mod.es");
+        let prelude = prelude
+            .lines()
+            .filter_map(|line| {
+                if line.starts_with("public import std.collections.") {
+                    Some("public import std.collections.{Array, List, Iter};")
+                } else if line.starts_with("public import std.io.") {
+                    None
+                } else {
+                    Some(line)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        for (path, source) in [
+            ("collections/mod.es", collections),
+            ("core/mod.es", read("core/mod.es")),
+            ("option/mod.es", read("option/mod.es")),
+            ("result/mod.es", read("result/mod.es")),
+            ("runtime/limits/mod.es", read("runtime/limits/mod.es")),
+            ("runtime/budget/mod.es", read("runtime/budget/mod.es")),
+            ("runtime/time/mod.es", read("runtime/time/mod.es")),
+            (
+                "effects/mod.es",
+                format!("module std.effects;\n{error_effect}"),
+            ),
+            (
+                "runtime/effects/mod.es",
+                "module std.runtime.effects; public import std.effects.Error;".into(),
+            ),
+            (
+                "runtime/error/mod.es",
+                format!("module std.runtime.error;\n{index_error}"),
+            ),
+            ("prelude/mod.es", prelude),
+            ("text/mod.es", format!("module std.text;\n{len}\n{join}")),
+            (
+                "text/base.es",
+                "module std.text; public flow identity(value: string) -> string { return value; }"
+                    .into(),
+            ),
+        ] {
+            let path = root.join("library/std").join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, source).unwrap();
+        }
         Self(root)
     }
 }
@@ -79,9 +130,9 @@ fn manifest_source_root_discovers_new_std_parts_with_canonical_package_and_sourc
     );
     assert_eq!(
         before.response.output.sources.as_ref().unwrap().files.len(),
-        4
+        13
     );
-    fs::write(fixture.0.join("library/std/text/extra.es"), "module std.text; import std.text.char_count; public flow width(value: string) -> usize { return char_count(identity(value)); }").unwrap();
+    fs::write(fixture.0.join("library/std/text/extra.es"), "module std.text; import std.text.len; public flow width(value: string) -> usize { return len(identity(value)); }").unwrap();
     let after = check();
     assert!(
         after.response.output.checked.is_some(),
@@ -91,8 +142,8 @@ fn manifest_source_root_discovers_new_std_parts_with_canonical_package_and_sourc
     assert_eq!(after.manifest.source.root, PathBuf::from("library"));
     assert_eq!(before.definition_origin, after.definition_origin);
     let sources = after.response.output.sources.as_ref().unwrap();
-    assert_eq!(sources.files.len(), 5);
-    assert_eq!(sources.stable_source_keys.len(), 5);
+    assert_eq!(sources.files.len(), 14);
+    assert_eq!(sources.stable_source_keys.len(), 14);
     let old_sources = before.response.output.sources.as_ref().unwrap();
     for old_file in &old_sources.files {
         let new_file = sources
@@ -154,7 +205,7 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
         return;
     }
     let fixture = Fixture::new();
-    fs::write(fixture.0.join("library/std/text/extra.es"), "module std.text; import std.text.char_count; public flow width(value: string) -> usize { return char_count(value); } public flow decorate(value: string) -> string { return value + \"!\"; }").unwrap();
+    fs::write(fixture.0.join("library/std/text/extra.es"), "module std.text; import std.text.len; public flow width(value: string) -> usize { return len(value); } public flow decorate(value: string) -> string { return value + \"!\"; }").unwrap();
     let build = |name| {
         sdk::build_standard_library(
             &options,
@@ -214,7 +265,7 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
     let sdk = sdk::load_standard_library_sdk(moved.parent().unwrap()).unwrap();
     assert_eq!(sdk.manifest, first.manifest);
     let checked = sdk.image.into_checked_from_image(&sdk.root).unwrap();
-    for name in ["identity", "width", "decorate", "char_count"] {
+    for name in ["identity", "width", "decorate", "len"] {
         assert!(
             checked.symbols.iter().any(|symbol| symbol.name == name
                 && matches!(symbol.def, etas_hir::SymbolDef::Item { .. }))
@@ -232,36 +283,6 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
 #[test]
 fn artifact_provider_checks_application_imports_against_installed_source_contracts() {
     let fixture = Fixture::new();
-    for module in ["option", "result"] {
-        let target = fixture.0.join("library/std").join(module);
-        fs::create_dir_all(&target).unwrap();
-        fs::copy(
-            etas_std::library::source_checkout_manifest()
-                .parent()
-                .unwrap()
-                .join("library/std")
-                .join(module)
-                .join("mod.es"),
-            target.join("mod.es"),
-        )
-        .unwrap();
-    }
-    fs::create_dir_all(fixture.0.join("library/std/core")).unwrap();
-    fs::write(
-        fixture.0.join("library/std/core/mod.es"),
-        "module std.core; @std.role(\"std.core.Index\") public spec Index; impl usize ~ Index;",
-    )
-    .unwrap();
-    for (file, source) in [
-        ("assembly.es", etas_std::StdLibrarySourceId::TextAssembly),
-        ("format.es", etas_std::StdLibrarySourceId::TextFormat),
-    ] {
-        fs::write(
-            fixture.0.join("library/std/text").join(file),
-            etas_std::standard_library_source(source).source,
-        )
-        .unwrap();
-    }
     fs::write(
         fixture.0.join("library/std/text/extra.es"),
         r#"module std.text;

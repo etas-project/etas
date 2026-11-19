@@ -172,17 +172,11 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         &image.std_contract,
         &manifest.std_contract,
     )?;
-    let registry = image
+    image
         .native_registry
         .clone()
         .into_registry()
         .map_err(invalid)?;
-    matches(
-        &artifact_path,
-        "body binding ABI",
-        &super::super::native_abi::fingerprint(&registry).map_err(invalid)?,
-        &manifest.native_binding_abi,
-    )?;
     let body_sources = image
         .sources
         .iter()

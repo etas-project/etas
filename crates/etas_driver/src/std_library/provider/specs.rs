@@ -10,9 +10,6 @@ pub(super) fn publish(
 ) -> Result<(), DriverError> {
     let mut registered = std::collections::BTreeSet::new();
     for spec in &sdk.public.public_metadata.spec_signatures {
-        if spec.visibility != metadata::Visibility::Public {
-            continue;
-        }
         let canonical = canonical_export(&spec.path, aliases)?;
         let Some(key) = declarations.get(&canonical).copied() else {
             continue;
@@ -91,6 +88,13 @@ pub(super) fn publish(
             "",
         );
         builder.bind_declaration(symbol, key.clone());
+        builder.source_visibility(
+            symbol,
+            match spec.visibility {
+                metadata::Visibility::Public => etas_std::StdSymbolVisibility::Public,
+                metadata::Visibility::Private => etas_std::StdSymbolVisibility::Private,
+            },
+        );
         registered.insert(canonical.clone());
         symbols.insert(canonical, symbol);
     }

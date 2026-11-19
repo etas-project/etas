@@ -217,7 +217,10 @@ fn published_action_trace_order_survives_binary_driver_and_consumer_analysis() {
         event_names(&summary.action_trace, &mut names);
         assert_eq!(
             names,
-            [format!("std.effects.actions.Console.{first}"), format!("std.effects.actions.Console.{second}")]
+            [
+                format!("std.effects.actions.Console.{first}"),
+                format!("std.effects.actions.Console.{second}")
+            ]
         );
 
         let mut loaded = origin_metadata::consumer(&workspace, "first");

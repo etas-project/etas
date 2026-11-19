@@ -40,6 +40,23 @@ fn closed_callback_templates_survive_source_binary_driver_metadata_replay() {
 public flow twice(f: () -> unit ![]) -> unit { f(); f(); }
 public flow relay(g: () -> unit ![]) -> unit { let alias = g; twice(alias); }
 public flow ignore(unused: () -> unit ![]) -> unit { return; }
+public flow invoke_pair<A, B, effect E>(jobs: (() -> A ![E], () -> B ![E])) -> (A, B) ![E] {
+    let (first, second) = jobs;
+    return (first(), second());
+}
+public flow capture_pair<A, B, effect E>(jobs: (() -> A ![E], () -> B ![E])) -> (() -> (A, B) ![E]) ![] {
+    let (first, second) = jobs;
+    return () => (first(), second());
+}
+public flow invoke_fields<A, B, effect E>(jobs: { first: () -> A ![E], second: () -> B ![E] }) -> (A, B) ![E] {
+    return ((jobs.first)(), (jobs.second)());
+}
+public flow relay_fields<A, B, effect E>(jobs: { first: () -> A ![E], second: () -> B ![E] }) -> { first: () -> A ![E], second: () -> B ![E] } ![] {
+    return jobs;
+}
+public flow capture_fields<A, B, effect E>(jobs: { first: () -> A ![E], second: () -> B ![E] }) -> (() -> (A, B) ![E]) ![] {
+    return () => ((jobs.first)(), (jobs.second)());
+}
 "#;
     let mut input = ProjectInput::single_source(SourceInput::anonymous(producer));
     input.options.entry_policy = EntryPolicy::Optional;
@@ -102,11 +119,19 @@ public flow ignore(unused: () -> unit ![]) -> unit { return; }
     .unwrap();
     let mut input = ProjectInput::single_source(SourceInput::anonymous(
         r#"module consumer;
-import callbacks.{relay, ignore};
+import callbacks.{relay, ignore, invoke_pair, capture_pair, invoke_fields, capture_fields, relay_fields};
 import std.io.println;
 flow main() -> unit {
     relay(() => { println("handled")?; return; });
     ignore(() => { println("not invoked")?; return; });
+    let paired: (i32, bool) = invoke_pair((() => { println("paired")?; return 7; }, () => true));
+    let run = capture_pair((() => 7, () => { println("captured")?; return true; }));
+    let captured: (i32, bool) = run();
+    let fields: (i32, bool) = invoke_fields({ first= () => { println("first field")?; return 7; }, second= () => true });
+    let run_fields = capture_fields({ first= () => 7, second= () => { println("captured field")?; return true; } });
+    let captured_fields: (i32, bool) = run_fields();
+    let returned_fields = relay_fields({ first= () => { println("returned first")?; return 7; }, second= () => { println("returned second")?; return true; } });
+    let returned: (i32, bool) = ((returned_fields.first)(), (returned_fields.second)());
 }
 "#,
     ));
@@ -154,5 +179,5 @@ flow main() -> unit {
             other => panic!("unresolved callback trace after replay: {other:?}"),
         }
     }
-    assert_eq!(events, 2, "{summary:?}");
+    assert_eq!(events, 8, "{summary:?}");
 }

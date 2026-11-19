@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub use etas_std::library::source_checkout_manifest;
+
 mod native_abi;
 pub mod provider;
 pub mod sdk;

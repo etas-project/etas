@@ -167,6 +167,8 @@ pub struct PackageIndex {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackagePublicMetadata {
     #[serde(default)]
+    pub scoped_callbacks: Vec<etas_package_metadata::ScopedCallbackContract>,
+    #[serde(default)]
     pub definition_descriptors: Option<etas_code::descriptor::DefinitionDescriptorSet>,
     #[serde(default)]
     pub definition_origins: Option<etas_code::identity::PackageDefinitionOrigins>,
@@ -222,7 +224,8 @@ pub struct PackagePublicMetadata {
 
 impl PackagePublicMetadata {
     pub fn is_empty(&self) -> bool {
-        self.definition_descriptors.is_none()
+        self.scoped_callbacks.is_empty()
+            && self.definition_descriptors.is_none()
             && self.definition_origins.is_none()
             && self.modules.is_empty()
             && self.types.is_empty()
@@ -318,6 +321,10 @@ pub struct PackageNamedSignatureMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageFlowSignatureMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition: Option<etas_code::DefinitionKey>,
+    #[serde(default)]
+    pub parameter_defaults: Vec<etas_package_metadata::ParameterDefault>,
     pub path: Vec<String>,
     #[serde(default)]
     pub generic_params: Vec<PackageCallableGenericParamMetadata>,
@@ -334,6 +341,8 @@ pub struct PackageFlowSignatureMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageAgentSignatureMetadata {
+    #[serde(default)]
+    pub parameter_defaults: Vec<etas_package_metadata::ParameterDefault>,
     pub path: Vec<String>,
     #[serde(default)]
     pub generic_params: Vec<PackageCallableGenericParamMetadata>,
@@ -350,6 +359,8 @@ pub struct PackageAgentSignatureMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageToolSignatureMetadata {
+    #[serde(default)]
+    pub parameter_defaults: Vec<etas_package_metadata::ParameterDefault>,
     pub path: Vec<String>,
     #[serde(default)]
     pub generic_params: Vec<PackageCallableGenericParamMetadata>,
@@ -366,6 +377,10 @@ pub struct PackageToolSignatureMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectActionSignatureMetadata {
+    #[serde(default)]
+    pub param_names: Vec<String>,
+    #[serde(default)]
+    pub parameter_defaults: Vec<etas_package_metadata::ParameterDefault>,
     pub path: Vec<String>,
     #[serde(default)]
     pub generic_params: Vec<PackageActionGenericParamMetadata>,
@@ -380,6 +395,7 @@ pub struct PackageEffectActionSignatureMetadata {
     pub output: PackageTypeMetadata,
     #[serde(default)]
     pub returns_never: bool,
+    pub default_handler_effects: Option<PackageEffectRowMetadata>,
     #[serde(default)]
     pub visibility: String,
 }
@@ -563,6 +579,8 @@ pub struct PackageRecordFieldMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectSummaryMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition: Option<etas_code::DefinitionKey>,
     pub residual_checks: Vec<etas_code::residual::identity::ResidualObligationRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub behavior: Option<etas_package_metadata::CallableValueBehavior>,
@@ -714,6 +732,8 @@ pub enum PackageSpecKindMetadata {
 pub struct PackageSpecMethodMetadata {
     pub name: String,
     pub receiver_param: Option<u32>,
+    #[serde(default)]
+    pub updating_receiver: bool,
     pub path: Vec<String>,
     #[serde(default)]
     pub signature: Option<PackageFlowSignatureMetadata>,
@@ -728,6 +748,10 @@ pub struct PackageSpecBoundMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageSpecImplMetadata {
+    #[serde(default)]
+    pub owner: Option<etas_code::ImplementationKey>,
+    #[serde(default)]
+    pub generic_params: Vec<PackageCallableGenericParamMetadata>,
     pub self_type: PackageTypeMetadata,
     pub spec: Vec<String>,
     #[serde(default)]

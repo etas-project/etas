@@ -28,8 +28,6 @@ serde_json.workspace = true
 
 [build-dependencies]
 etas_std.workspace = true
-serde_json.workspace = true
-blake3.workspace = true
 
 [dev-dependencies]
 bincode = { version = "2.0.1", features = ["serde"] }

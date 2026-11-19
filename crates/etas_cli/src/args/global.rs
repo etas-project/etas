@@ -35,7 +35,7 @@ pub struct GlobalOptions {
     pub cache_root: Option<PathBuf>,
 
     /// Select the standard library for the entire compilation session.
-    #[arg(long, global = true, value_enum, default_value_t = StdProviderChoice::Legacy)]
+    #[arg(long, global = true, value_enum, default_value_t = StdProviderChoice::toolchain_default())]
     pub std_provider: StdProviderChoice,
 
     /// SDK root containing std/manifest.json for the artifact provider.
@@ -94,4 +94,14 @@ pub enum CacheMode {
 pub enum StdProviderChoice {
     Legacy,
     Artifact,
+}
+
+impl StdProviderChoice {
+    pub const fn toolchain_default() -> Self {
+        if cfg!(any(debug_assertions, feature = "artifact-std-default")) {
+            Self::Artifact
+        } else {
+            Self::Legacy
+        }
+    }
 }

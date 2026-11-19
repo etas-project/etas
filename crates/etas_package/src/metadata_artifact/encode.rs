@@ -169,6 +169,7 @@ fn public_metadata_to_metadata(
     metadata: &PackagePublicMetadata,
 ) -> Result<etas_package_metadata::PublicMetadata, PackageError> {
     Ok(etas_package_metadata::PublicMetadata {
+        scoped_callbacks: metadata.scoped_callbacks.clone(),
         definition_origins: metadata.definition_origins.clone(),
         definition_descriptors: metadata.definition_descriptors.clone(),
         modules: metadata
@@ -432,6 +433,8 @@ fn flow_signature_to_metadata(
     signature: &crate::metadata::PackageFlowSignatureMetadata,
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
+        definition: signature.definition.clone(),
+        parameter_defaults: signature.parameter_defaults.clone(),
         path: signature.path.clone(),
         generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
@@ -454,6 +457,8 @@ fn agent_signature_to_metadata(
     signature: &crate::metadata::PackageAgentSignatureMetadata,
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
+        definition: None,
+        parameter_defaults: signature.parameter_defaults.clone(),
         path: signature.path.clone(),
         generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
@@ -480,6 +485,8 @@ fn tool_signature_to_metadata(
     signature: &crate::metadata::PackageToolSignatureMetadata,
 ) -> Result<etas_package_metadata::CallableSignature, PackageError> {
     Ok(etas_package_metadata::CallableSignature {
+        definition: None,
+        parameter_defaults: signature.parameter_defaults.clone(),
         path: signature.path.clone(),
         generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         param_names: signature.param_names.clone(),
@@ -530,6 +537,7 @@ fn spec_method_to_metadata(
 ) -> Result<etas_package_metadata::SpecMethod, PackageError> {
     Ok(etas_package_metadata::SpecMethod {
         name: method.name.clone(),
+        updating_receiver: method.updating_receiver,
         receiver_param: method.receiver_param,
         path: method.path.clone(),
         signature: method
@@ -557,6 +565,8 @@ fn spec_impl_to_metadata(
     implementation: &PackageSpecImplMetadata,
 ) -> Result<etas_package_metadata::SpecImpl, PackageError> {
     Ok(etas_package_metadata::SpecImpl {
+        owner: implementation.owner.clone(),
+        generic_params: callable_generic_params_to_metadata(&implementation.generic_params)?,
         self_type: type_to_metadata(&implementation.self_type)?,
         spec: implementation.spec.clone(),
         args: implementation
@@ -634,6 +644,13 @@ fn action_signature_to_metadata(
 ) -> Result<etas_package_metadata::ActionSignature, PackageError> {
     validate_action_selector_metadata(signature)?;
     Ok(etas_package_metadata::ActionSignature {
+        default_handler_effects: signature
+            .default_handler_effects
+            .as_ref()
+            .map(effect_row_to_metadata)
+            .transpose()?,
+        param_names: signature.param_names.clone(),
+        parameter_defaults: signature.parameter_defaults.clone(),
         path: signature.path.clone(),
         generic_params: callable_generic_params_to_metadata(&signature.generic_params)?,
         params: signature
@@ -1062,6 +1079,7 @@ fn effect_summary_to_metadata(
     summary: &PackageEffectSummaryMetadata,
 ) -> Result<etas_package_metadata::EffectSummary, PackageError> {
     Ok(etas_package_metadata::EffectSummary {
+        definition: summary.definition.clone(),
         residual_checks: summary.residual_checks.clone(),
         handler_requests: summary
             .handler_requests

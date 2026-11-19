@@ -50,8 +50,6 @@ mod flow_revisions;
 mod loaded_origins;
 #[path = "compiler_service/no_host.rs"]
 mod no_host;
-#[path = "compiler_service/std_checkpoint.rs"]
-mod std_checkpoint;
 #[path = "compiler_service/origin_metadata.rs"]
 mod origin_metadata;
 #[path = "compiler_service/residual_generics.rs"]
@@ -104,8 +102,14 @@ mod revision_stream_values;
 mod revisions;
 #[path = "compiler_service/source.rs"]
 mod source;
+#[path = "compiler_service/source_default_console.rs"]
+mod source_default_console;
+#[path = "compiler_service/source_loop_limits.rs"]
+mod source_loop_limits;
 #[path = "compiler_service/source_restoration.rs"]
 mod source_restoration;
+#[path = "compiler_service/std_checkpoint.rs"]
+mod std_checkpoint;
 use std::{
     collections::BTreeMap,
     sync::{

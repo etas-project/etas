@@ -405,6 +405,23 @@ fn external_public_metadata_with_graph(
     metadata: &etas_package::PackagePublicMetadata,
 ) -> ProjectExternalPublicMetadataInput {
     ProjectExternalPublicMetadataInput {
+        scoped_callbacks: metadata
+            .scoped_callbacks
+            .iter()
+            .map(|contract| etas_package_metadata::ScopedCallbackContract {
+                target: match &contract.target {
+                    etas_package_metadata::CallableContractTarget::Item(path) => {
+                        etas_package_metadata::CallableContractTarget::Item(
+                            dependency_path_with_graph(package, packages, path),
+                        )
+                    }
+                    etas_package_metadata::CallableContractTarget::Method(identity) => {
+                        etas_package_metadata::CallableContractTarget::Method(identity.clone())
+                    }
+                },
+                parameters: contract.parameters.clone(),
+            })
+            .collect(),
         package: package.id,
         types: metadata
             .types
@@ -425,6 +442,8 @@ fn external_public_metadata_with_graph(
             .flows
             .iter()
             .map(|signature| ProjectExternalFlowSignatureInput {
+                definition: signature.definition.clone(),
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -449,6 +468,7 @@ fn external_public_metadata_with_graph(
             .agents
             .iter()
             .map(|signature| ProjectExternalAgentSignatureInput {
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -476,6 +496,7 @@ fn external_public_metadata_with_graph(
             .tools
             .iter()
             .map(|signature| ProjectExternalToolSignatureInput {
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -523,6 +544,12 @@ fn external_public_metadata_with_graph(
             .spec_impls
             .iter()
             .map(|implementation| ProjectExternalSpecImplInput {
+                owner: implementation.owner.clone(),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &implementation.generic_params,
+                ),
                 self_type: dependency_type_input_with_graph(
                     package,
                     packages,
@@ -610,6 +637,12 @@ fn external_public_metadata_with_graph(
             .actions
             .iter()
             .map(|signature| ProjectExternalActionSignatureInput {
+                default_handler_effects: signature
+                    .default_handler_effects
+                    .as_ref()
+                    .map(|row| dependency_effect_row_input(package, packages, row)),
+                param_names: signature.param_names.clone(),
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -644,6 +677,7 @@ fn external_public_metadata_with_graph(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                definition: summary.definition.clone(),
                 residual_checks: summary.residual_checks.clone(),
                 behavior: summary.behavior.clone(),
                 handler_requests: summary.handler_requests.as_ref().map(|template| {
@@ -883,6 +917,8 @@ fn spec_signature_input(
             .callable
             .as_ref()
             .map(|callable| ProjectExternalFlowSignatureInput {
+                definition: callable.definition.clone(),
+                parameter_defaults: callable.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &callable.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -907,10 +943,13 @@ fn spec_signature_input(
             .iter()
             .map(|method| ProjectExternalSpecMethodInput {
                 name: method.name.clone(),
+                updating_receiver: method.updating_receiver,
                 receiver_param: method.receiver_param,
                 path: dependency_path_with_graph(package, packages, &method.path),
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
+                        definition: callable.definition.clone(),
+                        parameter_defaults: callable.parameter_defaults.clone(),
                         path: dependency_path_with_graph(package, packages, &callable.path),
                         generic_params: callable_generic_params_input(
                             package,
@@ -2124,6 +2163,9 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        default_handler_effects: None,
+                        param_names: Vec::new(),
+                        parameter_defaults: Vec::new(),
                         path: vec!["errors".to_owned(), "Net".to_owned(), "request".to_owned()],
                         generic_params: vec![
                             etas_package::metadata::PackageActionGenericParamMetadata {
@@ -2226,6 +2268,8 @@ mod tests {
                 dependencies: Vec::new(),
                 public_metadata: etas_package::PackagePublicMetadata {
                     flows: vec![etas_package::PackageFlowSignatureMetadata {
+                        definition: None,
+                        parameter_defaults: Vec::new(),
                         path: vec!["api".to_owned(), "read".to_owned()],
                         generic_params: generics,
                         param_names: Vec::new(),
@@ -2237,6 +2281,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        definition: None,
                         residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,
@@ -2368,6 +2413,9 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        default_handler_effects: None,
+                        param_names: Vec::new(),
+                        parameter_defaults: Vec::new(),
                         path: vec![
                             "effects".to_owned(),
                             "EdkHttp".to_owned(),
@@ -2387,6 +2435,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        definition: None,
                         residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,

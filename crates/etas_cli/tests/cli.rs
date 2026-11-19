@@ -7410,6 +7410,25 @@ fn run<const N: usize>(args: [&str; N]) -> (i32, String, String) {
     let _guard = (!cli_process_lock_is_held_by_current_thread()).then(lock_cli_process);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
+    // Cargo puts the test executable under deps/. Use the same SDK as the CLI
+    // under test when executing its commands in this process.
+    let prefix = Path::new(env!("CARGO_BIN_EXE_etas"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let sysroot = etas_driver::std_library::sdk::installed_sysroot(prefix);
+    let mut args = Vec::from(args);
+    if !args
+        .iter()
+        .any(|arg| *arg == "--sysroot" || arg.starts_with("--sysroot="))
+    {
+        let end = args
+            .iter()
+            .position(|arg| *arg == "--")
+            .unwrap_or(args.len());
+        args.splice(end..end, ["--sysroot", path(&sysroot)]);
+    }
     let code = etas_cli::run_with(args, &mut stdout, &mut stderr);
 
     (
@@ -8817,7 +8836,8 @@ fn package_action_trace_parameter_calls(
             .iter()
             .map(|child| package_action_trace_parameter_calls(child, expected))
             .sum(),
-        etas_package::PackageActionTraceMetadata::Repeat { child } => {
+        etas_package::PackageActionTraceMetadata::Repeat { child }
+        | etas_package::PackageActionTraceMetadata::DefaultHandler { child, .. } => {
             package_action_trace_parameter_calls(child, expected)
         }
         etas_package::PackageActionTraceMetadata::Widened {

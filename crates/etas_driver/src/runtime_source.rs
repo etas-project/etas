@@ -619,6 +619,8 @@ flow extra() -> unit { return; }
             dependencies: Vec::new(),
             public_metadata: PackagePublicMetadata {
                 flows: vec![PackageFlowSignatureMetadata {
+                    definition: None,
+                    parameter_defaults: Vec::new(),
                     generic_params: Vec::new(),
                     path: vec!["dep".to_owned(), "api".to_owned(), "call".to_owned()],
                     param_names: Vec::new(),
@@ -973,6 +975,8 @@ root = "src"
             dependencies: Vec::new(),
             public_metadata: PackagePublicMetadata {
                 flows: vec![PackageFlowSignatureMetadata {
+                    definition: None,
+                    parameter_defaults: Vec::new(),
                     generic_params: Vec::new(),
                     path: flow_path,
                     param_names: Vec::new(),

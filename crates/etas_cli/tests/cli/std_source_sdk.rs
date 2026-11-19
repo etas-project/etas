@@ -3,84 +3,38 @@ use super::*;
 #[test]
 fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes() {
     let root = temp_path(
-        &format!("std-source-sdk-{}-{}", std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()),
+        &format!(
+            "std-source-sdk-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ),
         "workspace",
     );
+    let binary = std::env::var_os("ETAS_STD_DELIVERY_BINARY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_etas")));
     let source = root.join("std-source");
     let maintained = etas_std::library::source_checkout_manifest()
         .parent()
         .unwrap();
     copy_dir_contents(&maintained.join("library"), &source.join("library"));
     fs::create_dir_all(source.join("library/std/extra")).unwrap();
-    // Check source ownership with binders independent of constructor/method binders.
-    for (file, replacements) in [
-        (
-            "task/mod.es",
-            vec![
-                (
-                    "public type Task<T, effect E>;",
-                    "public type Task<Output, effect Remaining>;",
-                ),
-                (
-                    "public type Continuation<T>;",
-                    "public type Continuation<ActionOutput>;",
-                ),
-            ],
-        ),
-        (
-            "fs/mod.es",
-            vec![(
-                "public type WorkspacePath<R ~ Region>;",
-                "public type WorkspacePath<Authority ~ Region>;",
-            )],
-        ),
-        (
-            "option/mod.es",
-            vec![(
-                "public enum Option<T> { Some(T), None, }",
-                "public enum Option<Payload> { Some(Payload), None, }",
-            )],
-        ),
-        (
-            "result/mod.es",
-            vec![(
-                "public enum Result<T, E> { Ok(T), Err(E), }",
-                "public enum Result<Success, Failure> { Ok(Success), Err(Failure), }",
-            )],
-        ),
-    ] {
-        let path = source.join("library/std").join(file);
-        let mut text = fs::read_to_string(&path).unwrap();
-        for (from, to) in replacements {
-            assert!(text.contains(from));
-            text = text.replace(from, to);
-        }
-        fs::write(path, text).unwrap();
-    }
-    fs::write(source.join("library/std/io/sdk.es"), r#"module std.io;
-public flow sdk_try_line() -> Result<string, IOError> ![] { return read_line()?; }
-"#).unwrap();
-    let actions = source.join("library/std/effects/mod.es");
-    fs::write(&actions, fs::read_to_string(&actions).unwrap()
-        .replace("<R ~ Region>", "<Scope ~ Region>")
-        .replace("WorkspacePath<R>", "WorkspacePath<Scope>"))
-        .unwrap();
-    let limits = source.join("library/std/runtime/limits/mod.es");
-    fs::write(&limits, fs::read_to_string(&limits).unwrap()
-        .replace("public enum Limit {", "public enum Limit { SdkOnly,")).unwrap();
-    let task = source.join("library/std/task/mod.es");
     fs::write(
-        &task,
-        fs::read_to_string(&task).unwrap()
-            + r#"
-@std.binding("std.task.run")
-public flow execute<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {}
-
-public flow dispatch<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {
-    return run(body);
-}
+        source.join("library/std/io/sdk.es"),
+        r#"module std.io;
+public flow sdk_try_line() -> Result<string, IOError> ![] { return read_line()?; }
 "#,
+    )
+    .unwrap();
+    let limits = source.join("library/std/runtime/limits/mod.es");
+    fs::write(
+        &limits,
+        fs::read_to_string(&limits)
+            .unwrap()
+            .replace("public enum Limit {", "public enum Limit { SdkOnly,"),
     )
     .unwrap();
     let filesystem = source.join("library/std/fs/mod.es");
@@ -93,7 +47,10 @@ public flow dispatch<T, effect E>(body: (Scheduler) -> T ![E]) -> T ![E] {
     )
     .unwrap();
     fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
-    fs::write(source.join("library/std/runtime/sdk.es"), r#"module std.runtime;
+    fs::write(
+        source.join("library/std/runtime/sdk.es"),
+        r#"module std.runtime;
+import std.runtime.checkpoint.checkpoint;
 type Pending<T> = { value: T };
 flow checkpoint_private<T>(value: T) -> T {
     let pending = Pending { value = value };
@@ -106,7 +63,9 @@ public flow checkpoint_apply<T>(action: (T) -> T ![], value: T) -> T {
     checkpoint("inside-std-callback");
     return action(first);
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     // Ordinary error declarations belong to source. An extra constructor needs
     // no compiler role or native registry entry, and native parse errors keep
     // their source-owned nominal type.
@@ -194,13 +153,11 @@ public flow read_reply(value: Reply<string>) -> string {
 import std.fs.{Region, WorkspacePath, IOError};
 public type Sandbox;
 impl Sandbox ~ Region;
-@std.binding("std.fs.read_bytes")
-flow raw_read<R ~ Region>(target: WorkspacePath<R>) -> bytes ![Error<IOError>] {}
 public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOError> ![] {
     let CatchIo: ![Error<IOError> => [] for Result<bytes, IOError>] = handler {
         Error<IOError>.raise(error) => { finish Err(error); }
     };
-    return handle { Ok(raw_read(target)) } with CatchIo;
+    return handle { Ok((perform std.effects.Fs.read<Sandbox>(target, None)).unwrap()) } with CatchIo;
 }
 "#,
     )
@@ -212,28 +169,14 @@ public flow load_checked(target: WorkspacePath<Sandbox>) -> Result<bytes, IOErro
             + "\npublic import std.extra.sdk_echo as bundled_echo;\n",
     )
     .unwrap();
-    let native = source.join("library/std/text/native.es");
-    fs::write(
-        &native,
-        fs::read_to_string(&native).unwrap()
-            + r#"
-@std.binding("std.text.uppercase")
-public flow case_text(value: string) -> string ![] {}
-@std.binding("std.collections.array_push")
-public flow append<U>(values: Array<U>, value: U) -> Array<U> ![] {}
-"#,
-    )
-    .unwrap();
     let app = root.join("app.es");
     fs::write(
         &app,
         r#"module app.main;
-import std.text.{join, trim, append, case_text};
+import std.text.{join, trim, uppercase as case_text};
 import std.text.{TextError, ParseFailure, NumericOverflow};
 import std.extra.{sdk_echo, Parcel, Constructed, Reply, pack, pack_reply, read_reply, Reader, via_reader, reader, Transformer, transform, roundtrip};
-import std.task.{run, execute, Scheduler, Async};
-import std.result.{is_ok, is_err};
-import std.collections.{array_extend, list_push, list_extend};
+import std.task.{run, Scheduler, Async};
 import std.extra.index_identity;
 type CallerParcel<T> = { value: T };
 impl CallerParcel<T> ~ Reader {
@@ -277,17 +220,17 @@ flow text_policy_checks() -> i32 ![] {
     if std.text.replace("é😀", "", "|") != "|é|😀|" || std.text.replace_n("é😀", "", "|", 2) != "|é|😀" { return 17; }
     if std.text.ascii_lowercase("ÉAZ界") != "Éaz界" || std.text.ascii_uppercase("éaz界") != "éAZ界" { return 18; }
     if !std.text.eq_ignore_ascii_case("Etas界", "eTAS界") || std.text.eq_ignore_ascii_case("É", "é") { return 19; }
-    if std.collections.list_get([1; 2; 3], ordinal) != None || [1; 2; 3].get(1) != Some(2) { return 20; }
+    if [1; 2; 3].get(ordinal) != None || [1; 2; 3].get(1) != Some(2) { return 20; }
     return 0;
 }
 
 flow option_checks() -> bool ![] {
-    let callable = std.option.unwrap(Some(increment));
+    let callable = Some(increment).unwrap();
     if callable(4) != 5 { return false; }
     let Handle: ![Wrapped => [] for i32] = handler {
         Wrapped.read() => { resume 13; }
     };
-    let answer = handle { std.option.unwrap(Some(deferred))() } with Handle;
+    let answer = handle { Some(deferred).unwrap()() } with Handle;
     if answer != 13 { return false; }
     let some: Option<i32> = Some(7);
     let none: Option<i32> = None;
@@ -315,18 +258,18 @@ flow collection_checks() -> bool ![] {
     if linked.push(0).extend([3; 4]) != [3; 4; 0; 1; 2] { return false; }
     let empty: List<i32> = [];
     if empty.pop() != (empty, None) || empty.tail() != None { return false; }
-    if std.collections.array_pop([4]) != ([], Some(4)) { return false; }
-    if std.collections.list_head([5;]) != Some(5) { return false; }
+    if [4].pop() != ([], Some(4)) { return false; }
+    if [5;].head() != Some(5) { return false; }
     let Handle: ![Wrapped => [] for i32] = handler {
         Wrapped.read() => { resume 13; }
     };
-    let callbacks = list_push([], deferred).extend([deferred;]);
+    let callbacks = [deferred;].extend([deferred;]);
     let head_answer = handle { callbacks.head().unwrap()() } with Handle;
     if head_answer != 13 { return false; }
     let list_index: u8 = 1;
     let list_answer = handle { callbacks.get(list_index).unwrap()() } with Handle;
     if list_answer != 13 { return false; }
-    let array_callbacks = array_extend([], [deferred, deferred]);
+    let array_callbacks = [deferred, deferred];
     let (earlier, final_callback) = array_callbacks.pop();
     let final_answer = handle { final_callback.unwrap()() } with Handle;
     if final_answer != 13 { return false; }
@@ -373,13 +316,13 @@ flow main(args: Array<string>) -> i32 {
     if !std.text.contains("aba世界😀", "世界") { return 65; }
     if std.text.strip_prefix("世界😀", "世界") != Some("😀") { return 66; }
     if std.text.strip_suffix("世界😀", "😀") != Some("世界") { return 67; }
-    if array_extend([1, 2], [3, 4]) != [1, 2, 3, 4] { return 71; }
-    if list_push([1; 2], 0) != [0; 1; 2] { return 72; }
-    if list_extend([1; 2], [3; 4]) != [3; 4; 1; 2] { return 73; }
+    if [1, 2].extend([3, 4]) != [1, 2, 3, 4] { return 71; }
+    if [1; 2].push(0) != [0; 1; 2] { return 72; }
+    if [1; 2].extend([3; 4]) != [3; 4; 1; 2] { return 73; }
     if trim("　 a \t b \n　") != "a \t b" || trim("　 \n\t") != "" { return 74; }
     let good: Result<i32, string> = Result.Ok(7);
     let bad: Result<i32, string> = Err("failed");
-    if !is_ok(good) || is_err(good) || !is_err(bad) { return 79; }
+    if !good.is_ok() || good.is_err() || !bad.is_err() { return 79; }
     if !good.is_ok() || good.is_err() || !bad.is_err() || good.unwrap() != 7 { return 77; }
     let constructor = Ok;
     let copied: Result<i32, string> = constructor(9);
@@ -393,12 +336,12 @@ flow main(args: Array<string>) -> i32 {
     if transform(transformer, 27) != 27 { return 84; }
     if transform(transformer, "caller") != "caller" { return 85; }
     if roundtrip(transformer) != "hidden" { return 86; }
-    let outcome = execute(scheduled);
+    let outcome = run(scheduled);
     if outcome != 7 { return 94; }
     if run(scheduled) != 7 { return 93; }
     let assemble = join;
     let strip = trim;
-    let values = append([strip(" a ")], strip(" b "));
+    let values = [strip(" a ")].push(strip(" b "));
     let parcel: Parcel<string> = sdk_echo(pack(bundled_echo(assemble(values, "|"))));
     let text = read_reply(pack_reply(via_reader(parcel)));
     let constructed: Constructed<string> = Constructed { value = text };
@@ -418,7 +361,7 @@ flow main(args: Array<string>) -> i32 {
     .unwrap();
     let sdk = root.join("sdk");
     let invoke = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_etas"))
+        let output = Command::new(&binary)
             .args(args)
             .current_dir(std::env::temp_dir())
             .output()
@@ -553,9 +496,12 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
 "#,
     )
     .unwrap();
-    invoke(&["pkg", "lock", path(&bridge)]);
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: bridge.clone(),
+    })
+    .unwrap();
     let old_lock = fs::read(bridge.join("etas.lock")).unwrap();
-    let needs_upgrade = Command::new(env!("CARGO_BIN_EXE_etas"))
+    let needs_upgrade = Command::new(&binary)
         .args([
             "pkg",
             "metadata",
@@ -608,7 +554,7 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
     ]);
     let package_source = fs::read_to_string(&app).unwrap()
         .replace("type CallerParcel<T>", "import bridge.bridge_summary;\ntype CallerParcel<T>")
-        .replace("    let caller = sdk_echo", "    let bridged = bridge_summary(\"package\");\n    if !is_ok(bridged) { return 76; }\n    let caller = sdk_echo");
+        .replace("    let caller = sdk_echo", "    let bridged = bridge_summary(\"package\");\n    if !bridged.is_ok() { return 76; }\n    let caller = sdk_echo");
     fs::write(packaged.join("src/app/main.es"), package_source).unwrap();
     invoke(&[
         "pkg",
@@ -639,16 +585,6 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
     ]))
     .unwrap();
     assert_eq!(package_run["value"]["value"], "0");
-    let native = source.join("library/std/text/native.es");
-    let binding = fs::read_to_string(&native).unwrap();
-    fs::write(
-        &native,
-        binding.replace("std.text.uppercase", "std.text.lowercase"),
-    )
-    .unwrap();
-    build();
-    assert_eq!(execute()["value"]["value"], "3");
-    fs::write(native, binding).unwrap();
     let assembly = source.join("library/std/text/assembly.es");
     let text = fs::read_to_string(&assembly).unwrap();
     let start = text.find("public flow join(").unwrap();
@@ -827,13 +763,31 @@ flow main(args: Array<string>) -> i32 {
         "{report}"
     );
     verify_source_filesystem_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
-    verify_source_checkpoint_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
-    verify_source_action_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
-    verify_task_provider_parity(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
-    verify_caller_task_handler(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
-    verify_source_console_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_source_checkpoint_sdk(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
+    verify_source_action_sdk(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
+    verify_task_provider_parity(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
+    verify_caller_task_handler(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
+    verify_source_console_sdk(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
-    verify_source_compiler_report_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)), &root);
+    verify_source_compiler_report_sdk(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
     fs::remove_dir_all(protected).unwrap();
     // The exact same application runs in two independent provider sessions.
     let common = root.join("common.es");
@@ -1027,7 +981,7 @@ flow main(args: Array<string>) -> i32 {
     manifest.artifact_hash = etas_package_metadata::blake3_hash(&bodyless);
     fs::write(artifact, bodyless).unwrap();
     fs::write(manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
-    let missing = Command::new(env!("CARGO_BIN_EXE_etas"))
+    let missing = Command::new(&binary)
         .args([
             "--cache",
             "off",
@@ -1448,27 +1402,59 @@ flow main(args: Array<string>) -> i32 {
     for provider in providers {
         let output = Command::new(binary)
             .args([
-                "--cache", "off", "run", path(&project),
-                "--std-provider", provider, "--profile", "readonly",
-                "--flow", "denied_retry", "--format", "json",
+                "--cache",
+                "off",
+                "run",
+                path(&project),
+                "--std-provider",
+                provider,
+                "--profile",
+                "readonly",
+                "--flow",
+                "denied_retry",
+                "--format",
+                "json",
             ])
             .current_dir(std::env::temp_dir())
-            .output().unwrap();
-        assert_eq!(output.status.code(), Some(3), "{}\n{}",
-            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(3),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(report["diagnostics"][0]["code"], "Analysis(InvalidArguments)", "{report}");
-        assert_eq!(report["diagnostics"][0]["message"],
-            "retry exhausted after 2 attempt(s): filesystem host boundary failed: filesystem request is missing its region-scoped action grant (action=Fs.write, region=app.main.Project)", "{report}");
+        assert_eq!(
+            report["diagnostics"][0]["code"], "Analysis(InvalidArguments)",
+            "{report}"
+        );
+        assert_eq!(
+            report["diagnostics"][0]["message"],
+            "retry exhausted after 2 attempt(s): filesystem host boundary failed: filesystem request is missing its region-scoped action grant (action=Fs.write, region=app.main.Project)",
+            "{report}"
+        );
         let events = report["events"].as_array().unwrap();
         let count = |kind| events.iter().filter(|event| event["kind"] == kind).count();
         assert_eq!(count("host_request_started"), 2, "{report}");
         assert_eq!(count("retry_attempt_failed"), 2, "{report}");
         assert_eq!(count("retry_exhausted"), 1, "{report}");
-        let signature = (report["diagnostics"].clone(), events.iter().map(|event| event["kind"].clone()).collect::<Vec<_>>());
-        if let Some(previous) = previous { assert_eq!(previous, signature); }
+        let signature = (
+            report["diagnostics"].clone(),
+            events
+                .iter()
+                .map(|event| event["kind"].clone())
+                .collect::<Vec<_>>(),
+        );
+        if let Some(previous) = previous {
+            assert_eq!(previous, signature);
+        }
         previous = Some(signature);
-        assert_eq!(fs::read(project.join("workspace/created.txt")).unwrap(), b"after");
+        assert_eq!(
+            fs::read(project.join("workspace/created.txt")).unwrap(),
+            b"after"
+        );
     }
     fs::remove_dir_all(project).unwrap();
 }
@@ -1480,7 +1466,9 @@ fn verify_source_console_sdk(binary: &Path, root: &Path) {
     let app = root.join("console-source.es");
     let checkpoints = root.join("console-checkpoints");
     let keys = root.join("console-checkpoint-keys");
-    fs::write(&app, r#"module app.main;
+    fs::write(
+        &app,
+        r#"module app.main;
 import std.effects.Console;
 import std.io.{print, println, eprintln, read_line, read_all};
 import std.runtime.checkpoint.checkpoint;
@@ -1512,7 +1500,9 @@ flow main(args: Array<string>) -> i32 ![] {
     };
     return tail;
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
     for resume in [None, Some(0), Some(1)] {
         let mut command = Command::new(binary);
         command.args(["--cache", "off"]);
@@ -1521,22 +1511,44 @@ flow main(args: Array<string>) -> i32 ![] {
         } else {
             command.args(["run", path(&app)]);
         }
-        let output = command.args([
-            "--std-provider", "artifact",
-            "--checkpoint-dir", path(&checkpoints),
-            "--checkpoint-key-dir", path(&keys),
-            "--format", "json",
-        ]).current_dir(std::env::temp_dir()).output().unwrap();
-        assert!(output.status.success(), "{}\n{}",
-            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let output = command
+            .args([
+                "--std-provider",
+                "artifact",
+                "--checkpoint-dir",
+                path(&checkpoints),
+                "--checkpoint-key-dir",
+                path(&keys),
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["value"]["value"], "0", "{report}");
-        assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
-        assert_eq!(report["checkpoints"].as_array().unwrap().len(),
-            resume.map_or(2, |index| 1 - index), "{report}");
+        assert!(
+            report["diagnostics"].as_array().unwrap().is_empty(),
+            "{report}"
+        );
+        assert_eq!(
+            report["checkpoints"].as_array().unwrap().len(),
+            resume.map_or(2, |index| 1 - index),
+            "{report}"
+        );
     }
-    let project = package_fixture("std-source-console", &[
-        ("etas.toml", r#"[package]
+    let project = package_fixture(
+        "std-source-console",
+        &[
+            (
+                "etas.toml",
+                r#"[package]
 name = "std-source-console"
 version = "0.1.0"
 edition = "2026"
@@ -1553,8 +1565,11 @@ rules = ["console=allow"]
 [runtime.profiles.denied.policy]
 mode = "local-static"
 rules = ["model=allow"]
-"#),
-        ("src/app/main.es", r#"module app.main;
+"#,
+            ),
+            (
+                "src/app/main.es",
+                r#"module app.main;
 import std.effects.Console;
 import std.io.{sdk_try_line, read_all, print, println, eprintln};
 spec Gate: trace = +Console;
@@ -1564,33 +1579,75 @@ flow main(args: Array<string>) -> i32 ![] ~ Gate {
         print("<" + first + ">"); println(read_all()); eprintln("done"); 0
     } with { Error<IOError>.raise(error) => { finish 91; } };
 }
-"#),
-    ]);
+"#,
+            ),
+        ],
+    );
     for (profile, input, expected) in [
         ("stdio", b"alpha\nbeta".as_slice(), "0"),
         ("stdio", b"\xff\n".as_slice(), "9"),
         ("denied", b"alpha\nbeta".as_slice(), "denied"),
     ] {
         let trace = root.join(format!("console-{expected}.json"));
-        let mut child = Command::new(binary).args([
-            "--cache", "off", "run", path(&project), "--profile", profile,
-            "--std-provider", "artifact", "--trace-out", path(&trace),
-        ]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
-            .current_dir(std::env::temp_dir()).spawn().unwrap();
+        let mut child = Command::new(binary)
+            .args([
+                "--cache",
+                "off",
+                "run",
+                path(&project),
+                "--profile",
+                profile,
+                "--std-provider",
+                "artifact",
+                "--trace-out",
+                path(&trace),
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .current_dir(std::env::temp_dir())
+            .spawn()
+            .unwrap();
         child.stdin.take().unwrap().write_all(input).unwrap();
         let output = child.wait_with_output().unwrap();
         let report: serde_json::Value = serde_json::from_slice(&fs::read(trace).unwrap()).unwrap();
         if expected == "denied" {
             assert_eq!(output.status.code(), Some(3), "{report}");
             assert!(output.stdout.is_empty());
-            assert!(report["diagnostics"][0]["message"].as_str().unwrap()
-                .contains("console policy denied request"), "{report}");
+            assert!(
+                report["diagnostics"][0]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("console policy denied request"),
+                "{report}"
+            );
         } else {
-            assert!(output.status.success(), "{report}\n{}", String::from_utf8_lossy(&output.stderr));
+            assert!(
+                output.status.success(),
+                "{report}\n{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
             assert_eq!(report["value"]["value"], expected, "{report}");
-            assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
-            assert_eq!(output.stdout, if expected == "0" { b"<alpha\n>beta\n".as_slice() } else { b"" });
-            assert_eq!(output.stderr, if expected == "0" { b"done\n".as_slice() } else { b"" });
+            assert!(
+                report["diagnostics"].as_array().unwrap().is_empty(),
+                "{report}"
+            );
+            assert_eq!(
+                output.stdout,
+                if expected == "0" {
+                    b"<alpha\n>beta\n".as_slice()
+                } else {
+                    b""
+                }
+            );
+            assert_eq!(
+                output.stderr,
+                if expected == "0" {
+                    b"done\n".as_slice()
+                } else {
+                    b""
+                }
+            );
         }
     }
 }
@@ -1605,7 +1662,6 @@ fn verify_source_action_sdk(binary: &Path, root: &Path) {
 import std.extra.{Echo, request_echo};
 import std.runtime.checkpoint.checkpoint;
 import std.task.{Async, Scheduler, run, start, await};
-import std.task.scheduler.{park, requeue};
 flow greeting() -> string ![] { return "hello"; }
 flow main(args: Array<string>) -> i32 ![] {
     let Uniform = handler {
@@ -1619,7 +1675,7 @@ flow main(args: Array<string>) -> i32 ![] {
     return run((scheduler: Scheduler) => {
         let first = start(() => {
             return handle { perform Async.yield(); checkpoint("generic-task"); 7 }
-                with { Async.yield() as continuation => { requeue(scheduler, continuation, ()); } };
+                with { Async.yield() as continuation => { scheduler.requeue(continuation, ()); } };
         });
         let second = start(greeting);
         return handle {
@@ -1627,8 +1683,8 @@ flow main(args: Array<string>) -> i32 ![] {
             let text: string = await(second);
             if n == 7 && text == "hello" { 0 } else { 1 }
         } with {
-            Async.await(task) as continuation => { park(scheduler, task, continuation); }
-            Async.yield() as continuation => { requeue(scheduler, continuation, ()); }
+            Async.await(task) as continuation => { scheduler.park(task, continuation); }
+            Async.yield() as continuation => { scheduler.requeue(continuation, ()); }
         };
     });
 }
@@ -1698,7 +1754,6 @@ fn verify_task_provider_parity(binary: &Path, root: &Path) {
         &app,
         r#"module app.main;
 import std.task.{Async, Scheduler, run, start, await};
-import std.task.scheduler.{park, requeue};
 flow number() -> i32 ![] { return 7; }
 flow greeting() -> string ![] { return "hello"; }
 flow main(args: Array<string>) -> i32 {
@@ -1710,8 +1765,8 @@ flow main(args: Array<string>) -> i32 {
             let text: string = await(second);
             if n == 7 && text == "hello" { 0 } else { 1 }
         } with {
-            Async.await(task) as continuation => { park(scheduler, task, continuation); }
-            Async.yield() as continuation => { requeue(scheduler, continuation, ()); }
+            Async.await(task) as continuation => { scheduler.park(task, continuation); }
+            Async.yield() as continuation => { scheduler.requeue(continuation, ()); }
         };
     });
 }
@@ -1758,7 +1813,7 @@ fn verify_caller_task_handler(binary: &Path, root: &Path) {
     fs::write(
         &app,
         r#"module app.main;
-import std.task.{Scheduler, dispatch, run, start, await};
+import std.task.{Scheduler, run, start, await};
 import std.runtime.checkpoint.checkpoint;
 import std.extra.sdk_echo;
 effect Probe { action<T> value<Key>(key: Key, value: T) -> T; }
@@ -1767,7 +1822,7 @@ flow scheduled(scheduler: Scheduler) -> i32 ![Probe.value<string>] {
     return value + 2;
 }
 flow main(args: Array<string>) -> i32 ![] {
-    let answer = handle { dispatch(scheduled) } with {
+    let answer = handle { run(scheduled) } with {
         Probe.value<string>(key, value) => { checkpoint("caller-handler"); resume sdk_echo(value); }
     };
     if answer + 1 != 43 { return 1; }
@@ -1786,8 +1841,8 @@ flow main(args: Array<string>) -> i32 ![] {
         return inner + 1;
     });
     if nested != 43 { return 2; }
-    let finished = dispatch((scheduler: Scheduler) => {
-        let answer = handle { dispatch(scheduled); "unreached" } with {
+    let finished = run((scheduler: Scheduler) => {
+        let answer = handle { run(scheduled); "unreached" } with {
             Probe.value<string>(key, value) => { checkpoint("finish-handler"); finish "finished"; }
         };
         if answer == "finished" { return "continued"; }
@@ -1807,21 +1862,330 @@ flow main(args: Array<string>) -> i32 ![] {
         } else {
             command.args(["run", path(&app)]);
         }
-        let output = command.args([
-            "--std-provider", "artifact",
-            "--checkpoint-dir", path(&checkpoints),
-            "--checkpoint-key-dir", path(&keys),
-            "--format", "json",
-        ])
-        .current_dir(std::env::temp_dir())
-        .output()
-        .unwrap();
-        assert!(output.status.success(), "{}\n{}",
-            String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        let output = command
+            .args([
+                "--std-provider",
+                "artifact",
+                "--checkpoint-dir",
+                path(&checkpoints),
+                "--checkpoint-key-dir",
+                path(&keys),
+                "--format",
+                "json",
+            ])
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["value"]["value"], "0", "{report}");
-        assert!(report["diagnostics"].as_array().unwrap().is_empty(), "{report}");
-        assert_eq!(report["checkpoints"].as_array().unwrap().len(),
-            resume.map_or(3, |index| 2 - index), "{report}");
+        assert!(
+            report["diagnostics"].as_array().unwrap().is_empty(),
+            "{report}"
+        );
+        assert_eq!(
+            report["checkpoints"].as_array().unwrap().len(),
+            resume.map_or(3, |index| 2 - index),
+            "{report}"
+        );
     }
+}
+
+#[test]
+fn source_sdk_join_and_added_generic_api_run_after_install_and_relocation() {
+    let root = temp_path(
+        &format!(
+            "source-sdk-declaration-closure-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ),
+        "workspace",
+    );
+    let source = root.join("source");
+    let consumer = root.join("consumer");
+    let library = source.join("library/std");
+    fs::create_dir_all(&consumer).unwrap();
+    let maintained = etas_std::library::source_checkout_manifest()
+        .parent()
+        .unwrap();
+    copy_dir_contents(&maintained.join("library"), &source.join("library"));
+    fs::copy(maintained.join("etas.toml"), source.join("etas.toml")).unwrap();
+    let binary = std::env::var_os("ETAS_STD_DELIVERY_BINARY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_etas")));
+    let invoke = |binary: &Path, args: &[&str]| {
+        let output = Command::new(binary)
+            .current_dir(&consumer)
+            .args([
+                "--no-config",
+                "--std-provider",
+                "artifact",
+                "--cache",
+                "off",
+                "--color",
+                "never",
+                "--format",
+                "json",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{:?}\n{}\n{}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    };
+    let manifest = source.join("etas.toml");
+    let base = root.join("base/std");
+    invoke(
+        &binary,
+        &[
+            "std",
+            "build",
+            "--manifest-path",
+            manifest.to_str().unwrap(),
+            "--out-dir",
+            base.to_str().unwrap(),
+        ],
+    );
+    let app = consumer.join("app.es");
+    fs::write(&app, "module app; import std.text.join; flow main(args: Array<string>) -> i32 ![] { return if join([\"source\", \"sdk\"], \":\") == \"source:sdk\" { 42 } else { 0 }; }").unwrap();
+    let result = invoke(
+        &binary,
+        &[
+            "--sysroot",
+            base.parent().unwrap().to_str().unwrap(),
+            "run",
+            "app.es",
+        ],
+    );
+    assert!(String::from_utf8_lossy(&result.stdout).contains("\"value\":\"42\""));
+    // The only API change is this new Etas file. Its private type/method body
+    // must remain available to the application in another process.
+    fs::write(
+        library.join("text/added.es"),
+        r#"module std.text;
+type Envelope<T> = { value: T };
+impl Envelope<T> {
+    flow unpack(self) -> T ![] { return self.value; }
+}
+public flow sdk_echo<T>(value: T) -> T ![] {
+    let envelope = Envelope { value };
+    return envelope.unpack();
+}
+"#,
+    )
+    .unwrap();
+    let prefix = root.join("prefix");
+    invoke(
+        &binary,
+        &[
+            "std",
+            "install",
+            "--manifest-path",
+            manifest.to_str().unwrap(),
+            "--prefix",
+            prefix.to_str().unwrap(),
+        ],
+    );
+    let installed_std = fs::read_dir(prefix.join("lib/etas"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path()
+        .join("std");
+    let installed: serde_json::Value =
+        serde_json::from_slice(&fs::read(installed_std.join("manifest.json")).unwrap()).unwrap();
+    let repeat = root.join("repeat/std");
+    invoke(
+        &binary,
+        &[
+            "std",
+            "build",
+            "--manifest-path",
+            manifest.to_str().unwrap(),
+            "--out-dir",
+            repeat.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(
+        fs::read(installed_std.join("manifest.json")).unwrap(),
+        fs::read(repeat.join("manifest.json")).unwrap()
+    );
+    let artifact = installed["artifact"].as_str().unwrap();
+    assert_eq!(
+        fs::read(installed_std.join(artifact)).unwrap(),
+        fs::read(repeat.join(artifact)).unwrap()
+    );
+    fs::write(&app, "module app; import std.text.{join, sdk_echo}; flow main(args: Array<string>) -> i32 ![] { let text = sdk_echo(join([\"source\", \"sdk\"], \":\")); return if text == \"source:sdk\" { 42 } else { if text == \"source:sdk!\" { 43 } else { 0 } }; }").unwrap();
+    let moved = root.join("moved-prefix");
+    fs::rename(&prefix, &moved).unwrap();
+    fs::remove_dir_all(source.join("library")).unwrap();
+    let relocated_binary = moved
+        .join("bin")
+        .join(format!("etas{}", std::env::consts::EXE_SUFFIX));
+    // Discovery must use the moved executable's install prefix.
+    invoke(&relocated_binary, &["check", "app.es"]);
+    let result = invoke(&relocated_binary, &["run", "app.es"]);
+    assert!(String::from_utf8_lossy(&result.stdout).contains("\"value\":\"42\""));
+    let cache = root.join("consumer-cache");
+    let cached_run = |label: &str, expected: &str| {
+        let profile = root.join(format!("{label}-profile.json"));
+        let output = Command::new(&relocated_binary)
+            .current_dir(&consumer)
+            .args([
+                "--no-config",
+                "--std-provider",
+                "artifact",
+                "--cache",
+                "read-write",
+                "--cache-root",
+            ])
+            .arg(&cache)
+            .arg("--profile-out")
+            .arg(&profile)
+            .args(["--format", "json", "run", "app.es"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{label}: {}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(report["value"]["value"], expected, "{label}");
+        let profile: serde_json::Value =
+            serde_json::from_slice(&fs::read(profile).unwrap()).unwrap();
+        let reused = profile["counters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|counter| counter["name"] == "frontend.reused_parsed_sources")
+            .unwrap()["value"]
+            .as_u64()
+            .unwrap();
+        eprintln!(
+            "installed SDK cached {label}: duration_ns={}, reused_parsed_sources={reused}, value={expected}",
+            profile["total_duration_ns"]
+        );
+        reused
+    };
+    cached_run("cold", "42");
+    assert!(fs::read_dir(&cache).unwrap().next().is_some());
+    cached_run("warm", "42");
+
+    let bridge = root.join("bridge");
+    fs::create_dir_all(bridge.join("src")).unwrap();
+    fs::write(
+        bridge.join("etas.toml"),
+        "[package]\nname = 'sdk-bridge'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'src'\n[dependencies]\nstd = { version = '>=0.2' }\n",
+    )
+    .unwrap();
+    fs::write(
+        bridge.join("src/bridge.es"),
+        "module bridge; public flow advance(value: i32) -> i32 ![] { return value + 1; }\n",
+    )
+    .unwrap();
+    etas_package::lock_package(etas_package::LockPackageOptions {
+        package_root: bridge.clone(),
+    })
+    .unwrap();
+    let old = etas_package::lockfile::read_lockfile(&bridge)
+        .unwrap()
+        .unwrap();
+    assert_eq!(old.packages[0].checksum, "builtin:std");
+    invoke(
+        &relocated_binary,
+        &["pkg", "lock", bridge.to_str().unwrap()],
+    );
+    let upgraded = etas_package::lockfile::read_lockfile(&bridge)
+        .unwrap()
+        .unwrap();
+    assert_eq!(upgraded.packages[0].version, installed["version"]);
+    assert_eq!(
+        upgraded.packages[0].checksum,
+        format!(
+            "builtin:std:artifact:{}:{}",
+            installed["version"].as_str().unwrap(),
+            installed["native_binding_abi"].as_str().unwrap()
+        )
+    );
+    let package = root.join("package");
+    fs::create_dir_all(package.join("src")).unwrap();
+    fs::write(
+        package.join("etas.toml"),
+        "[package]\nname = 'sdk-package-consumer'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'src'\n[dependencies]\nbridge = { path = '../bridge' }\n[[bin]]\nname = 'app'\nmodule = 'app'\nflow = 'main'\n",
+    )
+    .unwrap();
+    fs::write(
+        package.join("src/app.es"),
+        "module app; import bridge.advance; import std.text.sdk_echo; flow main(args: Array<string>) -> i32 ![] { return sdk_echo(advance(41)); }\n",
+    )
+    .unwrap();
+    invoke(
+        &relocated_binary,
+        &["pkg", "update", package.to_str().unwrap()],
+    );
+    let result = invoke(&relocated_binary, &["run", package.to_str().unwrap()]);
+    let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(report["value"]["value"], "42");
+
+    let moved_std = fs::read_dir(moved.join("lib/etas"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path()
+        .join("std");
+    let text = moved_std.join("library/std/text/assembly.es");
+    let assembly = fs::read_to_string(&text).unwrap();
+    let start = assembly.find("public flow join(").unwrap();
+    let end = assembly.find("public flow repeat(").unwrap();
+    let join = &assembly[start..end];
+    fs::write(
+        &text,
+        format!(
+            "{}{}{}",
+            &assembly[..start],
+            join.replace("return output;", "return output + \"!\";"),
+            &assembly[end..]
+        ),
+    )
+    .unwrap();
+    let rebuilt = root.join("rebuilt/std");
+    invoke(
+        &relocated_binary,
+        &[
+            "std",
+            "build",
+            "--manifest-path",
+            moved_std.join("etas.toml").to_str().unwrap(),
+            "--out-dir",
+            rebuilt.to_str().unwrap(),
+        ],
+    );
+    let changed: serde_json::Value =
+        serde_json::from_slice(&fs::read(rebuilt.join("manifest.json")).unwrap()).unwrap();
+    assert_ne!(installed["artifact_hash"], changed["artifact_hash"]);
+    fs::rename(&moved_std, root.join("previous-installed-std")).unwrap();
+    fs::rename(&rebuilt, &moved_std).unwrap();
+    let result = invoke(&relocated_binary, &["run", "app.es"]);
+    assert!(String::from_utf8_lossy(&result.stdout).contains("\"value\":\"43\""));
+    // Rebuilding only a std body must invalidate the same application's cache.
+    cached_run("changed-body", "43");
+    fs::remove_dir_all(root).unwrap();
 }

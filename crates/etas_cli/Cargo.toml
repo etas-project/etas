@@ -29,7 +29,8 @@ tracing.workspace = true
 tokio = { version = "1", features = ["rt", "time", "signal", "macros"], optional = true }
 
 [features]
-forbid-legacy-std = ["etas_driver/forbid-legacy-std"]
+artifact-std-default = []
+forbid-legacy-std = ["artifact-std-default", "etas_driver/forbid-legacy-std"]
 default = [
     "component-frontend",
     "component-runtime",
