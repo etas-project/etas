@@ -83,7 +83,7 @@ fn readonly_profile_discovers_root_and_subdirectory_with_relative_provenance_and
         ("count_overflow", vec!["LIMIT"]),
         ("byte_overflow", vec!["LIMIT"]),
     ] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         remove_legacy_runtime_host_env(&mut command);
         let (code, stdout, stderr) =
             run_process_with_command(command, ["run", path(&root), "--flow", flow], "");
@@ -97,14 +97,14 @@ fn readonly_profile_discovers_root_and_subdirectory_with_relative_provenance_and
         assert!(!stdout.contains("UNEXPECTED"));
         assert!(!stdout.contains(path(&root)));
     }
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", path(&root), "--flow", "denied"], "");
     assert_eq!(code, 3, "{stdout}\n{stderr}");
     assert!(!root.join("workspace/blocked").exists());
     fs::create_dir(root.join("workspace/empty")).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", path(&root), "--flow", "empty"], "");

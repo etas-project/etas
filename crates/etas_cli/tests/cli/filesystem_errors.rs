@@ -71,7 +71,7 @@ flow denied(args: Array<string>) -> i32 {
     );
     for (flow, expected_code) in [("main", 0), ("denied", 3)] {
         let trace = project.join(format!("{flow}.trace.json"));
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command.env_clear().env("HOME", &project).env(
             "PATH",
             std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into()),

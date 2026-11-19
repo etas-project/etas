@@ -33,7 +33,7 @@ mod method_contracts_tests;
 #[cfg(test)]
 mod request_instantiation_tests;
 
-/// Convert a package environment using the release-default legacy provider.
+/// Convert a package environment for an explicit legacy session.
 /// Artifact sessions must use `frontend_environment_with_std_registry`.
 pub fn frontend_environment(
     metadata: etas_package::PackageEnvironmentMetadata,

@@ -69,7 +69,7 @@ fn run_reply(reply: serde_json::Value, flow: &str) -> ReplyRun {
     ]);
     let root = project(&url);
     let trace = root.join("trace.json");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,

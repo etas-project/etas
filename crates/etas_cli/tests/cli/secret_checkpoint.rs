@@ -47,7 +47,7 @@ flow main(args: Array<string>) -> i32 {{
     )
     .unwrap();
     let command = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command
             .env_clear()
             .env("HOME", &home)
@@ -184,7 +184,7 @@ flow main(args: Array<string>) -> i32 {{
     )
     .unwrap();
     let command = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command
             .env_clear()
             .env("HOME", root)
