@@ -114,13 +114,21 @@ pub fn build_standard_library(
         package_root: output.package_root.clone(),
         selected_bin: None,
     })?;
+    let source_root = output.package_root.join(&output.manifest.source.root);
+    let mut assets = BTreeMap::new();
+    read_source_assets(&output.package_root, &source_root, &mut assets)?;
     // The body and source index must describe the bytes that actually passed
     // checking, including when the maintained tree changes during the build.
     let source_payload_hash = etas_package_metadata::source_payload_checksum_for_entries(
         image
             .sources
             .iter()
-            .map(|source| (source.relative_path.as_path(), source.text.as_bytes())),
+            .map(|source| (source.relative_path.as_path(), source.text.as_bytes()))
+            .chain(
+                assets
+                    .iter()
+                    .map(|(path, bytes)| (path.as_path(), bytes.as_slice())),
+            ),
     );
     let manifest_hash = etas_package::package_manifest_hash(&output.package_root)?;
     let dependency_lock_hash = etas_package::package_dependency_lock_hash(&output.package_root)?;
@@ -208,7 +216,6 @@ pub fn build_standard_library(
         path: out_dir,
         source,
     })?;
-    let source_root = output.package_root.join(&output.manifest.source.root);
     if out_dir.starts_with(&source_root) || source_root.starts_with(&out_dir) {
         return Err(invalid(
             "std output directory must be separate from its maintained source tree",
@@ -223,6 +230,9 @@ pub fn build_standard_library(
     }
     for source in &image.sources {
         write_file(&out_dir.join(&source.relative_path), source.text.as_bytes())?;
+    }
+    for (path, bytes) in assets {
+        write_file(&out_dir.join(path), &bytes)?;
     }
     let package_manifest = output.package_root.join("etas.toml");
     write_file(&out_dir.join("etas.toml"), &read_file(&package_manifest)?)?;
@@ -267,4 +277,29 @@ fn read_file(path: &Path) -> Result<Vec<u8>, DriverError> {
         path: path.to_owned(),
         source,
     })
+}
+
+fn read_source_assets(
+    package: &Path,
+    directory: &Path,
+    files: &mut BTreeMap<PathBuf, Vec<u8>>,
+) -> Result<(), DriverError> {
+    let io = |source| DriverError::Io {
+        path: directory.to_owned(),
+        source,
+    };
+    for entry in fs::read_dir(directory).map_err(io)? {
+        let entry = entry.map_err(io)?;
+        let kind = entry.file_type().map_err(io)?;
+        let path = entry.path();
+        if kind.is_dir() {
+            read_source_assets(package, &path, files)?;
+        } else if kind.is_file() && path.extension() != Some(std::ffi::OsStr::new("es")) {
+            let relative = path
+                .strip_prefix(package)
+                .expect("source asset belongs to package");
+            files.insert(relative.to_owned(), read_file(&path)?);
+        }
+    }
+    Ok(())
 }
