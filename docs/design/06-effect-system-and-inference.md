@@ -937,8 +937,7 @@ in [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
 Handler values and anonymous flows share lexical capture semantics. Within
 the owning task, a captured `var` identifies the original mutable binding.
 Assignments made before `resume` are visible to the resumed computation and
-later lexical accesses. A returned Handler can retain ordinary local bindings,
-subject to the existing resource and continuation lifetime checks. The common
+later lexical accesses. A Handler that captures an outer local `var` must stay within that binding’s lexical scope. Returned Handlers may retain immutable captures subject to resource and continuation lifetime checks. The common
 rules are defined in [Lambda And Handler Capture](20-lexical-capture.md).
 
 Etas borrows the surface shape of algebraic effect handlers, but it does not aim to provide a general-purpose algebraic-effects calculus like Koka. Etas handlers are runtime-scoped: they make selected runtime actions visible, enforceable, recoverable, traceable, and replayable in an agent runtime.
