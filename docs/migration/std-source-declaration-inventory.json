@@ -3,28 +3,29 @@
   "version": "0.4.0",
   "source_repository": "https://github.com/etas-project/etas-core",
   "source_root": "crates/etas_std",
-  "candidate_pins": {
-    "etas-core": "11be3bda899d7e169c8208a36972b971461bf34c",
-    "etas-frontend": "f3d81870f24d939fd8d0275c6930bc1edafceb82",
-    "etas-interpreter": "43fd71fb1da42fb4c000bae09fca98a3b05ef184"
+  "dependency_revisions": {
+    "etas-core": "d949b8165ed3d3b283ccee70d67d9fc97cdff142",
+    "etas-frontend": "73f03a0124e565b1b4b6289e38328dcf9ee22138",
+    "etas-interpreter": "f0a4814cf1669b66f070e551215ce17a0ee2bdcc"
   },
   "verified_source_sdk": {
-    "artifact_hash": "blake3:f247595628ffd7132cb9b096d612ae26e55b0ead0448624d94ce94fde55cd5c7",
+    "artifact_hash": "blake3:d4f3567565e9b7cc7ecd3336f431c15058dec91fc5b005157dfec1bdee5d5034",
+    "body_schema": 70,
+    "metadata_schema": 68,
     "source_files": 122,
     "type_checked_bodies": 600,
-    "effect_checked_bodies": 600,
-    "relocated_prefix_verification": {
-      "independent_runs": 2,
+    "effect_checked_bodies": 600
+  },
+  "delivery_checks": {
+    "workflow": ".github/workflows/source-std.yml",
+    "suite": "crates/etas_cli/tests/cli/std_source_sdk.rs",
+    "relocated_prefix": {
+      "independent_sessions": 2,
       "entries_per_run": 7,
       "checkpoint_resumes_per_run": 6,
-      "expected_and_observed_value": 42,
+      "expected_value": 42,
       "runner": "scripts/ci/validate_std_sdk.py"
     }
-  },
-  "delivery": {
-    "main_merged": false,
-    "full_sdk_suite": "Pending. Integration is resolving the open Effect row of an imported generic action.",
-    "suite": "crates/etas_cli/tests/cli/std_source_sdk.rs"
   },
   "historical_baseline": {
     "description": "Legacy registry coverage before the source declaration batch. The crosswalk tracks the symbols selected from this baseline.",
