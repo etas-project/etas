@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use etas_code::{CodeFingerprint, PackageKey};
+use etas_code::PackageKey;
 use etas_core::SourceId;
 use etas_frontend::{ExternalPackageId, ProjectInput, SourceInput, SourceKind};
 use etas_package::{
@@ -163,10 +163,9 @@ pub(crate) fn capture_source_definition_provenance(
                 .ok_or_else(|| invalid("package definition has no prepared package identity"))?;
             Some(local_package_key(root, identity)?)
         }
-        DriverProjectMode::SourceProject => Some(local_source_key(
-            "etas.code.source-project-origin.v1",
-            &input.project_root,
-        )?),
+        DriverProjectMode::SourceProject => Some(etas_package::source_project_package_key(
+            &canonical_path(&input.project_root)?,
+        )),
         DriverProjectMode::SingleFile => None,
     };
     let single_file_root = if mode == DriverProjectMode::SingleFile {
@@ -181,7 +180,7 @@ pub(crate) fn capture_source_definition_provenance(
         let entry = single_file_root
             .as_ref()
             .ok_or_else(|| invalid("single-file entry origin is missing"))?;
-        let package = local_source_key("etas.code.single-file-origin.v1", entry)?;
+        let package = etas_package::standalone_source_package_key(entry);
         let mut found_entry = false;
         for source in &input.sources {
             if !matches!(
@@ -334,13 +333,6 @@ fn locked_package_key(
         return Err(invalid("locked source package identity is invalid"));
     }
     local_package_key(root, identity)
-}
-
-fn local_source_key(domain: &'static str, path: &Path) -> Result<PackageKey, DriverError> {
-    let path = canonical_path(path)?;
-    Ok(PackageKey::from_canonical_fingerprint(
-        CodeFingerprint::of_bytes(domain, path.as_os_str().as_encoded_bytes()),
-    ))
 }
 
 fn canonical_path(path: &Path) -> Result<PathBuf, DriverError> {

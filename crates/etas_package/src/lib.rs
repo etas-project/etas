@@ -12,7 +12,9 @@ mod source_snapshot;
 mod store;
 mod vendor;
 
-pub use definition_origin::local_definition_package_key;
+pub use definition_origin::{
+    local_definition_package_key, source_project_package_key, standalone_source_package_key,
+};
 pub use diagnostics::{PackageDiagnostic, PackageError};
 pub use manifest::{
     BinTarget, BindingsSection, DependencySpec, Manifest, PackageSection, ReflectionSection,
