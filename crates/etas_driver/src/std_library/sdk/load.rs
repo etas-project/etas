@@ -1,7 +1,10 @@
 use std::path::{Component, Path, PathBuf};
 
 use etas_frontend::library_hir::LibraryHirImage;
-use etas_package_metadata::{ARTIFACT_SCHEMA_VERSION, MetadataSectionKind};
+use etas_package_metadata::{
+    ARTIFACT_SCHEMA_VERSION, MetadataArtifactError, MetadataSectionKind,
+    package_metadata_from_package_graph_payload, validate_artifact_schema,
+};
 
 use super::{STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file};
 use crate::DriverError;
@@ -202,8 +205,18 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
             expected,
         )?;
     }
-    let (_, public) = etas_package_metadata::package_metadata_from_artifact(&artifact_path, &bytes)
+    validate_artifact_schema(header).map_err(invalid)?;
+    let graph = decoded
+        .sections
+        .get(&MetadataSectionKind::PackageGraph)
+        .ok_or_else(|| {
+            MetadataArtifactError::invalid(
+                &artifact_path,
+                "package metadata artifact is missing package_graph section",
+            )
+        })
         .map_err(invalid)?;
+    let public = package_metadata_from_package_graph_payload(graph).map_err(invalid)?;
     Ok(LoadedStdSdk {
         root,
         manifest,
