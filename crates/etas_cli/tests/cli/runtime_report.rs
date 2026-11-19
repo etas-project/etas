@@ -26,7 +26,7 @@ flow main(args: Array<string>) -> i32 {
     for format in ["json", "jsonl", "human"] {
         let trace = file.with_extension(format!("{format}.trace.json"));
         let checkpoints = file.with_extension(format!("{format}.checkpoints"));
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command.env("ETAS_HOST_MEMORY", "memory");
         let (code, stdout, stderr) = run_process_with_command(
             command,
@@ -63,7 +63,7 @@ flow main(args: Array<string>) -> i32 {
         assert_eq!(text.matches("\"resumable\":false").count(), 2);
         assert!(!text.contains("\"machine\":"));
 
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command.env("ETAS_HOST_MEMORY", "memory");
         let (code, stdout, stderr) = run_process_with_command(
             command,
@@ -117,7 +117,7 @@ flow main(args: Array<string>) -> i32 {
     );
     let home = etas_host::TestWorkspace::create("secret-report-home").unwrap();
     let command = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command
             .env_clear()
             .env("HOME", home.path())

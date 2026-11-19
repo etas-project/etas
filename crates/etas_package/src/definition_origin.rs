@@ -1,5 +1,5 @@
 use crate::{PackageError, PackageIdentity};
-use etas_code::PackageKey;
+use etas_code::{CodeFingerprint, PackageKey};
 use std::path::Path;
 
 /// Capture a local package's original owner before vendoring or compilation.
@@ -14,6 +14,22 @@ pub fn local_definition_package_key(
             message: "invalid definition package identity".into(),
         }
     })
+}
+
+/// Package identity for a source directory without an Etas manifest.
+pub fn source_project_package_key(canonical_root: &Path) -> PackageKey {
+    PackageKey::from_canonical_fingerprint(CodeFingerprint::of_bytes(
+        "etas.code.source-project-origin.v1",
+        canonical_root.as_os_str().as_encoded_bytes(),
+    ))
+}
+
+/// Package identity for a single-file entry, including an editor buffer at that path.
+pub fn standalone_source_package_key(canonical_path: &Path) -> PackageKey {
+    PackageKey::from_canonical_fingerprint(CodeFingerprint::of_bytes(
+        "etas.code.single-file-origin.v1",
+        canonical_path.as_os_str().as_encoded_bytes(),
+    ))
 }
 
 #[cfg(test)]

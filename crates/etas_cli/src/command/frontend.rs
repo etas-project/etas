@@ -20,7 +20,7 @@ pub fn check_project_once(
     input: ProjectInput,
 ) -> Result<ProjectOutput, CliError> {
     etas_driver::check_project_once(
-        &driver_options(global, profile),
+        &driver_options(global, profile)?,
         CompileProjectRequest {
             input,
             snapshot_detail: SnapshotDetailLevel::None,
@@ -42,28 +42,6 @@ pub fn load_project(
     load_project_with_optimization(
         global,
         profile,
-        paths,
-        all,
-        entry_policy,
-        flow,
-        source_dependency_mode,
-        None,
-    )
-}
-
-pub fn load_project_with_optimization(
-    global: &GlobalOptions,
-    profile: &ProfileHandle,
-    paths: Vec<PathBuf>,
-    all: bool,
-    entry_policy: EntryPolicy,
-    flow: Option<String>,
-    source_dependency_mode: SourceDependencyMode,
-    optimization_level: Option<u8>,
-) -> Result<LoadedProjectInput, CliError> {
-    let options = driver_options_with_optimization(global, profile, optimization_level)?;
-    etas_driver::load_project(
-        &options,
         LoadProjectRequest {
             paths,
             all,
@@ -72,13 +50,49 @@ pub fn load_project_with_optimization(
             bin: None,
             source_dependency_mode,
         },
+        None,
     )
-    .map(|loaded| loaded.loaded)
-    .map_err(driver_error)
 }
 
-pub(crate) fn driver_options(global: &GlobalOptions, profile: &ProfileHandle) -> DriverOptions {
+pub fn load_project_with_optimization(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+    request: LoadProjectRequest,
+    optimization_level: Option<u8>,
+) -> Result<LoadedProjectInput, CliError> {
+    let options = driver_options_with_optimization(global, profile, optimization_level)?;
+    etas_driver::load_project(&options, request)
+        .map(|loaded| loaded.loaded)
+        .map_err(driver_error)
+}
+
+pub(crate) fn driver_options(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+) -> Result<DriverOptions, CliError> {
+    let mut options = base_driver_options(global, profile);
+    options.std_provider = match global.std_provider {
+        crate::args::global::StdProviderChoice::Legacy => {
+            etas_driver::std_library::provider::StdProvider::Legacy
+        }
+        crate::args::global::StdProviderChoice::Artifact => {
+            etas_driver::std_library::provider::StdProvider::artifact_profiled(
+                global.sysroot.as_deref(),
+                profile,
+            )
+            .map_err(driver_error)?
+        }
+    };
+    Ok(options)
+}
+
+/// Source bootstrap builds its own std provider from the input package.
+pub(crate) fn base_driver_options(
+    global: &GlobalOptions,
+    profile: &ProfileHandle,
+) -> DriverOptions {
     DriverOptions {
+        std_provider: etas_driver::std_library::provider::StdProvider::Legacy,
         workspace: global.workspace.clone(),
         cache_mode: match global.cache {
             CacheMode::Auto => DriverCacheMode::Auto,
@@ -102,7 +116,7 @@ pub(crate) fn driver_options_with_optimization(
     profile: &ProfileHandle,
     optimization_level: Option<u8>,
 ) -> Result<DriverOptions, CliError> {
-    let options = driver_options(global, profile);
+    let options = driver_options(global, profile)?;
     optimization_level.map_or(Ok(options.clone()), |level| {
         options.with_optimization_level(level).map_err(driver_error)
     })

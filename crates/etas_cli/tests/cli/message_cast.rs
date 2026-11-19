@@ -1,7 +1,7 @@
 use super::*;
 
 fn message_cli<const N: usize>(args: [&str; N]) -> (i32, String, String) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     run_process_with_command(command, args, "")
 }

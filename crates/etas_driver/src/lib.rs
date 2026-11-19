@@ -6,6 +6,7 @@ pub mod pkg;
 pub mod project_discovery;
 pub mod runtime_source;
 pub mod source;
+pub mod std_library;
 
 pub use compile::{
     CompileProjectRequest, CompileProjectResponse, CompileRunnableProjectResponse, DriverCacheMode,
@@ -22,4 +23,11 @@ pub use pkg::{
 pub use runtime_source::{RuntimeSourceDependencyPlan, RuntimeSourcePlan};
 pub use source::{
     DriverProjectMode, LoadProjectRequest, LoadedDriverProject, SourceDependencyMode, load_project,
+};
+pub use std_library::sdk::{
+    LoadedStdSdk, StdLibraryBuildOutput, StdLibraryBuildRequest, StdSdkManifest,
+    build_standard_library, load_standard_library_sdk,
+};
+pub use std_library::{
+    StdLibraryCheckOutput, StdLibraryCheckRequest, check_standard_library_source,
 };

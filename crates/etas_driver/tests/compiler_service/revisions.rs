@@ -749,12 +749,12 @@ fn an_active_revision_can_edit_its_definition_without_changing_the_frozen_backen
     let source = r#"
 module app;
 import std.compiler.{compile, parse_body, CompileError};
-agent Worker() -> Option<string> { return None; }
+agent Worker(value: Option<string>) -> Option<string> { return value; }
 flow main() -> bool ![Error<CompileError>] {
     let body = match parse_body("let definition = ^Worker; let syntax = match parse_body(\"return None;\") { Ok(body) => body, Err(_) => { return None; }, }; let edited = definition.with_body(syntax); return edited.revision.parent;") { Ok(body) => body, Err(_) => { return false; }, };
     let revised = compile((^Worker).with_body(body));
     let definition = ^Worker;
-    return revised() == Some(definition.revision.key);
+    return revised(None) == Some(definition.revision.key);
 }
 "#;
     let result = execute(source, None);

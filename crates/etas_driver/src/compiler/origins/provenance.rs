@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use etas_code::{CodeFingerprint, PackageKey};
+use etas_code::PackageKey;
 use etas_core::SourceId;
 use etas_frontend::{ExternalPackageId, ProjectInput, SourceInput, SourceKind};
 use etas_package::{
@@ -22,6 +22,7 @@ pub(crate) struct SourceDefinitionProvenance {
     single_file_root: Option<PathBuf>,
     single_files: HashMap<SourceId, (PathBuf, PackageKey)>,
     dependencies: HashMap<ExternalPackageId, DependencyOrigin>,
+    standard_library: Option<std::sync::Arc<etas_frontend::StandardLibrary>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +32,28 @@ struct DependencyOrigin {
 }
 
 impl SourceDefinitionProvenance {
+    pub(crate) fn with_standard_library(
+        mut self,
+        provider: &crate::std_library::provider::StdProvider,
+    ) -> Self {
+        if let crate::std_library::provider::StdProvider::Artifact(provider) = provider {
+            self.standard_library = Some(provider.library.clone());
+        }
+        self
+    }
+
+    pub(crate) fn uses_environment(
+        &self,
+        checked: &etas_frontend::CheckedProgramData,
+        prepared: &etas_frontend::ProjectEnvironmentInput,
+    ) -> bool {
+        let mut environment = prepared.clone();
+        if let Some(library) = &self.standard_library {
+            library.append_environment(&mut environment);
+        }
+        checked.uses_environment(&environment)
+    }
+
     #[cfg(test)]
     pub(crate) fn single_file_root(&self) -> Option<&Path> {
         self.single_file_root.as_deref()
@@ -62,6 +85,16 @@ impl SourceDefinitionProvenance {
         checked: &etas_frontend::CheckedProgramData,
     ) -> Result<(), DriverError> {
         for input in checked.external_definition_origins() {
+            // Artifact std is supplied by the verified toolchain provider,
+            // independently of the project's locked source dependencies.
+            if !self.dependencies.contains_key(&input.package)
+                && self.standard_library.as_ref().is_some_and(|library| {
+                    input.origins == library.origins
+                        && input.descriptors.as_ref() == Some(library.descriptors.as_ref())
+                })
+            {
+                continue;
+            }
             let origin = self
                 .dependencies
                 .get(&input.package)
@@ -130,10 +163,9 @@ pub(crate) fn capture_source_definition_provenance(
                 .ok_or_else(|| invalid("package definition has no prepared package identity"))?;
             Some(local_package_key(root, identity)?)
         }
-        DriverProjectMode::SourceProject => Some(local_source_key(
-            "etas.code.source-project-origin.v1",
-            &input.project_root,
-        )?),
+        DriverProjectMode::SourceProject => Some(etas_package::source_project_package_key(
+            &canonical_path(&input.project_root)?,
+        )),
         DriverProjectMode::SingleFile => None,
     };
     let single_file_root = if mode == DriverProjectMode::SingleFile {
@@ -148,7 +180,7 @@ pub(crate) fn capture_source_definition_provenance(
         let entry = single_file_root
             .as_ref()
             .ok_or_else(|| invalid("single-file entry origin is missing"))?;
-        let package = local_source_key("etas.code.single-file-origin.v1", entry)?;
+        let package = etas_package::standalone_source_package_key(entry);
         let mut found_entry = false;
         for source in &input.sources {
             if !matches!(
@@ -185,6 +217,7 @@ pub(crate) fn capture_source_definition_provenance(
         single_file_root,
         single_files,
         dependencies,
+        standard_library: None,
     })
 }
 
@@ -300,13 +333,6 @@ fn locked_package_key(
         return Err(invalid("locked source package identity is invalid"));
     }
     local_package_key(root, identity)
-}
-
-fn local_source_key(domain: &'static str, path: &Path) -> Result<PackageKey, DriverError> {
-    let path = canonical_path(path)?;
-    Ok(PackageKey::from_canonical_fingerprint(
-        CodeFingerprint::of_bytes(domain, path.as_os_str().as_encoded_bytes()),
-    ))
 }
 
 fn canonical_path(path: &Path) -> Result<PathBuf, DriverError> {

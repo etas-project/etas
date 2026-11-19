@@ -903,24 +903,35 @@ The compiler rejects this because untrusted data flows into the trusted instruct
 Sometimes secret or untrusted content must be sent to an agent after sanitization or redaction.
 
 ```etas
+import std.security.declassify.{sanitize, declassify};
+
 @model("gpt-5.5")
 agent Summarizer(input: Sanitized<string>) -> Summary {
     return perform infer<Summary>(SummaryPrompt(input));
 }
 
-let safe_text = sanitize(web_page.body);
+let safe_text = sanitize(web_page.body, strategy = WebText);
 let summary = Summarizer.run(safe_text);
 ```
 
 For secret data:
 
 ```etas
-let redacted = declassify(secret_doc, strategy = RedactPII);
+let redacted = declassify(
+    secret_doc,
+    strategy = RedactPII,
+    reason = "prepare approved material for summarization"
+);
 
 let result = Agent.run(redacted);
 ```
 
-Declassification is explicit and auditable.
+`WebText` is a configured `SanitizationStrategy<string, string>` and
+`web_page.body` has type `Untrusted<string>`. `RedactPII` is a configured typed
+`DeclassificationStrategy` for the secret document. Both strategies perform
+their declared validation or transformation. Secret release checks the current
+authority and records its outcome. The complete contracts are defined in
+[Sanitization And Declassification](19-standard-library.md#8-sanitization-and-declassification).
 
 ---
 

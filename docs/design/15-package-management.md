@@ -217,6 +217,37 @@ The frontend cache key must include the resolved lockfile entries and package
 metadata fingerprints for all dependencies that affect type checking, effect
 checking, policy checking, generated tool schemas, and public API resolution.
 
+### 7.1 Using the installed standard library
+
+`etas std install --prefix <prefix>` installs the executable at
+`<prefix>/bin/etas` and its matching SDK at
+`<prefix>/lib/etas/<toolchain-id>/std/`. The SDK includes the compiled
+interfaces, checked bodies and the corresponding `library/std/**/*.es` files.
+Moving the entire prefix preserves offline execution and source navigation.
+
+To try a change to the Etas sources in a checkout of `etas-core`, build an
+SDK and point the consumer at the directory containing `std/manifest.json`.
+
+```sh
+etas std build --manifest-path ../etas-core/crates/etas_std/etas.toml --out-dir /tmp/etas-sdk/std
+etas check app.es --std-provider artifact --sysroot /tmp/etas-sdk
+etas run app.es --std-provider artifact --sysroot /tmp/etas-sdk
+```
+
+A project with an older `builtin:std` lock entry upgrades explicitly. Set its
+`etas.toml` std requirement to a version range that admits the installed SDK
+(for example, `"0.4"` for std 0.4.0), then run the lock command.
+
+```sh
+etas pkg lock ./project --std-provider artifact --sysroot /tmp/etas-sdk
+```
+
+The resulting builtin entry identifies the SDK version and native ABI. A
+source body change invalidates the compilation cache even when this lock entry
+stays the same. A version or ABI mismatch produces a diagnostic during check
+or run. The explicit `--std-provider legacy` option selects the legacy registry
+and its original builtin lock identity for the entire session.
+
 ## 8. Package Metadata
 
 Published packages should include generated public API metadata. The metadata

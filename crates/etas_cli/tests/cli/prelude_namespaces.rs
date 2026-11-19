@@ -1,7 +1,7 @@
 use super::*;
 
 fn isolated_command() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     for (name, _) in std::env::vars_os() {
         if name.to_str().is_some_and(|name| name.starts_with("ETAS_")) {
             command.env_remove(name);

@@ -69,7 +69,7 @@ take_size(i);            // rejected if the parameter expects usize
 let z: usize = 0;        // allowed: integer literal is contextually typed
 ```
 
-Conversions between concrete integer types must be explicit. Indexing is the only special numeric context in the MVP. Etas defines `Index` as a compiler-known prelude spec, not as an ordinary runtime type. `Index` is satisfied by integer literals and by all concrete integer types:
+Conversions between concrete integer types must be explicit. Indexing has a checked numeric contract. Etas defines `Index` as a compiler-known prelude spec, not as an ordinary runtime type. `Index` is satisfied by integer literals and by all concrete integer types:
 
 ```text
 Index :=
@@ -88,6 +88,12 @@ let size: usize = pos;   // rejected: no general i32 -> usize coercion
 ```
 
 For signed index values, checked indexing fails if the value is negative. For all index values, checked indexing fails if the value is outside the collection bounds. The original index type remains visible to the typed IR; the type checker should treat this as an index-specific spec rule rather than a general conversion rule.
+
+Generic numeric helpers use the source-declared, compiler-known
+`std.math.Number` spec. It admits the primitive integer and float families,
+preserves concrete widths and keeps ordinary conversion rules. Its evidence
+and the `abs/min/max` contracts are defined in
+[Numeric Helpers](19-standard-library.md#5-numeric-helpers).
 
 Parameterized types, specs, effects, and actions use `<...>` in source, for
 example `Result<T, E>`, `Within<ReportsRoot>`, `Error<E>`, and `Fs.read<R>`.
@@ -195,6 +201,28 @@ impl Report ~ PromptEncode {
     }
 }
 ```
+
+An implementation can declare its own generic bounds before the receiver type:
+
+```etas
+impl<T ~ PromptEncode> Array<T> ~ PromptEncode {
+    flow encode(self) -> PromptPart {
+        var text = "[";
+        var separator = "";
+        for value in self limit Iterations(18446744073709551615) {
+            let part = value::PromptEncode.encode();
+            text = text + separator + part.text;
+            separator = ",";
+        }
+        return PromptPart { text= text + "]" };
+    }
+}
+```
+
+These bounds are conditions on the implementation's owner parameters and are
+available to every method. They do not add method generic parameters. An impl
+without an explicit parameter list continues to infer parameters from its owner
+type pattern.
 
 Generic flows can require spec bounds. Multiple bounds use `+`:
 
@@ -612,6 +640,18 @@ flow Enabled(value: Switch) -> Switch {
     return next;
 }
 ```
+
+### 3.3 Lambda And Handler Capture
+
+Anonymous flows and Handler values use the same lexical capture rules.
+Capturing a local `var` within its owning task preserves the original binding,
+and assignments are immediately visible to other accesses to that binding.
+Captured `let` bindings retain their immutability. Copying a callable preserves
+its captured bindings, and returned callables can extend ordinary binding
+lifetimes. Capture of mutable local state is task-local.
+
+The value, lifetime, concurrency, analysis and checkpoint requirements are
+defined in [Lambda And Handler Capture](20-lexical-capture.md).
 
 ## 4. Flows As The Ordinary Callable Unit
 

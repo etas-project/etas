@@ -1,5 +1,28 @@
 use super::*;
 
+fn callback_handler_selector(
+    graph: &mut etas_code::descriptor::DescriptorGraphInput,
+) -> &mut etas_code::descriptor::TypeInfoRef {
+    use etas_code::descriptor::{ParameterHandlerScopeInfo, StaticEffectArgInfo, TraceInfo};
+    graph
+        .traces
+        .iter_mut()
+        .find_map(|trace| {
+            let TraceInfo::ParameterCall(call) = trace else {
+                return None;
+            };
+            call.handlers.as_mut()?.iter_mut().find_map(|scope| {
+                let ParameterHandlerScopeInfo::Handle { arms } = scope;
+                arms.iter_mut()
+                    .find_map(|arm| match arm.action.arguments.as_mut_slice() {
+                        [StaticEffectArgInfo::Type(ty)] => Some(ty),
+                        _ => None,
+                    })
+            })
+        })
+        .expect("callback handler has a checked type selector")
+}
+
 #[test]
 fn metadata_only_reflected_flow_check_and_compile_respect_callback_trace() {
     let workspace = origin_metadata::workspace_with_source(
@@ -507,31 +530,7 @@ flow main() -> string ![Error<CompileError>] {
         .iter_mut()
         .find_map(|origin| origin.descriptors.as_mut())
         .unwrap();
-    let requested = set
-        .headers
-        .as_ref()
-        .unwrap()
-        .callables
-        .iter()
-        .find(|header| {
-            header
-                .id
-                .as_declaration()
-                .is_some_and(|id| id.declaration() == ["wrapped"])
-        })
-        .unwrap()
-        .analysis
-        .effects
-        .requested
-        .unwrap();
-    let original = set.graph.rows[requested.0 as usize]
-        .effects
-        .iter()
-        .find_map(|effect| match &effect.arguments[..] {
-            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(*ty),
-            _ => None,
-        })
-        .expect("requested action has a type selector");
+    let original = *callback_handler_selector(&mut set.graph);
     let etas_code::descriptor::TypeInfo::Applied {
         constructor,
         arguments,
@@ -554,15 +553,7 @@ flow main() -> string ![Error<CompileError>] {
             constructor,
             arguments: vec![other_arg],
         });
-    let row = &mut set.graph.rows[requested.0 as usize];
-    let selector = row
-        .effects
-        .iter_mut()
-        .find_map(|effect| match &mut effect.arguments[..] {
-            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
-            _ => None,
-        })
-        .unwrap();
+    let selector = callback_handler_selector(&mut set.graph);
     *selector = altered;
     let checked = origin_metadata::check(&forged);
     let definitions =
@@ -643,32 +634,7 @@ flow main() -> string ![Error<CompileError>] {
     let other = set.graph.types.iter().position(|ty| matches!(ty,
         etas_code::descriptor::TypeInfo::Nominal { definition, .. } if definition.declaration() == ["Other"]
     )).expect("published Other declaration");
-    let requested = set
-        .headers
-        .as_ref()
-        .unwrap()
-        .callables
-        .iter()
-        .find(|header| {
-            header
-                .id
-                .as_declaration()
-                .is_some_and(|id| id.declaration() == ["wrapped"])
-        })
-        .unwrap()
-        .analysis
-        .effects
-        .requested
-        .unwrap();
-    let row = &mut set.graph.rows[requested.0 as usize];
-    let selector = row
-        .effects
-        .iter_mut()
-        .find_map(|effect| match &mut effect.arguments[..] {
-            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
-            _ => None,
-        })
-        .expect("requested action has a nominal selector");
+    let selector = callback_handler_selector(&mut set.graph);
     *selector = etas_code::descriptor::TypeInfoRef(other as u32);
     let checked = origin_metadata::check(&forged);
     let definitions =
@@ -794,38 +760,13 @@ flow main() -> string ![Error<CompileError>] {
         .iter_mut()
         .find_map(|origin| origin.descriptors.as_mut())
         .unwrap();
-    let requested = set
-        .headers
-        .as_ref()
-        .unwrap()
-        .callables
-        .iter()
-        .find(|header| {
-            header
-                .id
-                .as_declaration()
-                .is_some_and(|id| id.declaration() == ["wrapped"])
-        })
-        .unwrap()
-        .analysis
-        .effects
-        .requested
-        .unwrap();
     let other = etas_code::descriptor::TypeInfoRef(set.graph.types.len() as u32);
     set.graph
         .types
         .push(etas_code::descriptor::TypeInfo::Primitive(
             etas_code::descriptor::PrimitiveInfo::U32,
         ));
-    let row = &mut set.graph.rows[requested.0 as usize];
-    let selector = row
-        .effects
-        .iter_mut()
-        .find_map(|effect| match &mut effect.arguments[..] {
-            [etas_code::descriptor::StaticEffectArgInfo::Type(ty)] => Some(ty),
-            _ => None,
-        })
-        .expect("requested action has a type selector");
+    let selector = callback_handler_selector(&mut set.graph);
     *selector = other;
     let checked = origin_metadata::check(&forged);
     let definitions =

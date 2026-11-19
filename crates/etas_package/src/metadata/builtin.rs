@@ -22,20 +22,28 @@ use super::{
 pub const BUILTIN_STD_VERSION: &str = "0.2.0";
 
 pub fn builtin_std_dependency(version: String, edition: String) -> ResolvedDependency {
+    let mut dependency = builtin_std_identity(version, edition);
+    dependency.public_metadata = builtin_std_public_metadata();
+    dependency.effect_metadata = builtin_std_effect_metadata();
+    dependency
+}
+
+/// The package resolver owns the builtin lock identity; the compiler session owns its interfaces.
+pub fn builtin_std_identity(version: String, edition: String) -> ResolvedDependency {
     ResolvedDependency {
         identity: PackageIdentity {
             name: "std".to_owned(),
             version,
             edition,
         },
-        std_compatibility: standard_registry().version().compatibility_identity(),
+        std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         import_root: "std".to_owned(),
         source: ResolvedDependencySource::Builtin {
             checksum: "builtin:std".to_owned(),
         },
         dependencies: Vec::new(),
-        public_metadata: builtin_std_public_metadata(),
-        effect_metadata: builtin_std_effect_metadata(),
+        public_metadata: PackagePublicMetadata::default(),
+        effect_metadata: PackageEffectMetadata::default(),
         tool_bindings: Vec::new(),
     }
 }
@@ -231,6 +239,8 @@ fn sort_named_signatures(signatures: &mut [PackageNamedSignatureMetadata]) {
 
 fn flow_signature(path: Vec<String>, decl: &FlowDecl) -> PackageFlowSignatureMetadata {
     PackageFlowSignatureMetadata {
+        definition: None,
+        parameter_defaults: Vec::new(),
         path,
         generic_params: callable_generic_params(&decl.type_params),
         param_names: Vec::new(),
@@ -243,6 +253,7 @@ fn flow_signature(path: Vec<String>, decl: &FlowDecl) -> PackageFlowSignatureMet
 
 fn tool_signature(path: Vec<String>, decl: &ToolDecl) -> PackageToolSignatureMetadata {
     PackageToolSignatureMetadata {
+        parameter_defaults: Vec::new(),
         path,
         generic_params: Vec::new(),
         param_names: Vec::new(),
@@ -258,7 +269,14 @@ fn callable_generic_params(params: &[StdGenericParam]) -> Vec<PackageCallableGen
         .iter()
         .map(|param| PackageCallableGenericParamMetadata {
             name: param.name.clone(),
-            kind: PackageCallableGenericParamKindMetadata::Type,
+            kind: match param.kind {
+                etas_std::StdGenericParamKind::Type => {
+                    PackageCallableGenericParamKindMetadata::Type
+                }
+                etas_std::StdGenericParamKind::EffectRow => {
+                    PackageCallableGenericParamKindMetadata::Effect
+                }
+            },
             bounds: param
                 .bounds
                 .iter()
@@ -282,6 +300,14 @@ fn action_signature(
         .collect::<Vec<_>>();
     let selector_len = effect_args.len();
     PackageEffectActionSignatureMetadata {
+        default_handler_effects: decl.default_handler_effects.as_ref().map(|effects| {
+            PackageEffectRowMetadata {
+                effects: effects.iter().map(effect_ref_from_std).collect(),
+                tail: decl.default_handler_effect_tail.clone(),
+            }
+        }),
+        param_names: Vec::new(),
+        parameter_defaults: Vec::new(),
         path,
         generic_params: callable_generic_params(&decl.type_params),
         params: decl.params.iter().map(package_type_from_std_type).collect(),
@@ -303,9 +329,7 @@ fn package_action_arg_kind_from_std(
             PackageEffectActionArgKindMetadata::MemoryPlace
         }
         etas_std::EffectActionArgKind::StaticResourcePath { ty } => {
-            PackageEffectActionArgKindMetadata::StaticResourcePath {
-                ty: (*ty).to_owned(),
-            }
+            PackageEffectActionArgKindMetadata::StaticResourcePath { ty: ty.to_string() }
         }
         etas_std::EffectActionArgKind::StringPattern => {
             PackageEffectActionArgKindMetadata::StringPattern
@@ -319,11 +343,13 @@ fn flow_effect_summary(
     forwarder: bool,
 ) -> PackageEffectSummaryMetadata {
     PackageEffectSummaryMetadata {
+        definition: None,
         residual_checks: vec![],
         behavior: None,
         handler_requests: None,
         returned_callables: None,
         default_handler_effects: forwarder.then(|| crate::PackageDefaultHandlerEffectsMetadata {
+            behavior: None,
             direct_effects: Default::default(),
             default_actions: effect_row_from_std(&decl.requested_actions),
             handlers: decl
@@ -498,6 +524,26 @@ fn package_type_from_std_type(ty: &StdType) -> PackageTypeMetadata {
         StdType::Task { output, effects } => PackageTypeMetadata::Task {
             output: Box::new(package_type_from_std_type(output)),
             effects: effect_row_expr_from_std(effects),
+        },
+        StdType::Handler {
+            handled,
+            produced,
+            result,
+        } => PackageTypeMetadata::Handler {
+            handled: effect_row_expr_from_std(handled),
+            produced: produced.as_ref().map(effect_row_expr_from_std),
+            result: result
+                .as_ref()
+                .map(|ty| Box::new(package_type_from_std_type(ty))),
+        },
+        StdType::Existential { bounds } => PackageTypeMetadata::Existential {
+            bounds: bounds
+                .iter()
+                .map(|bound| PackageSpecBoundMetadata {
+                    spec: bound.path.clone(),
+                    args: bound.args.iter().map(package_type_from_std_type).collect(),
+                })
+                .collect(),
         },
     }
 }

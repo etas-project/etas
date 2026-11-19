@@ -54,10 +54,14 @@ pub(super) fn build_environment(
                 spec.version(),
                 &locked.version,
             );
-            dependencies.push(metadata::builtin_std_dependency(
+            let mut dependency = metadata::builtin_std_identity(
                 locked.version.clone(),
                 manifest.package.edition.clone(),
-            ));
+            );
+            dependency.source = crate::ResolvedDependencySource::Builtin {
+                checksum: locked.checksum.clone(),
+            };
+            dependencies.push(dependency);
             continue;
         }
 
@@ -862,9 +866,7 @@ mod tests {
                 version: "1.0.0".into(),
                 edition: "2026".into(),
             },
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             import_root: name.into(),
             source: metadata::ResolvedDependencySource::Builtin {
                 checksum: "unchanged".into(),

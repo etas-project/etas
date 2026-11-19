@@ -13,7 +13,9 @@ use environment::build_environment;
 pub use environment::environment_from_locked_snapshot;
 use lock_policy::resolve_lockfile;
 
-pub use lock::{LockPackageOptions, LockedPackageResult, lock_package};
+pub use lock::{
+    LockPackageOptions, LockedPackageResult, StdLockIdentity, lock_package, lock_package_with_std,
+};
 pub use materialize::{MaterializePackageOptions, MaterializedPackageResult, materialize_package};
 
 use crate::{PackageEnvironmentMetadata, PackageError, manifest, vendor};
@@ -1060,6 +1062,33 @@ std = { version = "0.2" }
         assert_eq!(result.lockfile.packages[0].name, "std");
         assert_eq!(result.lockfile.packages[0].source, "builtin");
         assert!(root.join("etas.lock").is_file());
+
+        let selected = StdLockIdentity {
+            version: "0.2.13".to_owned(),
+            checksum: "builtin:std:artifact:0.2.13:checked-abi".to_owned(),
+        };
+        let upgraded = lock_package_with_std(
+            LockPackageOptions {
+                package_root: root.clone(),
+            },
+            &selected,
+        )
+        .unwrap();
+        assert_eq!(upgraded.lockfile.packages[0].version, selected.version);
+        assert_eq!(upgraded.lockfile.packages[0].checksum, selected.checksum);
+        fs::create_dir_all(root.join("src")).unwrap();
+        let prepared = prepare_package(PreparePackageOptions {
+            package_root: root,
+            selected_bin: None,
+        })
+        .unwrap();
+        assert!(matches!(&prepared.environment.dependencies[0].source,
+            crate::ResolvedDependencySource::Builtin { checksum } if checksum == &selected.checksum));
+        assert!(
+            prepared.environment.dependencies[0]
+                .public_metadata
+                .is_empty()
+        );
     }
 
     #[test]
@@ -2113,9 +2142,7 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
                 version: "0.2.0".to_owned(),
                 edition: "2026".to_owned(),
             },
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             import_root: "helper".to_owned(),
             source: metadata::ResolvedDependencySource::Registry {
                 registry: "https://packages.etas.dev".to_owned(),
@@ -2138,9 +2165,7 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
                 version: "0.1.0".to_owned(),
                 edition: "2026".to_owned(),
             },
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             import_root: "tools".to_owned(),
             source: metadata::ResolvedDependencySource::Path {
                 path: ".etas/payloads/agent-tools".to_owned(),
@@ -2154,9 +2179,7 @@ tools = { package = "agent-tools", version = "0.1", import = "tools" }
         let parent_checksum_document = vendor::dependency_content_checksum(&parent_dependency);
         let index = metadata::PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: metadata::PackageIdentity {
                 name: "metadata-only-transitive-root".to_owned(),
                 version: "0.1.0".to_owned(),
@@ -2803,9 +2826,7 @@ tools = { package = "agent-tools", version = "0.1", github = "owner/agent-tools"
         let text =
             fs::read_to_string(package_root.join(".etas").join("package-index.json")).unwrap();
         let mut index = serde_json::from_str::<metadata::PackageIndex>(&text).unwrap();
-        index.std_compatibility = etas_std::standard_registry()
-            .version()
-            .compatibility_identity();
+        index.std_compatibility = etas_std::StdRegistryVersion::phase1().compatibility_identity();
         metadata_artifact::write_fixture_package_metadata_artifact(package_root, &index).unwrap();
     }
 

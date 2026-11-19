@@ -16,6 +16,22 @@ pub struct LockPackageOptions {
     pub package_root: PathBuf,
 }
 
+/// Toolchain-owned std identity; interfaces remain with the compiler provider.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StdLockIdentity {
+    pub version: String,
+    pub checksum: String,
+}
+
+impl StdLockIdentity {
+    pub fn legacy() -> Self {
+        Self {
+            version: metadata::BUILTIN_STD_VERSION.to_owned(),
+            checksum: "builtin:std".to_owned(),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LockedPackageResult {
     pub package_root: PathBuf,
@@ -23,6 +39,13 @@ pub struct LockedPackageResult {
 }
 
 pub fn lock_package(options: LockPackageOptions) -> Result<LockedPackageResult, PackageError> {
+    lock_package_with_std(options, &StdLockIdentity::legacy())
+}
+
+pub fn lock_package_with_std(
+    options: LockPackageOptions,
+    standard_library: &StdLockIdentity,
+) -> Result<LockedPackageResult, PackageError> {
     let package_root = canonical_package_root(&options.package_root)?;
     let manifest = manifest::read_manifest(&package_root)?;
     let package_index = vendor::read_package_index(&package_root)?;
@@ -33,7 +56,13 @@ pub fn lock_package(options: LockPackageOptions) -> Result<LockedPackageResult, 
         let import_root = spec.import_root(dependency_name);
         if metadata::is_builtin_package(dependency_name) {
             let package_name = spec.package_name(dependency_name);
-            match locked_builtin_dependency(&package_root, dependency_name, spec, package_name) {
+            match locked_builtin_dependency(
+                &package_root,
+                dependency_name,
+                spec,
+                package_name,
+                standard_library,
+            ) {
                 Ok(locked) => insert_locked_package(&mut packages, locked, &mut diagnostics),
                 Err(diagnostic) => diagnostics.push(diagnostic),
             }
@@ -138,8 +167,9 @@ fn locked_builtin_dependency(
     dependency_name: &str,
     spec: &manifest::DependencySpec,
     package_name: &str,
+    standard_library: &StdLockIdentity,
 ) -> Result<LockedPackage, PackageDiagnostic> {
-    let version = metadata::BUILTIN_STD_VERSION.to_owned();
+    let version = standard_library.version.clone();
     if let Some(requirement) = spec.version() {
         match version_satisfies(&version, requirement) {
             Ok(true) => {}
@@ -167,10 +197,10 @@ fn locked_builtin_dependency(
         name: package_name.to_owned(),
         version,
         source: "builtin".to_owned(),
-        checksum: "builtin:std".to_owned(),
+        checksum: standard_library.checksum.clone(),
         dependencies: Vec::new(),
         import_root: spec.import_root(dependency_name),
-        metadata_fingerprint: Some("builtin:std".to_owned()),
+        metadata_fingerprint: Some(standard_library.checksum.clone()),
     })
 }
 
@@ -197,7 +227,7 @@ fn index_dependency<'a>(
 
 fn locked_index_dependency(dependency: &ResolvedDependency) -> LockedPackage {
     let metadata_fingerprint = match &dependency.source {
-        ResolvedDependencySource::Builtin { .. } => Some("builtin:std".to_owned()),
+        ResolvedDependencySource::Builtin { checksum } => Some(checksum.clone()),
         _ => dependency.public_metadata.fingerprint.clone(),
     };
     LockedPackage {

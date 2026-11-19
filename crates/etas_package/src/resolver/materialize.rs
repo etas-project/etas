@@ -265,9 +265,7 @@ fn dependency_from_source_index(
 fn empty_package_index(manifest: &manifest::Manifest) -> metadata::PackageIndex {
     metadata::PackageIndex {
         version: 1,
-        std_compatibility: etas_std::standard_registry()
-            .version()
-            .compatibility_identity(),
+        std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         package: PackageIdentity::current(manifest),
         dependencies: Vec::new(),
         external_modules: Vec::new(),

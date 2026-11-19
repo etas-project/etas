@@ -21,6 +21,14 @@ use etas_frontend::{
 
 static NEXT_FILE: AtomicUsize = AtomicUsize::new(0);
 
+// These fixtures use legacy declarations and lock identities. The installed
+// source SDK integration suite selects and verifies the release provider.
+fn legacy_cli_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    command.args(["--std-provider", "legacy"]);
+    command
+}
+
 #[cfg(unix)]
 #[path = "cli/atomic_replace.rs"]
 mod atomic_replace;
@@ -45,6 +53,8 @@ mod model_completion;
 mod native_tool_handlers;
 #[path = "cli/native_tool_numbers.rs"]
 mod native_tool_numbers;
+#[path = "cli/std_source_sdk.rs"]
+mod std_source_sdk;
 #[path = "cli/tool_rounds.rs"]
 mod tool_rounds;
 
@@ -259,7 +269,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
 fn legacy_command_allowlist_does_not_authorize_unconfined_execution() {
     let workspace = etas_host::TestWorkspace::create("cli-command-isolation").unwrap();
     for explicit in [false, true] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         for (name, _) in std::env::vars_os() {
             if name.to_string_lossy().starts_with("ETAS_HOST_") {
                 command.env_remove(name);
@@ -815,7 +825,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_BOUNDARY_POLICY", "cli-boundary-policy");
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", "--allow-effects", path(&file)], "");
@@ -857,7 +867,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
         })
         .to_string(),
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "http");
     command.env("ETAS_HOST_POLICY_URL", policy_url.clone());
     command.env("ETAS_HOST_POLICY_ALLOW_PRIVATE", "true");
@@ -924,7 +934,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>] {
         })
         .to_string(),
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "http");
     command.env("ETAS_HOST_POLICY_URL", policy_url.clone());
     command.env("ETAS_HOST_POLICY_ALLOW_PRIVATE", "true");
@@ -970,7 +980,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "unsafe-trace-spec-runtime");
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", "--allow-effects", path(&file)], "");
@@ -1005,7 +1015,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
         })
         .to_string(),
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "http");
     command.env("ETAS_HOST_POLICY_URL", policy_url.clone());
     command.env("ETAS_HOST_POLICY_ALLOW_PRIVATE", "true");
@@ -1049,7 +1059,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "local-static");
     command.env("ETAS_HOST_POLICY_RULES", "model=allow");
     let (code, stdout, stderr) =
@@ -1082,7 +1092,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "local-static");
     command.env("ETAS_HOST_POLICY_RULES", "model=allow");
     command.env("ETAS_HOST_BOUNDARY_POLICY", "cli-local-static-policy");
@@ -1116,7 +1126,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>]
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "local-static");
     command.env("ETAS_HOST_POLICY_RULES", "console=approval");
     command.env("ETAS_HOST_APPROVAL", "auto");
@@ -1136,7 +1146,7 @@ fn run_rejects_non_unsafe_local_policy_alias() {
         "boundary-policy-old-alias",
         "flow main(args: Array<string>) -> i32 { return 0; }",
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_POLICY", "require-approval-local-static");
     command.env("ETAS_HOST_BOUNDARY_POLICY", "cli-local-static-policy");
     let (code, stdout, stderr) =
@@ -4449,7 +4459,7 @@ fn run_executes_compiler_fixtures_with_command_io(relative: &str, expected_count
             .expect("fixture exit section should be an integer");
 
         let _guard = (!cli_process_lock_is_held_by_current_thread()).then(lock_cli_process);
-        let mut child = Command::new(env!("CARGO_BIN_EXE_etas"))
+        let mut child = crate::legacy_cli_command()
             .arg("--workspace")
             .arg(&fixtures)
             .arg("run")
@@ -4692,7 +4702,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>] ~ Terminal {
             ),
         ],
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -4728,7 +4738,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>] {
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let mut child = command
         .args([
@@ -4889,7 +4899,7 @@ flow main(args: Array<string>) -> i32 ![Approval] {
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_APPROVAL", "prompt");
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", "--allow-effects", path(&file)], "");
@@ -4922,7 +4932,7 @@ flow main(args: Array<string>) -> i32 ![Memory.read<ProjectMemory>, Memory.write
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     let (code, stdout, stderr) =
         run_process_with_command(command, ["run", "--allow-effects", path(&file)], "");
@@ -4988,7 +4998,7 @@ flow main(args: Array<string>) -> i32 ![Memory.read<ProjectMemory>, Console, Err
     ));
     let memory_mode = format!("sqlite:{}", path(&db_path));
 
-    let mut write = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut write = crate::legacy_cli_command();
     write.env("ETAS_HOST_MEMORY", &memory_mode);
     let (code, stdout, stderr) = run_process_with_command(
         write,
@@ -5006,7 +5016,7 @@ flow main(args: Array<string>) -> i32 ![Memory.read<ProjectMemory>, Console, Err
     assert_eq!(stdout, "stored\n");
     assert!(stderr.is_empty(), "{stderr}");
 
-    let mut read = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut read = crate::legacy_cli_command();
     read.env("ETAS_HOST_MEMORY", &memory_mode);
     let (code, stdout, stderr) =
         run_process_with_command(read, ["run", "--allow-effects", path(&reader)], "");
@@ -5036,7 +5046,7 @@ flow main(args: Array<string>) -> i32 ![Memory, Console, Error<IOError>] {
 }
 "#,
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     command.env("ETAS_HOST_SESSION_ID", "session-cli-42");
     let (code, stdout, stderr) =
@@ -5095,7 +5105,7 @@ flow main(args: Array<string>) -> i32 ![Memory, Console, Error<IOError>] {
     ));
     let session_mode = format!("sqlite:{}", path(&db_path));
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     command.env("ETAS_HOST_SESSION_ID", "session-cli-sqlite-42");
     command.env("ETAS_HOST_SESSION", &session_mode);
@@ -5107,7 +5117,7 @@ flow main(args: Array<string>) -> i32 ![Memory, Console, Error<IOError>] {
     assert!(stderr.is_empty(), "{stderr}");
     assert!(db_path.exists(), "SQLite session database was not created");
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     command.env("ETAS_HOST_SESSION_ID", "session-cli-sqlite-42");
     command.env("ETAS_HOST_SESSION", &session_mode);
@@ -5141,7 +5151,7 @@ flow main(args: Array<string>) -> i32 {
     );
     let trace = file.with_extension("trace.json");
     let checkpoints = file.with_extension("checkpoints");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5190,7 +5200,7 @@ flow main(args: Array<string>) -> i32 {
         bytes.len() < 512 * 1000,
         "checkpoint storage must remain linear in depth"
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5235,7 +5245,7 @@ flow main(args: Array<string>) -> i32 ![Memory.write<ProjectMemory>] {
         std::process::id(),
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5292,7 +5302,7 @@ fn project_agent_system_smoke_checks_effects_and_runs_with_openai_mock() {
         &base_url,
         "agent-smoke-mock",
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5358,7 +5368,7 @@ mode = "auto"
     )
     .expect("write oMLX thinking-control profile");
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5479,7 +5489,7 @@ fn runtime_profile_model_deadline_controls_slow_request() {
     let (base_url, server) =
         spawn_delayed_openai_completion_server("within deadline", Duration::from_millis(150));
     write_model_deadline_runtime_profile(&project, &base_url, 500);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5502,7 +5512,7 @@ fn runtime_profile_model_deadline_controls_slow_request() {
     let (base_url, server) =
         spawn_delayed_openai_completion_server("too late", Duration::from_millis(250));
     write_model_deadline_runtime_profile(&project, &base_url, 100);
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, _stdout, stderr) = run_process_with_command(
         command,
@@ -5548,7 +5558,7 @@ backend = "memory"
     )
     .unwrap();
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     for name in [
         "ETAS_HOST_MODEL_ADAPTER",
         "ETAS_HOST_MODEL_BASE_URL",
@@ -5627,7 +5637,7 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5715,7 +5725,7 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         "full runtime checkpoint must record completed source/tool boundary ledger: {checkpoint_json}"
     );
 
-    let mut resume = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut resume = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -5751,7 +5761,7 @@ fn full_phase1_agent_runtime_repairs_invalid_model_tool_args() {
         &model_base_url,
         "full-phase1-runtime-tool-repair",
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5826,7 +5836,7 @@ fn full_phase1_agent_runtime_uses_trace_spec_with_http_provider() {
         &policy_url,
         "full-phase1-runtime-http",
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5926,7 +5936,7 @@ fn full_phase1_agent_runtime_resume_rejects_incompatible_host_profile() {
         &model_base_url,
         "full-phase1-runtime",
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5970,7 +5980,7 @@ fn full_phase1_agent_runtime_resume_rejects_incompatible_host_profile() {
         "model = \"different-model\"",
     );
     std::fs::write(&local_manifest, local_profile).unwrap();
-    let mut resume = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut resume = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -6117,7 +6127,7 @@ allow = ["{tool_network_authority}"]
     )
     .expect("write external tool mock runtime profile");
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6253,7 +6263,7 @@ public flow main(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Fs.list<Pro
             ("data/listed.txt", "region-preserved"),
         ],
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6359,7 +6369,7 @@ public flow large(args: Array<string>) -> i32 ![Fs.read<ProjectRoot>, Error<IOEr
         ("missing", "7"),
         ("large", "0"),
     ] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         remove_legacy_runtime_host_env(&mut command);
         let (code, stdout, stderr) = run_process_with_command(
             command,
@@ -6566,7 +6576,7 @@ allow = ["{tool_network_authority}"]
     )
     .expect("write EDK-like mock runtime profile");
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6692,7 +6702,7 @@ fn multi_agent_system_default_main_runs_full_runtime_with_mock_host() {
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6812,7 +6822,7 @@ fn multi_agent_system_runtime_variants_resume_does_not_replay_completed_boundari
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6832,7 +6842,7 @@ fn multi_agent_system_runtime_variants_resume_does_not_replay_completed_boundari
     assert_eq!(code, 0, "stderr={stderr:?}\nstdout={stdout:?}");
     assert!(checkpoint_dir.join("checkpoint-1.json").is_file());
 
-    let mut resume = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut resume = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -6893,7 +6903,7 @@ fn multi_agent_system_runtime_variants_http_policy_approval_preserves_grants() {
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -7018,7 +7028,7 @@ fn multi_agent_system_runs_simple_multi_agent_with_mock_model() {
         "simple-multi-agent-mock",
     );
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -7323,7 +7333,7 @@ fn top_level_examples_check_and_run_from_cli() {
             values
         };
         let _guard = (!cli_process_lock_is_held_by_current_thread()).then(lock_cli_process);
-        let mut child = Command::new(env!("CARGO_BIN_EXE_etas"))
+        let mut child = crate::legacy_cli_command()
             .args(&run_args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -7408,6 +7418,25 @@ fn run<const N: usize>(args: [&str; N]) -> (i32, String, String) {
     let _guard = (!cli_process_lock_is_held_by_current_thread()).then(lock_cli_process);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
+    // Cargo puts the test executable under deps/. Use the same SDK as the CLI
+    // under test when executing its commands in this process.
+    let prefix = Path::new(env!("CARGO_BIN_EXE_etas"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let sysroot = etas_driver::std_library::sdk::installed_sysroot(prefix);
+    let mut args = Vec::from(args);
+    if !args
+        .iter()
+        .any(|arg| *arg == "--sysroot" || arg.starts_with("--sysroot="))
+    {
+        let end = args
+            .iter()
+            .position(|arg| *arg == "--")
+            .unwrap_or(args.len());
+        args.splice(end..end, ["--sysroot", path(&sysroot)]);
+    }
     let code = etas_cli::run_with(args, &mut stdout, &mut stderr);
 
     (
@@ -7418,7 +7447,7 @@ fn run<const N: usize>(args: [&str; N]) -> (i32, String, String) {
 }
 
 fn run_process<const N: usize>(args: [&str; N], stdin: &str) -> (i32, String, String) {
-    run_process_with_command(Command::new(env!("CARGO_BIN_EXE_etas")), args, stdin)
+    run_process_with_command(crate::legacy_cli_command(), args, stdin)
 }
 
 fn run_process_in<const N: usize>(
@@ -7426,7 +7455,7 @@ fn run_process_in<const N: usize>(
     args: [&str; N],
     stdin: &str,
 ) -> (i32, String, String) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     command.current_dir(current_dir);
     run_process_with_command(command, args, stdin)
 }
@@ -7634,7 +7663,7 @@ fn spawn_memory_approval_policy_server() -> (String, thread::JoinHandle<Vec<Stri
 }
 
 fn live_omlx_openai_command() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     if let Ok(key) = std::env::var("ETAS_HOST_OMLX_API_KEY") {
         command.env("ETAS_HOST_OMLX_API_KEY", key);
@@ -8815,7 +8844,8 @@ fn package_action_trace_parameter_calls(
             .iter()
             .map(|child| package_action_trace_parameter_calls(child, expected))
             .sum(),
-        etas_package::PackageActionTraceMetadata::Repeat { child } => {
+        etas_package::PackageActionTraceMetadata::Repeat { child }
+        | etas_package::PackageActionTraceMetadata::DefaultHandler { child, .. } => {
             package_action_trace_parameter_calls(child, expected)
         }
         etas_package::PackageActionTraceMetadata::Widened {

@@ -635,17 +635,22 @@ The agent only receives `repo.read`; writes happen in the surrounding flow after
 ### 10.4 Secret Declassification
 
 ```etas
+import std.security.declassify.{DeclassificationStrategy, declassify};
+
 type Incident = { id: IncidentId, summary: string }
 type RedactedIncident = { id: IncidentId, summary: string }
 type Report = { body: Markdown }
 
-tool vault.read_incident(id: IncidentId) -> SecretValue<Incident>
+tool vault.read_incident(id: IncidentId) -> Secret<Incident>
     ![Secret.read<Incident>];
 
-flow redact(incident: SecretValue<Incident>) -> Sanitized<RedactedIncident> {
+flow redact(
+    incident: Secret<Incident>,
+    strategy: DeclassificationStrategy<Incident, RedactedIncident>,
+) -> Sanitized<RedactedIncident> {
     return declassify(
         incident,
-        fields = ["id", "summary"],
+        strategy = strategy,
         reason = "incident report without secrets"
     );
 }
@@ -659,14 +664,21 @@ agent ReportWriter(input: Sanitized<RedactedIncident>) -> Report {
     return perform infer<Report>(prompt);
 }
 
-flow WriteIncidentReport(id: IncidentId) -> Report {
+flow WriteIncidentReport(
+    id: IncidentId,
+    strategy: DeclassificationStrategy<Incident, RedactedIncident>,
+) -> Report {
     let incident = vault.read_incident(id);
-    let safe = redact(incident);
+    let safe = redact(incident, strategy);
     return ReportWriter.run(safe);
 }
 ```
 
-`SecretValue<Incident>` is not prompt-encodable by default. Etas forces an explicit declassification flow before model input, making secret release auditable instead of an accidental string conversion.
+The configured strategy projects the approved incident fields and validates
+the result under the current secret-release authority. `Secret<Incident>`
+retains its secrecy until this checked release succeeds. The distinct host
+`SecretValue<K>` type is an opaque reference indexed by its secret-key type.
+See [Sanitization And Declassification](19-standard-library.md#8-sanitization-and-declassification).
 
 ### 10.5 Tenant-Scoped Memory And Tools
 

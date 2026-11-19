@@ -128,9 +128,7 @@ fn overlay(consumer: &mut LoadedDriverProject, library: &LoadedDriverProject, al
         .unwrap();
     let dependency = ResolvedDependency {
         identity: identity.clone(),
-        std_compatibility: etas_std::standard_registry()
-            .version()
-            .compatibility_identity(),
+        std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         import_root: alias.into(),
         source: ResolvedDependencySource::Path {
             path: library
@@ -161,9 +159,7 @@ fn overlay(consumer: &mut LoadedDriverProject, library: &LoadedDriverProject, al
             version: identity.version,
             edition: identity.edition,
             import_root: alias.into(),
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         },
     );
     let root = library.loaded.input.source_root.as_ref().unwrap();
@@ -529,9 +525,7 @@ fn relative_source_dependency_origins_use_the_owning_original_package_directory(
     };
     dependencies.push(ResolvedDependency {
         identity: parent.package_environment.unwrap().current_package.unwrap(),
-        std_compatibility: etas_std::standard_registry()
-            .version()
-            .compatibility_identity(),
+        std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         import_root: "parent".into(),
         source: ResolvedDependencySource::Path {
             path: "../parent".into(),

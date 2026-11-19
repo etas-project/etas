@@ -913,6 +913,7 @@ impl CliHostConfig {
         }
         if self.model.is_some() {
             grants.push(etas_host::HostActionGrant::allow("Agentic", "infer"));
+            grants.push(etas_host::HostActionGrant::allow("Agentic", "step"));
         }
         if !self.command_allowed_programs.is_empty() {
             for action in ["run", "start", "reconnect", "read", "write", "stop"] {
@@ -1055,17 +1056,32 @@ struct LoadedRuntimeConfig {
     base_dir: PathBuf,
 }
 
+pub(crate) struct RuntimeConfigRequest<'a> {
+    pub inputs: &'a [PathBuf],
+    pub flow: Option<&'a str>,
+    pub requested_profile: Option<&'a str>,
+    pub runtime_config: Option<&'a Path>,
+    pub allow_net: &'a [String],
+    pub max_call_depth: Option<u32>,
+    pub max_tool_rounds: Option<u32>,
+    pub cpu_threads: Option<&'a str>,
+    pub model_output_encoding: Option<&'a str>,
+}
+
 pub(crate) fn runtime_config_for_run(
-    inputs: &[PathBuf],
-    flow: Option<&str>,
-    requested_profile: Option<&str>,
-    runtime_config: Option<&Path>,
-    allow_net: &[String],
-    max_call_depth: Option<u32>,
-    max_tool_rounds: Option<u32>,
-    cpu_threads: Option<&str>,
-    model_output_encoding: Option<&str>,
+    request: RuntimeConfigRequest<'_>,
 ) -> Result<CliHostConfig, CliError> {
+    let RuntimeConfigRequest {
+        inputs,
+        flow,
+        requested_profile,
+        runtime_config,
+        allow_net,
+        max_call_depth,
+        max_tool_rounds,
+        cpu_threads,
+        model_output_encoding,
+    } = request;
     let mut env = RuntimeEnvOverrides::from_environment()?;
     if let Some(encoding) = model_output_encoding {
         model_output::parse(encoding)?;

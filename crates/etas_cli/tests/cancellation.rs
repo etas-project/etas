@@ -11,6 +11,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+fn legacy_cli_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    command.args(["--std-provider", "legacy"]);
+    command
+}
+
 struct Fixture(PathBuf);
 impl Fixture {
     fn new(body: &str) -> Self {
@@ -57,7 +63,7 @@ impl Drop for Process {
 fn cancelled_process(body: &str, signal: &str, expected: i32) {
     let fixture = Fixture::new(body);
     let mut child = Process(
-        Command::new(env!("CARGO_BIN_EXE_etas"))
+        crate::legacy_cli_command()
             .args(["--format", "json", "run"])
             .arg(fixture.0.join("main.es"))
             .stdin(Stdio::piped())
@@ -161,7 +167,7 @@ fn blocked_output(second_signal: bool, host_write: bool) {
     let trace = fixture.0.join("trace.json");
     let profile = fixture.0.join("profile.json");
     let mut child = Process(
-        Command::new(env!("CARGO_BIN_EXE_etas"))
+        crate::legacy_cli_command()
             .args(["--format", "json", "--profile-out"])
             .arg(&profile)
             .arg("run")
@@ -275,7 +281,7 @@ flow main(args: Array<string>) -> i32 ![Console] {
     .unwrap();
     let checkpoints = fixture.0.join("checkpoints");
     let mut initial = Process(
-        Command::new(env!("CARGO_BIN_EXE_etas"))
+        crate::legacy_cli_command()
             .arg("run")
             .arg(fixture.0.join("main.es"))
             .arg("--checkpoint-dir")
@@ -306,7 +312,7 @@ flow main(args: Array<string>) -> i32 ![Console] {
     let trace = fixture.0.join("resume-trace.json");
     let profile = fixture.0.join("resume-profile.json");
     let mut child = Process(
-        Command::new(env!("CARGO_BIN_EXE_etas"))
+        crate::legacy_cli_command()
             .args(["--format", "json", "--profile-out"])
             .arg(&profile)
             .args(["resume", "0", "--checkpoint-dir"])

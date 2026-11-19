@@ -20,7 +20,7 @@ use etas_frontend::{
     ProjectExternalTraceSpecConformanceTargetInput, ProjectExternalTraceSpecSummaryInput,
     ProjectExternalTypeInput, ProjectExternalTypeSpecSatisfactionInput, ProjectToolBindingInput,
 };
-use etas_std::{StdDecl, StdSymbolKind};
+use etas_std::StdSymbolKind;
 
 use crate::DriverError;
 
@@ -33,31 +33,54 @@ mod method_contracts_tests;
 #[cfg(test)]
 mod request_instantiation_tests;
 
+/// Convert a package environment for an explicit legacy session.
+/// Artifact sessions must use `frontend_environment_with_std_registry`.
 pub fn frontend_environment(
     metadata: etas_package::PackageEnvironmentMetadata,
 ) -> Result<ProjectEnvironmentInput, DriverError> {
+    frontend_environment_with_std_registry(metadata, &etas_std::standard_registry())
+}
+
+struct PackageGraph<'a> {
+    packages: &'a [ProjectExternalPackageInput],
+    std_registry: &'a etas_std::StdRegistry,
+}
+
+impl std::ops::Deref for PackageGraph<'_> {
+    type Target = [ProjectExternalPackageInput];
+    fn deref(&self) -> &Self::Target {
+        self.packages
+    }
+}
+
+/// Resolve std type identities with the same registry as the compilation session.
+pub fn frontend_environment_with_std_registry(
+    metadata: etas_package::PackageEnvironmentMetadata,
+    std_registry: &etas_std::StdRegistry,
+) -> Result<ProjectEnvironmentInput, DriverError> {
     let external_packages = external_packages(&metadata)?;
-    let effect_metadata = dependency_effect_metadata(&metadata, &external_packages)?;
+    let graph = PackageGraph {
+        packages: &external_packages,
+        std_registry,
+    };
+    let effect_metadata = dependency_effect_metadata(&metadata, &graph)?;
     let dependency_modules = dependency_external_modules(&metadata.dependencies);
-    let external_public_metadata = external_public_metadata(&metadata, &external_packages)?;
-    let tool_bindings = project_tool_bindings(&metadata, &external_packages)?;
+    let external_public_metadata = external_public_metadata(&metadata, &graph)?;
+    let tool_bindings = project_tool_bindings(&metadata, &graph)?;
     Ok(ProjectEnvironmentInput {
         stable_source_keys: Vec::new(),
         local_source_package: None,
         standalone_source_packages: Vec::new(),
         dependency_source_packages: Vec::new(),
-        external_package_dependencies: external_package_dependencies(
-            &metadata,
-            &external_packages,
-        )?,
-        external_definition_origins: external_definition_origins(&metadata, &external_packages)?,
+        external_package_dependencies: external_package_dependencies(&metadata, &graph)?,
+        external_definition_origins: external_definition_origins(&metadata, &graph)?,
         external_packages: external_packages.clone(),
         external_modules: metadata
             .external_modules
             .into_iter()
             .chain(dependency_modules)
             .filter(|module| !is_builtin_std_module(module))
-            .map(|module| external_module_input(module, &external_packages))
+            .map(|module| external_module_input(module, &graph))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
             .fold(Vec::new(), dedup_external_module),
@@ -71,7 +94,7 @@ pub fn frontend_environment(
 
 fn external_package_dependencies(
     metadata: &etas_package::PackageEnvironmentMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<Vec<etas_frontend::ProjectExternalPackageDependencyInput>, DriverError> {
     let ids = packages
         .iter()
@@ -112,7 +135,7 @@ fn external_package_dependencies(
 
 fn external_definition_origins(
     metadata: &etas_package::PackageEnvironmentMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<Vec<etas_frontend::ProjectExternalDefinitionOriginsInput>, DriverError> {
     let mut seen = BTreeSet::new();
     let mut origins = Vec::new();
@@ -158,7 +181,7 @@ fn external_definition_origins(
 
 fn project_tool_bindings(
     metadata: &etas_package::PackageEnvironmentMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<Vec<ProjectToolBindingInput>, DriverError> {
     metadata
         .tool_bindings
@@ -236,7 +259,7 @@ fn external_packages(
 
 fn external_public_metadata(
     metadata: &etas_package::PackageEnvironmentMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<Vec<ProjectExternalPublicMetadataInput>, DriverError> {
     let mut seen = BTreeMap::<String, ()>::new();
     flatten_dependencies(&metadata.dependencies)
@@ -256,7 +279,7 @@ fn external_public_metadata(
                         dependency.identity.name, dependency.import_root
                     ))
                 });
-            Some(package.map(|package| external_public_metadata_input(
+            Some(package.map(|package| external_public_metadata_with_graph(
                 package,
                 packages,
                 &dependency.public_metadata,
@@ -360,12 +383,45 @@ pub(crate) fn stable_external_package_id(key: &str) -> ExternalPackageId {
     ExternalPackageId(u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
 }
 
-fn external_public_metadata_input(
+pub(crate) fn external_public_metadata_input(
     package: &ProjectExternalPackageInput,
     packages: &[ProjectExternalPackageInput],
     metadata: &etas_package::PackagePublicMetadata,
+    std_registry: &etas_std::StdRegistry,
+) -> ProjectExternalPublicMetadataInput {
+    external_public_metadata_with_graph(
+        package,
+        &PackageGraph {
+            packages,
+            std_registry,
+        },
+        metadata,
+    )
+}
+
+fn external_public_metadata_with_graph(
+    package: &ProjectExternalPackageInput,
+    packages: &PackageGraph<'_>,
+    metadata: &etas_package::PackagePublicMetadata,
 ) -> ProjectExternalPublicMetadataInput {
     ProjectExternalPublicMetadataInput {
+        scoped_callbacks: metadata
+            .scoped_callbacks
+            .iter()
+            .map(|contract| etas_package_metadata::ScopedCallbackContract {
+                target: match &contract.target {
+                    etas_package_metadata::CallableContractTarget::Item(path) => {
+                        etas_package_metadata::CallableContractTarget::Item(
+                            dependency_path_with_graph(package, packages, path),
+                        )
+                    }
+                    etas_package_metadata::CallableContractTarget::Method(identity) => {
+                        etas_package_metadata::CallableContractTarget::Method(identity.clone())
+                    }
+                },
+                parameters: contract.parameters.clone(),
+            })
+            .collect(),
         package: package.id,
         types: metadata
             .types
@@ -386,6 +442,8 @@ fn external_public_metadata_input(
             .flows
             .iter()
             .map(|signature| ProjectExternalFlowSignatureInput {
+                definition: signature.definition.clone(),
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -410,6 +468,7 @@ fn external_public_metadata_input(
             .agents
             .iter()
             .map(|signature| ProjectExternalAgentSignatureInput {
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -437,6 +496,7 @@ fn external_public_metadata_input(
             .tools
             .iter()
             .map(|signature| ProjectExternalToolSignatureInput {
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -484,6 +544,12 @@ fn external_public_metadata_input(
             .spec_impls
             .iter()
             .map(|implementation| ProjectExternalSpecImplInput {
+                owner: implementation.owner.clone(),
+                generic_params: callable_generic_params_input(
+                    package,
+                    packages,
+                    &implementation.generic_params,
+                ),
                 self_type: dependency_type_input_with_graph(
                     package,
                     packages,
@@ -571,6 +637,12 @@ fn external_public_metadata_input(
             .actions
             .iter()
             .map(|signature| ProjectExternalActionSignatureInput {
+                default_handler_effects: signature
+                    .default_handler_effects
+                    .as_ref()
+                    .map(|row| dependency_effect_row_input(package, packages, row)),
+                param_names: signature.param_names.clone(),
+                parameter_defaults: signature.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -605,6 +677,7 @@ fn external_public_metadata_input(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                definition: summary.definition.clone(),
                 residual_checks: summary.residual_checks.clone(),
                 behavior: summary.behavior.clone(),
                 handler_requests: summary.handler_requests.as_ref().map(|template| {
@@ -679,6 +752,21 @@ fn external_public_metadata_input(
                 }),
                 default_handler_effects: summary.default_handler_effects.as_ref().map(|effects| {
                     etas_frontend::ProjectExternalDefaultHandlerEffectsInput {
+                        behavior: effects.behavior.as_ref().map(|behavior| {
+                            let mut behavior = behavior.clone();
+                            behavior.remap_paths(|kind, path| match kind {
+                                etas_package_metadata::CallableValuePathKind::Type => {
+                                    dependency_type_path(package, packages, path)
+                                }
+                                etas_package_metadata::CallableValuePathKind::Effect
+                                    if is_standard_effect_path(path) =>
+                                {
+                                    path.to_vec()
+                                }
+                                _ => dependency_path_with_graph(package, packages, path),
+                            });
+                            behavior
+                        }),
                         direct_effects: dependency_effect_row_input(
                             package,
                             packages,
@@ -794,7 +882,7 @@ fn external_public_metadata_input(
 
 fn named_signature_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     signature: &etas_package::PackageNamedSignatureMetadata,
 ) -> ProjectExternalNamedSignatureInput {
     ProjectExternalNamedSignatureInput {
@@ -810,7 +898,7 @@ fn named_signature_input(
 
 fn spec_signature_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     signature: &etas_package::PackageSpecSignatureMetadata,
 ) -> ProjectExternalSpecSignatureInput {
     ProjectExternalSpecSignatureInput {
@@ -829,6 +917,8 @@ fn spec_signature_input(
             .callable
             .as_ref()
             .map(|callable| ProjectExternalFlowSignatureInput {
+                definition: callable.definition.clone(),
+                parameter_defaults: callable.parameter_defaults.clone(),
                 path: dependency_path_with_graph(package, packages, &callable.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -853,10 +943,13 @@ fn spec_signature_input(
             .iter()
             .map(|method| ProjectExternalSpecMethodInput {
                 name: method.name.clone(),
+                updating_receiver: method.updating_receiver,
                 receiver_param: method.receiver_param,
                 path: dependency_path_with_graph(package, packages, &method.path),
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
+                        definition: callable.definition.clone(),
+                        parameter_defaults: callable.parameter_defaults.clone(),
                         path: dependency_path_with_graph(package, packages, &callable.path),
                         generic_params: callable_generic_params_input(
                             package,
@@ -900,7 +993,7 @@ fn spec_signature_input(
 
 fn callable_generic_params_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     params: &[etas_package::metadata::PackageCallableGenericParamMetadata],
 ) -> Vec<etas_frontend::ProjectExternalCallableGenericParamInput> {
     params
@@ -954,7 +1047,7 @@ fn dependency_path(package: &ProjectExternalPackageInput, path: &[String]) -> Ve
 
 fn dependency_contract_target(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     target: &etas_package_metadata::CallableContractTarget,
 ) -> etas_package_metadata::CallableContractTarget {
     match target {
@@ -971,7 +1064,7 @@ fn dependency_contract_target(
 
 fn dependency_path_with_graph(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     path: &[String],
 ) -> Vec<String> {
     if matches!(path.first().map(String::as_str), Some("std"))
@@ -982,10 +1075,7 @@ fn dependency_path_with_graph(
     dependency_path(package, path)
 }
 
-fn path_starts_with_any_import_root(
-    path: &[String],
-    packages: &[ProjectExternalPackageInput],
-) -> bool {
+fn path_starts_with_any_import_root(path: &[String], packages: &PackageGraph<'_>) -> bool {
     packages.iter().any(|package| {
         let root = package
             .import_root
@@ -1009,34 +1099,12 @@ fn path_segments_from_text(text: &str) -> Vec<String> {
 }
 
 fn is_standard_effect_base(base: &str) -> bool {
-    if base == "Error" {
-        return true;
-    }
-    let registry = etas_std::standard_registry();
-    if registry
-        .lookup_qualified(&path_segments_from_text(base))
-        .is_some_and(|symbol| {
-            matches!(
-                symbol.kind,
-                StdSymbolKind::Effect | StdSymbolKind::EffectAction
-            )
-        })
-    {
-        return true;
-    }
-    registry.symbols().any(|symbol| match &symbol.decl {
-        StdDecl::Effect(effect) => effect.name == base,
-        StdDecl::EffectAction(action) => {
-            format!("{}.{}", action.owner, action.name) == base
-                || symbol.qualified_path.join(".") == base
-        }
-        _ => false,
-    })
+    etas_std::is_standard_effect_reference(base)
 }
 
 fn dependency_callable_values(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     graph: &etas_package_metadata::CallableValueGraph,
 ) -> etas_package_metadata::CallableValueGraph {
     use etas_package_metadata::CallableValuePathKind;
@@ -1051,7 +1119,7 @@ fn dependency_callable_values(
 
 fn dependency_callable_request_target(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     target: &etas_package_metadata::CallableRequestTarget,
 ) -> etas_package_metadata::CallableRequestTarget {
     use etas_package_metadata::CallableValuePathKind;
@@ -1066,7 +1134,7 @@ fn dependency_callable_request_target(
 
 fn dependency_effect_row_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     row: &etas_package::PackageEffectRowMetadata,
 ) -> ProjectExternalEffectRowInput {
     ProjectExternalEffectRowInput {
@@ -1081,7 +1149,7 @@ fn dependency_effect_row_input(
 
 fn dependency_action_trace_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     trace: &etas_package::PackageActionTraceMetadata,
 ) -> ProjectExternalActionTraceInput {
     match trace {
@@ -1132,6 +1200,15 @@ fn dependency_action_trace_input(
                     .collect(),
             )
         }
+        etas_package::PackageActionTraceMetadata::DefaultHandler { guards, child } => {
+            ProjectExternalActionTraceInput::DefaultHandler {
+                guards: guards
+                    .iter()
+                    .map(|guard| dependency_effect_ref_input(package, packages, guard))
+                    .collect(),
+                body: Box::new(dependency_action_trace_input(package, packages, child)),
+            }
+        }
         etas_package::PackageActionTraceMetadata::Repeat { child } => {
             ProjectExternalActionTraceInput::Repeat(Box::new(dependency_action_trace_input(
                 package, packages, child,
@@ -1163,7 +1240,7 @@ fn dependency_action_trace_input(
 
 fn dependency_trace_spec_clause_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     clause: &etas_package::PackageTraceSpecClauseMetadata,
 ) -> ProjectExternalTraceSpecClauseInput {
     ProjectExternalTraceSpecClauseInput {
@@ -1241,7 +1318,7 @@ fn dependency_trace_spec_clause_kind_input(
 
 fn dependency_effect_ref_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     effect: &etas_package::PackageEffectRefMetadata,
 ) -> ProjectExternalEffectRefInput {
     let path = if is_standard_effect_path(&effect.path) {
@@ -1261,7 +1338,7 @@ fn dependency_effect_ref_input(
 
 fn dependency_effect_arg_input(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     arg: &etas_package::PackageEffectArgMetadata,
 ) -> ProjectExternalEffectArgInput {
     match arg {
@@ -1339,15 +1416,23 @@ fn dependency_type_input(
     package: &ProjectExternalPackageInput,
     ty: &etas_package::PackageTypeMetadata,
 ) -> ProjectExternalTypeInput {
-    dependency_type_input_with_graph(package, std::slice::from_ref(package), ty)
+    let registry = etas_std::standard_registry();
+    let graph = PackageGraph {
+        packages: std::slice::from_ref(package),
+        std_registry: &registry,
+    };
+    dependency_type_input_with_graph(package, &graph, ty)
 }
 
 fn dependency_type_input_with_graph(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     ty: &etas_package::PackageTypeMetadata,
 ) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::AgentContext { method } => {
+            ProjectExternalTypeInput::AgentContext(method.clone())
+        }
         etas_package::PackageTypeMetadata::Existential { bounds } => {
             ProjectExternalTypeInput::Existential {
                 bounds: bounds
@@ -1524,34 +1609,36 @@ fn dependency_type_input_with_graph(
 
 fn dependency_type_path(
     package: &ProjectExternalPackageInput,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     path: &[String],
 ) -> Vec<String> {
-    if is_standard_type_path(path) {
+    if path.first().is_some_and(|part| part == "std") {
         return path.to_vec();
+    }
+    let standard = packages
+        .std_registry
+        .lookup_qualified(path)
+        .or_else(|| {
+            (path.len() == 1)
+                .then(|| {
+                    packages
+                        .std_registry
+                        .lookup_prelude_in_namespace(&path[0], etas_std::StdNamespace::Type)
+                })
+                .flatten()
+        })
+        .filter(|symbol| symbol.kind == StdSymbolKind::Type);
+    if let Some(standard) = standard {
+        return standard.qualified_path.clone();
     }
     dependency_path_with_graph(package, packages, path)
 }
 
-fn is_standard_type_path(path: &[String]) -> bool {
-    if matches!(path.first().map(String::as_str), Some("std")) {
-        return true;
-    }
-    let registry = etas_std::standard_registry();
-    if registry
-        .lookup_qualified(path)
-        .is_some_and(|symbol| matches!(symbol.kind, StdSymbolKind::Type))
-    {
-        return true;
-    }
-    path.len() == 1
-        && registry
-            .lookup_prelude_in_namespace(&path[0], etas_std::StdNamespace::Type)
-            .is_some_and(|symbol| matches!(symbol.kind, StdSymbolKind::Type))
-}
-
 fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInput {
     match ty {
+        etas_package::PackageTypeMetadata::AgentContext { method } => {
+            ProjectExternalTypeInput::AgentContext(method.clone())
+        }
         etas_package::PackageTypeMetadata::Existential { bounds } => {
             ProjectExternalTypeInput::Existential {
                 bounds: bounds
@@ -1707,7 +1794,7 @@ fn type_input(ty: &etas_package::PackageTypeMetadata) -> ProjectExternalTypeInpu
 
 fn external_module_input(
     module: etas_package::PackageExternalModuleMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<ProjectExternalModuleInput, DriverError> {
     let package = external_package_for_owner(packages, module.package.as_ref())?;
     let path = package
@@ -1737,7 +1824,7 @@ fn external_module_input(
 }
 
 fn external_package_for_owner(
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     owner: Option<&etas_package::PackageExternalModuleOwnerMetadata>,
 ) -> Result<Option<ExternalPackageId>, DriverError> {
     let Some(owner) = owner else {
@@ -1763,7 +1850,7 @@ fn external_package_for_owner(
 
 fn dependency_effect_metadata(
     metadata: &etas_package::PackageEnvironmentMetadata,
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
 ) -> Result<etas_effects::DependencyEffectMetadata, DriverError> {
     let mut tags = Vec::new();
     for tag in &metadata.effect_metadata.tags {
@@ -1798,7 +1885,7 @@ fn dependency_effect_metadata(
 
 fn collect_dependency_effect_tags(
     dependencies: &[etas_package::ResolvedDependency],
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     output: &mut Vec<etas_effects::DependencyEffectTag>,
 ) -> Result<(), DriverError> {
     for dependency in dependencies {
@@ -1830,7 +1917,7 @@ fn collect_dependency_effect_tags(
 
 fn collect_dependency_effect_extensions(
     dependencies: &[etas_package::ResolvedDependency],
-    packages: &[ProjectExternalPackageInput],
+    packages: &PackageGraph<'_>,
     output: &mut Vec<etas_effects::DependencyEffectExtension>,
 ) {
     for dependency in dependencies {
@@ -1909,9 +1996,7 @@ mod tests {
             version: "1".into(),
             edition: "2026".into(),
             import_root: "dep.library".into(),
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         };
         let clause = etas_package::PackageTraceSpecClauseMetadata {
             kind: etas_package::PackageTraceSpecClauseKindMetadata::Allow,
@@ -1930,8 +2015,14 @@ mod tests {
                 }],
             }],
         };
-        let projected =
-            dependency_trace_spec_clause_input(&package, std::slice::from_ref(&package), &clause);
+        let projected = dependency_trace_spec_clause_input(
+            &package,
+            &PackageGraph {
+                packages: std::slice::from_ref(&package),
+                std_registry: &etas_std::standard_registry(),
+            },
+            &clause,
+        );
         let [bound] = projected.selector_bounds.as_slice() else {
             panic!("selector bound was lost");
         };
@@ -1952,6 +2043,63 @@ mod tests {
     }
 
     #[test]
+    fn dependency_types_follow_the_selected_std_prelude() {
+        let mut builder = etas_std::StdRegistryBuilder::new(etas_std::StdRegistryVersion::phase1());
+        let module = builder.module(&["std", "sdk"], "");
+        let error = builder.symbol(
+            module,
+            "SdkError",
+            StdSymbolKind::Type,
+            etas_std::StdDecl::Type(etas_std::TypeDecl::generic(
+                "SdkError",
+                &[],
+                etas_std::TypeDeclKind::Struct,
+            )),
+            "",
+        );
+        builder.prelude("SdkFailure", error);
+        let registry = builder.finish();
+        let package = ProjectExternalPackageInput {
+            id: ExternalPackageId(7),
+            name: "library".into(),
+            version: "1.0.0".into(),
+            edition: "2026".into(),
+            import_root: "vendor.library".into(),
+            std_compatibility: registry.version().compatibility_identity(),
+        };
+        let graph = PackageGraph {
+            packages: std::slice::from_ref(&package),
+            std_registry: &registry,
+        };
+        let sdk_type = dependency_type_input_with_graph(
+            &package,
+            &graph,
+            &etas_package::PackageTypeMetadata::Named {
+                path: vec!["SdkFailure".into()],
+            },
+        );
+        assert_eq!(
+            sdk_type,
+            ProjectExternalTypeInput::Named(vec!["std".into(), "sdk".into(), "SdkError".into()])
+        );
+        let owned_type = dependency_type_input_with_graph(
+            &package,
+            &graph,
+            &etas_package::PackageTypeMetadata::Named {
+                path: vec!["LibraryError".into()],
+            },
+        );
+        assert_eq!(
+            owned_type,
+            ProjectExternalTypeInput::Named(vec![
+                "vendor".into(),
+                "library".into(),
+                "LibraryError".into()
+            ])
+        );
+    }
+
+    #[test]
     fn dependency_type_input_preserves_std_prelude_types_without_package_prefix() {
         let package = ProjectExternalPackageInput {
             id: ExternalPackageId(7),
@@ -1959,9 +2107,7 @@ mod tests {
             version: "0.1.0".to_owned(),
             edition: "2026".to_owned(),
             import_root: "edk.algorithm".to_owned(),
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
         };
 
         let std_error = dependency_type_input(
@@ -1972,7 +2118,7 @@ mod tests {
         );
         assert_eq!(
             std_error,
-            ProjectExternalTypeInput::Named(vec!["IOError".to_owned()])
+            ProjectExternalTypeInput::Named(vec!["std".into(), "io".into(), "IOError".into()])
         );
 
         let package_error = dependency_type_input(
@@ -2000,9 +2146,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "errors".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/errors".to_owned(),
@@ -2019,6 +2163,9 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        default_handler_effects: None,
+                        param_names: Vec::new(),
+                        parameter_defaults: Vec::new(),
                         path: vec!["errors".to_owned(), "Net".to_owned(), "request".to_owned()],
                         generic_params: vec![
                             etas_package::metadata::PackageActionGenericParamMetadata {
@@ -2110,9 +2257,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "dep".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/generic-fs".to_owned(),
@@ -2123,6 +2268,8 @@ mod tests {
                 dependencies: Vec::new(),
                 public_metadata: etas_package::PackagePublicMetadata {
                     flows: vec![etas_package::PackageFlowSignatureMetadata {
+                        definition: None,
+                        parameter_defaults: Vec::new(),
                         path: vec!["api".to_owned(), "read".to_owned()],
                         generic_params: generics,
                         param_names: Vec::new(),
@@ -2134,6 +2281,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        definition: None,
                         residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,
@@ -2248,9 +2396,7 @@ mod tests {
                     version: "0.1.0".to_owned(),
                     edition: "2026".to_owned(),
                 },
-                std_compatibility: etas_std::standard_registry()
-                    .version()
-                    .compatibility_identity(),
+                std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
                 import_root: "edk.http".to_owned(),
                 source: etas_package::ResolvedDependencySource::Vendor {
                     path: ".etas/vendor/edk-http".to_owned(),
@@ -2267,6 +2413,9 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        default_handler_effects: None,
+                        param_names: Vec::new(),
+                        parameter_defaults: Vec::new(),
                         path: vec![
                             "effects".to_owned(),
                             "EdkHttp".to_owned(),
@@ -2286,6 +2435,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        definition: None,
                         residual_checks: vec![],
                         behavior: None,
                         handler_requests: None,

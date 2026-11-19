@@ -1,6 +1,6 @@
 [package]
 name = "etas_cli"
-version = "0.13.5"
+version = "0.16.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -29,7 +29,10 @@ tracing.workspace = true
 tokio = { version = "1", features = ["rt", "time", "signal", "macros"], optional = true }
 
 [features]
+artifact-std-default = []
+forbid-legacy-std = ["artifact-std-default", "etas_driver/forbid-legacy-std"]
 default = [
+    "artifact-std-default",
     "component-frontend",
     "component-runtime",
     "component-ide",
@@ -60,7 +63,7 @@ cli-dump-air = ["component-runtime"]
 cli-graph = []
 cli-effects = ["component-frontend", "dep:etas_effects", "dep:etas_hir"]
 cli-policy = ["component-runtime"]
-cli-pkg = ["dep:etas_driver"]
+cli-pkg = ["component-frontend"]
 cli-run = ["component-frontend", "component-runtime"]
 cli-replay = ["component-frontend", "component-runtime"]
 cli-resume = ["component-frontend", "component-runtime"]
@@ -69,5 +72,6 @@ cli-repl = ["component-frontend"]
 cli-lsp = ["component-ide"]
 
 [dev-dependencies]
+etas_std.workspace = true
 etas_package = { workspace = true, features = ["test-support"] }
 etas_package_metadata.workspace = true

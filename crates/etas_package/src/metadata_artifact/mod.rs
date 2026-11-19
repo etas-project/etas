@@ -11,6 +11,7 @@ pub use container::{
     package_metadata_artifact_path, package_source_payload_hash, read_package_metadata_artifact,
     read_package_metadata_artifact_info,
 };
+pub use convert::package_index_from_metadata;
 pub use encode::resolved_dependency_metadata;
 #[cfg(any(test, feature = "test-support"))]
 pub use fixture::write_fixture_package_metadata_artifact;
@@ -36,9 +37,7 @@ mod tests {
     fn selector_bound_metadata_survives_binary_and_package_conversion() {
         let mut metadata = etas_package_metadata::PackageMetadata {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: etas_package_metadata::PackageIdentity {
                 name: "dependency".into(),
                 version: "1.0.0".into(),
@@ -121,9 +120,7 @@ mod tests {
         .unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "consumer".into(),
                 version: "0.1.0".into(),
@@ -169,9 +166,7 @@ edition = "2026"
         fs::write(root.join("src").join("lib.es"), "module artifact;\n").unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "artifact".to_owned(),
                 version: "0.1.0".to_owned(),
@@ -181,6 +176,8 @@ edition = "2026"
             external_modules: Vec::new(),
             public_metadata: PackagePublicMetadata {
                 flows: vec![PackageFlowSignatureMetadata {
+                    definition: None,
+                    parameter_defaults: Vec::new(),
                     generic_params: Vec::new(),
                     path: vec!["artifact".to_owned(), "decode".to_owned()],
                     param_names: vec!["value".to_owned()],
@@ -206,6 +203,7 @@ edition = "2026"
                     visibility: "public".to_owned(),
                 }],
                 effect_summaries: vec![PackageEffectSummaryMetadata {
+                    definition: None,
                     residual_checks: vec![reference.clone()],
                     behavior: None,
                     handler_requests: None,
@@ -271,9 +269,7 @@ edition = "2026"
         fs::write(root.join("src").join("lib.es"), "module artifact;\n").unwrap();
         let index = PackageIndex {
             version: 1,
-            std_compatibility: etas_std::standard_registry()
-                .version()
-                .compatibility_identity(),
+            std_compatibility: etas_std::StdRegistryVersion::phase1().compatibility_identity(),
             package: PackageIdentity {
                 name: "artifact".to_owned(),
                 version: "0.1.0".to_owned(),

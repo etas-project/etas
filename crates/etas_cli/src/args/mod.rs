@@ -24,6 +24,8 @@ pub mod pkg;
 pub mod repl;
 #[cfg(feature = "cli-run")]
 pub mod run;
+#[cfg(feature = "cli-pkg")]
+pub mod std_library;
 #[cfg(feature = "cli-watch")]
 pub mod watch;
 
@@ -80,6 +82,8 @@ pub enum Command {
     Policy(PolicyArgs),
     #[cfg(feature = "cli-pkg")]
     Pkg(PkgArgs),
+    #[cfg(feature = "cli-pkg")]
+    Std(std_library::StdArgs),
     #[cfg(feature = "cli-run")]
     Run(RunArgs),
     #[cfg(feature = "cli-replay")]

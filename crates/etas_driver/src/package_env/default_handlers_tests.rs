@@ -141,7 +141,16 @@ fn summary(output: &ProjectOutput) -> &etas_effects::EffectSummary {
 fn binary_replay_preserves_default_handler_effect_causality() {
     let fixture = PackageFixture::new();
     let dependency = fixture.dependency(
-        "public flow inspect() -> CheckReport ![Error<CompileError>] { return check(^Worker); }",
+        r#"
+public effect Output {
+    @default_handler
+    action write(text: string) -> unit ![Error<CompileError>];
+}
+public flow inspect() -> CheckReport ![Error<CompileError>] {
+    perform Output.write("checking");
+    return check(^Worker);
+}
+"#,
     );
     let defaults = dependency
         .public_metadata
@@ -153,17 +162,23 @@ fn binary_replay_preserves_default_handler_effect_causality() {
         .as_ref()
         .unwrap();
     assert!(defaults.direct_effects.effects.is_empty());
-    assert_eq!(defaults.handlers.len(), 1);
-    assert_eq!(defaults.default_actions.effects.len(), 1);
+    assert_eq!(defaults.handlers.len(), 2);
+    assert_eq!(defaults.default_actions.effects.len(), 2);
+    assert_eq!(dependency.public_metadata.actions.len(), 1);
+    assert!(
+        dependency.public_metadata.actions[0]
+            .default_handler_effects
+            .is_some()
+    );
     let output = replay(
         dependency,
-        "flow main(report: CheckReport) -> CheckReport { return handle { return inspect(); } with { Code.check(_) => { resume report; } }; }",
+        "import compiler_api.Output; flow main(report: CheckReport) -> CheckReport { return handle { return inspect(); } with { Code.check(_) => { resume report; } Output.write(_) => { resume; } }; }",
     );
     let summary = summary(&output);
     assert!(summary.escaping_effects.is_empty(), "{summary:#?}");
     assert!(summary.default_actions.is_empty());
     assert!(summary.default_handler_effects.is_none());
-    assert_eq!(summary.requested_actions.effects.iter().count(), 1);
+    assert_eq!(summary.requested_actions.effects.iter().count(), 2);
     assert!(
         !matches!(&summary.support, etas_effects::InterpreterSupport::RequiresHost(host) if host.kinds.contains(&etas_effects::HostRequirementKind::Compiler))
     );

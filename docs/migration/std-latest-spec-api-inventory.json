@@ -1,0 +1,51 @@
+{
+  "source_root": "crates/etas_std (etas-core)",
+  "delivery_inventory": "std-source-declaration-inventory.json",
+  "historical_spec_baseline": {
+    "repository": "https://github.com/etas-project/etas",
+    "branch": "fix/checked-adt-fast-paths",
+    "revision": "58e64856108a78938b39ff3dfce656a50bb865ac",
+    "scope": "Additions and contract changes identified by the spec sync at this revision."
+  },
+  "source_paths": {
+    "std.agent.AssistantTurn": "library/std/agent/mod.es",
+    "std.agent.MessageContent": "library/std/agent/mod.es",
+    "std.agent.StepDecision": "library/std/agent/mod.es",
+    "std.agent.StepDiagnostic": "library/std/agent/mod.es",
+    "std.agent.StepResult": "library/std/agent/mod.es",
+    "std.agent.StopReason": "library/std/agent/mod.es",
+    "std.agent.ToolCall": "library/std/agent/mod.es",
+    "std.agent.ToolRef": "library/std/agent/mod.es",
+    "std.agent.ToolResult": "library/std/agent/mod.es",
+    "std.agent.Usage": "library/std/agent/mod.es",
+    "std.agent.conversation.append_results": "library/std/agent/conversation/mod.es",
+    "std.agent.conversation.append_step": "library/std/agent/conversation/mod.es",
+    "std.agent.conversation.from_prompt": "library/std/agent/conversation/mod.es",
+    "std.agent.step": "library/std/agent/mod.es",
+    "std.command.run": "library/std/command/mod.es",
+    "std.effects.Agentic.step": "library/std/effects/mod.es",
+    "std.io.eprint": "library/std/io/mod.es",
+    "std.task.scheduler.DefaultScheduler": "library/std/task/scheduler/policy.es",
+    "std.task.scheduler.FifoScheduler": "library/std/task/scheduler/policy.es",
+    "std.task.scheduler.ReadyTask": "library/std/task/scheduler/policy.es",
+    "std.task.scheduler.Scheduler": "library/std/task/scheduler/policy.es",
+    "std.task.scheduler.SchedulerHandle": "library/std/task/scheduler/policy.es",
+    "std.task.scheduler.handlers": "library/std/task/scheduler/handlers.es",
+    "std.text.contains": "library/std/text/search.es",
+    "std.text.len": "library/std/text/positions.es",
+    "std.tool.invoke": "library/std/tool/mod.es",
+    "std.tool.reference": "library/std/tool/mod.es"
+  },
+  "legacy_action_name": {
+    "std.effects.actions.Agentic.step": "std.effects.Agentic.step"
+  },
+  "changed_contracts": [
+    "JSON is transparent recursive ADT",
+    "task.run accepts optional Scheduler implementation value",
+    "SchedulerHandle is distinct from the policy spec",
+    "mutable scheduler select receiver",
+    "compiler ToolRef re-exports the protocol identity",
+    "text.is_empty uses constant-time length",
+    "Conversation.session is optional for in-memory conversations"
+  ]
+}

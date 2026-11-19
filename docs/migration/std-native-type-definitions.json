@@ -1,0 +1,324 @@
+{
+  "source_root": "crates/etas_std (etas-core)",
+  "delivery_inventory": "std-source-declaration-inventory.json",
+  "scope": "Crosswalk from former std.role type identities to Etas declarations or built-in language types.",
+  "source_declarations_by_former_role": {
+    "std.agent.message.Message": {
+      "source": "library/std/agent/message/complete.es",
+      "declaration": "public type Message"
+    },
+    "std.agent.message.MessageContext": {
+      "source": "library/std/agent/message/context.es",
+      "declaration": "type MessageContext"
+    },
+    "std.agent.message.PayloadRepresentation": {
+      "source": "library/std/agent/message/context.es",
+      "declaration": "type PayloadRepresentation"
+    },
+    "std.agent.message.Provenance": {
+      "source": "library/std/agent/message/complete.es",
+      "declaration": "public type Provenance"
+    },
+    "std.agent.prompt.Prompt": {
+      "source": "library/std/agent/prompt/complete.es",
+      "declaration": "public type Prompt"
+    },
+    "std.agent.prompt.PromptEncode": {
+      "source": "library/std/agent/prompt/complete.es",
+      "declaration": "public spec PromptEncode"
+    },
+    "std.agent.prompt.PromptPart": {
+      "source": "library/std/agent/prompt/complete.es",
+      "declaration": "public type PromptPart"
+    },
+    "std.agent.schema.ModelResponse": {
+      "source": "library/std/agent/schema/complete.es",
+      "declaration": "public type ModelResponse"
+    },
+    "std.agent.schema.Schema": {
+      "source": "library/std/agent/schema/complete.es",
+      "declaration": "public type Schema"
+    },
+    "std.agent.session.ContextPolicy": {
+      "source": "library/std/agent/session/complete.es",
+      "declaration": "public enum ContextPolicy"
+    },
+    "std.agent.session.Conversation": {
+      "source": "library/std/agent/session/complete.es",
+      "declaration": "public type Conversation"
+    },
+    "std.agent.session.RetentionPolicy": {
+      "source": "library/std/agent/session/complete.es",
+      "declaration": "public enum RetentionPolicy"
+    },
+    "std.agent.session.SessionConfig": {
+      "source": "library/std/agent/session/complete.es",
+      "declaration": "public type SessionConfig"
+    },
+    "std.agent.session.SessionId": {
+      "source": "library/std/agent/session/complete.es",
+      "declaration": "public type SessionId"
+    },
+    "std.collections.Array": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public alias Array"
+    },
+    "std.collections.Iter": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type Iter"
+    },
+    "std.collections.List": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type List"
+    },
+    "std.collections.Map": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type Map"
+    },
+    "std.collections.Range": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type Range"
+    },
+    "std.collections.Set": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type Set"
+    },
+    "std.collections.Slice": {
+      "source": "library/std/collections/mod.es",
+      "declaration": "public type Slice"
+    },
+    "std.compiler.ActionSummary": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type ActionSummary"
+    },
+    "std.compiler.AgentDef": {
+      "source": "library/std/compiler/definitions.es",
+      "declaration": "public type AgentDef"
+    },
+    "std.compiler.AgentId": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type AgentId"
+    },
+    "std.compiler.CallableDef": {
+      "source": "library/std/compiler/definitions.es",
+      "declaration": "public type CallableDef"
+    },
+    "std.compiler.CallableId": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum CallableId"
+    },
+    "std.compiler.DefinitionId": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type DefinitionId"
+    },
+    "std.compiler.DescriptorDetail": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum DescriptorDetail"
+    },
+    "std.compiler.Determinism": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum Determinism"
+    },
+    "std.compiler.EffectRowInfo": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type EffectRowInfo"
+    },
+    "std.compiler.GenericOwnerInfo": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum GenericOwnerInfo"
+    },
+    "std.compiler.StaticValueInfo": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum StaticValueInfo"
+    },
+    "std.compiler.SyntaxBlock": {
+      "source": "library/std/compiler/definitions.es",
+      "declaration": "public type SyntaxBlock"
+    },
+    "std.compiler.TraceConstraintInfo": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type TraceConstraintInfo"
+    },
+    "std.compiler.TraceSummary": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type TraceSummary"
+    },
+    "std.compiler.TraceWitness": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public type TraceWitness"
+    },
+    "std.compiler.TypeInfo": {
+      "source": "library/std/compiler/metadata.es",
+      "declaration": "public enum TypeInfo"
+    },
+    "std.core.Index": {
+      "source": "library/std/core/mod.es",
+      "declaration": "public spec Index"
+    },
+    "std.fs.Region": {
+      "source": "library/std/fs/mod.es",
+      "declaration": "public spec Region"
+    },
+    "std.fs.WorkspacePath": {
+      "source": "library/std/fs/mod.es",
+      "declaration": "public type WorkspacePath"
+    },
+    "std.host.command.Command": {
+      "source": "library/std/host/command/complete.es",
+      "declaration": "public type Command"
+    },
+    "std.host.command.CommandHandle": {
+      "source": "library/std/host/command/complete.es",
+      "declaration": "public type CommandHandle"
+    },
+    "std.host.command.CommandResult": {
+      "source": "library/std/host/command/complete.es",
+      "declaration": "public type CommandResult"
+    },
+    "std.json.JsonValue": {
+      "source": "library/std/json/complete.es",
+      "declaration": "public enum JsonValue"
+    },
+    "std.math.Number": {
+      "source": "library/std/math/complete.es",
+      "declaration": "public spec Number"
+    },
+    "std.memory.MemoryPlace": {
+      "source": "library/std/memory/storage.es",
+      "declaration": "public type MemoryPlace"
+    },
+    "std.memory.MemoryRegion": {
+      "source": "library/std/memory/complete.es",
+      "declaration": "public type MemoryRegion"
+    },
+    "std.memory.MemorySelection": {
+      "source": "library/std/memory/complete.es",
+      "declaration": "public type MemorySelection"
+    },
+    "std.memory.MemoryWriteIntent": {
+      "source": "library/std/memory/complete.es",
+      "declaration": "public type MemoryWriteIntent"
+    },
+    "std.memory.Store": {
+      "source": "library/std/memory/complete.es",
+      "declaration": "public type Store"
+    },
+    "std.option.Option": {
+      "source": "library/std/option/mod.es",
+      "declaration": "public enum Option"
+    },
+    "std.result.Result": {
+      "source": "library/std/result/mod.es",
+      "declaration": "public enum Result"
+    },
+    "std.runtime.budget.Money": {
+      "source": "library/std/runtime/budget/mod.es",
+      "declaration": "public type Money"
+    },
+    "std.runtime.error.IndexError": {
+      "source": "library/std/runtime/error/complete.es",
+      "declaration": "public type IndexError"
+    },
+    "std.runtime.limits.Limit": {
+      "source": "library/std/runtime/limits/mod.es",
+      "declaration": "public enum Limit"
+    },
+    "std.runtime.trace.TraceLabel": {
+      "source": "library/std/runtime/trace/complete.es",
+      "declaration": "public type TraceLabel"
+    },
+    "std.security.declassify.DeclassificationStrategy": {
+      "source": "library/std/security/declassify/complete.es",
+      "declaration": "public type DeclassificationStrategy"
+    },
+    "std.security.declassify.SanitizationEvidence": {
+      "source": "library/std/security/declassify/complete.es",
+      "declaration": "public type SanitizationEvidence"
+    },
+    "std.security.declassify.SanitizationStrategy": {
+      "source": "library/std/security/declassify/complete.es",
+      "declaration": "public type SanitizationStrategy"
+    },
+    "std.security.trust.Public": {
+      "source": "library/std/security/trust/complete.es",
+      "declaration": "public type Public"
+    },
+    "std.security.trust.Sanitized": {
+      "source": "library/std/security/trust/complete.es",
+      "declaration": "public type Sanitized"
+    },
+    "std.security.trust.Secret": {
+      "source": "library/std/security/trust/complete.es",
+      "declaration": "public type Secret"
+    },
+    "std.security.trust.Trusted": {
+      "source": "library/std/security/trust/complete.es",
+      "declaration": "public type Trusted"
+    },
+    "std.security.trust.Untrusted": {
+      "source": "library/std/security/trust/complete.es",
+      "declaration": "public type Untrusted"
+    },
+    "std.stream.ByteStream": {
+      "source": "library/std/stream/complete.es",
+      "declaration": "public spec ByteStream"
+    },
+    "std.task.Continuation": {
+      "source": "library/std/task/mod.es",
+      "declaration": "public type Continuation"
+    },
+    "std.task.Scheduler": {
+      "source": "library/std/task/mod.es",
+      "declaration": "public type Scheduler"
+    },
+    "std.task.Task": {
+      "source": "library/std/task/mod.es",
+      "declaration": "public type Task"
+    }
+  },
+  "former_language_primitive_roles": [
+    "std.core.bool",
+    "std.core.bytes",
+    "std.core.char",
+    "std.core.f32",
+    "std.core.f64",
+    "std.core.i128",
+    "std.core.i16",
+    "std.core.i32",
+    "std.core.i64",
+    "std.core.i8",
+    "std.core.isize",
+    "std.core.never",
+    "std.core.string",
+    "std.core.u128",
+    "std.core.u16",
+    "std.core.u32",
+    "std.core.u64",
+    "std.core.u8",
+    "std.core.unit",
+    "std.core.usize"
+  ],
+  "private_execution_capabilities": {
+    "std.browser.protocol.BrowserConnection": "library/std/browser/protocol/complete.es",
+    "std.compiler.RetainedDefinition": "library/std/compiler/definitions.es",
+    "std.compiler.RetainedSyntax": "library/std/compiler/definitions.es",
+    "std.memory.MemoryCapability": "library/std/memory/storage.es",
+    "std.memory.TransactionHandle": "library/std/memory/complete.es",
+    "std.net.tcp.TcpConnection": "library/std/net/tcp/complete.es",
+    "std.secret.SecretHandle": "library/std/secret/complete.es",
+    "std.security.declassify.DeclassificationPermit": "library/std/security/declassify/complete.es",
+    "std.security.declassify.SanitizationHandle": "library/std/security/declassify/complete.es",
+    "std.security.trust.SecretEvidence": "library/std/security/trust/complete.es",
+    "std.security.trust.TrustEvidence": "library/std/security/trust/complete.es",
+    "std.task.ContinuationState": "library/std/task/mod.es",
+    "std.task.SchedulerState": "library/std/task/mod.es",
+    "std.task.TaskHandle": "library/std/task/mod.es",
+    "std.tls.TlsConnection": "library/std/tls/complete.es"
+  },
+  "representation": {
+    "std.collections.Array": "The source alias Array<T> = [T] uses contiguous language array storage.",
+    "std.collections.List": "The recursive source type List<T> = [] | T :: List<T> uses empty and cons constructors.",
+    "std.collections.OrderedTree": "Empty and Branch constructors represent the ordered collection tree. OrderedNode holds the recursive children and a height.",
+    "execution": "The runtime supplies live capability identities. Etas records, enums and specs describe their public interfaces."
+  }
+}

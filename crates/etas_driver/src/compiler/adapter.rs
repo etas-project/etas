@@ -60,17 +60,6 @@ impl NativeCompilerService {
         loaded
             .source_definition_provenance
             .validate_external_definition_origins(checked)?;
-        if loaded
-            .loaded
-            .input
-            .environment
-            .canonical_environment_fingerprint()
-            != checked.project_environment_fingerprint
-        {
-            return Err(crate::DriverError::InvalidInput(
-                "compiler source provider differs from the checked package environment".into(),
-            ));
-        }
         self.package_sources = match (&loaded.package_root, &loaded.package_environment) {
             (Some(root), Some(environment)) => {
                 Some(Arc::new(super::sources::CompilerPackageSources {

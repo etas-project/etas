@@ -59,7 +59,7 @@ flow main(args: Array<string>) -> i32 {
     let keys = etas_host::TestWorkspace::create("binary-text-private-keys").unwrap();
     let key_dir = keys.path().join("private");
     let command = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command.env_clear().env("HOME", keys.path()).env(
             "PATH",
             std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into()),

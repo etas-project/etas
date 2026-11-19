@@ -77,8 +77,13 @@ impl NativeCompilerService {
         let snapshot = RuntimeSourceMaterializer::new(&sources.root, &sources.environment)
             .locked_snapshot(package, &|| control.check())
             .map_err(source_error)?;
-        let loaded =
-            crate::source::load_locked_source_project(&snapshot, owner, &|| control.check())?;
+        let loaded = crate::source::load_locked_source_project(
+            &snapshot,
+            owner,
+            &self.definitions.catalog().checked_program().std_registry,
+            &self.definitions.catalog().checked_program().compile_options,
+            &|| control.check(),
+        )?;
         let project = session
             .try_open_project(loaded.loaded.input.clone())
             .map_err(|error| {

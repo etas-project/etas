@@ -1,0 +1,17 @@
+[package]
+name = "std-sdk-file-consumer"
+version = "0.1.0"
+edition = "2026"
+
+[source]
+root = "src"
+
+[[bin]]
+name = "file-consumer"
+module = "app.main"
+flow = "main"
+profile = "readonly"
+
+[runtime.profiles.readonly.filesystem.regions."app.main.Sandbox"]
+root = "."
+read = true

@@ -40,7 +40,7 @@ flow main(args: Array<string>) -> i32 {{
     let keys = etas_host::TestWorkspace::create("cold-text-codec-keys").unwrap();
     let key_dir = keys.path().join("private");
     let command = || {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         command
             .env_clear()
             .env("HOME", keys.path())
@@ -114,7 +114,7 @@ flow main(args: Array<string>) -> i32 {{
         ),
     );
     let checkpoints = temp_path("segmented-prompt-checkpoints", "dir");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -126,7 +126,7 @@ flow main(args: Array<string>) -> i32 {{
     assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
     let saved = checkpoints.join("checkpoint-0.json");
     let before = fs::read(&saved).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -184,7 +184,7 @@ flow main(args: Array<string>) -> i32 {{
     );
     let checkpoints = temp_path("unicode-case-checkpoints", "dir");
     let trace = temp_path("unicode-case-trace", "json");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -203,7 +203,7 @@ flow main(args: Array<string>) -> i32 {{
     assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
     let saved = checkpoints.join("checkpoint-0.json");
     let before = fs::read(&saved).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -267,7 +267,7 @@ flow main(args: Array<string>) -> i32 {
 "#,
     );
     let checkpoints = temp_path("checked-text-query-checkpoints", "dir");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -278,7 +278,7 @@ flow main(args: Array<string>) -> i32 {
     assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
     let saved = checkpoints.join("checkpoint-0.json");
     let before = fs::read(&saved).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -317,7 +317,7 @@ flow main(args: Array<string>) -> i32 {
     );
     let checkpoints = temp_path("shared-text-checkpoints", "dir");
     let trace = temp_path("shared-text-trace", "json");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -341,7 +341,7 @@ flow main(args: Array<string>) -> i32 {
         !artifact.to_string().contains("Concat"),
         "internal text representation is not a wire format"
     );
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -389,7 +389,7 @@ flow main(args: Array<string>) -> i32 {
 "#,
     );
     let checkpoints = temp_path("segmented-text-membership-checkpoints", "dir");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -400,7 +400,7 @@ flow main(args: Array<string>) -> i32 {
     assert!(stdout.contains(r#""type":"i32","value":"0""#), "{stdout}");
     let saved = checkpoints.join("checkpoint-0.json");
     let before = fs::read(&saved).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+    let mut command = crate::legacy_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,

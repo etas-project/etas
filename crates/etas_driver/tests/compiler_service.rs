@@ -102,8 +102,14 @@ mod revision_stream_values;
 mod revisions;
 #[path = "compiler_service/source.rs"]
 mod source;
+#[path = "compiler_service/source_default_console.rs"]
+mod source_default_console;
+#[path = "compiler_service/source_loop_limits.rs"]
+mod source_loop_limits;
 #[path = "compiler_service/source_restoration.rs"]
 mod source_restoration;
+#[path = "compiler_service/std_checkpoint.rs"]
+mod std_checkpoint;
 use std::{
     collections::BTreeMap,
     sync::{

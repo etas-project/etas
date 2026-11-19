@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-pub(super) fn package_index_from_metadata(
+pub fn package_index_from_metadata(
     metadata: etas_package_metadata::PackageMetadata,
     path: &Path,
 ) -> Result<PackageIndex, PackageError> {
@@ -63,6 +63,7 @@ fn public_metadata_from_metadata(
     path: &Path,
 ) -> Result<PackagePublicMetadata, PackageError> {
     Ok(PackagePublicMetadata {
+        scoped_callbacks: metadata.scoped_callbacks,
         definition_origins: metadata.definition_origins,
         definition_descriptors: metadata.definition_descriptors,
         modules: metadata
@@ -431,6 +432,8 @@ fn flow_signature_from_metadata(
     path: &Path,
 ) -> Result<crate::metadata::PackageFlowSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageFlowSignatureMetadata {
+        definition: signature.definition,
+        parameter_defaults: signature.parameter_defaults,
         path: signature.path,
         generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
@@ -456,6 +459,7 @@ fn agent_signature_from_metadata(
     signature: etas_package_metadata::CallableSignature,
 ) -> Result<crate::metadata::PackageAgentSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageAgentSignatureMetadata {
+        parameter_defaults: signature.parameter_defaults,
         path: signature.path,
         generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
@@ -478,6 +482,7 @@ fn tool_signature_from_metadata(
     path: &Path,
 ) -> Result<crate::metadata::PackageToolSignatureMetadata, PackageError> {
     Ok(crate::metadata::PackageToolSignatureMetadata {
+        parameter_defaults: signature.parameter_defaults,
         path: signature.path,
         generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         param_names: signature.param_names,
@@ -532,6 +537,7 @@ fn spec_method_from_metadata(
 ) -> Result<PackageSpecMethodMetadata, PackageError> {
     Ok(PackageSpecMethodMetadata {
         name: method.name,
+        updating_receiver: method.updating_receiver,
         receiver_param: method.receiver_param,
         path: method.path,
         signature: method
@@ -558,6 +564,8 @@ fn spec_impl_from_metadata(
     implementation: etas_package_metadata::SpecImpl,
 ) -> Result<PackageSpecImplMetadata, PackageError> {
     Ok(PackageSpecImplMetadata {
+        owner: implementation.owner,
+        generic_params: callable_generic_params_from_metadata(implementation.generic_params)?,
         self_type: type_from_metadata(implementation.self_type)?,
         spec: implementation.spec,
         args: implementation
@@ -635,6 +643,12 @@ fn action_signature_from_metadata(
     path: &Path,
 ) -> Result<PackageEffectActionSignatureMetadata, PackageError> {
     let signature = PackageEffectActionSignatureMetadata {
+        default_handler_effects: signature
+            .default_handler_effects
+            .map(effect_row_from_metadata)
+            .transpose()?,
+        param_names: signature.param_names,
+        parameter_defaults: signature.parameter_defaults,
         path: signature.path,
         generic_params: callable_generic_params_from_metadata(signature.generic_params)?,
         params: signature
@@ -796,6 +810,14 @@ fn type_from_metadata(
         })
     };
     match ty.kind {
+        etas_package_metadata::TypeKind::AgentContext => Ok(PackageTypeMetadata::AgentContext {
+            method: ty.agent_context.ok_or_else(|| {
+                missing(
+                    Path::new(".etas/package.etasmeta"),
+                    "agent context method identity is missing",
+                )
+            })?,
+        }),
         etas_package_metadata::TypeKind::Existential => Ok(PackageTypeMetadata::Existential {
             bounds: ty
                 .bounds
@@ -1071,6 +1093,7 @@ fn effect_summary_from_metadata(
     summary: etas_package_metadata::EffectSummary,
 ) -> Result<PackageEffectSummaryMetadata, PackageError> {
     Ok(PackageEffectSummaryMetadata {
+        definition: summary.definition,
         residual_checks: summary.residual_checks.clone(),
         behavior: summary.behavior,
         handler_requests: summary
@@ -1081,6 +1104,7 @@ fn effect_summary_from_metadata(
             .default_handler_effects
             .map(|effects| {
                 Ok::<_, PackageError>(crate::PackageDefaultHandlerEffectsMetadata {
+                    behavior: effects.behavior,
                     direct_effects: effect_row_from_metadata(effects.direct_effects)?,
                     default_actions: effect_row_from_metadata(effects.default_actions)?,
                     handlers: effects
@@ -1153,6 +1177,15 @@ fn action_trace_from_metadata(
                     .into_iter()
                     .map(action_trace_from_metadata)
                     .collect::<Result<Vec<_>, _>>()?,
+            }
+        }
+        etas_package_metadata::ActionTrace::DefaultHandler { guards, body } => {
+            PackageActionTraceMetadata::DefaultHandler {
+                guards: guards
+                    .into_iter()
+                    .map(effect_ref_from_metadata)
+                    .collect::<Result<_, _>>()?,
+                child: Box::new(action_trace_from_metadata(*body)?),
             }
         }
         etas_package_metadata::ActionTrace::Repeat(child) => PackageActionTraceMetadata::Repeat {

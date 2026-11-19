@@ -505,10 +505,14 @@ before committing the answer; task handles cannot escape a shorter-lived
 handler environment they still depend on.
 
 Each action invocation has its own arm/continuation. Arms may interleave;
-there is no implicit global lock held across an arm's wait. Capturing a handler
-value does not create shared mutable local variables. Shared resources still
-use explicit APIs and effect/resource conflict checks; a single-threaded
-scheduler does not make arbitrary reentrant mutation safe.
+there is no implicit global lock held across an arm's wait. Same-task lambda
+and Handler captures preserve their mutable lexical bindings. A callable
+retaining a local `var` is task-local, including when stored in another
+callable or value container. Child-task inheritance and concurrent invocation
+must enforce that ownership. Independent task input can capture an immutable
+snapshot. Shared resources use explicit APIs and effect/resource conflict
+checks. The full capture rules are in
+[Lambda And Handler Capture](20-lexical-capture.md).
 
 `finish value;` targets its enclosing handled expression, not whichever child
 happens to be executing the arm. If that expression encloses a concurrent

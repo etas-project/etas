@@ -55,7 +55,7 @@ public flow main(_args: Array<string>) -> i32
         fs::remove_file(&target).unwrap();
         fs::write(&target, b"before\n").unwrap();
         fs::set_permissions(&target, fs::Permissions::from_mode(mode)).unwrap();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_etas"));
+        let mut command = crate::legacy_cli_command();
         remove_legacy_runtime_host_env(&mut command);
         let (code, stdout, stderr) = run_process_with_command(
             command,
