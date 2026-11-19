@@ -82,7 +82,23 @@ pub struct CompileRunnableProjectResponse {
 
 pub fn check_project_once(
     options: &DriverOptions,
+    request: CompileProjectRequest,
+) -> Result<CompileProjectResponse, DriverError> {
+    check_once(options, request, true)
+}
+
+/// Check an application against the installed std interface without restoring executable bodies.
+pub fn check_project_interface_once(
+    options: &DriverOptions,
+    request: CompileProjectRequest,
+) -> Result<CompileProjectResponse, DriverError> {
+    check_once(options, request, false)
+}
+
+fn check_once(
+    options: &DriverOptions,
     mut request: CompileProjectRequest,
+    executable: bool,
 ) -> Result<CompileProjectResponse, DriverError> {
     options.std_provider.configure(&mut request.input);
     if let Some(level) = options.optimization_level {
@@ -103,7 +119,7 @@ pub fn check_project_once(
         )
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
     } else {
-        frontend_session(options)?
+        frontend_session_with_library(options, executable)?
     };
     let project = session
         .try_open_project(request.input)
@@ -402,6 +418,13 @@ fn dependency_overlay_changes_from_sources(
 pub fn frontend_session(
     options: &DriverOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
+    frontend_session_with_library(options, true)
+}
+
+fn frontend_session_with_library(
+    options: &DriverOptions,
+    executable: bool,
+) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
     let session = match &options.std_provider {
         crate::std_library::provider::StdProvider::Legacy => {
             FrontendSession::with_options(session_options(options)?)
@@ -413,34 +436,49 @@ pub fn frontend_session(
             )
         }
         crate::std_library::provider::StdProvider::Artifact(provider) => {
-            FrontendSession::with_options_and_std_registry(
+            let session = FrontendSession::with_options_and_std_registry(
                 session_options(options)?,
                 provider.registry.clone(),
             )
-            .map(|session| session.with_standard_library(provider.library.clone()))
+            .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
+            return if executable {
+                Ok(session.with_standard_library(provider.executable_library(&options.profile)?))
+            } else {
+                Ok(session.with_standard_library_interface(provider.interface.clone()))
+            };
         }
     };
     session.map_err(|error| DriverError::FrontendSession(format!("{error:?}")))
 }
 
 pub fn session_options(options: &DriverOptions) -> Result<FrontendSessionOptions, DriverError> {
-    if options.cache_mode == DriverCacheMode::Off
-        || (options.cache_mode == DriverCacheMode::Auto && options.cache_root.is_none())
-    {
+    if options.cache_mode == DriverCacheMode::Off {
         return Ok(FrontendSessionOptions::memory_only());
     }
     let root = match options.cache_root.clone() {
         Some(root) => root,
-        None => crate::project_discovery::resolve_workspace(options)?
-            .join(".etas")
-            .join("cache"),
+        None => {
+            let root = crate::project_discovery::resolve_workspace(options)?
+                .join(".etas")
+                .join("cache");
+            if options.cache_mode == DriverCacheMode::Auto && !root.is_dir() {
+                return Ok(FrontendSessionOptions::memory_only());
+            }
+            root
+        }
     };
     Ok(FrontendSessionOptions::disk_cache(root).with_disk_cache_access(disk_cache_access(options)))
 }
 
 pub fn check_request(options: &DriverOptions) -> CheckRequest {
-    CheckRequest::full_project()
-        .with_disk_artifact_access(disk_cache_access(options))
+    let access = disk_cache_access(options);
+    let request = if access.can_read() {
+        CheckRequest::incremental()
+    } else {
+        CheckRequest::full_project()
+    };
+    request
+        .with_disk_artifact_access(access)
         .with_snapshot_detail(SnapshotDetailLevel::None)
         .with_pipeline_timing(options.profile.is_enabled())
 }

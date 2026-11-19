@@ -1,12 +1,10 @@
 use std::path::PathBuf;
 
+use etas_core::SourceFile;
 use etas_driver::{
     CompileProjectRequest, DriverCacheMode, DriverError, DriverOptions, LoadProjectRequest,
-    SourceDependencyMode,
 };
-use etas_frontend::{
-    EntryPolicy, LoadedProjectInput, ProjectInput, ProjectOutput, SnapshotDetailLevel,
-};
+use etas_frontend::{ProjectOutput, SnapshotDetailLevel};
 use etas_utils::ProfileHandle;
 
 use crate::{
@@ -14,56 +12,27 @@ use crate::{
     error::CliError,
 };
 
-pub fn check_project_once(
-    global: &GlobalOptions,
-    profile: &ProfileHandle,
-    input: ProjectInput,
-) -> Result<ProjectOutput, CliError> {
-    etas_driver::check_project_once(
-        &driver_options(global, profile)?,
-        CompileProjectRequest {
-            input,
-            snapshot_detail: SnapshotDetailLevel::None,
-        },
-    )
-    .map(|response| response.response.output)
-    .map_err(driver_error)
-}
-
-pub fn load_project(
-    global: &GlobalOptions,
-    profile: &ProfileHandle,
-    paths: Vec<PathBuf>,
-    all: bool,
-    entry_policy: EntryPolicy,
-    flow: Option<String>,
-    source_dependency_mode: SourceDependencyMode,
-) -> Result<LoadedProjectInput, CliError> {
-    load_project_with_optimization(
-        global,
-        profile,
-        LoadProjectRequest {
-            paths,
-            all,
-            entry_policy,
-            flow,
-            bin: None,
-            source_dependency_mode,
-        },
-        None,
-    )
-}
-
-pub fn load_project_with_optimization(
+pub fn check_paths(
     global: &GlobalOptions,
     profile: &ProfileHandle,
     request: LoadProjectRequest,
     optimization_level: Option<u8>,
-) -> Result<LoadedProjectInput, CliError> {
+) -> Result<(Vec<(PathBuf, SourceFile)>, ProjectOutput), CliError> {
     let options = driver_options_with_optimization(global, profile, optimization_level)?;
-    etas_driver::load_project(&options, request)
-        .map(|loaded| loaded.loaded)
-        .map_err(driver_error)
+    let loaded = etas_driver::load_project(&options, request)
+        .map_err(driver_error)?
+        .loaded;
+    let output = etas_driver::check_project_interface_once(
+        &options,
+        CompileProjectRequest {
+            input: loaded.input,
+            snapshot_detail: SnapshotDetailLevel::None,
+        },
+    )
+    .map_err(driver_error)?
+    .response
+    .output;
+    Ok((loaded.sources, output))
 }
 
 pub(crate) fn driver_options(

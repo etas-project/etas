@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{Arc, OnceLock},
+};
 
 use etas_code::{CallableId, DefinitionKey, descriptor::GenericOwner};
 use etas_package_metadata as metadata;
@@ -24,9 +28,34 @@ pub enum StdProvider {
 pub struct ArtifactStdProvider {
     pub sdk: LoadedStdSdk,
     pub registry: Arc<StdRegistry>,
-    pub library: Arc<etas_frontend::StandardLibrary>,
+    pub interface: Arc<etas_frontend::StandardLibraryInterface>,
+    library: OnceLock<Result<Arc<etas_frontend::StandardLibrary>, String>>,
     pub identity: String,
     pub bootstrap_identity: String,
+}
+
+impl ArtifactStdProvider {
+    pub fn executable_library(
+        &self,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Arc<etas_frontend::StandardLibrary>, DriverError> {
+        self.library
+            .get_or_init(|| {
+                let _restore = profile.span("std.restore_checked_library", "std");
+                let program = self
+                    .sdk
+                    .image
+                    .clone()
+                    .into_checked_from_image_profiled(&self.sdk.root, profile)
+                    .map_err(|error| error.to_string())?;
+                Ok(Arc::new(etas_frontend::StandardLibrary {
+                    program,
+                    interface: self.interface.clone(),
+                }))
+            })
+            .clone()
+            .map_err(invalid)
+    }
 }
 
 impl StdProvider {
@@ -125,13 +154,6 @@ impl StdProvider {
             let _query = profile.span("std.build_query_registry", "std");
             Arc::new(query_registry(&sdk)?)
         };
-        let checked = {
-            let _restore = profile.span("std.restore_checked_library", "std");
-            sdk.image
-                .clone()
-                .into_checked_from_image_profiled(&sdk.root, profile)
-                .map_err(invalid)?
-        };
         let package = etas_frontend::ProjectExternalPackageInput {
             id: etas_frontend::ExternalPackageId(0),
             name: sdk.manifest.package.clone(),
@@ -150,8 +172,7 @@ impl StdProvider {
             &index.public_metadata,
             &registry,
         );
-        let library = Arc::new(etas_frontend::StandardLibrary {
-            program: checked,
+        let interface = Arc::new(etas_frontend::StandardLibraryInterface {
             package,
             metadata: public_metadata,
             modules: sdk
@@ -202,7 +223,8 @@ impl StdProvider {
         Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
             sdk,
             registry,
-            library,
+            interface,
+            library: OnceLock::new(),
             identity,
             bootstrap_identity,
         })))

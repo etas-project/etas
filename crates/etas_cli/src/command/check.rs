@@ -33,13 +33,9 @@ pub fn run(
     } else {
         EntryPolicy::CompileOnly
     };
-    let options = super::frontend::driver_options_with_optimization(
+    let (sources, output) = super::frontend::check_paths(
         global,
         profile,
-        Some(optimization_level),
-    )?;
-    let loaded = etas_driver::load_project(
-        &options,
         etas_driver::LoadProjectRequest {
             paths: args.input,
             all: args.all,
@@ -48,27 +44,15 @@ pub fn run(
             bin: None,
             source_dependency_mode: SourceDependencyMode::MetadataOnly,
         },
-    )
-    .map_err(super::frontend::driver_error)?
-    .loaded;
-    let output = etas_driver::check_project_once(
-        &options,
-        etas_driver::CompileProjectRequest {
-            input: loaded.input,
-            snapshot_detail: etas_frontend::SnapshotDetailLevel::None,
-        },
-    )
-    .map_err(super::frontend::driver_error)?
-    .response
-    .output;
+        Some(optimization_level),
+    )?;
     let any_errors = has_blocking_check_errors(&output.diagnostics, args.phase1);
     let effective_level = output
         .checked
         .as_ref()
         .map(|checked| checked.compile_options.optimization_level.to_string());
 
-    let checked = loaded
-        .sources
+    let checked = sources
         .into_iter()
         .map(|(path, source)| {
             let diagnostics = output
