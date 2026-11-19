@@ -14,14 +14,6 @@ The `^` reflection extension is described separately in
 [Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md);
 its std descriptor types do not turn metadata fields into source syntax.
 
-This grammar defines source forms, not the std API catalog or compiler metadata
-format. Names such as `Result`, `Index`, `infer`, and `join` are not keywords;
-their specified integrations are [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts).
-Resolved symbol identity, rather than spelling alone, selects those contracts.
-The `^` reflection extension is described separately in
-[Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md);
-its std descriptor types do not turn metadata fields into source syntax.
-
 Source examples use **four spaces per indentation level**. Tabs are not used for indentation.
 
 Comments are lexical trivia. They are ignored by parsing, do not enter the typed AST or AIR, and do not affect effects, trace specs, runtime policy, limits, traces, or runtime behavior.

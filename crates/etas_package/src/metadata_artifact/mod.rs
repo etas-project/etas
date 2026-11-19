@@ -176,6 +176,8 @@ edition = "2026"
             external_modules: Vec::new(),
             public_metadata: PackagePublicMetadata {
                 flows: vec![PackageFlowSignatureMetadata {
+                    definition: None,
+                    parameter_defaults: Vec::new(),
                     generic_params: Vec::new(),
                     path: vec!["artifact".to_owned(), "decode".to_owned()],
                     param_names: vec!["value".to_owned()],
@@ -201,6 +203,7 @@ edition = "2026"
                     visibility: "public".to_owned(),
                 }],
                 effect_summaries: vec![PackageEffectSummaryMetadata {
+                    definition: None,
                     residual_checks: vec![reference.clone()],
                     behavior: None,
                     handler_requests: None,

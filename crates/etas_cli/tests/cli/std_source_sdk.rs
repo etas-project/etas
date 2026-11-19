@@ -1157,7 +1157,6 @@ read = true
 import std.fs.{Region, path, read_bytes};
 import std.codec.text.{utf8_encode, utf8_decode, Strict, Replace, MalformedInput, TextCodecError, InvalidUtf8};
 import std.bytes.len as byte_length;
-import std.char.{is_alphabetic, is_alphanumeric, is_ascii_digit, is_control, to_u32, from_u32};
 type Corpus; impl Corpus ~ Region;
 flow main(args: Array<string>) -> i32 {
     let text = "A界😀";
@@ -1165,9 +1164,7 @@ flow main(args: Array<string>) -> i32 {
     if byte_length(encoded) != 8 { return 1; }
     let mode: MalformedInput = MalformedInput.Strict;
     if utf8_decode(encoded, mode) != Ok(text) || utf8_decode(encoded, Replace) != Ok(text) { return 2; }
-    if !is_alphabetic('界') || !is_alphanumeric('٣') || !is_ascii_digit('7') { return 3; }
-    if !is_control('\n') || !is_control(from_u32(133).unwrap()) { return 4; }
-    if to_u32('😀') != 128512 || from_u32(128512) != Some('😀') { return 5; }
+    // CHARACTER_CHECKS
     let file = match path<Corpus>("malformed.bin") { Ok(value) => value, Err(_) => { return 6; } };
     let malformed = read_bytes(file);
     let failure: TextCodecError = TextCodecError.InvalidUtf8;
@@ -1181,12 +1178,33 @@ flow main(args: Array<string>) -> i32 {
         ],
     );
     fs::write(project.join("workspace/malformed.bin"), [b'a', 0xff, b'b']).unwrap();
+    let application = project.join("src/app/main.es");
+    let template = fs::read_to_string(&application).unwrap();
     let providers = if cfg!(feature = "forbid-legacy-std") {
         vec!["artifact"]
     } else {
         vec!["legacy", "artifact"]
     };
     for provider in providers {
+        let character_checks = match provider {
+            "legacy" => {
+                r#"
+    if !std.char.is_alphabetic('界') || !std.char.is_alphanumeric('٣') || !std.char.is_ascii_digit('7') { return 3; }
+    if !std.char.is_control('\n') || !std.char.is_control(std.char.from_u32(133).unwrap()) { return 4; }
+    if std.char.to_u32('😀') != 128512 || std.char.from_u32(128512) != Some('😀') { return 5; }"#
+            }
+            _ => {
+                r#"
+    if !'界'.is_alphabetic() || !'٣'.is_alphanumeric() || !'7'.is_ascii_digit() { return 3; }
+    if !'\n'.is_control() || !char.from_u32(133).unwrap().is_control() { return 4; }
+    if '😀'.to_u32() != 128512 || char.from_u32(128512) != Some('😀') { return 5; }"#
+            }
+        };
+        fs::write(
+            &application,
+            template.replace("// CHARACTER_CHECKS", character_checks),
+        )
+        .unwrap();
         let output = Command::new(binary)
             .args([
                 "--cache",
