@@ -4,7 +4,7 @@
 
 This section sketches the current user-facing Etas source syntax. It is intentionally separate from the internal core calculus in [Formal Core, Static Analyses, and PL Context](08-formal-core-static-analyses-and-pl-context.md).
 
-String escapes and numeric literal suffixes are omitted here.
+String and character literals accept Unicode scalar escapes such as `\u{fffd}` and `\u{1f600}`, with one to six hexadecimal digits. Numeric literal suffixes are omitted here.
 
 This grammar defines source forms, not the std API catalog or compiler metadata
 format. Names such as `Result`, `Index`, `infer`, and `join` are not keywords;
@@ -202,8 +202,8 @@ ActionPattern::= Path StaticEffectArgs?
 ImplDecl      ::= TypeImplDecl
                 | SpecImplDecl
                 | AgentImplDecl
-TypeImplDecl  ::= "impl" ImplTarget "{" ImplItem* "}"
-SpecImplDecl ::= "impl" TypeExpr SpecSatisfaction (";" | "{" SpecImplItem* "}")
+TypeImplDecl  ::= "impl" TypeParams? ImplTarget "{" ImplItem* "}"
+SpecImplDecl ::= "impl" TypeParams? TypeExpr SpecSatisfaction (";" | "{" SpecImplItem* "}")
 AgentImplDecl ::= "impl" "agent" Path SpecSatisfaction? (";" | "{" AgentImplItem* "}")
 ImplTarget    ::= Path TypeArgs?
 ImplItem      ::= Visibility? FlowDecl
@@ -1103,6 +1103,11 @@ The compiler infers each anonymous flow's input type, output type, effect row, a
 
 Anonymous flow body effects are latent effects: creating a flow value does not execute the body, but calling, composing, joining, returning, or storing that value must preserve and expose its effect row. The detailed rules are in [Effect System and Inference](06-effect-system-and-inference.md#7-anonymous-flows-and-latent-effects).
 
+Anonymous flows and Handler values preserve the identities of captured lexical
+bindings. A captured local `var` can be rebound within its owning task, and a
+captured `let` remains immutable. Callable copies, escaping environments and
+task boundaries follow [Lambda And Handler Capture](20-lexical-capture.md).
+
 Agent calls normally use the compiler-generated `run` entrypoint, for example
 `Writer.run(topic)`. The `run` body is ordinary checked code; each
 agent-scoped `perform infer<T>(prompt)` inside that body records a requested
@@ -1308,6 +1313,7 @@ Pattern       ::= Ident
                 | "_"
                 | LiteralPattern
                 | TuplePattern
+                | ListPattern
                 | RecordPattern
                 | VariantPattern
 
@@ -1319,6 +1325,10 @@ LiteralPattern
                 | CharLiteral
 
 TuplePattern  ::= "(" Pattern ("," Pattern)* ","? ")"
+ListPattern   ::= "[" "]"
+                | PatternAtom "::" Pattern
+PatternAtom   ::= Ident | "_" | LiteralPattern | TuplePattern
+                | RecordPattern | VariantPattern | "[" "]"
 RecordPattern ::= Path? "{" PatternField* "}"
 PatternField  ::= Ident (":" Pattern)? ","?
 VariantPattern::= Path
@@ -1330,6 +1340,14 @@ PatternFieldEntry
               ::= Ident (":" Pattern)?
 PatternList   ::= Pattern ("," Pattern)* ","?
 ```
+
+List patterns destructure `List<T>`: `[]` matches the empty list and
+`head :: tail` matches a nonempty list, binding a `T` and a `List<T>`.
+Cons patterns associate to the right, so `a :: b :: rest` peels two cells.
+Both sides may use nested patterns. These patterns preserve value semantics;
+sharing an immutable tail does not grant access to mutate another binding.
+Empty/nonempty alternatives participate in ordinary exhaustiveness checking.
+This does not add array-pattern syntax or invoke a standard-library method.
 
 Literal patterns match by value and do not bind names. For example, `(true, x)` is a tuple pattern whose first element is the boolean literal `true` and whose second element binds `x`. Boolean literals in pattern position are never variable bindings. MVP literal patterns include booleans, integers, strings, and chars; floating-point literal patterns are intentionally omitted because equality around `NaN` and precision should not be hidden inside pattern syntax.
 

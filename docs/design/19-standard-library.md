@@ -235,13 +235,13 @@ transformed value, not automatically to the original string.
 
 | Module | API | Return Type / Behavior |
 |---|---|---|
-| `std.char` | `is_whitespace(c: char)` | `bool`; Unicode White_Space property |
-| `std.char` | `is_alphabetic(c: char)` | `bool`; Unicode Alphabetic property |
-| `std.char` | `is_alphanumeric(c: char)` | `bool`; Alphabetic or Unicode number category |
-| `std.char` | `is_control(c: char)` | `bool`; Unicode General_Category Cc |
-| `std.char` | `is_ascii_digit(c: char)` | `bool`; ASCII `0` through `9` only |
-| `std.char` | `to_u32(c: char)` | `u32`; scalar numeric value |
-| `std.char` | `from_u32(value: u32)` | `Option<char>`; reject surrogates and values beyond U+10FFFF |
+| `std.char` | `c.is_whitespace()` | `bool`; Unicode White_Space property |
+| `std.char` | `c.is_alphabetic()` | `bool`; Unicode Alphabetic property |
+| `std.char` | `c.is_alphanumeric()` | `bool`; Alphabetic or Unicode number category |
+| `std.char` | `c.is_control()` | `bool`; Unicode General_Category Cc |
+| `std.char` | `c.is_ascii_digit()` | `bool`; ASCII `0` through `9` only |
+| `std.char` | `c.to_u32()` | `u32`; scalar numeric value |
+| `std.char` | `char.from_u32(value)` | `Option<char>`; reject surrogates and values beyond U+10FFFF |
 | `std.codec.text` | `utf8_encode(s: string)` | `bytes`; UTF-8 encoding with no external action |
 | `std.codec.text` | `utf8_decode(body: bytes, malformed: MalformedInput)` | `Result<string, TextCodecError>`; explicit rejection or U+FFFD replacement for malformed input |
 
@@ -893,3 +893,303 @@ wall-time limits. This deliberately fail-fast example aborts on a stopped turn;
 an application may instead explicitly repair context, delegate, or return a
 typed failure. Such choices remain ordinary Etas code, not hidden behavior of
 `step`.
+
+## 5. Numeric Helpers
+
+### 5.1 Signatures And Numeric Evidence
+
+The following contracts replace the signature-only legacy declarations.
+They are accepted design targets as of 2026-11-16. Their implementation and
+installed-provider acceptance remain engineering work.
+
+```etas
+module std.math;
+
+@std.role("std.math.Number")
+public spec Number;
+
+public flow abs<T ~ Number>(value: T) -> T ![];
+public flow min<T ~ Number>(left: T, right: T) -> T ![];
+public flow max<T ~ Number>(left: T, right: T) -> T ![];
+```
+
+`Number` is a new compiler-known primitive numeric spec. Its declaration is
+owned by Etas source. Compiler evidence admits the primitive signed and
+unsigned integer families, `isize`, `usize`, `f32` and `f64`. User declarations
+cannot extend that primitive family. Generic bodies bounded by `Number` may
+use same-type comparisons and supported binary arithmetic. Operations with a
+narrower domain require their checked primitive contract. In particular,
+`Number` alone does not establish that unsigned unary negation is valid.
+The magnitude primitive used by `abs` covers unsigned, signed and floating
+inputs according to section 5.2. This evidence must survive
+package imports and checked-code restoration, following the existing compiler
+contract pattern for `Index`.
+
+The operands of `min` and `max` have the same numeric type. Existing literal
+inference applies, and conversions between concrete types remain explicit.
+Each operation returns the same type and width. Nominal numeric wrappers must
+use their declared conversion or their own ordinary helper. Strings, booleans,
+collections and unconstrained generic values do not satisfy `Number`.
+
+The single-argument legacy `min<T>(T) -> T` and `max<T>(T) -> T` were incomplete
+declarations. Their replacements are binary numeric operations. Collection
+reduction requires a separate API with its own empty-input contract.
+
+### 5.2 Results And Edge Cases
+
+`abs` returns the magnitude. Unsigned input is returned unchanged. For a signed
+integer minimum, its positive magnitude does not fit the result type, so the
+operation raises the existing checked arithmetic-overflow execution fault.
+It follows the same failure mechanism as overflowing integer negation.
+It neither wraps nor saturates. The empty Effect row describes the absence of
+observable authority actions, following ordinary checked arithmetic.
+
+Floating-point `abs` clears the sign bit at the input width. Both signed zeros
+produce positive zero, negative infinity produces positive infinity, and a NaN
+retains its payload and remaining encoding bits.
+
+Integer `min` and `max` use numeric order and return one of their inputs.
+Floating-point results follow these deterministic selection rules.
+
+| Inputs | `min` | `max` |
+| --- | --- | --- |
+| Distinct ordered values, including infinities | Smaller operand | Larger operand |
+| Equal values other than opposite signed zeros | Left operand | Left operand |
+| Negative zero and positive zero, in either order | Negative zero | Positive zero |
+| Exactly one NaN | The other operand | The other operand |
+| Two NaNs | Left operand, preserving its encoding | Left operand, preserving its encoding |
+
+The selected operand is returned at its original width. Selection does not
+round through `f64` or canonicalize a selected NaN payload. Implementations
+share the numeric rules across constant evaluation and runtime execution.
+Ordinary Etas bodies own selection and branching. Checked primitive arithmetic
+and float bit classification use declared primitive bindings where required.
+
+## 6. Round-Robin Groups
+
+### 6.1 Public Contract
+
+`std.agent.group.round_robin` repeatedly invokes a homogeneous array of
+state-transforming callbacks in array order. The state can contain an
+application conversation or transcript. Agents with different entry signatures
+are adapted with ordinary closures to this shared state contract.
+
+```etas
+module std.agent.group;
+
+public enum GroupError { EmptyParticipants, }
+public enum GroupStop { PredicateSatisfied, TurnLimitReached, }
+public type RoundRobinResult<S> = {
+    public state: S,
+    public turns: usize,
+    public reason: GroupStop,
+};
+
+public flow round_robin<S, effect E>(
+    participants: Array<(S) -> S ![E]>,
+    initial: S,
+    max_turns: usize,
+    stop_when: (S) -> bool ![],
+) -> RoundRobinResult<S> ![E, Error<GroupError>];
+```
+
+The source implementation performs these steps in order.
+
+1. Reject an empty participant array with `Error<GroupError>.raise(EmptyParticipants)`.
+2. Set `state = initial` and `turns = 0`. Evaluate `stop_when(state)` once.
+   If true, return `PredicateSatisfied` with zero turns.
+3. While `turns < max_turns`, invoke participant `turns % participants.len()`
+   with the current state. Replace the state only after the callback returns
+   successfully, then increment `turns` once.
+4. Evaluate `stop_when` after each completed turn. Return immediately with
+   `PredicateSatisfied` when true, including on the final permitted turn.
+5. Otherwise return the current state and `TurnLimitReached` after the budget
+   of turns is consumed. With a nonempty roster and `max_turns = 0`, this
+   returns the initial state unless the initial predicate already succeeded.
+
+One turn means one callback invocation. `max_turns` counts across all
+participants. A three-participant group with five allowed turns invokes
+indices `0, 1, 2, 0, 1`. Each call to `round_robin` starts at index zero.
+The function returns the final state and completion reason.
+
+### 6.2 Effects, Failure And Ownership
+
+Calls are sequential. The next participant observes the state returned by its
+predecessor. `E` includes the checked effects of the supplied callbacks, with
+the existing row-inclusion rules determining a common row. A callback that
+invokes an agent therefore exposes its Agentic actions. Pure callbacks are
+also valid. The predicate is pure under its declared row and is evaluated once
+at each specified boundary.
+
+The combinator inherits handlers, policies, budgets, cancellation, trace and
+session context. `max_turns` is an algorithm bound. Inherited execution limits
+can terminate the call earlier and keep their existing failure behavior.
+Callback errors and execution faults propagate immediately. Completed external
+actions retain their effects. The combinator performs no implicit retries or
+state rollback. Its implementation is an ordinary checked Etas loop.
+
+## 7. Virtual Trace Stages
+
+The public runtime signature remains
+`VirtualStages(stages: Array<TraceLabel>) -> TraceLabel ![]` in
+`std.runtime.trace`.
+
+The flow constructs an immutable composite label containing its child labels
+in order. Empty input constructs an empty composite. Single-element input
+retains a composite node, duplicates are retained and nested composites retain
+their hierarchy. It creates metadata without executing the stages. `Logical`
+continues to denote the existing logical trace label.
+
+`TraceLabel` retains its source-declared opaque nominal type for this migration.
+The source flow calls a private, pure binding that allocates the structured
+label payload. That binding validates the label inputs and preserves their
+checked identities. It performs no host request, trace emission or provider
+call. The opaque storage codec preserves this tree through checkpointing.
+
+An annotation such as `@trace(VirtualStages([Researcher, Critic]))` uses
+annotation-specific elaboration. The frontend resolves agent, flow or tool
+declaration references to checked stage labels with their callable identity,
+revision and source provenance. Label expressions such as `Logical` are also
+accepted. Import aliases preserve the resolved identity. Unresolved or
+non-callable declaration references produce a diagnostic. Ordinary runtime
+calls to `VirtualStages` require actual `TraceLabel` values.
+
+Trace metadata records a plan of logical stages. Physical inference, tool,
+permission and usage events come from actual execution. A virtual stage label
+alone cannot certify a model call, an approval or a tool invocation. Fusion
+records the source-stage mapping and the actual physical invocation separately.
+Display strings may accompany the structured plan, while runtime checks and
+replay use its checked identities.
+
+## 8. Sanitization And Declassification
+
+### 8.1 Typed Strategies And Signatures
+
+`std.security.declassify` defines these source-owned declarations.
+
+```etas
+@std.role("std.security.declassify.SanitizationStrategy")
+public type SanitizationStrategy<T, U>;
+@std.role("std.security.declassify.DeclassificationStrategy")
+public type DeclassificationStrategy<T, U>;
+public enum SecurityError {
+    Rejected,
+    Denied,
+    InvalidReason,
+    Unavailable,
+    StrategyMismatch,
+}
+
+public flow sanitize<T, U>(
+    value: Untrusted<T>,
+    strategy: SanitizationStrategy<T, U>,
+) -> Sanitized<U> ![Error<SecurityError>];
+
+public flow declassify<T, U>(
+    value: Secret<T>,
+    strategy: DeclassificationStrategy<T, U>,
+    reason: string,
+) -> Sanitized<U> ![Secret, Error<SecurityError>];
+```
+
+Both strategy types are immutable opaque references issued by trusted bindings.
+Each identifies a validated strategy implementation, its revision and exact
+input/output types. An installed strategy may execute a checked Etas body with
+signature `(T) -> Result<U, SecurityError> ![]`. Binding installation supplies
+the evidence associating that body with the strategy contract. The public APIs
+validate this evidence and execute that body under the caller's limits.
+Issuing a strategy handle and granting secret release use the existing trusted
+binding and runtime authority mechanisms.
+
+These signatures replace the two unrestricted legacy `T -> T` declarations.
+Every call supplies a strategy explicitly. A strategy has a concrete contract,
+such as removing designated HTML constructs or projecting approved incident
+fields. The `Sanitized` wrapper records processing under that contract. Prompt
+encoding retains data-channel placement and nested trust labels. A subsequent
+conversion to a trusted instruction channel requires its own existing evidence.
+
+These APIs and their strategy types are imported explicitly from
+`std.security.declassify`. The illustrative `sanitize.html` and `sanitize.text`
+names used in earlier examples denote application or EDK helpers. Those helpers
+provide their own source definitions, choose a concrete strategy and handle
+its errors.
+
+`Secret<T>` is the trust wrapper containing a typed secret value.
+`std.secret.SecretValue<K>` is an opaque host-secret reference indexed by a key
+type. This `declassify` signature accepts the former. Handling an opaque host
+secret requires a separately declared host operation and its authority checks.
+
+### 8.2 Sanitization
+
+`sanitize` validates the strategy and input/output types, passes the untrusted
+payload only to that strategy's protected execution frame, and returns
+`Sanitized<U>` after successful output validation. An explicit strategy may be
+a validator that preserves the input when its checks pass, or a transformer
+that produces a different type. Rejection raises `Error<SecurityError>`.
+Missing or incompatible strategy evidence raises `Unavailable` or
+`StrategyMismatch`.
+
+The operation performs the strategy's declared deterministic computation.
+It obtains neither secret access nor an implicit model/host request. Boundary
+primitives provide validated payload access and wrapper construction. The
+strategy's actual validation and transformation can be implemented in Etas.
+
+### 8.3 Secret Release And Audit
+
+`declassify` rejects a reason that is empty after whitespace trimming. It then
+validates strategy identity, revision and type correspondence and checks the
+current authority for the exact strategy before exposing the secret payload
+to its protected strategy frame. Denial produces `Denied`, while an absent
+implementation produces `Unavailable`. Strategy rejection produces `Rejected`.
+Successful output validation constructs `Sanitized<U>` with release provenance.
+
+The operation requests a new checked action `Secret.declassify` on the existing
+Secret owner. Its inferred signature binders carry `T` and `U`, with zero static
+selectors. Its payload carries the secret wrapper, typed strategy and reason.
+
+```etas
+impl std.effects.Secret {
+    action<T, U> declassify(
+        value: std.security.trust.Secret<T>,
+        strategy: DeclassificationStrategy<T, U>,
+        reason: string,
+    ) -> Sanitized<U>;
+}
+```
+
+The default handler enforces strategy-scoped grants, current trace specs and
+approvals, then performs the protected transformation. The public row is
+`![Secret, Error<SecurityError>]`. Custom handler support must preserve the
+protected release check before any secret access or result-wrapper creation.
+
+The audit record includes strategy identity and revision, input/output type
+identities, caller trace, authorization outcome, the supplied reason and result
+status. The reason is caller-supplied audit data and follows the existing
+redaction policy. Secret payloads and strategy intermediate values are excluded
+from ordinary errors, logs and trace payloads. Permission failures and strategy
+failures produce trace-visible outcomes through the existing runtime mechanism.
+
+Raw access to the secret and construction of release provenance belong to
+explicit protected bindings. Ordinary casts or trust-wrapper constructors must
+retain nested secrecy and cannot manufacture a successful release. A checked
+strategy executes under inherited budgets and cancellation. An identity
+release requires an explicitly configured strategy and the same authorization
+as any other release.
+
+## 9. Implementation And Migration Acceptance
+
+The seven legacy declarations are historical API inventory entries with
+incomplete execution contracts. The corrected signatures above are intentional
+API changes. Preserve the recorded legacy baseline and classify each change
+explicitly when comparing providers. Retain the Rust registry during migration.
+Apply the new contracts to supported execution paths before advertising their
+availability. Unsupported paths must report an actionable diagnostic.
+
+Source flows, ordinary enums, result records and policy bodies live in the
+existing `etas_std/library/std` modules. Their compilation reuses the existing
+pass manager, pipelines and installed std artifact mechanism. Native bindings
+own primitive numeric operations, opaque payload storage, secret authority and
+protected wrapper/provenance operations.
+
+The implementation tasks, code locations and acceptance cases are recorded in
+[Legacy Flow Implementation](../migrations/legacy-flow-implementation.md).

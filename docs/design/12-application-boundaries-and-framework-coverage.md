@@ -545,19 +545,27 @@ receipts, and storage retention; it does not implicitly generate summaries.
 
 AutoGen-style teams and Microsoft Agent Framework group chats are common enough that users should not hand-roll them every time.
 
-Recommended standard-library shape:
+Each participant adapts its agent call to the shared `Conversation` state
+contract. The standard-library shape is defined in
+[Round-Robin Groups](19-standard-library.md#6-round-robin-groups).
 
 ```etas
-flow Debate(question: Question) -> Answer {
-    let transcript =
+import std.agent.group;
+
+flow Debate(
+    initial: Conversation,
+    participants: Array<(Conversation) -> Conversation ![Agentic]>,
+    stop_when: (Conversation) -> bool ![],
+) -> Conversation {
+    let result =
         group.round_robin(
-            [Researcher, Critic, Synthesizer],
-            question,
-            limits = [Iterations(6), Tokens(30_000)],
-            stop_when = mentions("FINAL"),
+            participants,
+            initial,
+            max_turns = 6,
+            stop_when = stop_when,
         );
 
-    return transcript ~> FinalAnswerWriter;
+    return result.state;
 }
 ```
 

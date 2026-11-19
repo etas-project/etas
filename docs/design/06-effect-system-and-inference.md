@@ -934,6 +934,13 @@ in [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
 
 ### 2.2 Handler Scope
 
+Handler values and anonymous flows share lexical capture semantics. Within
+the owning task, a captured `var` identifies the original mutable binding.
+Assignments made before `resume` are visible to the resumed computation and
+later lexical accesses. A returned Handler can retain ordinary local bindings,
+subject to the existing resource and continuation lifetime checks. The common
+rules are defined in [Lambda And Handler Capture](20-lexical-capture.md).
+
 Etas borrows the surface shape of algebraic effect handlers, but it does not aim to provide a general-purpose algebraic-effects calculus like Koka. Etas handlers are runtime-scoped: they make selected runtime actions visible, enforceable, recoverable, traceable, and replayable in an agent runtime.
 
 | Dimension | Koka-style algebraic effects | Etas runtime-scoped effect actions |
@@ -1045,8 +1052,9 @@ invalidates the arm's local handle. The original handler environment is restored
 when the task resumes (deep resumption); operations performed by a handler arm
 continue to follow ordinary enclosing-handler rules. Delaying a continuation
 does not detach active trace specs, runtime authorization, cancellation, or
-budget accounting. Multiple arms may interleave; this does not authorize hidden
-shared mutation of captured values. See the concurrency chapter for `finish`
+budget accounting. Multiple arms may interleave. Mutable lexical captures stay
+within their owning task, and cross-task state uses explicit checked resources.
+See the concurrency chapter for `finish`
 across child tasks and cancellation/completion races.
 
 For example, if `Cache.get : string -> Option<string>`, then a
