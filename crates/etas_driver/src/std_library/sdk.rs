@@ -114,7 +114,14 @@ pub fn build_standard_library(
         package_root: output.package_root.clone(),
         selected_bin: None,
     })?;
-    let source_payload_hash = etas_package::package_source_payload_hash(&output.package_root)?;
+    // The body and source index must describe the bytes that actually passed
+    // checking, including when the maintained tree changes during the build.
+    let source_payload_hash = etas_package_metadata::source_payload_checksum_for_entries(
+        image
+            .sources
+            .iter()
+            .map(|source| (source.relative_path.as_path(), source.text.as_bytes())),
+    );
     let manifest_hash = etas_package::package_manifest_hash(&output.package_root)?;
     let dependency_lock_hash = etas_package::package_dependency_lock_hash(&output.package_root)?;
     let public = etas_frontend::build_package_metadata_artifact_from_checked(
@@ -214,7 +221,9 @@ pub fn build_standard_library(
             source,
         })?;
     }
-    copy_tree(&source_root, &installed_sources)?;
+    for source in &image.sources {
+        write_file(&out_dir.join(&source.relative_path), source.text.as_bytes())?;
+    }
     let package_manifest = output.package_root.join("etas.toml");
     write_file(&out_dir.join("etas.toml"), &read_file(&package_manifest)?)?;
     let lock_path = output.package_root.join("etas.lock");
@@ -258,26 +267,4 @@ fn read_file(path: &Path) -> Result<Vec<u8>, DriverError> {
         path: path.to_owned(),
         source,
     })
-}
-
-fn copy_tree(source_root: &Path, destination: &Path) -> Result<(), DriverError> {
-    create_dir(destination)?;
-    let entries = fs::read_dir(source_root).map_err(|source| DriverError::Io {
-        path: source_root.to_owned(),
-        source,
-    })?;
-    for entry in entries {
-        let entry = entry.map_err(|source| DriverError::Io {
-            path: source_root.to_owned(),
-            source,
-        })?;
-        let source = entry.path();
-        let target = destination.join(entry.file_name());
-        if source.is_dir() {
-            copy_tree(&source, &target)?;
-        } else {
-            write_file(&target, &read_file(&source)?)?;
-        }
-    }
-    Ok(())
 }

@@ -66,6 +66,9 @@ pub(super) fn publish(
             {
                 TypeDeclKind::Primitive
             }
+            metadata::TypeKind::Nominal if source_role.is_none() && ty.children.is_empty() => {
+                TypeDeclKind::Support
+            }
             metadata::TypeKind::Nominal => TypeDeclKind::Struct,
             _ if source_role.is_some() => TypeDeclKind::Support,
             _ => {
@@ -121,6 +124,8 @@ pub(super) fn publish(
             declaration.code_role = etas_std::CodeTypeRole::from_source_path(&canonical.join("."));
             if ty.kind == metadata::TypeKind::Alias {
                 declaration.canonical_type = Some(projector.ty(ty)?);
+            } else if kind == TypeDeclKind::Support {
+                declaration = declaration.intrinsic_only();
             } else {
                 declaration.representation =
                     ty.children.first().map(|ty| projector.ty(ty)).transpose()?;
