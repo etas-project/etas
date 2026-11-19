@@ -14,18 +14,14 @@ async fn checked_console_default_runs_after_explicit_handlers() {
     let mut builder = etas_std::StdRegistryBuilder::from_registry(registry.clone());
     builder.source_action_signature(
         symbol.id,
-        action.type_params,
-        action.effect_args,
-        action.selector_param_names,
-        action.params,
-        action.output,
-        Some(etas_std::StdEffectRowExpr {
-            effects: vec![etas_std::StdEffectRef::typed(
+        etas_std::EffectActionDecl {
+            default_handler_effects: Some(vec![etas_std::StdEffectRef::typed(
                 &["Error"],
                 etas_std::StdType::parse("std.io.IOError"),
-            )],
-            tail: None,
-        }),
+            )]),
+            default_handler_effect_tail: None,
+            ..action
+        },
     );
     let mut session = etas_frontend::FrontendSession::with_std_registry(std::sync::Arc::new(
         builder.try_finish().unwrap(),
