@@ -68,6 +68,7 @@ pub(crate) fn run(
         Some(flow.clone()),
         optimization_level,
         host_config.compiler_config().filter(|_| !args.dry_run),
+        args.checkpoint_dir.is_none(),
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);
     let visible_compile_diagnostics = visible_run_diagnostics(global, &compiled.diagnostics);

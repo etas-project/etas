@@ -80,11 +80,18 @@ pub struct CompileRunnableProjectResponse {
     pub response: CheckResponse,
 }
 
+#[derive(Clone, Copy)]
+enum StdLinkage {
+    Interface,
+    Executable,
+    Deferred,
+}
+
 pub fn check_project_once(
     options: &DriverOptions,
     request: CompileProjectRequest,
 ) -> Result<CompileProjectResponse, DriverError> {
-    check_once(options, request, true)
+    check_once(options, request, StdLinkage::Executable)
 }
 
 /// Check an application against the installed std interface without restoring executable bodies.
@@ -92,13 +99,13 @@ pub fn check_project_interface_once(
     options: &DriverOptions,
     request: CompileProjectRequest,
 ) -> Result<CompileProjectResponse, DriverError> {
-    check_once(options, request, false)
+    check_once(options, request, StdLinkage::Interface)
 }
 
 fn check_once(
     options: &DriverOptions,
     mut request: CompileProjectRequest,
-    executable: bool,
+    linkage: StdLinkage,
 ) -> Result<CompileProjectResponse, DriverError> {
     options.std_provider.configure(&mut request.input);
     if let Some(level) = options.optimization_level {
@@ -119,7 +126,7 @@ fn check_once(
         )
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
     } else {
-        frontend_session_with_library(options, executable)?
+        frontend_session_with_library(options, linkage)?
     };
     let project = session
         .try_open_project(request.input)
@@ -147,12 +154,31 @@ pub fn compile_runnable_project(
 
 pub fn compile_runnable_project_with_loaded(
     options: &DriverOptions,
+    request: LoadProjectRequest,
+    snapshot_detail: SnapshotDetailLevel,
+) -> Result<CompileRunnableProjectResponse, DriverError> {
+    compile_runnable_with_std_linkage(options, request, snapshot_detail, StdLinkage::Executable)
+}
+
+/// Compile an entry that does not require retaining an unused SDK for a future
+/// compiler operation or checkpoint.
+pub fn compile_runnable_project_with_deferred_std(
+    options: &DriverOptions,
+    request: LoadProjectRequest,
+    snapshot_detail: SnapshotDetailLevel,
+) -> Result<CompileRunnableProjectResponse, DriverError> {
+    compile_runnable_with_std_linkage(options, request, snapshot_detail, StdLinkage::Deferred)
+}
+
+fn compile_runnable_with_std_linkage(
+    options: &DriverOptions,
     mut request: LoadProjectRequest,
     snapshot_detail: SnapshotDetailLevel,
+    linkage: StdLinkage,
 ) -> Result<CompileRunnableProjectResponse, DriverError> {
     request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
     let metadata_loaded = load_project(options, request)?;
-    let mut session = frontend_session(options)?;
+    let mut session = frontend_session_with_library(options, linkage)?;
     let project = session
         .try_open_project(metadata_loaded.loaded.input.clone())
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
@@ -418,12 +444,12 @@ fn dependency_overlay_changes_from_sources(
 pub fn frontend_session(
     options: &DriverOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
-    frontend_session_with_library(options, true)
+    frontend_session_with_library(options, StdLinkage::Executable)
 }
 
 fn frontend_session_with_library(
     options: &DriverOptions,
-    executable: bool,
+    linkage: StdLinkage,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
     let session = match &options.std_provider {
         crate::std_library::provider::StdProvider::Legacy => {
@@ -441,11 +467,22 @@ fn frontend_session_with_library(
                 provider.registry.clone(),
             )
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
-            return if executable {
-                Ok(session.with_standard_library(provider.executable_library(&options.profile)?))
-            } else {
-                Ok(session.with_standard_library_interface(provider.interface.clone()))
-            };
+            let interface = provider.interface.clone();
+            return Ok(match linkage {
+                StdLinkage::Interface => session.with_standard_library_interface(interface),
+                StdLinkage::Executable => {
+                    session.with_standard_library(provider.executable_library(&options.profile)?)
+                }
+                StdLinkage::Deferred => {
+                    let provider = provider.clone();
+                    let profile = options.profile.clone();
+                    session.with_deferred_standard_library(interface, move || {
+                        provider
+                            .executable_library(&profile)
+                            .map_err(|error| error.to_string())
+                    })
+                }
+            });
         }
     };
     session.map_err(|error| DriverError::FrontendSession(format!("{error:?}")))
