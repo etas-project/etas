@@ -8,7 +8,7 @@ use etas_code::{CallableId, DefinitionKey, descriptor::GenericOwner};
 use etas_package_metadata as metadata;
 use etas_std::{StdRegistry, StdRegistryBuilder, StdType};
 
-use super::sdk::{LoadedStdSdk, installed_sysroot, load_standard_library_sdk};
+use super::sdk::{LoadedStdSdk, StdSdkManifest, installed_sysroot, load_standard_library_sdk};
 use crate::DriverError;
 
 mod effects;
@@ -42,12 +42,19 @@ impl ArtifactStdProvider {
         self.library
             .get_or_init(|| {
                 let _restore = profile.span("std.restore_checked_library", "std");
-                let program = self
-                    .sdk
-                    .image
-                    .clone()
-                    .into_checked_from_image_profiled(&self.sdk.root, profile)
+                let analysis = self
+                    .installed_effect_analysis(profile)
                     .map_err(|error| error.to_string())?;
+                let image = self.sdk.image.clone();
+                let program = match analysis {
+                    Some(payload) => image.into_checked_from_installed_analysis(
+                        &self.sdk.root,
+                        &payload,
+                        profile,
+                    ),
+                    None => image.into_checked_from_image_profiled(&self.sdk.root, profile),
+                }
+                .map_err(|error| error.to_string())?;
                 Ok(Arc::new(etas_frontend::StandardLibrary {
                     program,
                     interface: self.interface.clone(),
@@ -55,6 +62,20 @@ impl ArtifactStdProvider {
             })
             .clone()
             .map_err(invalid)
+    }
+
+    fn installed_effect_analysis(
+        &self,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Option<Vec<u8>>, DriverError> {
+        let Some(expected_hash) = self.sdk.manifest.effect_analysis_hash.as_deref() else {
+            return Ok(None);
+        };
+        let _load = profile.span("std.load_effect_analysis", "std");
+        if !super::install_receipt::installed_artifact_is_trusted(&self.sdk.manifest.identity()?) {
+            return Ok(None);
+        }
+        self.sdk.load_effect_analysis(expected_hash).map(Some)
     }
 }
 
@@ -216,7 +237,13 @@ impl StdProvider {
                     })?,
             ),
         });
-        let identity = metadata::blake3_hash(&serde_json::to_vec(&sdk.manifest).map_err(invalid)?);
+        // An installation's optional solver cache is unrelated to application
+        // and checkpoint compatibility with the underlying library.
+        let identity = StdSdkManifest {
+            effect_analysis_hash: None,
+            ..sdk.manifest.clone()
+        }
+        .identity()?;
         let bootstrap_identity = metadata::blake3_hash(
             &serde_json::to_vec(&sdk.image.native_registry).map_err(invalid)?,
         );

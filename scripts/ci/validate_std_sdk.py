@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -51,9 +52,10 @@ def main():
             else:
                 shutil.copy2(path, application / path.name)
 
-        def invoke(label, arguments, expected=None):
+        def invoke(label, arguments, expected=None, profile=None):
             tick = time.monotonic()
-            result = subprocess.run(common + arguments, cwd=application, capture_output=True, text=True)
+            profile_options = ["--profile-out", str(profile)] if profile else []
+            result = subprocess.run(common + profile_options + arguments, cwd=application, capture_output=True, text=True)
             (output / (label + ".json")).write_text(result.stdout)
             (output / (label + ".log")).write_text(result.stderr)
             assert result.returncode == 0, (label, result.returncode, result.stderr, result.stdout)
@@ -67,7 +69,12 @@ def main():
 
         for filename in ["collections.es", "tasks.es"]:
             invoke("check-" + filename, ["check", filename])
-        _, seconds = invoke("collections", ["run", "collections.es"], 42)
+        profile = output / "collections.profile.json" if sys.platform == "linux" and not args.sysroot else None
+        _, seconds = invoke("collections", ["run", "collections.es"], 42, profile=profile)
+        if profile:
+            counters = {counter["name"] for counter in json.loads(profile.read_text())["counters"]}
+            assert "std.restore.effects.replay_summaries.duration_ns" in counters, counters
+            assert "std.restore.effects.solve_summaries.duration_ns" not in counters, counters
         receipt["entries"].append({"flow": "collections", "value": 42, "seconds": seconds})
         invoke("check-files", ["check", "files"])
         _, seconds = invoke("files", ["run", "files"], 42)

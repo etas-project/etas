@@ -20,6 +20,7 @@ pub use load::{LoadedStdSdk, load_standard_library_sdk};
 pub const STD_SDK_SCHEMA: u32 = 1;
 pub const STD_TOOLCHAIN_ID: &str = env!("ETAS_TOOLCHAIN_ID");
 const ARTIFACT_PATH: &str = "artifacts/std.etasmeta";
+const EFFECT_ANALYSIS_PATH: &str = "artifacts/std.effects.etasmeta";
 
 pub fn installed_sysroot(prefix: &Path) -> PathBuf {
     prefix.join("lib/etas").join(STD_TOOLCHAIN_ID)
@@ -53,6 +54,8 @@ pub struct StdSdkManifest {
     pub target: String,
     pub artifact: PathBuf,
     pub artifact_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_analysis_hash: Option<String>,
     pub source_payload_hash: String,
     pub manifest_hash: String,
     pub dependency_lock_hash: String,
@@ -60,9 +63,31 @@ pub struct StdSdkManifest {
     pub sources: BTreeMap<PathBuf, String>,
 }
 
+impl StdSdkManifest {
+    pub fn identity(&self) -> Result<String, DriverError> {
+        let bytes = serde_json::to_vec(self).map_err(invalid)?;
+        Ok(etas_package_metadata::blake3_hash(&bytes))
+    }
+}
+
 pub fn build_standard_library(
     options: &DriverOptions,
     request: StdLibraryBuildRequest,
+) -> Result<StdLibraryBuildOutput, DriverError> {
+    build_sdk(options, request, false)
+}
+
+pub fn build_installed_standard_library(
+    options: &DriverOptions,
+    request: StdLibraryBuildRequest,
+) -> Result<StdLibraryBuildOutput, DriverError> {
+    build_sdk(options, request, cfg!(target_os = "linux"))
+}
+
+fn build_sdk(
+    options: &DriverOptions,
+    request: StdLibraryBuildRequest,
+    capture_effect_analysis: bool,
 ) -> Result<StdLibraryBuildOutput, DriverError> {
     let output = check_standard_library_source(
         options,
@@ -182,6 +207,24 @@ pub fn build_standard_library(
     });
     let bytes = etas_package_metadata::encode_metadata_artifact(&decoded.header, sections)
         .map_err(invalid)?;
+    let effect_analysis = if capture_effect_analysis {
+        let _capture = options.profile.span("std.capture_effect_analysis", "std");
+        let payload = image
+            .capture_effect_analysis(&output.package_root, &options.profile)
+            .map_err(invalid)?;
+        Some(
+            etas_package_metadata::encode_metadata_artifact(
+                &decoded.header,
+                vec![EncodedMetadataSection {
+                    kind: MetadataSectionKind::LibraryBodies,
+                    payload,
+                }],
+            )
+            .map_err(invalid)?,
+        )
+    } else {
+        None
+    };
     let manifest = StdSdkManifest {
         schema: STD_SDK_SCHEMA,
         package: output.manifest.package.name,
@@ -196,6 +239,9 @@ pub fn build_standard_library(
         toolchain_id: STD_TOOLCHAIN_ID.into(),
         artifact: ARTIFACT_PATH.into(),
         artifact_hash: etas_package_metadata::blake3_hash(&bytes),
+        effect_analysis_hash: effect_analysis
+            .as_deref()
+            .map(etas_package_metadata::blake3_hash),
         source_payload_hash,
         manifest_hash,
         dependency_lock_hash,
@@ -246,6 +292,9 @@ pub fn build_standard_library(
         })?;
     }
     write_file(&out_dir.join(ARTIFACT_PATH), &bytes)?;
+    if let Some(effect_analysis) = effect_analysis {
+        write_file(&out_dir.join(EFFECT_ANALYSIS_PATH), &effect_analysis)?;
+    }
     write_file(
         &out_dir.join("manifest.json"),
         &serde_json::to_vec_pretty(&manifest).map_err(invalid)?,

@@ -6,7 +6,9 @@ use etas_package_metadata::{
     package_metadata_from_package_graph_payload, validate_artifact_schema,
 };
 
-use super::{STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file};
+use super::{
+    EFFECT_ANALYSIS_PATH, STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file,
+};
 use crate::DriverError;
 
 #[derive(Clone, Debug)]
@@ -15,6 +17,30 @@ pub struct LoadedStdSdk {
     pub manifest: StdSdkManifest,
     pub public: etas_package_metadata::PackageMetadata,
     pub image: LibraryHirImage,
+}
+
+impl LoadedStdSdk {
+    pub(crate) fn load_effect_analysis(&self, expected_hash: &str) -> Result<Vec<u8>, DriverError> {
+        let path = self.root.join(EFFECT_ANALYSIS_PATH);
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "Effect analysis digest",
+            etas_package_metadata::blake3_hash(&bytes).as_str(),
+            expected_hash,
+        )?;
+        let mut archive =
+            etas_package_metadata::decode_metadata_artifact(&path, &bytes).map_err(invalid)?;
+        archive
+            .sections
+            .remove(&MetadataSectionKind::LibraryBodies)
+            .ok_or_else(|| {
+                invalid(format!(
+                    "{}: installed SDK has no solved Effect analysis",
+                    path.display()
+                ))
+            })
+    }
 }
 
 /// Load a complete installed std with no handwritten registry construction or
