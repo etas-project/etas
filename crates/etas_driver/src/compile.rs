@@ -5,11 +5,11 @@ use std::{
 
 use etas_core::Severity;
 use etas_frontend::{
-    CheckRequest, CheckResponse, CheckScope, DependencyOverlayChange, DiskCacheAccess,
-    EnvironmentChange, ExternalPackageId, FrontendSession, FrontendSessionOptions,
-    FrontendSessionStore, ModulePath, OptimizationLevel, ProjectChangeSet, ProjectInput,
-    ProjectRevision, RuntimeSourceRequirement, RuntimeSourceRequirements, SnapshotDetailLevel,
-    SourceInput, SourceKind,
+    CheckRequest, CheckResponse, CheckRetention, CheckScope, DependencyOverlayChange,
+    DiskCacheAccess, EnvironmentChange, ExternalPackageId, FrontendCacheConfig, FrontendSession,
+    FrontendSessionOptions, FrontendSessionStore, ModulePath, OptimizationLevel, ProjectChangeSet,
+    ProjectInput, ProjectRevision, RuntimeSourceRequirement, RuntimeSourceRequirements,
+    SnapshotDetailLevel, SourceInput, SourceKind,
 };
 use etas_utils::ProfileHandle;
 
@@ -126,14 +126,14 @@ fn check_once(
         )
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
     } else {
-        frontend_session_with_library(options, linkage)?
+        frontend_session_with_library(options, linkage, session_options(options)?)?
     };
     let project = session
         .try_open_project(request.input)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
     let mut check = check_request(options).with_snapshot_detail(request.snapshot_detail);
     if !check.disk_artifact_access.can_write() {
-        check.retention = etas_frontend::CheckRetention::OneShot;
+        check.retention = CheckRetention::OneShot;
     }
     let response = session
         .check(project, check)
@@ -178,7 +178,10 @@ fn compile_runnable_with_std_linkage(
 ) -> Result<CompileRunnableProjectResponse, DriverError> {
     request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
     let metadata_loaded = load_project(options, request)?;
-    let mut session = frontend_session_with_library(options, linkage)?;
+    let session_options = session_options(options)?;
+    let writes_cache = matches!(&session_options.cache,
+        FrontendCacheConfig::Disk { access, .. } if access.can_write());
+    let mut session = frontend_session_with_library(options, linkage, session_options)?;
     let project = session
         .try_open_project(metadata_loaded.loaded.input.clone())
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
@@ -188,13 +191,14 @@ fn compile_runnable_with_std_linkage(
         let _span = options
             .profile
             .span_with_attrs("frontend.check", "frontend", attrs);
+        let mut request = check_request(options)
+            .with_snapshot_detail(snapshot_detail)
+            .with_scope(CheckScope::EntryReachable);
+        if !writes_cache && metadata_loaded.package_environment.is_none() {
+            request.retention = CheckRetention::OneShot;
+        }
         let response = session
-            .check(
-                project,
-                check_request(options)
-                    .with_snapshot_detail(snapshot_detail)
-                    .with_scope(CheckScope::EntryReachable),
-            )
+            .check(project, request)
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
         record_pipeline_profile(options, &response);
         response
@@ -444,26 +448,24 @@ fn dependency_overlay_changes_from_sources(
 pub fn frontend_session(
     options: &DriverOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
-    frontend_session_with_library(options, StdLinkage::Executable)
+    frontend_session_with_library(options, StdLinkage::Executable, session_options(options)?)
 }
 
 fn frontend_session_with_library(
     options: &DriverOptions,
     linkage: StdLinkage,
+    session_options: FrontendSessionOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
     let session = match &options.std_provider {
         crate::std_library::provider::StdProvider::Legacy => {
-            FrontendSession::with_options(session_options(options)?)
+            FrontendSession::with_options(session_options)
         }
         crate::std_library::provider::StdProvider::SourceBootstrap(registry) => {
-            FrontendSession::with_options_and_std_registry(
-                session_options(options)?,
-                registry.clone(),
-            )
+            FrontendSession::with_options_and_std_registry(session_options, registry.clone())
         }
         crate::std_library::provider::StdProvider::Artifact(provider) => {
             let session = FrontendSession::with_options_and_std_registry(
-                session_options(options)?,
+                session_options,
                 provider.registry.clone(),
             )
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
