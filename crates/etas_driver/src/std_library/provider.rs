@@ -41,7 +41,7 @@ impl ArtifactStdProvider {
     ) -> Result<Arc<etas_frontend::StandardLibrary>, DriverError> {
         self.library
             .get_or_init(|| {
-                let _restore = profile.span("std.restore_checked_library", "std");
+                let _restore = profile.span("std.load_executable_library", "std");
                 let analysis = self
                     .installed_effect_analysis(profile)
                     .map_err(|error| error.to_string())?;

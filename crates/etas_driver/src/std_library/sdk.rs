@@ -227,9 +227,11 @@ fn build_sdk(
     let bytes = etas_package_metadata::encode_metadata_artifact(&decoded.header, sections)
         .map_err(invalid)?;
     let effect_analysis = if capture_effect_analysis {
-        let _capture = options.profile.span("std.capture_effect_analysis", "std");
+        let _capture = options
+            .profile
+            .span("std.prepare_installed_publication", "std");
         let payload = image
-            .capture_effect_analysis(&output.package_root, &options.profile)
+            .prepare_installed_publication(checked, &output.package_root, &options.profile)
             .map_err(invalid)?;
         Some(
             etas_package_metadata::encode_metadata_artifact(

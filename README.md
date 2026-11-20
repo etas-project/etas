@@ -35,9 +35,12 @@ No model provider or API key is needed for this example.
 The installer places `etas` in Cargo's binary directory and builds the
 matching SDK from the standard-library sources pinned by Cargo. The CLI uses
 this SDK by default. Pass `--std-provider legacy` to select the legacy registry.
-On Linux, `std install` prepares binary SDK data and materialized Effect facts
-for the matching executable. `etas run` reuses these and checks the execution
-contracts on load.
+On Linux, `std install` prepares binary SDK data and finalized type, Effect,
+Handler and concurrency facts for the matching executable. `etas run` loads
+these without repeating the standard library's static checks. Loading binds
+source and reflection owners to the current process. SDKs with residual
+monitors retain proof rebinding, and unpaired SDKs use the portable checking
+path. Runtime permissions, budgets and trace enforcement still apply.
 To inspect a program before running it:
 
 ```sh

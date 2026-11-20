@@ -73,9 +73,8 @@ def main():
         _, seconds = invoke("collections", ["run", "collections.es"], 42, profile=profile)
         if profile:
             counters = {counter["name"] for counter in json.loads(profile.read_text())["counters"]}
-            assert "std.restore.effects.replay_prepared_facts.duration_ns" in counters, counters
-            assert "std.restore.effects.solve_summaries.duration_ns" not in counters, counters
-            assert "std.restore.effects.materialize_facts.duration_ns" not in counters, counters
+            assert "std.installed.pass.PublishInstalledLibraryPass.duration_ns" in counters, counters
+            assert not any(name.startswith("std.restore.") for name in counters), counters
         receipt["entries"].append({"flow": "collections", "value": 42, "seconds": seconds})
         invoke("check-files", ["check", "files"])
         _, seconds = invoke("files", ["run", "files"], 42)
