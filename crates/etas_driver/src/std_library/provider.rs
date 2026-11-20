@@ -241,6 +241,7 @@ impl StdProvider {
         // and checkpoint compatibility with the underlying library.
         let identity = StdSdkManifest {
             effect_analysis_hash: None,
+            prepared_image_hash: None,
             ..sdk.manifest.clone()
         }
         .identity()?;

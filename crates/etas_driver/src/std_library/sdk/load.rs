@@ -7,7 +7,8 @@ use etas_package_metadata::{
 };
 
 use super::{
-    EFFECT_ANALYSIS_PATH, STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file,
+    EFFECT_ANALYSIS_PATH, PREPARED_IMAGE_PATH, STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest,
+    invalid, read_file,
 };
 use crate::DriverError;
 
@@ -132,8 +133,22 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         &etas_package_metadata::blake3_hash(&bytes),
         &manifest.artifact_hash,
     )?;
-    let decoded =
-        etas_package_metadata::decode_metadata_artifact(&artifact_path, &bytes).map_err(invalid)?;
+    let prepared;
+    let archive = if let Some(expected_hash) = &manifest.prepared_image_hash {
+        let path = root.join(PREPARED_IMAGE_PATH);
+        prepared = read_file(&path)?;
+        matches(
+            &path,
+            "prepared image digest",
+            &etas_package_metadata::blake3_hash(&prepared),
+            expected_hash,
+        )?;
+        &prepared
+    } else {
+        &bytes
+    };
+    let decoded = etas_package_metadata::decode_metadata_artifact(&artifact_path, archive)
+        .map_err(invalid)?;
     let header = &decoded.header;
     matches(
         &artifact_path,
@@ -180,7 +195,12 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
                 artifact_path.display()
             ))
         })?;
-    let image = LibraryHirImage::decode(body).map_err(invalid)?;
+    let image = if manifest.prepared_image_hash.is_some() {
+        LibraryHirImage::decode_prepared(body)
+    } else {
+        LibraryHirImage::decode(body)
+    }
+    .map_err(invalid)?;
     matches(
         &artifact_path,
         "body schema",

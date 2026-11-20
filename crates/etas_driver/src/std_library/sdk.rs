@@ -21,6 +21,7 @@ pub const STD_SDK_SCHEMA: u32 = 1;
 pub const STD_TOOLCHAIN_ID: &str = env!("ETAS_TOOLCHAIN_ID");
 const ARTIFACT_PATH: &str = "artifacts/std.etasmeta";
 const EFFECT_ANALYSIS_PATH: &str = "artifacts/std.effects.etasmeta";
+const PREPARED_IMAGE_PATH: &str = "artifacts/std.prepared.etasmeta";
 
 pub fn installed_sysroot(prefix: &Path) -> PathBuf {
     prefix.join("lib/etas").join(STD_TOOLCHAIN_ID)
@@ -56,6 +57,8 @@ pub struct StdSdkManifest {
     pub artifact_hash: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_analysis_hash: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prepared_image_hash: Option<String>,
     pub source_payload_hash: String,
     pub manifest_hash: String,
     pub dependency_lock_hash: String,
@@ -201,6 +204,22 @@ fn build_sdk(
         .into_iter()
         .map(|(kind, payload)| EncodedMetadataSection { kind, payload })
         .collect::<Vec<_>>();
+    let prepared_image = if capture_effect_analysis {
+        let payload = image.encode_prepared().map_err(invalid)?;
+        // Validate the native codec while preparing the installation.
+        LibraryHirImage::decode_prepared(&payload).map_err(invalid)?;
+        let mut prepared = sections.clone();
+        prepared.push(EncodedMetadataSection {
+            kind: MetadataSectionKind::LibraryBodies,
+            payload,
+        });
+        Some(
+            etas_package_metadata::encode_metadata_artifact(&decoded.header, prepared)
+                .map_err(invalid)?,
+        )
+    } else {
+        None
+    };
     sections.push(EncodedMetadataSection {
         kind: MetadataSectionKind::LibraryBodies,
         payload: image.encode().map_err(invalid)?,
@@ -240,6 +259,9 @@ fn build_sdk(
         artifact: ARTIFACT_PATH.into(),
         artifact_hash: etas_package_metadata::blake3_hash(&bytes),
         effect_analysis_hash: effect_analysis
+            .as_deref()
+            .map(etas_package_metadata::blake3_hash),
+        prepared_image_hash: prepared_image
             .as_deref()
             .map(etas_package_metadata::blake3_hash),
         source_payload_hash,
@@ -292,6 +314,9 @@ fn build_sdk(
         })?;
     }
     write_file(&out_dir.join(ARTIFACT_PATH), &bytes)?;
+    if let Some(prepared_image) = prepared_image {
+        write_file(&out_dir.join(PREPARED_IMAGE_PATH), &prepared_image)?;
+    }
     if let Some(effect_analysis) = effect_analysis {
         write_file(&out_dir.join(EFFECT_ANALYSIS_PATH), &effect_analysis)?;
     }
