@@ -470,6 +470,43 @@ fn frontend_session_with_library(
             )
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
             let interface = provider.interface.clone();
+            if provider.sdk.prepared_queries.is_some() {
+                let behaviors = provider.clone();
+                let profile = options.profile.clone();
+                let executable = if matches!(linkage, StdLinkage::Executable | StdLinkage::Deferred)
+                {
+                    let provider = provider.clone();
+                    let profile = profile.clone();
+                    Some(
+                        std::sync::Arc::new(move |consumer: &etas_frontend::CheckedProgramData| {
+                            provider
+                                .executable_library_for(consumer, &profile)
+                                .map_err(|e| e.to_string())
+                        })
+                            as std::sync::Arc<
+                                dyn Fn(
+                                        &etas_frontend::CheckedProgramData,
+                                    ) -> Result<
+                                        std::sync::Arc<etas_frontend::StandardLibrary>,
+                                        String,
+                                    > + Send
+                                    + Sync,
+                            >,
+                    )
+                } else {
+                    None
+                };
+                return Ok(session.with_installed_standard_library(
+                    interface,
+                    move |consumer| {
+                        behaviors
+                            .sdk
+                            .load_behaviors(&behaviors.registry, consumer, &profile)
+                            .map_err(|e| e.to_string())
+                    },
+                    executable,
+                ));
+            }
             return Ok(match linkage {
                 StdLinkage::Interface => session.with_standard_library_interface(interface),
                 StdLinkage::Executable | StdLinkage::Deferred => {

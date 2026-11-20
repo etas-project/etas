@@ -62,6 +62,8 @@ def main():
                         "frontend.check", "interpreter.plan", "interpreter.eval")},
                     "loaded_body_modules": counters.get("std.loaded_body_modules"),
                     "loaded_body_bytes": counters.get("std.loaded_body_bytes"),
+                    "parsed_standard_sources": counters.get("std.installed.source_parse_count"),
+                    "loaded_public_behaviors": counters.get("std.loaded_public_behaviors"),
                 })
     medians = {label: round(statistics.median(row["wall_ms"] for row in samples
                                             if row["version"] == label), 3)

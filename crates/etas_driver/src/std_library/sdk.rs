@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use super::{StdLibraryCheckRequest, check_standard_library_source};
 use crate::{DriverError, DriverOptions};
 
+mod behaviors;
 mod delta;
 mod load;
 pub use load::{LoadedStdSdk, load_standard_library_sdk};
@@ -82,6 +83,8 @@ pub struct StdSdkManifest {
 pub(crate) struct PreparedStdQueries {
     pub registry: Option<etas_std::StdRegistryImage>,
     pub interface: std::sync::Arc<etas_frontend::StandardLibraryInterface>,
+    pub signatures: StdBundleFile,
+    pub behaviors: Vec<behaviors::BehaviorEntry>,
     pub bootstrap_identity: String,
     #[serde(with = "callable_index")]
     pub callables: BTreeMap<etas_code::CallableId, u32>,
@@ -118,7 +121,7 @@ pub struct StdModuleBundle {
 
 pub(crate) fn decode_queries(bytes: &[u8]) -> Result<PreparedStdQueries, DriverError> {
     let payload = bytes
-        .strip_prefix(b"ETASQRY4")
+        .strip_prefix(b"ETASQRY6")
         .ok_or_else(|| invalid("incompatible installed std queries"))?;
     serde_json::from_slice(payload).map_err(invalid)
 }
@@ -174,16 +177,19 @@ impl StdLibraryBuildOutput {
                 }
             })
             .collect();
+        let (interface, signatures, behaviors) = behaviors::publish(self, provider)?;
         let queries = PreparedStdQueries {
+            signatures,
+            behaviors,
             registry: Some(
                 etas_std::StdRegistryImage::capture(&provider.registry).map_err(invalid)?,
             ),
-            interface: provider.interface.clone(),
+            interface,
             bootstrap_identity: provider.bootstrap_identity.clone(),
             callables,
             bundles,
         };
-        let mut payload = b"ETASQRY4".to_vec();
+        let mut payload = b"ETASQRY6".to_vec();
         serde_json::to_writer(&mut payload, &queries).map_err(invalid)?;
         decode_queries(&payload)?;
         write_file(&self.out_dir.join(PREPARED_QUERIES_PATH), &payload)?;

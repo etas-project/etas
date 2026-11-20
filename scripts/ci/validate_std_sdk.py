@@ -72,10 +72,14 @@ def main():
         profile = output / "collections.profile.json" if sys.platform == "linux" and not args.sysroot else None
         _, seconds = invoke("collections", ["run", "collections.es"], 42, profile=profile)
         if profile:
-            counters = {counter["name"] for counter in json.loads(profile.read_text())["counters"]}
-            assert "std.installed.pass.PublishInstalledLibraryPass.duration_ns" in counters, counters
+            counters = {counter["name"]: counter["value"] for counter in json.loads(profile.read_text())["counters"]}
+            assert "std.installed.bind.duration_ns" in counters, counters
+            assert counters["std.installed.source_parse_count"] == 0, counters
             assert not any(name.startswith("std.restore.") for name in counters), counters
         receipt["entries"].append({"flow": "collections", "value": 42, "seconds": seconds})
+        invoke("check-reflection", ["check", "reflection.es"])
+        _, seconds = invoke("reflection", ["run", "reflection.es"], 42)
+        receipt["entries"].append({"flow": "reflection", "value": 42, "seconds": seconds})
         invoke("check-files", ["check", "files"])
         _, seconds = invoke("files", ["run", "files"], 42)
         receipt["entries"].append({"flow": "files", "value": 42, "seconds": seconds})
