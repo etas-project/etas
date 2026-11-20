@@ -472,15 +472,12 @@ fn frontend_session_with_library(
             let interface = provider.interface.clone();
             return Ok(match linkage {
                 StdLinkage::Interface => session.with_standard_library_interface(interface),
-                StdLinkage::Executable => {
-                    session.with_standard_library(provider.executable_library(&options.profile)?)
-                }
-                StdLinkage::Deferred => {
+                StdLinkage::Executable | StdLinkage::Deferred => {
                     let provider = provider.clone();
                     let profile = options.profile.clone();
-                    session.with_deferred_standard_library(interface, move || {
+                    session.with_deferred_standard_library(interface, move |consumer| {
                         provider
-                            .executable_library(&profile)
+                            .executable_library_for(consumer, &profile)
                             .map_err(|error| error.to_string())
                     })
                 }

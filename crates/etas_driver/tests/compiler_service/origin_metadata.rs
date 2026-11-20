@@ -290,7 +290,13 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
         )
         .unwrap();
     }
-    for binding in &mut input.descriptors.as_mut().unwrap().declarations {
+    for binding in &mut input
+        .descriptors
+        .as_mut()
+        .map(std::sync::Arc::make_mut)
+        .unwrap()
+        .declarations
+    {
         binding.definition = DefinitionKey::new(
             forged,
             binding.definition.module().to_vec(),
@@ -302,6 +308,7 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
     for callable in &mut input
         .descriptors
         .as_mut()
+        .map(std::sync::Arc::make_mut)
         .unwrap()
         .headers
         .as_mut()
@@ -323,6 +330,7 @@ fn definition_origins_cannot_impersonate_a_different_prepared_package_owner() {
     for snapshot in &mut input
         .descriptors
         .as_mut()
+        .map(std::sync::Arc::make_mut)
         .unwrap()
         .headers
         .as_mut()
@@ -553,7 +561,7 @@ public flow lookup() -> i32 { return 7; }
     let checked = check(&loaded);
     let replayed = checked.external_definition_origins()[0]
         .descriptors
-        .as_ref()
+        .as_deref()
         .unwrap();
     assert_eq!(replayed, &descriptors);
     assert_eq!(
@@ -696,7 +704,7 @@ flow main() -> unit { let definition = ^relay; let choice = ^choose; let stopped
     let checked = check(&loaded);
     let replayed = checked.external_definition_origins()[0]
         .descriptors
-        .as_ref()
+        .as_deref()
         .unwrap();
     assert_eq!(replayed, &descriptors);
     let fingerprint = etas_package_metadata::definition_descriptors_fingerprint(&descriptors);
@@ -899,7 +907,7 @@ public flow lookup() -> i32 { return 7; }
         assert_eq!(
             checked.external_definition_origins()[0]
                 .descriptors
-                .as_ref()
+                .as_deref()
                 .unwrap(),
             &descriptors
         );
@@ -962,7 +970,7 @@ flow inspect() -> unit { let definition = ^Worker; return; }
         let consumer = check(&consumer);
         let replayed = consumer.external_definition_origins()[0]
             .descriptors
-            .as_ref()
+            .as_deref()
             .unwrap()
             .headers
             .as_ref()

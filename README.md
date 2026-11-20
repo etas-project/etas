@@ -35,12 +35,36 @@ No model provider or API key is needed for this example.
 The installer places `etas` in Cargo's binary directory and builds the
 matching SDK from the standard-library sources pinned by Cargo. The CLI uses
 this SDK by default. Pass `--std-provider legacy` to select the legacy registry.
-On Linux, `std install` prepares binary SDK data and finalized type, Effect,
-Handler and concurrency facts for the matching executable. `etas run` loads
-these without repeating the standard library's static checks. Loading binds
-source and reflection owners to the current process. SDKs with residual
-monitors retain proof rebinding, and unpaired SDKs use the portable checking
-path. Runtime permissions, budgets and trace enforcement still apply.
+On Linux, `std install` prepares checked SDK data, public query indices and
+rootless interpreter layouts for the matching toolchain build. The compiler records
+semantic dependencies from solved calls, types, generic bounds and Effect facts.
+The installer takes their transitive closures and packages the checked IR and
+analysis results directly. Original source is retained for diagnostics and
+reflection. `etas run` selects the smallest installed execution bundle covering
+its checked calls and methods; declaration and type indices stay shared.
+Static checks load the prepared public interface without decoding executable
+bodies. Standalone source applications reuse its installation-time validation.
+The installation receipt binds the complete SDK manifest to the CLI's compiled
+build stamp, avoiding a repeated scan of the executable. Code and dependency
+changes regenerate this stamp.
+
+Reflection, directly imported std values, caller-performed actions and calls
+spanning the available bundles use the complete SDK. Programs with residual
+monitors retain proof rebinding;
+unpaired SDKs use the portable checking path. Runtime permissions, budgets and
+trace enforcement still apply.
+
+Measure startup in fresh processes with project caching disabled:
+
+```sh
+python3 scripts/ci/benchmark_std_startup.py --binary /path/to/installed/bin/etas --receipt-dir /tmp/etas-startup
+```
+
+The benchmark checks a `std.text.join` program and records wall time, stage
+timings and loaded body size. Pass `--baseline /path/to/older/bin/etas` to compare
+versions, or `--cpu N` to pin the samples to one CPU. The default target is a
+median below 500 ms across ten runs; stage timings can include nested work.
+
 To inspect a program before running it:
 
 ```sh

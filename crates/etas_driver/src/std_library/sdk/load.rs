@@ -1,4 +1,7 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::{Arc, OnceLock},
+};
 
 use etas_frontend::library_hir::LibraryHirImage;
 use etas_package_metadata::{
@@ -7,8 +10,8 @@ use etas_package_metadata::{
 };
 
 use super::{
-    EFFECT_ANALYSIS_PATH, PREPARED_IMAGE_PATH, STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest,
-    invalid, read_file,
+    EFFECT_ANALYSIS_PATH, INTERPRETER_LAYOUT_PATH, PREPARED_IMAGE_PATH, PREPARED_QUERIES_PATH,
+    STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file,
 };
 use crate::DriverError;
 
@@ -16,11 +19,106 @@ use crate::DriverError;
 pub struct LoadedStdSdk {
     pub root: PathBuf,
     pub manifest: StdSdkManifest,
-    pub public: etas_package_metadata::PackageMetadata,
-    pub image: LibraryHirImage,
+    public: Arc<OnceLock<Result<etas_package_metadata::PackageMetadata, String>>>,
+    image: Arc<OnceLock<Result<LibraryHirImage, String>>>,
+    pub(crate) prepared_queries: Option<super::PreparedStdQueries>,
 }
 
 impl LoadedStdSdk {
+    pub fn image(&self) -> Result<&LibraryHirImage, DriverError> {
+        self.image
+            .get_or_init(|| self.read_image().map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(invalid)
+    }
+
+    pub fn public(&self) -> Result<&etas_package_metadata::PackageMetadata, DriverError> {
+        self.public
+            .get_or_init(|| self.read_public().map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(invalid)
+    }
+
+    fn read_image(&self) -> Result<LibraryHirImage, DriverError> {
+        let (path, expected) = match &self.manifest.prepared_image_hash {
+            Some(hash) => (self.root.join(PREPARED_IMAGE_PATH), hash),
+            None => (
+                self.root.join(&self.manifest.artifact),
+                &self.manifest.artifact_hash,
+            ),
+        };
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "body artifact digest",
+            &etas_package_metadata::blake3_hash(&bytes),
+            expected,
+        )?;
+        let mut archive =
+            etas_package_metadata::decode_metadata_artifact(&path, &bytes).map_err(invalid)?;
+        let body = archive
+            .sections
+            .remove(&MetadataSectionKind::LibraryBodies)
+            .ok_or_else(|| invalid("std artifact has no checked bodies"))?;
+        if self.manifest.prepared_image_hash.is_some() {
+            LibraryHirImage::decode_prepared(&body)
+        } else {
+            LibraryHirImage::decode(&body)
+        }
+        .map_err(invalid)
+    }
+
+    fn read_public(&self) -> Result<etas_package_metadata::PackageMetadata, DriverError> {
+        let path = self.root.join(&self.manifest.artifact);
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "public artifact digest",
+            &etas_package_metadata::blake3_hash(&bytes),
+            &self.manifest.artifact_hash,
+        )?;
+        let archive =
+            etas_package_metadata::decode_metadata_artifact(&path, &bytes).map_err(invalid)?;
+        let graph = archive
+            .sections
+            .get(&MetadataSectionKind::PackageGraph)
+            .ok_or_else(|| invalid("std artifact has no public graph"))?;
+        package_metadata_from_package_graph_payload(graph).map_err(invalid)
+    }
+
+    pub(crate) fn load_bundle_file(
+        &self,
+        file: &super::StdBundleFile,
+    ) -> Result<Vec<u8>, DriverError> {
+        let path = relative_file(&self.root, &file.path)?;
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "module bundle digest",
+            &etas_package_metadata::blake3_hash(&bytes),
+            &file.hash,
+        )?;
+        match &file.base {
+            Some(base) => super::delta::decode(&self.load_bundle_file(base)?, &bytes),
+            None => Ok(bytes),
+        }
+    }
+
+    pub(crate) fn load_runtime_layouts(&self) -> Result<Option<std::sync::Arc<[u8]>>, DriverError> {
+        let Some(expected) = &self.manifest.interpreter_layout_hash else {
+            return Ok(None);
+        };
+        let path = self.root.join(INTERPRETER_LAYOUT_PATH);
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "runtime layouts digest",
+            &etas_package_metadata::blake3_hash(&bytes),
+            expected,
+        )?;
+        Ok(Some(bytes.into()))
+    }
+
     pub(crate) fn load_effect_analysis(&self, expected_hash: &str) -> Result<Vec<u8>, DriverError> {
         let path = self.root.join(EFFECT_ANALYSIS_PATH);
         let bytes = read_file(&path)?;
@@ -94,6 +192,26 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         env!("ETAS_STD_CONTRACT"),
     )?;
     matches(&manifest_path, "package", manifest.package.as_str(), "std")?;
+    if let Some(expected) = &manifest.prepared_queries_hash
+        && super::super::install_receipt::installed_artifact_is_trusted(&manifest.identity()?)
+    {
+        let path = root.join(PREPARED_QUERIES_PATH);
+        let bytes = read_file(&path)?;
+        matches(
+            &path,
+            "prepared queries digest",
+            &etas_package_metadata::blake3_hash(&bytes),
+            expected,
+        )?;
+        let queries = super::decode_queries(&bytes)?;
+        return Ok(LoadedStdSdk {
+            root,
+            manifest,
+            public: Arc::default(),
+            image: Arc::default(),
+            prepared_queries: Some(queries),
+        });
+    }
     let package = etas_package::read_manifest(&root)?;
     matches(
         &manifest_path,
@@ -266,8 +384,9 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
     Ok(LoadedStdSdk {
         root,
         manifest,
-        public,
-        image,
+        public: Arc::new(OnceLock::from(Ok(public))),
+        image: Arc::new(OnceLock::from(Ok(image))),
+        prepared_queries: None,
     })
 }
 

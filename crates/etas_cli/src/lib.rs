@@ -88,6 +88,10 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
+    #[cfg(feature = "component-frontend")]
+    etas_driver::std_library::install_receipt::register_toolchain_build(env!(
+        "ETAS_EXECUTABLE_BUILD_ID"
+    ));
     let args = normalize_default_run_args(args);
     let args = match CliArgs::try_parse_from(args) {
         Ok(args) => args,

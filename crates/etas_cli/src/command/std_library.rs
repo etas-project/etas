@@ -45,13 +45,75 @@ pub fn run(
         ),
     };
     let options = super::frontend::base_driver_options(global, profile);
-    let output = if executable.is_some() {
+    let mut output = if executable.is_some() {
         build_installed_standard_library(&options, request)
     } else {
         build_standard_library(&options, request)
     }
     .map_err(super::frontend::driver_error)?;
     if let Some(executable) = executable {
+        #[cfg(feature = "component-runtime")]
+        if let Some(program) = &output.installed_program {
+            let _layouts = profile.span("std.prepare_runtime_layouts", "std");
+            let payload = etas_interpreter::encode_installed_layouts(program)
+                .map_err(|message| CliError::InvalidUsage(message))?;
+            if let Some(payload) = payload {
+                output
+                    .publish_runtime_layouts(&payload)
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
+        if let (Some(base), Some(checked)) = (
+            output.installed_image.take(),
+            output.installed_program.clone(),
+        ) {
+            for compilation in std::mem::take(&mut output.execution_slices) {
+                let _module = profile.span("std.prepare_execution_bundle", "std");
+                let image = base.execution_slice(&compilation.definitions);
+                let publication = image
+                    .prepare_installed_publication(&checked, &output.out_dir, profile)
+                    .map_err(|error| {
+                        CliError::InvalidUsage(format!(
+                            "std IR slice {:?}: {error}",
+                            compilation.modules
+                        ))
+                    })?;
+                let program = image
+                    .clone()
+                    .into_checked_from_installed_analysis(&output.out_dir, &publication, profile)
+                    .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+                #[cfg(feature = "component-runtime")]
+                let layouts = etas_interpreter::encode_installed_layouts(&program)
+                    .map_err(CliError::InvalidUsage)?;
+                #[cfg(not(feature = "component-runtime"))]
+                let layouts: Option<Vec<u8>> = None;
+                output
+                    .publish_bundle(
+                        compilation.modules,
+                        &image,
+                        &publication,
+                        layouts.as_deref(),
+                    )
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
+        if output.installed_program.is_some() {
+            let _queries = profile.span("std.prepare_queries", "std");
+            let sysroot = output
+                .out_dir
+                .parent()
+                .expect("installed std has a sysroot");
+            let provider = etas_driver::std_library::provider::StdProvider::artifact_profiled(
+                Some(sysroot),
+                profile,
+            )
+            .map_err(super::frontend::driver_error)?;
+            if let etas_driver::std_library::provider::StdProvider::Artifact(provider) = provider {
+                output
+                    .publish_queries(&provider)
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
         if output.manifest.effect_analysis_hash.is_some()
             && let Some(temporary) = &executable.temporary
         {

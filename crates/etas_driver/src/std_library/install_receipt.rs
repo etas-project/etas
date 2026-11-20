@@ -2,6 +2,14 @@ use std::path::Path;
 
 use crate::DriverError;
 
+static RUNNING_BUILD: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+
+/// Register the executable's compile-time stamp before loading an installed SDK.
+/// Embedders without a build stamp retain the executable-digest receipt format.
+pub fn register_toolchain_build(build: &'static str) {
+    RUNNING_BUILD.get_or_init(|| build);
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use std::{fs::File, io, os::unix::fs::MetadataExt, path::Path};
@@ -14,6 +22,11 @@ mod linux {
     const RECEIPT: &str = "user.etas-std-install";
 
     fn receipt(executable: &File, manifest_identity: &str) -> io::Result<String> {
+        if let Some(build) = super::RUNNING_BUILD.get() {
+            return Ok(format!(
+                "etas-std-install-v2\n{build}\n{manifest_identity}\n"
+            ));
+        }
         let digest = blake3::Hasher::new().update_reader(executable)?.finalize();
         Ok(format!(
             "etas-std-install-v1\n{digest}\n{manifest_identity}\n"

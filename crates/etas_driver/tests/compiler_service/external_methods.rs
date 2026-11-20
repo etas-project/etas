@@ -408,6 +408,7 @@ fn external_method_reflection_rejects_private_missing_and_unchecked_targets() {
         if let Some(headers) = origin
             .descriptors
             .as_mut()
+            .map(std::sync::Arc::make_mut)
             .and_then(|set| set.headers.as_mut())
         {
             for agent in &mut headers.agents {

@@ -90,7 +90,7 @@ impl SourceDefinitionProvenance {
             if !self.dependencies.contains_key(&input.package)
                 && self.standard_library.as_ref().is_some_and(|library| {
                     input.origins == library.origins
-                        && input.descriptors.as_ref() == Some(library.descriptors.as_ref())
+                        && input.descriptors.as_deref() == Some(library.descriptors.as_ref())
                 })
             {
                 continue;

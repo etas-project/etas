@@ -12,7 +12,8 @@ pub(super) fn publish(
     declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
     aliases: &BTreeMap<Vec<String>, Vec<String>>,
 ) -> Result<(), DriverError> {
-    let public = &sdk.public.public_metadata;
+    let image = sdk.image()?;
+    let public = &sdk.public()?.public_metadata;
     let mut types = public
         .types
         .iter()
@@ -27,13 +28,12 @@ pub(super) fn publish(
         let Some(key) = declarations.get(&canonical).copied() else {
             continue;
         };
-        let source_role = sdk
-            .image
+        let source_role = image
             .declarations
             .get(key)
-            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(|item| image.program.items.get(*item))
             .and_then(etas_hir::HirItem::symbol)
-            .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
+            .and_then(|symbol| image.types.source_type_roles.get(&symbol));
         if registered.contains(&canonical) {
             continue;
         }

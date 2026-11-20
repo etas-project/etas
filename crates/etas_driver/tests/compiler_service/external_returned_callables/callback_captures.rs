@@ -222,6 +222,7 @@ flow main() -> i32 ![Error<CompileError>] { return compile(^Worker)(43); }
         let Some(headers) = origin
             .descriptors
             .as_mut()
+            .map(std::sync::Arc::make_mut)
             .and_then(|set| set.headers.as_mut())
         else {
             continue;
