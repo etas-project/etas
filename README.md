@@ -144,6 +144,7 @@ are optional here: the compiler infers them from calls such as `println`.
 
 ## Next Steps
 
+- [Local checkout integration and verification](docs/development/local-checkouts.md)
 - [Examples](examples/)
 - [Language specification](docs/design/README.md)
 - [Building a standard library SDK and upgrading an existing lockfile](docs/design/15-package-management.md#71-using-the-installed-standard-library)

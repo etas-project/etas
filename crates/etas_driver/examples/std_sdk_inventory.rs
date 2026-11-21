@@ -21,7 +21,10 @@ struct SourceMethod<'a> {
     implementation: etas_code::CodeFingerprint,
 }
 
-fn compare(provider: &ArtifactStdProvider, artifact: &StdMigrationBaseline) -> serde_json::Value {
+fn compare(
+    provider: &ArtifactStdProvider,
+    artifact: &StdMigrationBaseline,
+) -> Result<serde_json::Value, Box<dyn Error>> {
     let registry = etas_std::standard_registry();
     let legacy = StdMigrationBaseline::from_registry(&registry);
     let diff = legacy.compare(artifact);
@@ -33,8 +36,8 @@ fn compare(provider: &ArtifactStdProvider, artifact: &StdMigrationBaseline) -> s
             legacy_method_exports.insert(symbol.qualified_path.join("."), method);
         }
     }
-    let metadata = &provider.sdk.public.public_metadata;
-    let image = &provider.sdk.image;
+    let metadata = &provider.sdk.public()?.public_metadata;
+    let image = provider.sdk.image()?;
     let mut source_flows = BTreeMap::new();
     for (definition, item) in &image.declarations {
         if let etas_hir::HirItem::Flow(flow) = &image.program.items[*item]
@@ -71,7 +74,7 @@ fn compare(provider: &ArtifactStdProvider, artifact: &StdMigrationBaseline) -> s
         .iter()
         .map(|alias| (alias.exported.join("."), alias.from.join(".")))
         .collect::<BTreeMap<_, _>>();
-    serde_json::json!({
+    Ok(serde_json::json!({
         "schema": "etas.std.sdk-api-diff.v1",
         "artifact_hash": provider.sdk.manifest.artifact_hash,
         "registry_diff": diff,
@@ -79,7 +82,7 @@ fn compare(provider: &ArtifactStdProvider, artifact: &StdMigrationBaseline) -> s
         "source_flows": source_flows,
         "source_methods_by_owner": source_methods,
         "source_reexports": source_reexports,
-    })
+    }))
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -96,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     let artifact = StdMigrationBaseline::from_registry(&provider.registry);
     if compare_legacy {
-        serde_json::to_writer_pretty(io::stdout().lock(), &compare(&provider, &artifact))?;
+        serde_json::to_writer_pretty(io::stdout().lock(), &compare(&provider, &artifact)?)?;
     } else {
         serde_json::to_writer_pretty(io::stdout().lock(), &artifact)?;
     }
