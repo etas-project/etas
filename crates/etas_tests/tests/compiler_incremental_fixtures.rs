@@ -676,6 +676,8 @@ fn external_environment() -> ProjectEnvironmentInput {
                 ty: Some(ProjectExternalTypeInput::Primitive("i32".into())),
             }],
             flows: vec![ProjectExternalFlowSignatureInput {
+                definition: None,
+                parameter_defaults: Vec::new(),
                 path: vec!["dep".into(), "math".into(), "add".into()],
                 generic_params: Vec::new(),
                 param_names: vec!["left".into(), "right".into()],
@@ -685,6 +687,7 @@ fn external_environment() -> ProjectEnvironmentInput {
                 visibility: "public".into(),
             }],
             effect_summaries: vec![ProjectExternalEffectSummaryInput {
+                definition: None,
                 residual_checks: vec![],
                 behavior: None,
                 handler_requests: None,
@@ -711,6 +714,7 @@ fn external_environment() -> ProjectEnvironmentInput {
             type_spec_satisfactions: Vec::new(),
             callable_spec_satisfactions: Vec::new(),
             trace_spec_conformances: Vec::new(),
+            scoped_callbacks: Vec::new(),
             action_summaries: Vec::new(),
             trace_spec_summaries: Vec::new(),
             re_exports: Vec::new(),

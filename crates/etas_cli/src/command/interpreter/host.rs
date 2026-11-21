@@ -238,6 +238,7 @@ impl EnvSecretClient {
         operation: &etas_host::execution::OperationContext,
     ) -> Result<SecretResponse, HostError> {
         operation.signal().check()?;
+        request.validate()?;
         let result = match &request.operation {
             SecretOperation::Read { key } => match std::env::var(key) {
                 Ok(_) => Ok(SecretPayload::Value(SecretValue::new(
@@ -378,7 +379,41 @@ fn sha256(input: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
-    use super::hmac_sha256;
+    use super::{EnvSecretClient, hmac_sha256};
+
+    #[tokio::test]
+    async fn env_secret_adapter_rejects_unauthorized_access_before_provider_lookup() {
+        for operation in [
+            etas_host::SecretOperation::Read { key: "PATH".into() },
+            etas_host::SecretOperation::HmacSha256 {
+                key: etas_host::SecretRef::new("PATH"),
+                body: vec![],
+            },
+        ] {
+            let request = etas_host::SecretRequest {
+                id: etas_host::HostRequestId(1),
+                operation,
+                authority: etas_host::AuthorityContext::deny_all(),
+                trace: etas_host::TraceContext::root(etas_host::TraceId(1)),
+                budget: Default::default(),
+            };
+            let scope = etas_host::execution::ExecutionScope::new();
+            let registration = scope
+                .register(None, Some(request.id), request.trace.clone())
+                .unwrap();
+            registration.begin_dispatch().unwrap();
+            let error = EnvSecretClient
+                .execute_scoped(request, registration.context())
+                .await
+                .unwrap_err();
+            assert_eq!(error.code, etas_host::HostErrorCode::AuthorityDenied);
+            registration
+                .complete(etas_host::execution::ExternalOutcome::Confirmed, vec![])
+                .unwrap();
+            scope.finish_body(true).unwrap();
+            scope.join().await.unwrap();
+        }
+    }
 
     #[test]
     fn hmac_sha256_matches_rfc4231_test_vector() {

@@ -6,6 +6,7 @@
 etas_builtin = { path = "../etas-core/crates/etas_builtin" }
 etas_cache = { path = "../etas-core/crates/etas_cache" }
 etas_core = { path = "../etas-core/crates/etas_core" }
+etas_code = { path = "../etas-core/crates/etas_code" }
 etas_host = { path = "../etas-core/crates/etas_host" }
 etas_package_metadata = { path = "../etas-core/crates/etas_package_metadata" }
 etas_std = { path = "../etas-core/crates/etas_std" }
