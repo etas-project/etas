@@ -225,6 +225,22 @@ checking, policy checking, generated tool schemas, and public API resolution.
 interfaces, checked bodies and the corresponding `library/std/**/*.es` files.
 Moving the entire prefix preserves offline execution and source navigation.
 
+SDK schema 2 stores checked IR and analysis facts as a shared declaration/type
+object plus disjoint module body objects in `artifacts/objects/`. The manifest
+names their content hashes; the object index records semantic dependencies and
+stable definition IDs. Module containers index individual definition payloads;
+the runtime selects a dependency closure, decodes its bodies and links the saved
+facts. Installed interpreter layouts and public ABI projections are
+prepared once for the matching toolchain. Ordinary installed execution does not
+parse or solve standard-library sources.
+
+Selected object packs are optional caches outside the SDK, keyed by the SDK
+manifest, entry definitions and compiler/runtime ABI. Delete
+`$XDG_CACHE_HOME/etas/std-objects` (or `~/.cache/etas/std-objects`) to discard them;
+`ETAS_STD_CACHE_ROOT` selects a separate directory. The next run reads canonical
+objects and rebuilds the pack. No precomputed execution-closure images are
+required in a release.
+
 To try a change to the Etas sources in a checkout of `etas-core`, build an
 SDK and point the consumer at the directory containing `std/manifest.json`.
 

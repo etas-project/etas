@@ -30,7 +30,6 @@ pub struct ArtifactStdProvider {
     pub registry: Arc<StdRegistry>,
     pub interface: Arc<etas_frontend::StandardLibraryInterface>,
     library: OnceLock<Result<Arc<etas_frontend::StandardLibrary>, String>>,
-    bundled_libraries: Vec<OnceLock<Result<Arc<etas_frontend::StandardLibrary>, String>>>,
     pub identity: String,
     pub bootstrap_identity: String,
 }
@@ -82,7 +81,7 @@ impl ArtifactStdProvider {
         consumer: &etas_frontend::CheckedProgramData,
         profile: &etas_utils::ProfileHandle,
     ) -> Result<Arc<etas_frontend::StandardLibrary>, DriverError> {
-        let Some(queries) = &self.sdk.prepared_queries else {
+        let Some(_) = &self.sdk.prepared_queries else {
             return self.executable_library(profile);
         };
         // Reflection and caller-performed actions can introduce execution roots
@@ -119,66 +118,32 @@ impl ArtifactStdProvider {
                 .into_iter()
                 .map(etas_code::CallableId::method),
         );
-        let Some(required) = required
+        let index = self.sdk.object_index()?;
+        let Some(roots) = required
             .iter()
-            .map(|callable| queries.callables.get(callable).copied())
-            .collect::<Option<std::collections::BTreeSet<_>>>()
+            .map(|callable| index.callable(callable))
+            .collect::<Option<Vec<_>>>()
         else {
             return self.executable_library(profile);
         };
-        let selected = (!required.is_empty())
-            .then(|| {
-                queries
-                    .bundles
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, bundle)| bundle.callables.is_superset(&required))
-                    .min_by_key(|(_, bundle)| bundle.image_size)
-            })
-            .flatten();
-        let Some((index, bundle)) = selected else {
-            return self.executable_library(profile);
-        };
-        self.bundled_libraries[index]
-            .get_or_init(|| {
-                let _load = profile.span("std.load_module_bundle", "std");
-                profile.counter("std.loaded_body_modules", bundle.modules.len() as u64);
-                profile.counter("std.loaded_body_bytes", bundle.image_size as u64);
-                let payload = self
-                    .sdk
-                    .load_bundle_file(&bundle.image)
-                    .map_err(|e| e.to_string())?;
-                let image = {
-                    let _decode = profile.span("std.decode_module_image", "std");
-                    etas_frontend::library_hir::LibraryHirImage::decode_prepared(&payload)
-                        .map_err(|e| e.to_string())?
-                };
-                let publication = self
-                    .sdk
-                    .load_bundle_file(&bundle.publication)
-                    .map_err(|e| e.to_string())?;
-                let installed_layouts = bundle
-                    .layouts
-                    .as_ref()
-                    .map(|file| {
-                        self.sdk
-                            .load_bundle_file(file)
-                            .map(|bytes| std::sync::Arc::<[u8]>::from(bytes))
-                    })
-                    .transpose()
-                    .map_err(|e| e.to_string())?;
-                let program = image
-                    .into_checked_from_installed_analysis(&self.sdk.root, &publication, profile)
-                    .map_err(|e| e.to_string())?;
-                Ok(Arc::new(etas_frontend::StandardLibrary {
-                    profile: profile.clone(),
-                    installed_layouts,
-                    program,
-                    interface: self.interface.clone(),
-                }))
-            })
-            .clone()
-            .map_err(invalid)
+        let roots = roots.into_iter().collect::<std::collections::BTreeSet<_>>();
+        let definitions = index.closure(roots.iter().copied());
+        let image = self
+            .sdk
+            .assemble_objects(&definitions, profile, Some(&roots))?;
+        let publication = self
+            .installed_effect_analysis(profile)?
+            .expect("installed SDK publication");
+        let installed_layouts = self.sdk.load_runtime_layouts()?;
+        let program = image
+            .into_checked_from_installed_analysis(&self.sdk.root, &publication, profile)
+            .map_err(invalid)?;
+        Ok(Arc::new(etas_frontend::StandardLibrary {
+            profile: profile.clone(),
+            installed_layouts,
+            program,
+            interface: self.interface.clone(),
+        }))
     }
 
     fn installed_effect_analysis(
@@ -316,10 +281,8 @@ impl StdProvider {
             let interface = Arc::new(interface);
             interface.restore_installed_validation(&registry);
             let bootstrap_identity = queries.bootstrap_identity.clone();
-            let bundled_libraries = queries.bundles.iter().map(|_| OnceLock::new()).collect();
             let identity = semantic_identity(&sdk.manifest)?;
             return Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
-                bundled_libraries,
                 sdk,
                 registry,
                 interface,
@@ -402,7 +365,6 @@ impl StdProvider {
         // and checkpoint compatibility with the underlying library.
         let identity = StdSdkManifest {
             effect_analysis_hash: None,
-            prepared_image_hash: None,
             interpreter_layout_hash: None,
             prepared_queries_hash: None,
             ..sdk.manifest.clone()
@@ -415,7 +377,6 @@ impl StdProvider {
             sdk,
             registry,
             interface,
-            bundled_libraries: Vec::new(),
             library: OnceLock::new(),
             identity,
             bootstrap_identity,
@@ -468,7 +429,6 @@ impl StdProvider {
 fn semantic_identity(manifest: &StdSdkManifest) -> Result<String, DriverError> {
     StdSdkManifest {
         effect_analysis_hash: None,
-        prepared_image_hash: None,
         interpreter_layout_hash: None,
         prepared_queries_hash: None,
         ..manifest.clone()

@@ -63,40 +63,6 @@ pub fn run(
                     .map_err(super::frontend::driver_error)?;
             }
         }
-        if let (Some(base), Some(checked)) = (
-            output.installed_image.take(),
-            output.installed_program.clone(),
-        ) {
-            for compilation in std::mem::take(&mut output.execution_slices) {
-                let _module = profile.span("std.prepare_execution_bundle", "std");
-                let image = base.execution_slice(&compilation.definitions);
-                let publication = image
-                    .prepare_installed_publication(&checked, &output.out_dir, profile)
-                    .map_err(|error| {
-                        CliError::InvalidUsage(format!(
-                            "std IR slice {:?}: {error}",
-                            compilation.modules
-                        ))
-                    })?;
-                let program = image
-                    .clone()
-                    .into_checked_from_installed_analysis(&output.out_dir, &publication, profile)
-                    .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
-                #[cfg(feature = "component-runtime")]
-                let layouts = etas_interpreter::encode_installed_layouts(&program)
-                    .map_err(CliError::InvalidUsage)?;
-                #[cfg(not(feature = "component-runtime"))]
-                let layouts: Option<Vec<u8>> = None;
-                output
-                    .publish_bundle(
-                        compilation.modules,
-                        &image,
-                        &publication,
-                        layouts.as_deref(),
-                    )
-                    .map_err(super::frontend::driver_error)?;
-            }
-        }
         if output.installed_program.is_some() {
             let _queries = profile.span("std.prepare_queries", "std");
             let sysroot = output

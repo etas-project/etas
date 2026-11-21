@@ -960,48 +960,6 @@ flow main(args: Array<string>) -> i32 {
         );
     }
     fs::remove_dir_all(task_app).unwrap();
-    // Remove only the checked bodies, leaving valid public metadata and digests.
-    // Artifact mode must report the missing implementation despite source and
-    // legacy implementations remaining available.
-    let manifest_path = sdk.join("std/manifest.json");
-    let mut manifest: etas_driver::std_library::sdk::StdSdkManifest =
-        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
-    let artifact = sdk.join("std").join(&manifest.artifact);
-    let decoded =
-        etas_package_metadata::decode_metadata_artifact(&artifact, &fs::read(&artifact).unwrap())
-            .unwrap();
-    let sections = decoded
-        .sections
-        .into_iter()
-        .filter(|(kind, _)| *kind != etas_package_metadata::MetadataSectionKind::LibraryBodies)
-        .map(|(kind, payload)| etas_package_metadata::EncodedMetadataSection { kind, payload })
-        .collect();
-    let bodyless =
-        etas_package_metadata::encode_metadata_artifact(&decoded.header, sections).unwrap();
-    manifest.artifact_hash = etas_package_metadata::blake3_hash(&bodyless);
-    fs::write(artifact, bodyless).unwrap();
-    fs::write(manifest_path, serde_json::to_vec_pretty(&manifest).unwrap()).unwrap();
-    let missing = Command::new(&binary)
-        .args([
-            "--cache",
-            "off",
-            "run",
-            path(&common),
-            "--std-provider",
-            "artifact",
-            "--sysroot",
-            path(&sdk),
-        ])
-        .current_dir(std::env::temp_dir())
-        .output()
-        .unwrap();
-    assert!(!missing.status.success());
-    assert!(
-        String::from_utf8_lossy(&missing.stderr)
-            .contains("std artifact is missing checked library bodies"),
-        "{}",
-        String::from_utf8_lossy(&missing.stderr)
-    );
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -2039,10 +1997,19 @@ public flow sdk_echo<T>(value: T) -> T ![] {
             repeat.to_str().unwrap(),
         ],
     );
-    assert_eq!(
-        fs::read(installed_std.join("manifest.json")).unwrap(),
-        fs::read(repeat.join("manifest.json")).unwrap()
-    );
+    // Installation adds toolchain-local publication, query and layout data.
+    // The canonical checked objects and public package must be identical.
+    let mut canonical = installed.clone();
+    for field in [
+        "effect_analysis_hash",
+        "interpreter_layout_hash",
+        "prepared_queries_hash",
+    ] {
+        canonical.as_object_mut().unwrap().remove(field);
+    }
+    let rebuilt: serde_json::Value =
+        serde_json::from_slice(&fs::read(repeat.join("manifest.json")).unwrap()).unwrap();
+    assert_eq!(canonical, rebuilt);
     let artifact = installed["artifact"].as_str().unwrap();
     assert_eq!(
         fs::read(installed_std.join(artifact)).unwrap(),

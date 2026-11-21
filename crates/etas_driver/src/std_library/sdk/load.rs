@@ -10,8 +10,8 @@ use etas_package_metadata::{
 };
 
 use super::{
-    EFFECT_ANALYSIS_PATH, INTERPRETER_LAYOUT_PATH, PREPARED_IMAGE_PATH, PREPARED_QUERIES_PATH,
-    STD_SDK_SCHEMA, STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file,
+    EFFECT_ANALYSIS_PATH, INTERPRETER_LAYOUT_PATH, PREPARED_QUERIES_PATH, STD_SDK_SCHEMA,
+    STD_TOOLCHAIN_ID, StdSdkManifest, invalid, read_file,
 };
 use crate::DriverError;
 
@@ -21,6 +21,8 @@ pub struct LoadedStdSdk {
     pub manifest: StdSdkManifest,
     public: Arc<OnceLock<Result<etas_package_metadata::PackageMetadata, String>>>,
     image: Arc<OnceLock<Result<LibraryHirImage, String>>>,
+    pub(crate) object_index:
+        Arc<OnceLock<Result<Arc<etas_frontend::library_hir::objects::LibraryObjectIndex>, String>>>,
     pub(crate) prepared_queries: Option<super::PreparedStdQueries>,
 }
 
@@ -40,32 +42,9 @@ impl LoadedStdSdk {
     }
 
     fn read_image(&self) -> Result<LibraryHirImage, DriverError> {
-        let (path, expected) = match &self.manifest.prepared_image_hash {
-            Some(hash) => (self.root.join(PREPARED_IMAGE_PATH), hash),
-            None => (
-                self.root.join(&self.manifest.artifact),
-                &self.manifest.artifact_hash,
-            ),
-        };
-        let bytes = read_file(&path)?;
-        matches(
-            &path,
-            "body artifact digest",
-            &etas_package_metadata::blake3_hash(&bytes),
-            expected,
-        )?;
-        let mut archive =
-            etas_package_metadata::decode_metadata_artifact(&path, &bytes).map_err(invalid)?;
-        let body = archive
-            .sections
-            .remove(&MetadataSectionKind::LibraryBodies)
-            .ok_or_else(|| invalid("std artifact has no checked bodies"))?;
-        if self.manifest.prepared_image_hash.is_some() {
-            LibraryHirImage::decode_prepared(&body)
-        } else {
-            LibraryHirImage::decode(&body)
-        }
-        .map_err(invalid)
+        let index = self.object_index()?;
+        let definitions = index.definitions.keys().copied().collect();
+        self.assemble_objects(&definitions, &etas_utils::ProfileHandle::disabled(), None)
     }
 
     fn read_public(&self) -> Result<etas_package_metadata::PackageMetadata, DriverError> {
@@ -209,6 +188,7 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
             manifest,
             public: Arc::default(),
             image: Arc::default(),
+            object_index: Arc::default(),
             prepared_queries: Some(queries),
         });
     }
@@ -251,22 +231,8 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         &etas_package_metadata::blake3_hash(&bytes),
         &manifest.artifact_hash,
     )?;
-    let prepared;
-    let archive = if let Some(expected_hash) = &manifest.prepared_image_hash {
-        let path = root.join(PREPARED_IMAGE_PATH);
-        prepared = read_file(&path)?;
-        matches(
-            &path,
-            "prepared image digest",
-            &etas_package_metadata::blake3_hash(&prepared),
-            expected_hash,
-        )?;
-        &prepared
-    } else {
-        &bytes
-    };
-    let decoded = etas_package_metadata::decode_metadata_artifact(&artifact_path, archive)
-        .map_err(invalid)?;
+    let decoded =
+        etas_package_metadata::decode_metadata_artifact(&artifact_path, &bytes).map_err(invalid)?;
     let header = &decoded.header;
     matches(
         &artifact_path,
@@ -304,21 +270,15 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         &header.dependency_lock_hash,
         &manifest.dependency_lock_hash,
     )?;
-    let body = decoded
-        .sections
-        .get(&MetadataSectionKind::LibraryBodies)
-        .ok_or_else(|| {
-            invalid(format!(
-                "{}: std artifact is missing checked library bodies",
-                artifact_path.display()
-            ))
-        })?;
-    let image = if manifest.prepared_image_hash.is_some() {
-        LibraryHirImage::decode_prepared(body)
-    } else {
-        LibraryHirImage::decode(body)
-    }
-    .map_err(invalid)?;
+    let mut sdk = LoadedStdSdk {
+        root: root.clone(),
+        manifest: manifest.clone(),
+        public: Arc::default(),
+        image: Arc::default(),
+        object_index: Arc::default(),
+        prepared_queries: None,
+    };
+    let image = sdk.read_image()?;
     matches(
         &artifact_path,
         "body schema",
@@ -381,13 +341,9 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         })
         .map_err(invalid)?;
     let public = package_metadata_from_package_graph_payload(graph).map_err(invalid)?;
-    Ok(LoadedStdSdk {
-        root,
-        manifest,
-        public: Arc::new(OnceLock::from(Ok(public))),
-        image: Arc::new(OnceLock::from(Ok(image))),
-        prepared_queries: None,
-    })
+    sdk.public = Arc::new(OnceLock::from(Ok(public)));
+    sdk.image = Arc::new(OnceLock::from(Ok(image)));
+    Ok(sdk)
 }
 
 fn relative_file(root: &Path, path: &Path) -> Result<PathBuf, DriverError> {

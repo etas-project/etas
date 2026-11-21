@@ -1,5 +1,5 @@
-//! Installed std producer. The public package projection and checked private
-//! body graph share the normal ETASMETA container.
+//! Installed std producer. Public ABI metadata and canonical checked module
+//! objects are linked by an immutable SDK manifest.
 
 use std::{
     collections::BTreeMap,
@@ -17,15 +17,15 @@ use crate::{DriverError, DriverOptions};
 mod behaviors;
 mod delta;
 mod load;
+pub mod objects;
 pub use load::{LoadedStdSdk, load_standard_library_sdk};
 
-pub const STD_SDK_SCHEMA: u32 = 1;
+pub const STD_SDK_SCHEMA: u32 = 2;
 pub const STD_TOOLCHAIN_ID: &str = env!("ETAS_TOOLCHAIN_ID");
 const ARTIFACT_PATH: &str = "artifacts/std.etasmeta";
 const EFFECT_ANALYSIS_PATH: &str = "artifacts/std.effects.etasmeta";
 const PREPARED_QUERIES_PATH: &str = "artifacts/std.queries";
 const INTERPRETER_LAYOUT_PATH: &str = "artifacts/std.runtime";
-const PREPARED_IMAGE_PATH: &str = "artifacts/std.prepared.etasmeta";
 
 pub fn installed_sysroot(prefix: &Path) -> PathBuf {
     prefix.join("lib/etas").join(STD_TOOLCHAIN_ID)
@@ -43,9 +43,6 @@ pub struct StdLibraryBuildOutput {
     pub out_dir: PathBuf,
     pub manifest: StdSdkManifest,
     pub installed_program: Option<etas_frontend::CheckedProgram>,
-    pub installed_image: Option<LibraryHirImage>,
-    pub execution_slices: Vec<etas_frontend::library_hir::LibrarySlicePlan>,
-    pub bundles: Vec<StdModuleBundle>,
     bundle_store: delta::BundleStore,
 }
 
@@ -64,10 +61,9 @@ pub struct StdSdkManifest {
     pub target: String,
     pub artifact: PathBuf,
     pub artifact_hash: String,
+    pub checked_objects: objects::CheckedObjectFiles,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_analysis_hash: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub prepared_image_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interpreter_layout_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,22 +83,9 @@ pub(crate) struct PreparedStdQueries {
     pub imported_signatures: StdBundleFile,
     pub behaviors: Vec<behaviors::BehaviorEntry>,
     pub bootstrap_identity: String,
-    #[serde(with = "callable_index")]
-    pub callables: BTreeMap<etas_code::CallableId, u32>,
-    pub bundles: Vec<StdModuleIndexEntry>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct StdModuleIndexEntry {
-    pub modules: std::collections::BTreeSet<Vec<String>>,
-    pub callables: std::collections::BTreeSet<u32>,
-    pub image: StdBundleFile,
-    pub publication: StdBundleFile,
-    pub layouts: Option<StdBundleFile>,
-    pub image_size: usize,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StdBundleFile {
     pub path: PathBuf,
     pub hash: String,
@@ -110,40 +93,11 @@ pub struct StdBundleFile {
     pub base: Option<Box<StdBundleFile>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StdModuleBundle {
-    pub modules: std::collections::BTreeSet<Vec<String>>,
-    pub callables: std::collections::BTreeSet<etas_code::CallableId>,
-    pub image: StdBundleFile,
-    pub publication: StdBundleFile,
-    pub layouts: Option<StdBundleFile>,
-    pub image_size: usize,
-}
-
 pub(crate) fn decode_queries(bytes: &[u8]) -> Result<PreparedStdQueries, DriverError> {
     let payload = bytes
-        .strip_prefix(b"ETASQRY7")
+        .strip_prefix(b"ETASQRY8")
         .ok_or_else(|| invalid("incompatible installed std queries"))?;
     serde_json::from_slice(payload).map_err(invalid)
-}
-
-mod callable_index {
-    use super::*;
-    pub fn serialize<S: serde::Serializer>(
-        index: &BTreeMap<etas_code::CallableId, u32>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        index.iter().collect::<Vec<_>>().serialize(serializer)
-    }
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> Result<BTreeMap<etas_code::CallableId, u32>, D::Error> {
-        Ok(
-            Vec::<(etas_code::CallableId, u32)>::deserialize(deserializer)?
-                .into_iter()
-                .collect(),
-        )
-    }
 }
 
 impl StdLibraryBuildOutput {
@@ -155,29 +109,6 @@ impl StdLibraryBuildOutput {
             .interface
             .validate_for_install(&provider.registry)
             .map_err(invalid)?;
-        let mut callables = BTreeMap::new();
-        let bundles = self
-            .bundles
-            .iter()
-            .map(|bundle| {
-                let indices = bundle
-                    .callables
-                    .iter()
-                    .map(|callable| {
-                        let next = callables.len() as u32;
-                        *callables.entry(callable.clone()).or_insert(next)
-                    })
-                    .collect();
-                StdModuleIndexEntry {
-                    modules: bundle.modules.clone(),
-                    callables: indices,
-                    image: bundle.image.clone(),
-                    publication: bundle.publication.clone(),
-                    layouts: bundle.layouts.clone(),
-                    image_size: bundle.image_size,
-                }
-            })
-            .collect();
         let (interface, signatures, imported_signatures, behaviors) =
             behaviors::publish(self, provider)?;
         let queries = PreparedStdQueries {
@@ -189,64 +120,14 @@ impl StdLibraryBuildOutput {
             ),
             interface,
             bootstrap_identity: provider.bootstrap_identity.clone(),
-            callables,
-            bundles,
         };
-        let mut payload = b"ETASQRY7".to_vec();
+        let mut payload = b"ETASQRY8".to_vec();
         serde_json::to_writer(&mut payload, &queries).map_err(invalid)?;
         decode_queries(&payload)?;
         write_file(&self.out_dir.join(PREPARED_QUERIES_PATH), &payload)?;
         self.manifest.prepared_queries_hash = Some(etas_package_metadata::blake3_hash(&payload));
         let bytes = serde_json::to_vec_pretty(&self.manifest).map_err(invalid)?;
         write_file(&self.out_dir.join("manifest.json"), &bytes)
-    }
-
-    pub fn publish_bundle(
-        &mut self,
-        modules: std::collections::BTreeSet<Vec<String>>,
-        image: &LibraryHirImage,
-        publication: &[u8],
-        layouts: Option<&[u8]>,
-    ) -> Result<(), DriverError> {
-        let base = PathBuf::from(format!("artifacts/bundles/{}", self.bundles.len()));
-        let payload = image.encode_prepared().map_err(invalid)?;
-        let mut write = |extension: &str, bytes: &[u8]| {
-            self.bundle_store.write(
-                &self.out_dir,
-                base.with_extension(extension),
-                extension,
-                bytes,
-            )
-        };
-        let image_file = write("body", &payload)?;
-        let publication = write("publication", publication)?;
-        let layouts = layouts.map(|bytes| write("runtime", bytes)).transpose()?;
-        let callables = image
-            .declarations
-            .iter()
-            .filter(|(_, item)| match &image.program.items[**item] {
-                etas_hir::HirItem::Flow(flow) => flow.body.as_block().is_some() || matches!(flow.body, etas_hir::HirFlowBody::Runtime { .. }),
-                etas_hir::HirItem::Tool(tool) => matches!(&tool.body, etas_hir::HirToolBody::Source(body) if body.as_block().is_some()),
-                _ => false,
-            })
-            .map(|(key, _)| etas_code::CallableId::declaration(key.clone()).map_err(invalid))
-            .chain(
-                image
-                    .methods
-                    .iter()
-                    .filter(|(_, item)| matches!(&image.program.items[**item], etas_hir::HirItem::Flow(flow) if flow.body.as_block().is_some() || matches!(flow.body, etas_hir::HirFlowBody::Runtime { .. })))
-                    .map(|(method, _)| Ok(etas_code::CallableId::method(method.clone()))),
-            )
-            .collect::<Result<_, DriverError>>()?;
-        self.bundles.push(StdModuleBundle {
-            modules,
-            callables,
-            image: image_file,
-            publication,
-            layouts,
-            image_size: payload.len(),
-        });
-        Ok(())
     }
 
     pub fn publish_runtime_layouts(&mut self, payload: &[u8]) -> Result<(), DriverError> {
@@ -390,33 +271,14 @@ fn build_sdk(
     let decoded =
         etas_package_metadata::decode_metadata_artifact(Path::new(ARTIFACT_PATH), &public.bytes)
             .map_err(invalid)?;
-    let mut sections = decoded
+    let sections = decoded
         .sections
         .into_iter()
         .map(|(kind, payload)| EncodedMetadataSection { kind, payload })
         .collect::<Vec<_>>();
-    let prepared_image = if capture_effect_analysis {
-        let payload = image.encode_prepared().map_err(invalid)?;
-        // Validate the native codec while preparing the installation.
-        LibraryHirImage::decode_prepared(&payload).map_err(invalid)?;
-        let mut prepared = sections.clone();
-        prepared.push(EncodedMetadataSection {
-            kind: MetadataSectionKind::LibraryBodies,
-            payload,
-        });
-        Some(
-            etas_package_metadata::encode_metadata_artifact(&decoded.header, prepared)
-                .map_err(invalid)?,
-        )
-    } else {
-        None
-    };
-    sections.push(EncodedMetadataSection {
-        kind: MetadataSectionKind::LibraryBodies,
-        payload: image.encode().map_err(invalid)?,
-    });
     let bytes = etas_package_metadata::encode_metadata_artifact(&decoded.header, sections)
         .map_err(invalid)?;
+    let object_archive = image.checked_objects().map_err(invalid)?;
     let effect_analysis = if capture_effect_analysis {
         let _capture = options
             .profile
@@ -437,6 +299,25 @@ fn build_sdk(
     } else {
         None
     };
+    let out_dir = request.out_dir;
+    create_dir(&out_dir)?;
+    let out_dir = out_dir.canonicalize().map_err(|source| DriverError::Io {
+        path: out_dir,
+        source,
+    })?;
+    if out_dir.starts_with(&source_root) || source_root.starts_with(&out_dir) {
+        return Err(invalid(
+            "std output directory must be separate from its maintained source tree",
+        ));
+    }
+    let artifacts = out_dir.join("artifacts");
+    if artifacts.exists() {
+        fs::remove_dir_all(&artifacts).map_err(|source| DriverError::Io {
+            path: artifacts,
+            source,
+        })?;
+    }
+    let checked_objects = objects::publish(&out_dir, object_archive)?;
     let manifest = StdSdkManifest {
         schema: STD_SDK_SCHEMA,
         package: output.manifest.package.name,
@@ -451,10 +332,8 @@ fn build_sdk(
         toolchain_id: STD_TOOLCHAIN_ID.into(),
         artifact: ARTIFACT_PATH.into(),
         artifact_hash: etas_package_metadata::blake3_hash(&bytes),
+        checked_objects,
         effect_analysis_hash: effect_analysis
-            .as_deref()
-            .map(etas_package_metadata::blake3_hash),
-        prepared_image_hash: prepared_image
             .as_deref()
             .map(etas_package_metadata::blake3_hash),
         interpreter_layout_hash: None,
@@ -473,17 +352,6 @@ fn build_sdk(
             })
             .collect(),
     };
-    let out_dir = request.out_dir;
-    create_dir(&out_dir)?;
-    let out_dir = out_dir.canonicalize().map_err(|source| DriverError::Io {
-        path: out_dir,
-        source,
-    })?;
-    if out_dir.starts_with(&source_root) || source_root.starts_with(&out_dir) {
-        return Err(invalid(
-            "std output directory must be separate from its maintained source tree",
-        ));
-    }
     let installed_sources = out_dir.join(&output.manifest.source.root);
     if installed_sources.exists() {
         fs::remove_dir_all(&installed_sources).map_err(|source| DriverError::Io {
@@ -509,9 +377,6 @@ fn build_sdk(
         })?;
     }
     write_file(&out_dir.join(ARTIFACT_PATH), &bytes)?;
-    if let Some(prepared_image) = prepared_image {
-        write_file(&out_dir.join(PREPARED_IMAGE_PATH), &prepared_image)?;
-    }
     if let Some(effect_analysis) = effect_analysis {
         write_file(&out_dir.join(EFFECT_ANALYSIS_PATH), &effect_analysis)?;
     }
@@ -523,13 +388,6 @@ fn build_sdk(
         out_dir,
         manifest,
         installed_program: capture_effect_analysis.then(|| checked.clone()),
-        installed_image: capture_effect_analysis.then(|| image.clone()),
-        execution_slices: if capture_effect_analysis {
-            image.execution_slices(checked)
-        } else {
-            Vec::new()
-        },
-        bundles: Vec::new(),
         bundle_store: delta::BundleStore::default(),
     })
 }

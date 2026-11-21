@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -42,6 +43,18 @@ def main():
                     for path in sorted(fixtures.rglob("*")) if path.is_file()},
         "entries": [],
     }
+    sdk_cache = output / "derived-sdk-cache"
+    shutil.rmtree(sdk_cache, ignore_errors=True)
+    environment = {**os.environ, "ETAS_STD_CACHE_ROOT": str(sdk_cache)}
+    sdk_manifest = json.loads(manifest.read_text())
+    if sdk_manifest["schema"] >= 2:
+        objects = sdk_manifest["checked_objects"]
+        references = [objects["index"], objects["shared"], *objects["modules"].values()]
+        paths = {manifest.parent / reference["path"] for reference in references}
+        assert not (manifest.parent / "artifacts/bundles").exists()
+        assert "prepared_image_hash" not in sdk_manifest
+        receipt["canonical_objects"] = {"modules": len(objects["modules"]), "files": len(paths),
+                                        "bytes": sum(path.stat().st_size for path in paths)}
     started = time.monotonic()
 
     with tempfile.TemporaryDirectory(prefix="etas-std-sdk-consumer-") as directory:
@@ -55,7 +68,7 @@ def main():
         def invoke(label, arguments, expected=None, profile=None):
             tick = time.monotonic()
             profile_options = ["--profile-out", str(profile)] if profile else []
-            result = subprocess.run(common + profile_options + arguments, cwd=application, capture_output=True, text=True)
+            result = subprocess.run(common + profile_options + arguments, cwd=application, env=environment, capture_output=True, text=True)
             (output / (label + ".json")).write_text(result.stdout)
             (output / (label + ".log")).write_text(result.stderr)
             assert result.returncode == 0, (label, result.returncode, result.stderr, result.stdout)
@@ -76,6 +89,17 @@ def main():
             assert "std.installed.bind.duration_ns" in counters, counters
             assert counters["std.installed.source_parse_count"] == 0, counters
             assert not any(name.startswith("std.restore.") for name in counters), counters
+        if profile and sdk_manifest["schema"] >= 2:
+            assert counters["std.object_pack_cache_hit"] == 0, counters
+            invoke("collections-cache-hit", ["run", "collections.es"], 42, profile=profile)
+            hit = {counter["name"]: counter["value"] for counter in json.loads(profile.read_text())["counters"]}
+            assert hit["std.object_pack_cache_hit"] == 1, hit
+            shutil.rmtree(sdk_cache)
+            invoke("collections-cache-deleted", ["run", "collections.es"], 42, profile=profile)
+            cold = {counter["name"]: counter["value"] for counter in json.loads(profile.read_text())["counters"]}
+            assert cold["std.object_pack_cache_hit"] == 0, cold
+            assert cold["std.installed.source_parse_count"] == 0, cold
+            receipt["derived_cache_rebuild"] = {"hit": 1, "after_delete": 0, "standard_sources_parsed": 0}
         receipt["entries"].append({"flow": "collections", "value": 42, "seconds": seconds})
         invoke("check-reflection", ["check", "reflection.es"])
         _, seconds = invoke("reflection", ["run", "reflection.es"], 42)
