@@ -637,6 +637,16 @@ fn record_pipeline_profile(options: &DriverOptions, response: &CheckResponse) {
         "frontend.reused_parsed_sources",
         response.output.reused_parsed_sources as u64,
     );
+    if let Some(signatures) = &response.output.signature_types {
+        options.profile.counter(
+            "frontend.signature_base_types",
+            signatures.store.base_len() as u64,
+        );
+        options.profile.counter(
+            "frontend.signature_added_types",
+            signatures.store.local_types().len() as u64,
+        );
+    }
     if let Some(reachability) = response.output.reachability.as_ref() {
         options.profile.counter(
             "frontend.reachable_items",

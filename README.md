@@ -53,7 +53,10 @@ and source-body exposure directly. The retained source archive parses a file
 only when a diagnostic or reflection operation requests its AST. SDK type
 descriptor fingerprints are also prepared during installation; startup computes
 fingerprints for the caller's new types. Standalone source applications reuse
-the public interface's installation-time validation.
+the public interface's installation-time validation. Unchanged imported type
+bases keep their shared frozen index. Execution bundles retain the selected
+bodies' Effect captures and environments. Installed ABI records use a byte index
+by TypeId; runtime decodes each requested record once and shares that result.
 The installation receipt binds the complete SDK manifest to the CLI's compiled
 build stamp, avoiding a repeated scan of the executable. Code and dependency
 changes regenerate this stamp.
@@ -77,11 +80,12 @@ median below 500 ms across ten runs; pass `--max-ms 100` for a 100 ms budget.
 Stage timings can include nested work.
 
 A local Linux release comparison of 20 fresh processes on CPU 42, with project
-caching off, measured a 314.7 ms median for CLI 0.19.0 versus 358.5 ms for
-0.18.0 on this join program. The complete SDK contained 617 execution bundles;
+caching off, measured a 253.0 ms median for CLI 0.19.1 versus 300.4 ms for
+0.19.0 on this join program. The complete SDK contained 617 execution bundles;
 the program loaded 15 of 442 callable behaviors and parsed no standard-library
-sources. Signature fact construction took about 6.7 ms. The 100 ms budget
-remains unmet; public metadata loading, executable-image/layout decoding and
+sources. The caller reused 1,122 frozen signature types and added no signature
+types. Installed layout decoding took about 11.2 ms. The 100 ms budget remains
+unmet; public metadata loading, executable-image/layout decoding and
 runtime type correspondence remain significant costs.
 
 To inspect a program before running it:
