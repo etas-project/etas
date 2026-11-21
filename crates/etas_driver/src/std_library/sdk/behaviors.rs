@@ -21,6 +21,7 @@ pub(super) fn publish(
     (
         Arc<StandardLibraryInterface>,
         StdBundleFile,
+        StdBundleFile,
         Vec<BehaviorEntry>,
     ),
     DriverError,
@@ -32,6 +33,18 @@ pub(super) fn publish(
         &output.out_dir,
         "artifacts/std.signatures.cbor".into(),
         "signatures",
+        &bytes,
+    )?;
+    let imported = provider
+        .interface
+        .prepare_imported_signatures(provider.registry.clone())
+        .map_err(invalid)?;
+    let mut bytes = Vec::new();
+    ciborium::ser::into_writer(&imported, &mut bytes).map_err(invalid)?;
+    let imported_signatures = output.bundle_store.write(
+        &output.out_dir,
+        "artifacts/std.imported-signatures.cbor".into(),
+        "imported-signatures",
         &bytes,
     )?;
     let mut interface = provider.interface.as_ref().clone();
@@ -111,25 +124,23 @@ pub(super) fn publish(
             file,
         });
     }
-    Ok((Arc::new(interface), signatures, entries))
+    Ok((
+        Arc::new(interface),
+        signatures,
+        imported_signatures,
+        entries,
+    ))
 }
 
 impl LoadedStdSdk {
     pub(crate) fn load_signatures(
         &self,
-    ) -> Result<Arc<etas_types::ExternalPublicMetadataInput>, DriverError> {
-        let file = &self
-            .prepared_queries
-            .as_ref()
-            .expect("paired queries")
-            .signatures;
-        let bytes = self.load_bundle_file(file)?;
-        let mut cursor = std::io::Cursor::new(bytes.as_slice());
-        let input = ciborium::de::from_reader(&mut cursor).map_err(invalid)?;
-        if cursor.position() != bytes.len() as u64 {
-            return Err(invalid("trailing installed signature data"));
-        }
-        Ok(Arc::new(input))
+    ) -> Result<(Arc<etas_types::PreparedExternalSignatures>, Arc<Vec<u8>>), DriverError> {
+        let queries = self.prepared_queries.as_ref().expect("paired queries");
+        let bytes = self.load_bundle_file(&queries.imported_signatures)?;
+        let input = ciborium::de::from_reader(bytes.as_slice()).map_err(invalid)?;
+        let fallback = self.load_bundle_file(&queries.signatures)?;
+        Ok((Arc::new(input), Arc::new(fallback)))
     }
 
     pub(crate) fn load_behaviors(

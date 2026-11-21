@@ -292,11 +292,13 @@ impl StdProvider {
             let _decode = profile.span("std.decode_artifact", "std");
             load_standard_library_sdk(&sysroot)?
         };
-        let prepared_signatures = sdk
-            .prepared_queries
-            .as_ref()
-            .map(|_| sdk.load_signatures())
-            .transpose()?;
+        let prepared_signatures = {
+            let _signatures = profile.span("std.load_imported_signatures", "std");
+            sdk.prepared_queries
+                .as_ref()
+                .map(|_| sdk.load_signatures())
+                .transpose()?
+        };
         if let Some(queries) = &mut sdk.prepared_queries {
             let registry = Arc::new(
                 queries
@@ -307,7 +309,10 @@ impl StdProvider {
                     .map_err(invalid)?,
             );
             let mut interface = queries.interface.as_ref().clone();
-            interface.prepared_signatures = prepared_signatures;
+            if let Some((imported, fallback)) = prepared_signatures {
+                interface.prepared_external = Some(imported);
+                interface.signature_fallback = Some(fallback);
+            }
             let interface = Arc::new(interface);
             interface.restore_installed_validation(&registry);
             let bootstrap_identity = queries.bootstrap_identity.clone();
@@ -347,6 +352,8 @@ impl StdProvider {
         );
         let interface = Arc::new(etas_frontend::StandardLibraryInterface {
             prepared_signatures: None,
+            prepared_external: None,
+            signature_fallback: None,
             validation: Default::default(),
             package,
             metadata: public_metadata,

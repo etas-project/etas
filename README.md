@@ -42,7 +42,10 @@ The installer takes their transitive closures and packages the checked IR and
 analysis results directly. Original source is retained for diagnostics and
 reflection. `etas run` selects the smallest installed execution bundle covering
 its checked calls and methods; declaration and type indices stay shared.
-Public calling signatures are normalized during installation. Source method
+Public calling signatures are normalized and imported into a frozen type
+universe during installation. Ordinary runs restore those solved facts and bind
+the caller's source symbols; a portable signature cache handles other package
+slots. Reflection revision coordinates are decoded when requested. Source method
 behavior graphs and flow summaries are stored separately; the checker loads
 those selected by checked calls, function values and witnesses, together with
 their semantic dependency closures. Ordinary runs use installed module origins
@@ -74,11 +77,12 @@ median below 500 ms across ten runs; pass `--max-ms 100` for a 100 ms budget.
 Stage timings can include nested work.
 
 A local Linux release comparison of 20 fresh processes on CPU 42, with project
-caching off, measured a 352.5 ms median for CLI 0.18.0 versus 466.2 ms for
-0.17.0 on this join program. The complete SDK contained 617 execution bundles;
+caching off, measured a 314.7 ms median for CLI 0.19.0 versus 358.5 ms for
+0.18.0 on this join program. The complete SDK contained 617 execution bundles;
 the program loaded 15 of 442 callable behaviors and parsed no standard-library
-sources. The 100 ms budget remains unmet; public signature loading, type
-association, and executable-image/layout decoding remain significant costs.
+sources. Signature fact construction took about 6.7 ms. The 100 ms budget
+remains unmet; public metadata loading, executable-image/layout decoding and
+runtime type correspondence remain significant costs.
 
 To inspect a program before running it:
 
