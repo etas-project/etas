@@ -5,6 +5,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use etas_driver::std_library::{
+    install_receipt::publish_install_receipt, sdk::build_installed_standard_library,
+};
 use etas_driver::{StdLibraryBuildRequest, build_standard_library};
 use etas_utils::ProfileHandle;
 
@@ -38,15 +41,88 @@ pub fn run(
                 }),
                 out_dir: etas_driver::std_library::sdk::installed_sysroot(&args.prefix).join("std"),
             },
-            StagedExecutable::prepare(&args.prefix)?,
+            Some(StagedExecutable::prepare(&args.prefix)?),
         ),
     };
-    let output = build_standard_library(
-        &super::frontend::base_driver_options(global, profile),
-        request,
-    )
+    let options = super::frontend::base_driver_options(global, profile);
+    let mut output = if executable.is_some() {
+        build_installed_standard_library(&options, request)
+    } else {
+        build_standard_library(&options, request)
+    }
     .map_err(super::frontend::driver_error)?;
     if let Some(executable) = executable {
+        #[cfg(feature = "component-runtime")]
+        if let Some(program) = &output.installed_program {
+            let _layouts = profile.span("std.prepare_runtime_layouts", "std");
+            let payload = etas_interpreter::encode_installed_layouts(program)
+                .map_err(|message| CliError::InvalidUsage(message))?;
+            if let Some(payload) = payload {
+                output
+                    .publish_runtime_layouts(&payload)
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
+        if let (Some(base), Some(checked)) = (
+            output.installed_image.take(),
+            output.installed_program.clone(),
+        ) {
+            for compilation in std::mem::take(&mut output.execution_slices) {
+                let _module = profile.span("std.prepare_execution_bundle", "std");
+                let image = base.execution_slice(&compilation.definitions);
+                let publication = image
+                    .prepare_installed_publication(&checked, &output.out_dir, profile)
+                    .map_err(|error| {
+                        CliError::InvalidUsage(format!(
+                            "std IR slice {:?}: {error}",
+                            compilation.modules
+                        ))
+                    })?;
+                let program = image
+                    .clone()
+                    .into_checked_from_installed_analysis(&output.out_dir, &publication, profile)
+                    .map_err(|error| CliError::InvalidUsage(error.to_string()))?;
+                #[cfg(feature = "component-runtime")]
+                let layouts = etas_interpreter::encode_installed_layouts(&program)
+                    .map_err(CliError::InvalidUsage)?;
+                #[cfg(not(feature = "component-runtime"))]
+                let layouts: Option<Vec<u8>> = None;
+                output
+                    .publish_bundle(
+                        compilation.modules,
+                        &image,
+                        &publication,
+                        layouts.as_deref(),
+                    )
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
+        if output.installed_program.is_some() {
+            let _queries = profile.span("std.prepare_queries", "std");
+            let sysroot = output
+                .out_dir
+                .parent()
+                .expect("installed std has a sysroot");
+            let provider = etas_driver::std_library::provider::StdProvider::artifact_profiled(
+                Some(sysroot),
+                profile,
+            )
+            .map_err(super::frontend::driver_error)?;
+            if let etas_driver::std_library::provider::StdProvider::Artifact(provider) = provider {
+                output
+                    .publish_queries(&provider)
+                    .map_err(super::frontend::driver_error)?;
+            }
+        }
+        if output.manifest.effect_analysis_hash.is_some()
+            && let Some(temporary) = &executable.temporary
+        {
+            let identity = output
+                .manifest
+                .identity()
+                .map_err(super::frontend::driver_error)?;
+            publish_install_receipt(temporary, &identity).map_err(super::frontend::driver_error)?;
+        }
         executable.publish()?;
     }
     writeln!(
@@ -64,12 +140,12 @@ pub fn run(
 }
 
 struct StagedExecutable {
-    temporary: PathBuf,
+    temporary: Option<PathBuf>,
     destination: PathBuf,
 }
 
 impl StagedExecutable {
-    fn prepare(prefix: &Path) -> Result<Option<Self>, CliError> {
+    fn prepare(prefix: &Path) -> Result<Self, CliError> {
         let bin = prefix.join("bin");
         fs::create_dir_all(&bin).map_err(|source| CliError::Io {
             path: bin.clone(),
@@ -78,15 +154,22 @@ impl StagedExecutable {
         let bin = bin
             .canonicalize()
             .map_err(|source| CliError::Io { path: bin, source })?;
+        let destination = bin.join(format!("etas{}", std::env::consts::EXE_SUFFIX));
+        #[cfg(not(target_os = "linux"))]
         let binary = std::env::current_exe().map_err(|source| CliError::Io {
             path: "<current executable>".into(),
             source,
         })?;
-        let destination = bin.join(format!("etas{}", std::env::consts::EXE_SUFFIX));
+        #[cfg(not(target_os = "linux"))]
         if binary == destination {
-            return Ok(None);
+            return Ok(Self {
+                temporary: None,
+                destination,
+            });
         }
         // Cargo can replace the source executable while the SDK is compiling.
+        #[cfg(target_os = "linux")]
+        let binary = PathBuf::from("/proc/self/exe");
         let mut input = fs::File::open(&binary).map_err(|source| CliError::Io {
             path: binary,
             source,
@@ -101,28 +184,43 @@ impl StagedExecutable {
             source,
         })?;
         let staged = Self {
-            temporary,
+            temporary: Some(temporary.clone()),
             destination,
         };
         io::copy(&mut input, &mut output)
-            .and_then(|_| output.set_permissions(input.metadata()?.permissions()))
+            .and_then(|_| set_installed_permissions(&input, &output))
             .map_err(|source| CliError::Io {
-                path: staged.temporary.clone(),
+                path: temporary,
                 source,
             })?;
-        Ok(Some(staged))
+        Ok(staged)
     }
 
-    fn publish(self) -> Result<(), CliError> {
-        fs::rename(&self.temporary, &self.destination).map_err(|source| CliError::Io {
-            path: self.destination.clone(),
-            source,
-        })
+    fn publish(&self) -> Result<(), CliError> {
+        if let Some(temporary) = &self.temporary {
+            fs::rename(temporary, &self.destination).map_err(|source| CliError::Io {
+                path: self.destination.clone(),
+                source,
+            })?;
+        }
+        Ok(())
     }
+}
+
+fn set_installed_permissions(input: &fs::File, output: &fs::File) -> io::Result<()> {
+    let permissions = input.metadata()?.permissions();
+    #[cfg(target_os = "linux")]
+    let permissions = {
+        use std::os::unix::fs::PermissionsExt;
+        fs::Permissions::from_mode(permissions.mode() & !0o022)
+    };
+    output.set_permissions(permissions)
 }
 
 impl Drop for StagedExecutable {
     fn drop(&mut self) {
-        let _ = fs::remove_file(&self.temporary);
+        if let Some(temporary) = &self.temporary {
+            let _ = fs::remove_file(temporary);
+        }
     }
 }

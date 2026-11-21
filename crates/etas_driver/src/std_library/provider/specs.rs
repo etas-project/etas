@@ -8,19 +8,19 @@ pub(super) fn publish(
     declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
     aliases: &BTreeMap<Vec<String>, Vec<String>>,
 ) -> Result<(), DriverError> {
+    let image = sdk.image()?;
     let mut registered = std::collections::BTreeSet::new();
-    for spec in &sdk.public.public_metadata.spec_signatures {
+    for spec in &sdk.public()?.public_metadata.spec_signatures {
         let canonical = canonical_export(&spec.path, aliases)?;
         let Some(key) = declarations.get(&canonical).copied() else {
             continue;
         };
-        let source_role = sdk
-            .image
+        let source_role = image
             .declarations
             .get(key)
-            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(|item| image.program.items.get(*item))
             .and_then(etas_hir::HirItem::symbol)
-            .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
+            .and_then(|symbol| image.types.source_type_roles.get(&symbol));
         if let Some(native) = source_role {
             if registered.insert(canonical.clone()) {
                 builder.bind_declaration(*native, key.clone());
@@ -29,7 +29,7 @@ pub(super) fn publish(
                     params: &spec.generic_params,
                 };
                 let implementations = sdk
-                    .public
+                    .public()?
                     .public_metadata
                     .spec_impls
                     .iter()

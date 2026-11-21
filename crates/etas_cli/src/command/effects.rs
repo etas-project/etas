@@ -49,17 +49,19 @@ pub fn run(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<CliExit, CliError> {
-    let loaded = super::frontend::load_project(
+    let (sources, output) = super::frontend::check_paths(
         global,
         profile,
-        vec![args.file],
-        false,
-        EntryPolicy::CompileOnly,
-        args.flow.clone(),
-        SourceDependencyMode::MetadataOnly,
+        etas_driver::LoadProjectRequest {
+            paths: vec![args.file],
+            all: false,
+            entry_policy: EntryPolicy::CompileOnly,
+            flow: args.flow.clone(),
+            bin: None,
+            source_dependency_mode: SourceDependencyMode::MetadataOnly,
+        },
+        None,
     )?;
-    let sources = loaded.sources;
-    let output = super::frontend::check_project_once(global, profile, loaded.input)?;
     write_diagnostics(stderr, &output.diagnostics, &sources)?;
 
     let report = effects_report(&output, &sources, args.flow.as_deref())?;

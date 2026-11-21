@@ -22,13 +22,19 @@ pub fn compile_project(
     flow: Option<String>,
     optimization_level: u8,
     compiler_config: Option<etas_driver::compiler::NativeCompilerConfig>,
+    defer_unused_std: bool,
 ) -> Result<CompiledRunInput, CliError> {
     let options = super::super::frontend::driver_options_with_optimization(
         global,
         profile,
         Some(optimization_level),
     )?;
-    let response = etas_driver::compile_runnable_project_with_loaded(
+    let compile = if defer_unused_std && compiler_config.is_none() {
+        etas_driver::compile_runnable_project_with_deferred_std
+    } else {
+        etas_driver::compile_runnable_project_with_loaded
+    };
+    let response = compile(
         &options,
         etas_driver::LoadProjectRequest {
             paths,

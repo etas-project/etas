@@ -1,10 +1,14 @@
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    path::Path,
+    sync::{Arc, OnceLock},
+};
 
 use etas_code::{CallableId, DefinitionKey, descriptor::GenericOwner};
 use etas_package_metadata as metadata;
 use etas_std::{StdRegistry, StdRegistryBuilder, StdType};
 
-use super::sdk::{LoadedStdSdk, installed_sysroot, load_standard_library_sdk};
+use super::sdk::{LoadedStdSdk, StdSdkManifest, installed_sysroot, load_standard_library_sdk};
 use crate::DriverError;
 
 mod effects;
@@ -24,9 +28,176 @@ pub enum StdProvider {
 pub struct ArtifactStdProvider {
     pub sdk: LoadedStdSdk,
     pub registry: Arc<StdRegistry>,
-    pub library: Arc<etas_frontend::StandardLibrary>,
+    pub interface: Arc<etas_frontend::StandardLibraryInterface>,
+    library: OnceLock<Result<Arc<etas_frontend::StandardLibrary>, String>>,
+    bundled_libraries: Vec<OnceLock<Result<Arc<etas_frontend::StandardLibrary>, String>>>,
     pub identity: String,
     pub bootstrap_identity: String,
+}
+
+impl ArtifactStdProvider {
+    pub fn executable_library(
+        &self,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Arc<etas_frontend::StandardLibrary>, DriverError> {
+        self.library
+            .get_or_init(|| {
+                let _restore = profile.span("std.load_executable_library", "std");
+                let analysis = self
+                    .installed_effect_analysis(profile)
+                    .map_err(|error| error.to_string())?;
+                let installed_layouts = if analysis.is_some() {
+                    self.sdk
+                        .load_runtime_layouts()
+                        .map_err(|error| error.to_string())?
+                } else {
+                    None
+                };
+                let image = {
+                    let _decode = profile.span("std.decode_executable_image", "std");
+                    self.sdk.image().map_err(|error| error.to_string())?.clone()
+                };
+                let program = match analysis {
+                    Some(payload) => image.into_checked_from_installed_analysis(
+                        &self.sdk.root,
+                        &payload,
+                        profile,
+                    ),
+                    None => image.into_checked_from_image_profiled(&self.sdk.root, profile),
+                }
+                .map_err(|error| error.to_string())?;
+                Ok(Arc::new(etas_frontend::StandardLibrary {
+                    profile: profile.clone(),
+                    installed_layouts,
+                    program,
+                    interface: self.interface.clone(),
+                }))
+            })
+            .clone()
+            .map_err(invalid)
+    }
+
+    pub fn executable_library_for(
+        &self,
+        consumer: &etas_frontend::CheckedProgramData,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Arc<etas_frontend::StandardLibrary>, DriverError> {
+        let Some(queries) = &self.sdk.prepared_queries else {
+            return self.executable_library(profile);
+        };
+        // Reflection and caller-performed actions can introduce execution roots
+        // beyond ordinary imported callables. They retain the complete SDK.
+        if consumer.requires_definition_catalog()
+            || !consumer.types.definition_operations.is_empty()
+            || !consumer.types.action_calls.is_empty()
+        {
+            return self.executable_library(profile);
+        }
+        let mut required = std::collections::BTreeSet::new();
+        required.extend(
+            consumer
+                .types
+                .library_flow_calls
+                .values()
+                .map(|call| call.callable.clone()),
+        );
+        for symbol in consumer.referenced_standard_symbols() {
+            if consumer
+                .std_registry
+                .symbol(symbol)
+                .is_some_and(|symbol| matches!(symbol.decl, etas_std::StdDecl::Value(_)))
+            {
+                return self.executable_library(profile);
+            }
+            if let Some(binding) = consumer.std_registry.body_binding(symbol) {
+                required.insert(binding.callable.clone());
+            }
+        }
+        required.extend(
+            consumer
+                .referenced_standard_methods()
+                .into_iter()
+                .map(etas_code::CallableId::method),
+        );
+        let Some(required) = required
+            .iter()
+            .map(|callable| queries.callables.get(callable).copied())
+            .collect::<Option<std::collections::BTreeSet<_>>>()
+        else {
+            return self.executable_library(profile);
+        };
+        let selected = (!required.is_empty())
+            .then(|| {
+                queries
+                    .bundles
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, bundle)| bundle.callables.is_superset(&required))
+                    .min_by_key(|(_, bundle)| bundle.image_size)
+            })
+            .flatten();
+        let Some((index, bundle)) = selected else {
+            return self.executable_library(profile);
+        };
+        self.bundled_libraries[index]
+            .get_or_init(|| {
+                let _load = profile.span("std.load_module_bundle", "std");
+                profile.counter("std.loaded_body_modules", bundle.modules.len() as u64);
+                profile.counter("std.loaded_body_bytes", bundle.image_size as u64);
+                let payload = self
+                    .sdk
+                    .load_bundle_file(&bundle.image)
+                    .map_err(|e| e.to_string())?;
+                let image = {
+                    let _decode = profile.span("std.decode_module_image", "std");
+                    etas_frontend::library_hir::LibraryHirImage::decode_prepared(&payload)
+                        .map_err(|e| e.to_string())?
+                };
+                let publication = self
+                    .sdk
+                    .load_bundle_file(&bundle.publication)
+                    .map_err(|e| e.to_string())?;
+                let installed_layouts = bundle
+                    .layouts
+                    .as_ref()
+                    .map(|file| {
+                        self.sdk
+                            .load_bundle_file(file)
+                            .map(|bytes| std::sync::Arc::<[u8]>::from(bytes))
+                    })
+                    .transpose()
+                    .map_err(|e| e.to_string())?;
+                let program = image
+                    .into_checked_from_installed_analysis(&self.sdk.root, &publication, profile)
+                    .map_err(|e| e.to_string())?;
+                Ok(Arc::new(etas_frontend::StandardLibrary {
+                    profile: profile.clone(),
+                    installed_layouts,
+                    program,
+                    interface: self.interface.clone(),
+                }))
+            })
+            .clone()
+            .map_err(invalid)
+    }
+
+    fn installed_effect_analysis(
+        &self,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Option<Vec<u8>>, DriverError> {
+        let Some(expected_hash) = self.sdk.manifest.effect_analysis_hash.as_deref() else {
+            return Ok(None);
+        };
+        let _load = profile.span("std.load_effect_analysis", "std");
+        if self.sdk.prepared_queries.is_none()
+            && !super::install_receipt::installed_artifact_is_trusted(
+                &self.sdk.manifest.identity()?,
+            )
+        {
+            return Ok(None);
+        }
+        self.sdk.load_effect_analysis(expected_hash).map(Some)
+    }
 }
 
 impl StdProvider {
@@ -117,20 +288,49 @@ impl StdProvider {
                 installed_sysroot(prefix)
             }
         };
-        let sdk = {
+        let mut sdk = {
             let _decode = profile.span("std.decode_artifact", "std");
             load_standard_library_sdk(&sysroot)?
         };
+        let prepared_signatures = {
+            let _signatures = profile.span("std.load_imported_signatures", "std");
+            sdk.prepared_queries
+                .as_ref()
+                .map(|_| sdk.load_signatures())
+                .transpose()?
+        };
+        if let Some(queries) = &mut sdk.prepared_queries {
+            let registry = Arc::new(
+                queries
+                    .registry
+                    .take()
+                    .expect("decoded SDK owns its registry")
+                    .into_registry()
+                    .map_err(invalid)?,
+            );
+            let mut interface = queries.interface.as_ref().clone();
+            if let Some((imported, fallback)) = prepared_signatures {
+                interface.prepared_external = Some(imported);
+                interface.signature_fallback = Some(fallback);
+            }
+            let interface = Arc::new(interface);
+            interface.restore_installed_validation(&registry);
+            let bootstrap_identity = queries.bootstrap_identity.clone();
+            let bundled_libraries = queries.bundles.iter().map(|_| OnceLock::new()).collect();
+            let identity = semantic_identity(&sdk.manifest)?;
+            return Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
+                bundled_libraries,
+                sdk,
+                registry,
+                interface,
+                library: OnceLock::new(),
+                identity,
+                bootstrap_identity,
+            })));
+        }
         let registry = {
             let _query = profile.span("std.build_query_registry", "std");
             Arc::new(query_registry(&sdk)?)
-        };
-        let checked = {
-            let _restore = profile.span("std.restore_checked_library", "std");
-            sdk.image
-                .clone()
-                .into_checked_from_image_profiled(&sdk.root, profile)
-                .map_err(invalid)?
         };
         let package = etas_frontend::ProjectExternalPackageInput {
             id: etas_frontend::ExternalPackageId(0),
@@ -141,7 +341,7 @@ impl StdProvider {
             std_compatibility: sdk.manifest.std_contract.clone(),
         };
         let index = etas_package::package_index_from_metadata(
-            sdk.public.clone(),
+            sdk.public()?.clone(),
             &sdk.root.join(&sdk.manifest.artifact),
         )?;
         let public_metadata = crate::package_env::external_public_metadata_input(
@@ -150,12 +350,15 @@ impl StdProvider {
             &index.public_metadata,
             &registry,
         );
-        let library = Arc::new(etas_frontend::StandardLibrary {
-            program: checked,
+        let interface = Arc::new(etas_frontend::StandardLibraryInterface {
+            prepared_signatures: None,
+            prepared_external: None,
+            signature_fallback: None,
+            validation: Default::default(),
             package,
             metadata: public_metadata,
             modules: sdk
-                .public
+                .public()?
                 .public_metadata
                 .modules
                 .iter()
@@ -180,13 +383,13 @@ impl StdProvider {
                 })
                 .collect(),
             origins: sdk
-                .public
+                .public()?
                 .public_metadata
                 .definition_origins
                 .clone()
                 .ok_or_else(|| invalid("std artifact has no canonical declaration origins"))?,
             descriptors: Arc::new(
-                sdk.public
+                sdk.public()?
                     .public_metadata
                     .definition_descriptors
                     .clone()
@@ -195,14 +398,25 @@ impl StdProvider {
                     })?,
             ),
         });
-        let identity = metadata::blake3_hash(&serde_json::to_vec(&sdk.manifest).map_err(invalid)?);
+        // An installation's optional solver cache is unrelated to application
+        // and checkpoint compatibility with the underlying library.
+        let identity = StdSdkManifest {
+            effect_analysis_hash: None,
+            prepared_image_hash: None,
+            interpreter_layout_hash: None,
+            prepared_queries_hash: None,
+            ..sdk.manifest.clone()
+        }
+        .identity()?;
         let bootstrap_identity = metadata::blake3_hash(
-            &serde_json::to_vec(&sdk.image.native_registry).map_err(invalid)?,
+            &serde_json::to_vec(&sdk.image()?.native_registry).map_err(invalid)?,
         );
         Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
             sdk,
             registry,
-            library,
+            interface,
+            bundled_libraries: Vec::new(),
+            library: OnceLock::new(),
             identity,
             bootstrap_identity,
         })))
@@ -251,18 +465,28 @@ impl StdProvider {
     }
 }
 
+fn semantic_identity(manifest: &StdSdkManifest) -> Result<String, DriverError> {
+    StdSdkManifest {
+        effect_analysis_hash: None,
+        prepared_image_hash: None,
+        interpreter_layout_hash: None,
+        prepared_queries_hash: None,
+        ..manifest.clone()
+    }
+    .identity()
+}
+
 /// Project structured checked package interfaces into the existing std query
 /// API. Source flows keep their canonical bundle callables; compiler limit
 /// bindings retain their semantic tags and primitive execution contracts.
 fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
-    let native = sdk
-        .image
+    let image = sdk.image()?;
+    let native = image
         .native_registry
         .clone()
         .into_registry()
         .map_err(invalid)?;
-    let mut bindings = sdk
-        .image
+    let mut bindings = image
         .types
         .source_type_roles
         .values()
@@ -275,20 +499,20 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             if declaration.kind == etas_std::TypeDeclKind::Primitive)
         .then_some(symbol.id)
     }));
-    bindings.extend(sdk.image.program.standard_action_targets.iter().filter_map(
-        |(symbol, target)| {
-            matches!(
-                sdk.image
-                    .program
-                    .symbols
-                    .get(*symbol)
-                    .map(|symbol| &symbol.def),
-                Some(etas_hir::SymbolDef::EffectAction { .. })
-            )
-            .then_some(*target)
-        },
-    ));
-    for (_, item) in sdk.image.program.items.iter() {
+    bindings.extend(
+        image
+            .program
+            .standard_action_targets
+            .iter()
+            .filter_map(|(symbol, target)| {
+                matches!(
+                    image.program.symbols.get(*symbol).map(|symbol| &symbol.def),
+                    Some(etas_hir::SymbolDef::EffectAction { .. })
+                )
+                .then_some(*target)
+            }),
+    );
+    for (_, item) in image.program.items.iter() {
         if let etas_hir::HirItem::Flow(etas_hir::HirFlowDecl {
             body: etas_hir::HirFlowBody::Runtime { role, .. },
             ..
@@ -325,7 +549,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         .collect::<BTreeMap<_, _>>();
     let mut builder = StdRegistryBuilder::from_registry(native);
     let descriptors = sdk
-        .public
+        .public()?
         .public_metadata
         .definition_descriptors
         .as_ref()
@@ -345,11 +569,11 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         let interface = header
             .id
             .as_method()
-            .and_then(|method| sdk.image.methods.get(method))
-            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(|method| image.methods.get(method))
+            .and_then(|item| image.program.items.get(*item))
             .and_then(etas_hir::HirItem::symbol)
             .and_then(|symbol| {
-                sdk.image.types.methods.entries().find_map(|entry| {
+                image.types.methods.entries().find_map(|entry| {
                     let source = match &entry.target {
                         etas_types::method::MethodTarget::Source { symbol, .. }
                         | etas_types::method::MethodTarget::Agent { symbol, .. } => *symbol,
@@ -381,11 +605,11 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
                 .collect(),
         );
     }
-    for (key, item) in &sdk.image.declarations {
+    for (key, item) in &image.declarations {
         if let etas_hir::HirItem::Flow(etas_hir::HirFlowDecl {
             body: etas_hir::HirFlowBody::Runtime { role, .. },
             ..
-        }) = &sdk.image.program.items[*item]
+        }) = &image.program.items[*item]
         {
             builder.source_execution_role(
                 CallableId::declaration(key.clone()).map_err(invalid)?,
@@ -393,17 +617,16 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             );
         }
     }
-    for (identity, item) in &sdk.image.methods {
+    for (identity, item) in &image.methods {
         if let etas_hir::HirItem::Flow(etas_hir::HirFlowDecl {
             body: etas_hir::HirFlowBody::Runtime { role, .. },
             ..
-        }) = &sdk.image.program.items[*item]
+        }) = &image.program.items[*item]
         {
             builder.source_execution_role(CallableId::method(identity.clone()), *role);
         }
     }
-    let declarations = sdk
-        .image
+    let declarations = image
         .declarations
         .keys()
         .map(|key| {
@@ -412,7 +635,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             (path, key)
         })
         .collect::<BTreeMap<_, _>>();
-    let exports = &sdk.public.public_metadata.re_exports;
+    let exports = &sdk.public()?.public_metadata.re_exports;
     let aliases = exports
         .iter()
         .map(|export| (export.exported.clone(), export.from.clone()))
@@ -442,7 +665,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         &aliases,
     )?;
     let mut values = std::collections::BTreeSet::new();
-    for value in &sdk.public.public_metadata.values {
+    for value in &sdk.public()?.public_metadata.values {
         if value.visibility != metadata::Visibility::Public {
             continue;
         }
@@ -481,7 +704,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         symbols.insert(canonical, symbol);
     }
     let mut flows = sdk
-        .public
+        .public()?
         .public_metadata
         .flows
         .iter()
@@ -513,7 +736,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
                 flow.path.join(".")
             ))
         })?;
-        if !sdk.image.declarations.contains_key(key) {
+        if !image.declarations.contains_key(key) {
             return Err(invalid("std callable metadata has no checked declaration"));
         }
         if !definitions.insert(key.clone()) {
@@ -531,7 +754,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             params: &flow.generic_params,
         };
         let summary = sdk
-            .public
+            .public()?
             .public_metadata
             .effect_summaries
             .iter()
@@ -566,7 +789,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
             requested_action_tail: requests.tail,
             source_method: None,
         };
-        if let Some(native) = source_native_binding(sdk, key, &requirements) {
+        if let Some(native) = source_native_binding(image, key, &requirements) {
             let symbol = *symbols.get(&canonical).expect("bootstrap limit contract");
             if symbol != native {
                 return Err(invalid(
@@ -583,7 +806,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         }
         // Runtime primitives retain their execution ABI while the checked
         // source declaration owns the public path and signature.
-        if let Some(native) = source_native_binding(sdk, key, &primitive_bindings) {
+        if let Some(native) = source_native_binding(image, key, &primitive_bindings) {
             builder.source_primitive_flow(native, module, declaration, key.clone());
             symbols.retain(|_, symbol| *symbol != native);
             symbols.insert(flow.path.clone(), native);
@@ -607,7 +830,7 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
         symbols.insert(flow.path.clone(), symbol);
         symbols.insert(canonical, symbol);
     }
-    for export in &sdk.public.public_metadata.re_exports {
+    for export in &sdk.public()?.public_metadata.re_exports {
         let target = *symbols
             .get(&canonical_export(&export.from, &aliases)?)
             .ok_or_else(|| {
@@ -653,22 +876,22 @@ fn query_registry(sdk: &LoadedStdSdk) -> Result<StdRegistry, DriverError> {
 
 /// Only a checked canonical binding retains the primitive execution identity.
 fn source_native_binding(
-    sdk: &LoadedStdSdk,
+    image: &etas_frontend::library_hir::LibraryHirImage,
     definition: &DefinitionKey,
     bindings: &BTreeMap<Vec<String>, etas_std::StdSymbolId>,
 ) -> Option<etas_std::StdSymbolId> {
-    let item = *sdk.image.declarations.get(definition)?;
+    let item = *image.declarations.get(definition)?;
     if let etas_hir::HirItem::Flow(etas_hir::HirFlowDecl {
         body: etas_hir::HirFlowBody::Runtime { role, .. },
         ..
-    }) = &sdk.image.program.items[item]
+    }) = &image.program.items[item]
         && let Some(path) = role.native_contract_path()
     {
         return bindings
             .get(&path.split('.').map(str::to_owned).collect::<Vec<_>>())
             .copied();
     }
-    sdk.image
+    image
         .program
         .symbols
         .iter()

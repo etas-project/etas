@@ -6,9 +6,10 @@ use std::{path::Path, sync::Arc};
 fn prepare(sysroot: &Path) -> Arc<etas_interpreter::api::code::PreparedCodeRevision> {
     use etas_driver::std_library::provider::StdProvider;
     use etas_driver::{CompileProjectRequest, DriverCacheMode, DriverOptions, check_project_once};
-    let provider = StdProvider::artifact(Some(sysroot)).unwrap();
-    let StdProvider::Artifact(artifact) = &provider else {
-        unreachable!()
+    let options = DriverOptions {
+        std_provider: StdProvider::artifact(Some(sysroot)).unwrap(),
+        cache_mode: DriverCacheMode::Off,
+        ..Default::default()
     };
     let mut input = ProjectInput::single_source(SourceInput::anonymous(
         r#"
@@ -25,11 +26,7 @@ flow inspect() -> unit { let definition = ^main; return; }
     let package = PackageKey::from_name_and_version("std-checkpoint-app", "0.1.0").unwrap();
     input.environment.local_source_package = Some(package);
     let output = check_project_once(
-        &DriverOptions {
-            std_provider: provider.clone(),
-            cache_mode: DriverCacheMode::Off,
-            ..Default::default()
-        },
+        &options,
         CompileProjectRequest {
             input,
             snapshot_detail: Default::default(),
@@ -57,8 +54,11 @@ flow inspect() -> unit { let definition = ^main; return; }
         Default::default(),
     );
     let definition = store.reflect_flow(reflection).unwrap();
+    let StdProvider::Artifact(artifact) = &options.std_provider else {
+        unreachable!()
+    };
     let mut session = etas_frontend::FrontendSession::with_std_registry(artifact.registry.clone())
-        .with_standard_library(artifact.library.clone());
+        .with_standard_library(artifact.executable_library(&options.profile).unwrap());
     let candidate = store
         .compile_definition(&definition, &mut session, Default::default())
         .unwrap();
@@ -135,6 +135,7 @@ async fn source_std_checkpoint_resumes_under_a_fresh_prepared_revision_in_anothe
     std::fs::write(
         source.join("library/std/runtime/probe.es"),
         r#"module std.runtime;
+import std.runtime.checkpoint.checkpoint;
 type Pending<T> = { value: T };
 flow saved<T>(value: T) -> T {
     let pending = Pending { value = value };

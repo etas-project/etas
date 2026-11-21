@@ -10,7 +10,8 @@ pub mod std_library;
 
 pub use compile::{
     CompileProjectRequest, CompileProjectResponse, CompileRunnableProjectResponse, DriverCacheMode,
-    DriverOptions, check_project_once, check_request, compile_runnable_project,
+    DriverOptions, check_project_interface_once, check_project_once, check_request,
+    compile_runnable_project, compile_runnable_project_with_deferred_std,
     compile_runnable_project_with_loaded, session_options,
 };
 pub use diagnostics::DriverError;

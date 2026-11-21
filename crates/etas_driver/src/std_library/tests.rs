@@ -264,7 +264,12 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
     );
     let sdk = sdk::load_standard_library_sdk(moved.parent().unwrap()).unwrap();
     assert_eq!(sdk.manifest, first.manifest);
-    let checked = sdk.image.into_checked_from_image(&sdk.root).unwrap();
+    let checked = sdk
+        .image()
+        .unwrap()
+        .clone()
+        .into_checked_from_image(&sdk.root)
+        .unwrap();
     for name in ["identity", "width", "decorate", "len"] {
         assert!(
             checked.symbols.iter().any(|symbol| symbol.name == name
@@ -322,7 +327,7 @@ public enum Reply<T> { Empty, Item(T), Named { value: T }, }
             .declaration_key(reply.id)
             .unwrap()
             .package(),
-        artifact.sdk.image.package
+        artifact.sdk.image().unwrap().package
     );
     let named = artifact
         .registry
@@ -345,7 +350,7 @@ public enum Reply<T> { Empty, Item(T), Named { value: T }, }
             .as_declaration()
             .unwrap()
             .package(),
-        artifact.sdk.image.package
+        artifact.sdk.image().unwrap().package
     );
     fs::create_dir_all(fixture.0.join("application")).unwrap();
     fs::write(fixture.0.join("application/etas.toml"), "[package]\nname = 'consumer'\nversion = '0.1.0'\nedition = '2026'\n[source]\nroot = 'src'\n[[bin]]\nname = 'consumer'\nmodule = 'app.main'\nflow = 'main'\n").unwrap();

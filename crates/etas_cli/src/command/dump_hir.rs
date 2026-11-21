@@ -21,7 +21,7 @@ pub fn run(
 ) -> Result<CliExit, CliError> {
     let optimization_level = args.optimization.level().map_err(CliError::InvalidUsage)?;
     let profile = ProfileHandle::disabled();
-    let loaded = super::frontend::load_project_with_optimization(
+    let (sources, output) = super::frontend::check_paths(
         global,
         &profile,
         etas_driver::LoadProjectRequest {
@@ -34,9 +34,7 @@ pub fn run(
         },
         Some(optimization_level),
     )?;
-    let sources = loaded.sources;
-    let output =
-        super::frontend::check_project_once(global, &profile, loaded.input)?.into_check_output();
+    let output = output.into_check_output();
     let effective_level = output
         .checked
         .as_ref()

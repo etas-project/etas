@@ -35,6 +35,59 @@ No model provider or API key is needed for this example.
 The installer places `etas` in Cargo's binary directory and builds the
 matching SDK from the standard-library sources pinned by Cargo. The CLI uses
 this SDK by default. Pass `--std-provider legacy` to select the legacy registry.
+On Linux, `std install` prepares checked SDK data, public query indices and
+rootless interpreter layouts for the matching toolchain build. The compiler records
+semantic dependencies from solved calls, types, generic bounds and Effect facts.
+The installer takes their transitive closures and packages the checked IR and
+analysis results directly. Original source is retained for diagnostics and
+reflection. `etas run` selects the smallest installed execution bundle covering
+its checked calls and methods; declaration and type indices stay shared.
+Public calling signatures are normalized and imported into a frozen type
+universe during installation. Ordinary runs restore those solved facts and bind
+the caller's source symbols; a portable signature cache handles other package
+slots. Reflection revision coordinates are decoded when requested. Source method
+behavior graphs and flow summaries are stored separately; the checker loads
+those selected by checked calls, function values and witnesses, together with
+their semantic dependency closures. Ordinary runs use installed module origins
+and source-body exposure directly. The retained source archive parses a file
+only when a diagnostic or reflection operation requests its AST. SDK type
+descriptor fingerprints are also prepared during installation; startup computes
+fingerprints for the caller's new types. Standalone source applications reuse
+the public interface's installation-time validation. Unchanged imported type
+bases keep their shared frozen index. Execution bundles retain the selected
+bodies' Effect captures and environments. Installed ABI records use a byte index
+by TypeId; runtime decodes each requested record once and shares that result.
+The installation receipt binds the complete SDK manifest to the CLI's compiled
+build stamp, avoiding a repeated scan of the executable. Code and dependency
+changes regenerate this stamp.
+
+Reflection, directly imported std values, caller-performed actions and calls
+spanning the available bundles use the complete SDK. Programs with residual
+monitors retain proof rebinding;
+unpaired SDKs use the portable checking path. Runtime permissions, budgets and
+trace enforcement still apply.
+
+Measure startup in fresh processes with project caching disabled:
+
+```sh
+python3 scripts/ci/benchmark_std_startup.py --binary /path/to/installed/bin/etas --receipt-dir /tmp/etas-startup
+```
+
+The benchmark checks a `std.text.join` program and records wall time, stage
+timings, loaded body size, selected behavior count and standard-source parse
+count. Pass `--baseline /path/to/older/bin/etas` to compare versions, or `--cpu N` to pin the samples to one CPU. The default target is a
+median below 500 ms across ten runs; pass `--max-ms 100` for a 100 ms budget.
+Stage timings can include nested work.
+
+A local Linux release comparison of 20 fresh processes on CPU 42, with project
+caching off, measured a 253.0 ms median for CLI 0.19.1 versus 300.4 ms for
+0.19.0 on this join program. The complete SDK contained 617 execution bundles;
+the program loaded 15 of 442 callable behaviors and parsed no standard-library
+sources. The caller reused 1,122 frozen signature types and added no signature
+types. Installed layout decoding took about 11.2 ms. The 100 ms budget remains
+unmet; public metadata loading, executable-image/layout decoding and
+runtime type correspondence remain significant costs.
+
 To inspect a program before running it:
 
 ```sh

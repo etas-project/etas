@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 pub use etas_std::library::source_checkout_manifest;
 
+pub mod install_receipt;
 mod native_abi;
 pub mod provider;
 pub mod sdk;

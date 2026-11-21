@@ -221,7 +221,7 @@ public flow lookup() -> i32 { return 7; }
         .environment
         .external_definition_origins
         .iter()
-        .find_map(|origin| origin.descriptors.as_ref())
+        .find_map(|origin| origin.descriptors.as_deref())
         .unwrap();
     let header = descriptors
         .headers
@@ -428,7 +428,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let root = set
         .headers
@@ -528,7 +528,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let original = *callback_handler_selector(&mut set.graph);
     let etas_code::descriptor::TypeInfo::Applied {
@@ -629,7 +629,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let other = set.graph.types.iter().position(|ty| matches!(ty,
         etas_code::descriptor::TypeInfo::Nominal { definition, .. } if definition.declaration() == ["Other"]
@@ -758,7 +758,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let other = etas_code::descriptor::TypeInfoRef(set.graph.types.len() as u32);
     set.graph
@@ -901,7 +901,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let root = set
         .headers
@@ -1327,7 +1327,7 @@ flow main() -> string ![Error<CompileError>] {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let mut replaced = 0;
     for trace in &mut set.graph.traces {
@@ -1709,7 +1709,7 @@ public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Er
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let header = set
         .headers
@@ -2052,7 +2052,7 @@ public flow invoke(draft: CallableDef<(i32) -> i32 ![]>) -> unit ![] { return; }
     let set = environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let header = set
         .headers
@@ -2621,7 +2621,7 @@ fn imported_nominal_representation_cannot_disagree_with_its_descriptor() {
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let before = set.declarations.len();
     set.declarations
@@ -2890,7 +2890,7 @@ flow main() -> unit ![] { return; }
         .environment
         .external_definition_origins
         .iter_mut()
-        .find_map(|origin| origin.descriptors.as_mut())
+        .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
         .unwrap();
     let before = set.declarations.len();
     set.declarations
@@ -3102,7 +3102,7 @@ flow main() -> i32 {{ let result = invoke(^local, 4)?; return match result {{ Ok
         let set = environment
             .external_definition_origins
             .iter_mut()
-            .find_map(|origin| origin.descriptors.as_mut())
+            .find_map(|origin| origin.descriptors.as_mut().map(std::sync::Arc::make_mut))
             .unwrap();
         let header = set
             .headers

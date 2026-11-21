@@ -121,6 +121,7 @@ pub(crate) fn run(
         Some(flow.clone()),
         optimization_level,
         host_config.compiler_config(),
+        false,
     )?;
     let has_compile_error = super::interpreter::has_error(&compiled.diagnostics);
     let visible_compile_diagnostics = visible_resume_diagnostics(global, &compiled.diagnostics);

@@ -9,8 +9,9 @@ pub(super) fn publish(
     declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
     aliases: &BTreeMap<Vec<String>, Vec<String>>,
 ) -> Result<(), DriverError> {
+    let image = sdk.image()?;
     let mut registered = std::collections::BTreeSet::new();
-    for effect in &sdk.public.public_metadata.effects {
+    for effect in &sdk.public()?.public_metadata.effects {
         if effect.visibility != metadata::Visibility::Public {
             continue;
         }
@@ -31,20 +32,19 @@ pub(super) fn publish(
             .map(|param| projector.param(param))
             .collect::<Result<Vec<_>, _>>()?;
         let extends = sdk
-            .public
+            .public()?
             .effect_metadata
             .extensions
             .iter()
             .filter(|edge| edge.child == canonical)
             .map(|edge| edge.parent.join("."))
             .collect();
-        let source_role = sdk
-            .image
+        let source_role = image
             .declarations
             .get(key)
-            .and_then(|item| sdk.image.program.items.get(*item))
+            .and_then(|item| image.program.items.get(*item))
             .and_then(etas_hir::HirItem::symbol)
-            .and_then(|symbol| sdk.image.types.source_type_roles.get(&symbol));
+            .and_then(|symbol| image.types.source_type_roles.get(&symbol));
         if let Some(native) = source_role {
             if symbols.get(&canonical) != Some(native) {
                 return Err(invalid(
@@ -89,8 +89,9 @@ fn publish_actions(
     symbols: &mut BTreeMap<Vec<String>, StdSymbolId>,
     declarations: &BTreeMap<Vec<String>, &DefinitionKey>,
 ) -> Result<(), DriverError> {
+    let image = sdk.image()?;
     let mut published = BTreeMap::new();
-    for action in &sdk.public.public_metadata.actions {
+    for action in &sdk.public()?.public_metadata.actions {
         if action.visibility != metadata::Visibility::Public {
             continue;
         }
@@ -101,8 +102,8 @@ fn publish_actions(
         let key = *declarations
             .get(owner)
             .ok_or_else(|| invalid("source action has no checked effect owner"))?;
-        let item = sdk.image.declarations[key];
-        let etas_hir::HirItem::Effect(effect) = &sdk.image.program.items[item] else {
+        let item = image.declarations[key];
+        let etas_hir::HirItem::Effect(effect) = &image.program.items[item] else {
             return Err(invalid("source action owner is not an effect"));
         };
         let source = effect
@@ -110,7 +111,7 @@ fn publish_actions(
             .actions()
             .iter()
             .find(|source| {
-                sdk.image
+                image
                     .program
                     .symbols
                     .get(source.symbol)
@@ -121,11 +122,7 @@ fn publish_actions(
                     == Some(name.as_str())
             })
             .ok_or_else(|| invalid("source action has no checked declaration"))?;
-        let native = sdk
-            .image
-            .program
-            .standard_action_targets
-            .get(&source.symbol);
+        let native = image.program.standard_action_targets.get(&source.symbol);
         if let Some(native) = native {
             // The checked image already owns every source signature of this
             // execution action. Keep that group intact when publishing its

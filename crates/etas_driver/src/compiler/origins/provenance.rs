@@ -22,7 +22,7 @@ pub(crate) struct SourceDefinitionProvenance {
     single_file_root: Option<PathBuf>,
     single_files: HashMap<SourceId, (PathBuf, PackageKey)>,
     dependencies: HashMap<ExternalPackageId, DependencyOrigin>,
-    standard_library: Option<std::sync::Arc<etas_frontend::StandardLibrary>>,
+    standard_library: Option<std::sync::Arc<etas_frontend::StandardLibraryInterface>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -37,7 +37,7 @@ impl SourceDefinitionProvenance {
         provider: &crate::std_library::provider::StdProvider,
     ) -> Self {
         if let crate::std_library::provider::StdProvider::Artifact(provider) = provider {
-            self.standard_library = Some(provider.library.clone());
+            self.standard_library = Some(provider.interface.clone());
         }
         self
     }
@@ -90,7 +90,7 @@ impl SourceDefinitionProvenance {
             if !self.dependencies.contains_key(&input.package)
                 && self.standard_library.as_ref().is_some_and(|library| {
                     input.origins == library.origins
-                        && input.descriptors.as_ref() == Some(library.descriptors.as_ref())
+                        && input.descriptors.as_deref() == Some(library.descriptors.as_ref())
                 })
             {
                 continue;

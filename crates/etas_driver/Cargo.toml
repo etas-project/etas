@@ -1,6 +1,6 @@
 [package]
 name = "etas_driver"
-version = "0.4.0"
+version = "0.5.1"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -25,6 +25,10 @@ etas_utils.workspace = true
 blake3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+ciborium.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1.1.6", features = ["fs"] }
 
 [build-dependencies]
 etas_std.workspace = true

@@ -173,7 +173,11 @@ fn external_definition_origins(
         origins.push(etas_frontend::ProjectExternalDefinitionOriginsInput {
             package: package.id,
             origins: source,
-            descriptors: dependency.public_metadata.definition_descriptors.clone(),
+            descriptors: dependency
+                .public_metadata
+                .definition_descriptors
+                .clone()
+                .map(std::sync::Arc::new),
         });
     }
     Ok(origins)

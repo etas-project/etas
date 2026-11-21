@@ -5,11 +5,11 @@ use std::{
 
 use etas_core::Severity;
 use etas_frontend::{
-    CheckRequest, CheckResponse, CheckScope, DependencyOverlayChange, DiskCacheAccess,
-    EnvironmentChange, ExternalPackageId, FrontendSession, FrontendSessionOptions,
-    FrontendSessionStore, ModulePath, OptimizationLevel, ProjectChangeSet, ProjectInput,
-    ProjectRevision, RuntimeSourceRequirement, RuntimeSourceRequirements, SnapshotDetailLevel,
-    SourceInput, SourceKind,
+    CheckRequest, CheckResponse, CheckRetention, CheckScope, DependencyOverlayChange,
+    DiskCacheAccess, EnvironmentChange, ExternalPackageId, FrontendCacheConfig, FrontendSession,
+    FrontendSessionOptions, FrontendSessionStore, ModulePath, OptimizationLevel, ProjectChangeSet,
+    ProjectInput, ProjectRevision, RuntimeSourceRequirement, RuntimeSourceRequirements,
+    SnapshotDetailLevel, SourceInput, SourceKind,
 };
 use etas_utils::ProfileHandle;
 
@@ -80,9 +80,32 @@ pub struct CompileRunnableProjectResponse {
     pub response: CheckResponse,
 }
 
+#[derive(Clone, Copy)]
+enum StdLinkage {
+    Interface,
+    Executable,
+    Deferred,
+}
+
 pub fn check_project_once(
     options: &DriverOptions,
+    request: CompileProjectRequest,
+) -> Result<CompileProjectResponse, DriverError> {
+    check_once(options, request, StdLinkage::Executable)
+}
+
+/// Check an application against the installed std interface without restoring executable bodies.
+pub fn check_project_interface_once(
+    options: &DriverOptions,
+    request: CompileProjectRequest,
+) -> Result<CompileProjectResponse, DriverError> {
+    check_once(options, request, StdLinkage::Interface)
+}
+
+fn check_once(
+    options: &DriverOptions,
     mut request: CompileProjectRequest,
+    linkage: StdLinkage,
 ) -> Result<CompileProjectResponse, DriverError> {
     options.std_provider.configure(&mut request.input);
     if let Some(level) = options.optimization_level {
@@ -103,14 +126,14 @@ pub fn check_project_once(
         )
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?
     } else {
-        frontend_session(options)?
+        frontend_session_with_library(options, linkage, session_options(options)?)?
     };
     let project = session
         .try_open_project(request.input)
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
     let mut check = check_request(options).with_snapshot_detail(request.snapshot_detail);
     if !check.disk_artifact_access.can_write() {
-        check.retention = etas_frontend::CheckRetention::OneShot;
+        check.retention = CheckRetention::OneShot;
     }
     let response = session
         .check(project, check)
@@ -131,12 +154,34 @@ pub fn compile_runnable_project(
 
 pub fn compile_runnable_project_with_loaded(
     options: &DriverOptions,
+    request: LoadProjectRequest,
+    snapshot_detail: SnapshotDetailLevel,
+) -> Result<CompileRunnableProjectResponse, DriverError> {
+    compile_runnable_with_std_linkage(options, request, snapshot_detail, StdLinkage::Executable)
+}
+
+/// Compile an entry that does not require retaining an unused SDK for a future
+/// compiler operation or checkpoint.
+pub fn compile_runnable_project_with_deferred_std(
+    options: &DriverOptions,
+    request: LoadProjectRequest,
+    snapshot_detail: SnapshotDetailLevel,
+) -> Result<CompileRunnableProjectResponse, DriverError> {
+    compile_runnable_with_std_linkage(options, request, snapshot_detail, StdLinkage::Deferred)
+}
+
+fn compile_runnable_with_std_linkage(
+    options: &DriverOptions,
     mut request: LoadProjectRequest,
     snapshot_detail: SnapshotDetailLevel,
+    linkage: StdLinkage,
 ) -> Result<CompileRunnableProjectResponse, DriverError> {
     request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
     let metadata_loaded = load_project(options, request)?;
-    let mut session = frontend_session(options)?;
+    let session_options = session_options(options)?;
+    let writes_cache = matches!(&session_options.cache,
+        FrontendCacheConfig::Disk { access, .. } if access.can_write());
+    let mut session = frontend_session_with_library(options, linkage, session_options)?;
     let project = session
         .try_open_project(metadata_loaded.loaded.input.clone())
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
@@ -146,13 +191,14 @@ pub fn compile_runnable_project_with_loaded(
         let _span = options
             .profile
             .span_with_attrs("frontend.check", "frontend", attrs);
+        let mut request = check_request(options)
+            .with_snapshot_detail(snapshot_detail)
+            .with_scope(CheckScope::EntryReachable);
+        if !writes_cache && metadata_loaded.package_environment.is_none() {
+            request.retention = CheckRetention::OneShot;
+        }
         let response = session
-            .check(
-                project,
-                check_request(options)
-                    .with_snapshot_detail(snapshot_detail)
-                    .with_scope(CheckScope::EntryReachable),
-            )
+            .check(project, request)
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
         record_pipeline_profile(options, &response);
         response
@@ -402,45 +448,110 @@ fn dependency_overlay_changes_from_sources(
 pub fn frontend_session(
     options: &DriverOptions,
 ) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
+    frontend_session_with_library(options, StdLinkage::Executable, session_options(options)?)
+}
+
+fn frontend_session_with_library(
+    options: &DriverOptions,
+    linkage: StdLinkage,
+    session_options: FrontendSessionOptions,
+) -> Result<FrontendSession<FrontendSessionStore>, DriverError> {
     let session = match &options.std_provider {
         crate::std_library::provider::StdProvider::Legacy => {
-            FrontendSession::with_options(session_options(options)?)
+            FrontendSession::with_options(session_options)
         }
         crate::std_library::provider::StdProvider::SourceBootstrap(registry) => {
-            FrontendSession::with_options_and_std_registry(
-                session_options(options)?,
-                registry.clone(),
-            )
+            FrontendSession::with_options_and_std_registry(session_options, registry.clone())
         }
         crate::std_library::provider::StdProvider::Artifact(provider) => {
-            FrontendSession::with_options_and_std_registry(
-                session_options(options)?,
+            let session = FrontendSession::with_options_and_std_registry(
+                session_options,
                 provider.registry.clone(),
             )
-            .map(|session| session.with_standard_library(provider.library.clone()))
+            .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
+            let interface = provider.interface.clone();
+            if provider.sdk.prepared_queries.is_some() {
+                let behaviors = provider.clone();
+                let profile = options.profile.clone();
+                let executable = if matches!(linkage, StdLinkage::Executable | StdLinkage::Deferred)
+                {
+                    let provider = provider.clone();
+                    let profile = profile.clone();
+                    Some(
+                        std::sync::Arc::new(move |consumer: &etas_frontend::CheckedProgramData| {
+                            provider
+                                .executable_library_for(consumer, &profile)
+                                .map_err(|e| e.to_string())
+                        })
+                            as std::sync::Arc<
+                                dyn Fn(
+                                        &etas_frontend::CheckedProgramData,
+                                    ) -> Result<
+                                        std::sync::Arc<etas_frontend::StandardLibrary>,
+                                        String,
+                                    > + Send
+                                    + Sync,
+                            >,
+                    )
+                } else {
+                    None
+                };
+                return Ok(session.with_installed_standard_library(
+                    interface,
+                    move |consumer| {
+                        behaviors
+                            .sdk
+                            .load_behaviors(&behaviors.registry, consumer, &profile)
+                            .map_err(|e| e.to_string())
+                    },
+                    executable,
+                ));
+            }
+            return Ok(match linkage {
+                StdLinkage::Interface => session.with_standard_library_interface(interface),
+                StdLinkage::Executable | StdLinkage::Deferred => {
+                    let provider = provider.clone();
+                    let profile = options.profile.clone();
+                    session.with_deferred_standard_library(interface, move |consumer| {
+                        provider
+                            .executable_library_for(consumer, &profile)
+                            .map_err(|error| error.to_string())
+                    })
+                }
+            });
         }
     };
     session.map_err(|error| DriverError::FrontendSession(format!("{error:?}")))
 }
 
 pub fn session_options(options: &DriverOptions) -> Result<FrontendSessionOptions, DriverError> {
-    if options.cache_mode == DriverCacheMode::Off
-        || (options.cache_mode == DriverCacheMode::Auto && options.cache_root.is_none())
-    {
+    if options.cache_mode == DriverCacheMode::Off {
         return Ok(FrontendSessionOptions::memory_only());
     }
     let root = match options.cache_root.clone() {
         Some(root) => root,
-        None => crate::project_discovery::resolve_workspace(options)?
-            .join(".etas")
-            .join("cache"),
+        None => {
+            let root = crate::project_discovery::resolve_workspace(options)?
+                .join(".etas")
+                .join("cache");
+            if options.cache_mode == DriverCacheMode::Auto && !root.is_dir() {
+                return Ok(FrontendSessionOptions::memory_only());
+            }
+            root
+        }
     };
     Ok(FrontendSessionOptions::disk_cache(root).with_disk_cache_access(disk_cache_access(options)))
 }
 
 pub fn check_request(options: &DriverOptions) -> CheckRequest {
-    CheckRequest::full_project()
-        .with_disk_artifact_access(disk_cache_access(options))
+    let access = disk_cache_access(options);
+    let request = if access.can_read() {
+        CheckRequest::incremental()
+    } else {
+        CheckRequest::full_project()
+    };
+    request
+        .with_disk_artifact_access(access)
         .with_snapshot_detail(SnapshotDetailLevel::None)
         .with_pipeline_timing(options.profile.is_enabled())
 }
@@ -526,6 +637,16 @@ fn record_pipeline_profile(options: &DriverOptions, response: &CheckResponse) {
         "frontend.reused_parsed_sources",
         response.output.reused_parsed_sources as u64,
     );
+    if let Some(signatures) = &response.output.signature_types {
+        options.profile.counter(
+            "frontend.signature_base_types",
+            signatures.store.base_len() as u64,
+        );
+        options.profile.counter(
+            "frontend.signature_added_types",
+            signatures.store.local_types().len() as u64,
+        );
+    }
     if let Some(reachability) = response.output.reachability.as_ref() {
         options.profile.counter(
             "frontend.reachable_items",

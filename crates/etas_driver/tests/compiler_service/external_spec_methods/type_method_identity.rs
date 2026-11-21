@@ -290,7 +290,7 @@ flow main() -> i32 ![] {{ return first(Remote {{ value = 7 }}); }}
         let actual = checked
             .external_definition_origins()
             .iter()
-            .filter_map(|origin| origin.descriptors.as_ref())
+            .filter_map(|origin| origin.descriptors.as_deref())
             .flat_map(|set| set.headers.iter().flat_map(|headers| &headers.callables))
             .filter(|header| header.id.as_method().is_some())
             .map(|header| header.id.clone())

@@ -71,6 +71,7 @@ fn legacy_external_agent_headers_cannot_fabricate_revision_coordinates() {
     let headers = loaded.loaded.input.environment.external_definition_origins[0]
         .descriptors
         .as_mut()
+        .map(std::sync::Arc::make_mut)
         .unwrap()
         .headers
         .as_mut()
