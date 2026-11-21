@@ -95,23 +95,3 @@ For the source standard-library SDK installation workflow, follow the current
 [package specification](../design/15-package-management.md#71-using-the-installed-standard-library).
 An old CLI installation command without a matching SDK is not an equivalent
 replacement.
-
-## Recovering Older Local Work
-
-Compare old local changes against both their original base and current `main`.
-A dirty-file count is not an unmerged-feature count. Even a textually clean
-three-way merge can duplicate a type or hook introduced elsewhere upstream.
-
-Keep replaced implementation paths deleted. Port only independently reviewed
-changes and current-contract regression tests. Historical architecture worklists
-belong in an explicitly marked archive, not in the active implementation queue.
-
-During the 2026-11-21 integration, the three previously automatic local patch
-configurations were backed up and removed from automatic Cargo discovery.
-This prevents editor metadata refreshes from silently replacing the published
-Git dependency identities and dirtying committed lockfiles. Explicit local
-integration profiles with absolute paths remain in the private recovery backup.
-They can be selected for a deliberate integration run with
-`cargo --config /absolute/path/to/profile.toml test`; that still changes the
-workspace lockfile, so preserve any independent lock edits first. Normal builds
-and final synchronization checks use the committed pins without a patch profile.
