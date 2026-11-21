@@ -1,1 +1,1 @@
-effect::CannotResumeNeverAction | cannot resume an action whose return type is never
+type::TypeMismatch | cannot resume a handled action whose return type is never

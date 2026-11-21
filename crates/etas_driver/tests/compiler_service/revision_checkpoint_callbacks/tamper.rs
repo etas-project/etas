@@ -26,11 +26,11 @@ flow main() -> i32 ![Error<CompileError>] {
     for remove in [true, false] {
         let mut bad = artifact.clone();
         let boundary = generic_boundary(&mut bad).unwrap();
-        assert_eq!(boundary["call"]["effect_row_bindings"][0][0], "E");
+        assert_eq!(boundary["effect_row_bindings"][0][0], "E");
         if remove {
-            boundary["call"]["effect_row_bindings"] = serde_json::json!([]);
+            boundary["effect_row_bindings"] = serde_json::json!([]);
         } else {
-            boundary["call"]["effect_row_bindings"][0][1]["effects"] =
+            boundary["effect_row_bindings"][0][1]["effects"] =
                 serde_json::json!([{"name":"Console.stdout_write","args":[]}]);
         }
         let error = etas_interpreter::api::codec::checkpoint_from_json_with_revisions(
@@ -81,12 +81,12 @@ flow main() -> i32 ![Error<CompileError>] {
         let mut bad = artifact.clone();
         let boundary = generic_boundary(&mut bad).expect("specialized program-return boundary");
         match case {
-            0 => boundary["call"]["type_bindings"][0]["type"] = serde_json::json!(string.0),
-            1 => boundary["call"]["type_bindings"] = serde_json::json!([]),
-            2 => boundary["call"]["effect_row_bindings"] = serde_json::json!([]),
-            3 => boundary["call"]["type_bindings"][0]["name"] = serde_json::json!("E"),
+            0 => boundary["type_bindings"][0]["type"] = serde_json::json!(string.0),
+            1 => boundary["type_bindings"] = serde_json::json!([]),
+            2 => boundary["effect_row_bindings"] = serde_json::json!([]),
+            3 => boundary["type_bindings"][0]["name"] = serde_json::json!("E"),
             4 => {
-                boundary["call"]["effect_row_bindings"][0][1]["effects"] =
+                boundary["effect_row_bindings"][0][1]["effects"] =
                     serde_json::json!([{"name":"Console.stdout_write","args":[]}])
             }
             _ => unreachable!(),
@@ -107,12 +107,15 @@ flow main() -> i32 ![Error<CompileError>] {
 }
 
 fn generic_boundary(value: &mut serde_json::Value) -> Option<&mut serde_json::Value> {
-    if value
-        .get("call")
-        .and_then(|call| call.get("kind"))
-        .and_then(serde_json::Value::as_str)
-        == Some("specialized")
-        && value.get("handler_floor").is_some()
+    if value.get("kind").and_then(serde_json::Value::as_str) == Some("specialized")
+        && value
+            .get("effect_row_bindings")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|rows| rows.iter().any(|row| row[0] == "E"))
+        && value
+            .get("type_bindings")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|types| types.iter().any(|ty| ty["name"] == "T"))
     {
         return Some(value);
     }

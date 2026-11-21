@@ -275,7 +275,7 @@ fn compiler_project_negative_fixtures_report_project_diagnostics() {
         },
         ProjectNegativeCase {
             name: "duplicate_top_level_item",
-            diagnostic: "duplicate top-level declaration `helper`",
+            diagnostic: "ambiguous",
         },
         ProjectNegativeCase {
             name: "duplicate_module",

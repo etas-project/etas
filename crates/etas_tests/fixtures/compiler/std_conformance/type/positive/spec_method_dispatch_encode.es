@@ -9,13 +9,13 @@ type Packet = {
 };
 
 spec Encoder {
-    flow encode(value: Packet) -> string;
+    flow encode(self) -> string;
 }
 
 impl Packet ~ Encoder {
-    flow encode(value: Packet) -> string
+    flow encode(self) -> string
     {
-        return value.body;
+        return self.body;
     }
 }
 

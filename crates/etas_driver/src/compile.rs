@@ -730,9 +730,12 @@ mod tests {
 
         for level in 0..=3 {
             let response = check_project_once(
-                &DriverOptions::default()
-                    .with_optimization_level(level)
-                    .unwrap(),
+                &DriverOptions {
+                    cache_mode: DriverCacheMode::Off,
+                    ..Default::default()
+                }
+                .with_optimization_level(level)
+                .unwrap(),
                 CompileProjectRequest {
                     input: ProjectInput::single_source(SourceInput::anonymous(
                         "flow main() -> i32 { return 42; }",
