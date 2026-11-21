@@ -7,12 +7,12 @@ public alias ExternalStringBox = ExternalBox<string>;
 public spec ExternalReadOnly: trace = -Console.stdout_write;
 
 public spec ExternalEncoder {
-    flow encode(packet: ExternalPacket) -> string;
+    flow encode(self) -> string;
 }
 
 impl ExternalPacket ~ ExternalEncoder {
-    flow encode(packet: ExternalPacket) -> string ~ ExternalReadOnly {
-        return packet.body;
+    flow encode(self) -> string ~ ExternalReadOnly {
+        return self.body;
     }
 }
 

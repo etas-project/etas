@@ -27,7 +27,7 @@ fn runnable_project_loads_external_spec_implementation_module() {
                 "library/api.es",
                 r#"
 module library.api;
-public spec Identity<T> { flow id(input: T) -> T; }
+public spec Identity<T> { flow id(self) -> T; }
 public type Token = i32;
 public flow lookup() -> i32 { return 7; }
 "#,
@@ -37,7 +37,7 @@ public flow lookup() -> i32 { return 7; }
                 r#"
 module library.impls;
 import library.api.{Identity, Token};
-impl Token ~ Identity<Token> { flow id(input: Token) -> Token { return input; } }
+impl Token ~ Identity<Token> { flow id(self) -> Token { return self; } }
 "#,
             ),
         ],
@@ -115,7 +115,7 @@ fn reflected_flow_can_use_imported_parameterized_behavioral_spec() {
                 "library/api.es",
                 r#"
 module library.api;
-public spec Identity<T> { flow id(input: T) -> T; }
+public spec Identity<T> { flow id(self) -> T; }
 public type Token = i32;
 public type Other = i32;
 public flow lookup() -> i32 { return 7; }
@@ -127,7 +127,7 @@ public flow lookup() -> i32 { return 7; }
 module library.other_impls;
 import library.api.{Identity, Other};
 impl Other ~ Identity<Other> {
-    flow id(input: Other) -> Other { return input; }
+    flow id(self) -> Other { return self; }
 }
 "#,
             ),
@@ -137,7 +137,7 @@ impl Other ~ Identity<Other> {
 module library.impls;
 import library.api.{Identity, Token};
 impl Token ~ Identity<Token> {
-    flow id(input: Token) -> Token { return input; }
+    flow id(self) -> Token { return self; }
 }
 "#,
             ),
@@ -237,7 +237,7 @@ fn reflected_instantiated_generic_flow_dispatches_external_spec_method() {
                 "library/api.es",
                 r#"
 module library.api;
-public spec Identity<T> { flow id(input: T) -> T; }
+public spec Identity<T> { flow id(self) -> T; }
 public type Token = i32;
 "#,
             ),
@@ -246,7 +246,7 @@ public type Token = i32;
                 r#"
 module library.impls;
 import library.api.{Identity, Token};
-impl Token ~ Identity<Token> { flow id(input: Token) -> Token { return input; } }
+impl Token ~ Identity<Token> { flow id(self) -> Token { return self; } }
 "#,
             ),
         ],

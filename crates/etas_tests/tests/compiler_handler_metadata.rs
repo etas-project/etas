@@ -207,10 +207,13 @@ flow main() -> {output} ![Error<CompileError>] {{
             "missing request evidence: {body}"
         );
         assert!(
-            missing.diagnostics.iter().any(|diagnostic| diagnostic.code
-                == etas_core::DiagnosticCode::Type(
-                    etas_core::TypeDiagnosticCode::IncompleteTypeFacts
-                )),
+            missing.diagnostics.iter().any(|diagnostic| matches!(
+                diagnostic.code,
+                etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)
+                    | etas_core::DiagnosticCode::Effect(
+                        etas_core::EffectDiagnosticCode::IncompleteEffectFacts
+                    )
+            )),
             "missing request evidence: {body}: {:?}",
             missing.diagnostics
         );

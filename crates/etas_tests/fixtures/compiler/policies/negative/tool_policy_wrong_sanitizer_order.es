@@ -1,4 +1,4 @@
-module tests.compiler.policies.negative.tool_policy_missing_sanitizer;
+module tests.compiler.policies.negative.tool_policy_wrong_sanitizer_order;
 
 type Page = {
     score: i32,
@@ -123,7 +123,7 @@ let ProjectMemory =
         store = "project-main"
     );
 
-spec FixturePolicy: trace = +Web.search & (Sanitizer.sanitize << Web.search);
+spec FixturePolicy: trace = +Web.search & +Sanitizer.sanitize & (Sanitizer.sanitize << Web.search);
 
 flow policies_negative_tool_policy_missing_sanitizer_exercise_44(seed: i32) -> i32
     ~ FixturePolicy
@@ -135,6 +135,7 @@ flow policies_negative_tool_policy_missing_sanitizer_exercise_44(seed: i32) -> i
     }
     let policies_negative_tool_policy_missing_sanitizer_adjust_44: i32 -> i32 = (value: i32) => value + 44;
     total = policies_negative_tool_policy_missing_sanitizer_adjust_44(total);
+    total = total + perform Sanitizer.sanitize("no prior search");
     total = total + perform Web.search("unsafe search");
     total = total + policies_negative_tool_policy_missing_sanitizer_score_44(2);
     total = total + policies_negative_tool_policy_missing_sanitizer_finish_44(1);

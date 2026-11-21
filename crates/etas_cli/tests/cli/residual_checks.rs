@@ -59,7 +59,7 @@ fn residual_cli_check_run_and_checkpoint_resume_use_the_real_interpreter_target(
     );
     let checkpoint = checkpoints.join("checkpoint-0.json");
     let saved = read_checkpoint_file(&checkpoint);
-    assert_eq!(saved["schema"], "etas.cli.interpreter-checkpoint.v76");
+    assert_eq!(saved["schema"], "etas.cli.interpreter-checkpoint.v102");
     assert_eq!(
         saved["checkpoint"]["machine"]["residual"]["scopes"]
             .as_array()
@@ -100,6 +100,6 @@ flow main(args: Array<string>) -> i32 ![] ~ Safe {
     assert_eq!(code, 0, "{stdout}\n{stderr}");
     let (code, stdout, stderr) = run_process(["run", path(&root)], "");
     assert_eq!(code, 3, "{stdout}\n{stderr}");
-    assert!(stderr.contains("TraceSpecResidualViolation"), "{stderr}");
-    assert!(stderr.contains("Gate.send"), "{stderr}");
+    assert!(stderr.contains("TraceSpecResidualIncomplete"), "{stderr}");
+    assert!(stderr.contains("ErrorPropagation"), "{stderr}");
 }

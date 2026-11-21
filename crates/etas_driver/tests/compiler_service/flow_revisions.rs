@@ -1747,7 +1747,7 @@ public flow invoke(draft: CallableDef<(i32) -> i32 ![]>, value: i32) -> i32 ![Er
             == etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)
             && diagnostic
                 .message
-                .contains("trace parameter call requires a checked callback function")),
+                .contains("callable descriptor and public signature disagree on parameter type")),
         "{:?}",
         output.diagnostics
     );

@@ -566,10 +566,10 @@ fn read_expected_effect_diagnostics(fixture: &Path) -> Result<Vec<ExpectedDiagno
     }
     if !expected
         .iter()
-        .any(|line| line.code.starts_with("effect::"))
+        .any(|line| line.code.starts_with("effect::") || line.code.starts_with("type::"))
     {
         return Err(format!(
-            "{} must contain at least one stable effect diagnostic code",
+            "{} must contain a stable type or effect diagnostic code",
             path.display()
         ));
     }
@@ -616,9 +616,9 @@ impl ExpectedDiagnostic {
                 "effect diagnostics must use `code | message | label | line | column`, got `{line}`"
             ));
         }
-        if !parts[0].starts_with("effect::") {
+        if !parts[0].starts_with("effect::") && !parts[0].starts_with("type::") {
             return Err(format!(
-                "effect diagnostics must pin an effect diagnostic code, got `{}`",
+                "handler/effect diagnostics must pin a type or effect diagnostic code, got `{}`",
                 parts[0]
             ));
         }

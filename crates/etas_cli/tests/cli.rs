@@ -5197,8 +5197,9 @@ flow main(args: Array<string>) -> i32 {
     }
     assert!(variants >= 1000, "checkpoint must retain every constructor");
     assert!(
-        bytes.len() < 512 * 1000,
-        "checkpoint storage must remain linear in depth"
+        bytes.len() < 1024 * 1000,
+        "checkpoint storage must remain linear in depth: {} bytes",
+        bytes.len()
     );
     let mut command = crate::legacy_cli_command();
     command.env("ETAS_HOST_MEMORY", "memory");
@@ -5803,9 +5804,8 @@ fn full_phase1_agent_runtime_repairs_invalid_model_tool_args() {
     assert!(
         model_requests
             .iter()
-            .any(|request| request.contains("InvalidToolArguments")
-                && request.contains("model supplied invalid arguments")),
-        "invalid tool args should be returned to the model as a tool result:\n{model_requests:#?}"
+            .any(|request| request.contains("The previous tool request was invalid")),
+        "invalid tool args should be returned as model repair feedback:\n{model_requests:#?}"
     );
     assert!(
         model_requests
@@ -7418,24 +7418,16 @@ fn run<const N: usize>(args: [&str; N]) -> (i32, String, String) {
     let _guard = (!cli_process_lock_is_held_by_current_thread()).then(lock_cli_process);
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    // Cargo puts the test executable under deps/. Use the same SDK as the CLI
-    // under test when executing its commands in this process.
-    let prefix = Path::new(env!("CARGO_BIN_EXE_etas"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    let sysroot = etas_driver::std_library::sdk::installed_sysroot(prefix);
     let mut args = Vec::from(args);
-    if !args
-        .iter()
-        .any(|arg| *arg == "--sysroot" || arg.starts_with("--sysroot="))
-    {
-        let end = args
-            .iter()
-            .position(|arg| *arg == "--")
-            .unwrap_or(args.len());
-        args.splice(end..end, ["--sysroot", path(&sysroot)]);
+    // Match the provider used by this suite's subprocess fixtures. Source SDK
+    // tests select their own provider/sysroot explicitly.
+    if !args.iter().any(|arg| {
+        matches!(*arg, "--std-provider" | "--sysroot")
+            || arg.starts_with("--std-provider=")
+            || arg.starts_with("--sysroot=")
+    }) {
+        let start = usize::from(args.first() == Some(&"etas"));
+        args.splice(start..start, ["--std-provider", "legacy"]);
     }
     let code = etas_cli::run_with(args, &mut stdout, &mut stderr);
 

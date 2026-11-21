@@ -429,9 +429,9 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .callables[0]
         .id = etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
-    // This forged Tool no longer claims a Flow snapshot. Keep the graph
-    // internally coherent so the frontend can reject the export-kind mismatch.
-    metadata
+    // Keep the forged Tool's snapshot coherent so import validation reaches
+    // the mismatch with the public Flow export.
+    let snapshots = metadata
         .public_metadata
         .definition_descriptors
         .as_mut()
@@ -441,9 +441,13 @@ fn malformed_binary_definition_kind_is_rejected_at_the_real_import_span() {
         .unwrap()
         .snapshots
         .as_mut()
-        .unwrap()
-        .flows
-        .clear();
+        .unwrap();
+    let mut snapshot = snapshots.flows.pop().unwrap();
+    snapshot.identity = binding.definition.clone();
+    snapshot.dependencies.lexical_owner = binding.definition.clone();
+    snapshot.revision.definition =
+        etas_code::CallableId::declaration(binding.definition.clone()).unwrap();
+    snapshots.tools.push(snapshot);
     let sections = etas_package_metadata::package_metadata_to_sections(&metadata).unwrap();
     let bytes = etas_package_metadata::encode_metadata_artifact(&header, sections).unwrap();
     etas_package_metadata::write_metadata_artifact_file(&artifact, &bytes).unwrap();
@@ -1046,6 +1050,15 @@ fn binary_agent_metadata_cannot_add_a_default_entry_missing_from_the_definition(
     );
     let initial = consumer(&workspace, "first");
     let root = initial.package_root.unwrap();
+    std::fs::write(
+        root.join("src/app/main.es"),
+        r#"
+module app.main;
+import first.library.api.Worker;
+flow main() -> unit { let definition = ^Worker; return; }
+"#,
+    )
+    .unwrap();
     let artifact = etas_package::package_metadata_artifact_path(&workspace.0.join("library"));
     let (header, mut metadata) = etas_package_metadata::package_metadata_from_artifact(
         &artifact,
@@ -1091,8 +1104,17 @@ fn binary_agent_metadata_cannot_add_a_default_entry_missing_from_the_definition(
     let diagnostic = output
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.message.contains("disagree on the default entry"))
-        .expect("conflicting binary agent metadata must be rejected at the environment boundary");
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .contains("has no matching callable or exported value signature")
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "conflicting binary agent metadata must be rejected: {:?}",
+                output.diagnostics
+            )
+        });
     assert_eq!(
         diagnostic.code,
         etas_core::DiagnosticCode::Type(etas_core::TypeDiagnosticCode::IncompleteTypeFacts)

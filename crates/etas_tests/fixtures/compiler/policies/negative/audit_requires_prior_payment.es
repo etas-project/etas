@@ -1,4 +1,4 @@
-module tests.compiler.policies.negative.missing_audit_after_payment;
+module tests.compiler.policies.negative.audit_requires_prior_payment;
 
 type Page = {
     score: i32,
@@ -123,7 +123,7 @@ let ProjectMemory =
         store = "project-main"
     );
 
-spec FixturePolicy: trace = +Payment.charge & (Audit.write << Payment.charge);
+spec FixturePolicy: trace = +Payment.charge & +Audit.write & (Audit.write << Payment.charge);
 
 flow policies_negative_missing_audit_after_payment_exercise_39(seed: i32) -> i32
     ~ FixturePolicy
@@ -135,6 +135,8 @@ flow policies_negative_missing_audit_after_payment_exercise_39(seed: i32) -> i32
     }
     let policies_negative_missing_audit_after_payment_adjust_39: i32 -> i32 = (value: i32) => value + 39;
     total = policies_negative_missing_audit_after_payment_adjust_39(total);
+    // A << G requires prior G at A; a later payment cannot guard this audit.
+    perform Audit.write("attempted payment");
     let charge = perform Payment.charge("BillingAccount", 999);
     total = total + charge.code;
     total = total + policies_negative_missing_audit_after_payment_score_39(2);

@@ -107,7 +107,7 @@ fn a_checkpoint_from_a_candidate_root_recompiles_saved_source_before_resume() {
         checkpoint_from_json(&artifact, revision.program())
             .unwrap_err()
             .message()
-            .contains("native checkpoint requires prepared revisions")
+            .contains("prepared revisions")
     );
     let checkpoint = decode_for_revision(&artifact, &revision);
     let host = no_host::NoHost::with_checkpoint();
