@@ -38,10 +38,22 @@ this SDK by default. Pass `--std-provider legacy` to select the legacy registry.
 On Linux, `std install` prepares checked SDK data, public query indices and
 rootless interpreter layouts for the matching toolchain build. The compiler records
 semantic dependencies from solved calls, types, generic bounds and Effect facts.
-The installer takes their transitive closures and packages the checked IR and
-analysis results directly. Original source is retained for diagnostics and
-reflection. `etas run` selects the smallest installed execution bundle covering
-its checked calls and methods; declaration and type indices stay shared.
+The SDK stores a shared declaration/type object, one body object per module,
+and a semantic dependency index. HIR nodes and their checked Type/Effect facts
+have stable IDs and are stored once. Each module indexes its definition bodies;
+startup decodes the definitions in the selected closure. Original source is retained for diagnostics
+and reflection. `etas run` takes the transitive closure of its checked calls and
+methods, reads only the corresponding module objects, then links those saved
+facts without parsing or solving the standard library.
+
+A derived object-pack cache combines the selected official objects. Its key
+includes the SDK manifest, entry set, compiler and runtime ABI. It lives outside
+the SDK (`$XDG_CACHE_HOME/etas/std-objects`, or `~/.cache/etas/std-objects`);
+`ETAS_STD_CACHE_ROOT` overrides that directory. Deleting it is supported: the next
+run links the canonical objects directly and rebuilds the pack. Cached bytes are
+verified against the official object hashes. Installation does not precompute
+closure images or populate this cache.
+
 Public calling signatures are normalized and imported into a frozen type
 universe during installation. Ordinary runs restore those solved facts and bind
 the caller's source symbols; a portable signature cache handles other package
@@ -54,15 +66,15 @@ only when a diagnostic or reflection operation requests its AST. SDK type
 descriptor fingerprints are also prepared during installation; startup computes
 fingerprints for the caller's new types. Standalone source applications reuse
 the public interface's installation-time validation. Unchanged imported type
-bases keep their shared frozen index. Execution bundles retain the selected
+bases keep their shared frozen index. Linked module views retain the selected
 bodies' Effect captures and environments. Installed ABI records use a byte index
 by TypeId; runtime decodes each requested record once and shares that result.
 The installation receipt binds the complete SDK manifest to the CLI's compiled
 build stamp, avoiding a repeated scan of the executable. Code and dependency
 changes regenerate this stamp.
 
-Reflection, directly imported std values, caller-performed actions and calls
-spanning the available bundles use the complete SDK. Programs with residual
+Reflection, directly imported std values and caller-performed actions currently
+load all canonical module objects. Programs with residual
 monitors retain proof rebinding;
 unpaired SDKs use the portable checking path. Runtime permissions, budgets and
 trace enforcement still apply.
@@ -75,18 +87,32 @@ python3 scripts/ci/benchmark_std_startup.py --binary /path/to/installed/bin/etas
 
 The benchmark checks a `std.text.join` program and records wall time, stage
 timings, loaded body size, selected behavior count and standard-source parse
-count. Pass `--baseline /path/to/older/bin/etas` to compare versions, or `--cpu N` to pin the samples to one CPU. The default target is a
-median below 500 ms across ten runs; pass `--max-ms 100` for a 100 ms budget.
+count, including SDK cache misses and hits. `--sdk-cache miss` deletes the derived
+cache before each process; `--sdk-cache hit` primes it once. Pass `--baseline /path/to/older/bin/etas` to compare versions, or `--cpu N` to pin the samples to one CPU. The default target is a
+median below 500 ms across 20 runs per SDK cache mode; pass `--max-ms 100` for a 100 ms budget.
 Stage timings can include nested work.
 
-A local Linux release comparison of 20 fresh processes on CPU 42, with project
-caching off, measured a 253.0 ms median for CLI 0.19.1 versus 300.4 ms for
-0.19.0 on this join program. The complete SDK contained 617 execution bundles;
-the program loaded 15 of 442 callable behaviors and parsed no standard-library
-sources. The caller reused 1,122 frozen signature types and added no signature
-types. Installed layout decoding took about 11.2 ms. The 100 ms budget remains
-unmet; public metadata loading, executable-image/layout decoding and
-runtime type correspondence remain significant costs.
+A local Linux release comparison interleaved 20 fresh processes per SDK cache
+mode on CPU 42, with project caching off:
+
+| Derived object-pack cache | CLI 0.20.0 | CLI 0.19.1 baseline |
+| --- | ---: | ---: |
+| Deleted before each process | 295.8 ms | 243.8 ms |
+| Primed before measurement | 290.6 ms | 238.7 ms |
+
+These are wall-time medians for the join program above. CLI 0.19.1 uses installed
+closure images in both cohorts and has no derived object-pack cache. Every
+0.20.0 sample parsed zero standard-library sources; object-pack misses and hits
+were verified separately. Checked object assembly took about 43.2 ms without a
+pack and 41.8 ms with one. Stage timings can include nested work.
+
+The complete 0.20.0 SDK occupies 32.37 MB, compared with 145.38 MB for the old
+617-image release. Its 51 module references resolve to 50 unique canonical
+objects, with no precomputed execution-closure images or unreferenced objects.
+Standard-library sources, public interfaces and the global interpreter layout
+are included in those SDK totals. The shared format currently adds about
+50 ms to this short program's startup compared with the old precomputed images;
+the 100 ms budget remains unmet.
 
 To inspect a program before running it:
 
