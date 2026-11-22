@@ -222,7 +222,7 @@ fn captured_agent_values_require_recompiled_native_revisions_on_checkpoint_resto
         )
         .unwrap_err()
         .message()
-        .contains("no freshly prepared revision")
+        .contains("freshly prepared revisions")
     );
     let checkpoint = etas_interpreter::api::codec::checkpoint_from_json_with_revisions(
         &Default::default(),
@@ -288,7 +288,7 @@ fn captured_old_and_new_agent_revisions_coexist_after_source_recompilation() {
     )
     .unwrap_err();
     assert!(
-        error.message().contains("no freshly prepared revision"),
+        error.message().contains("freshly prepared revisions"),
         "{error}"
     );
     let (checked, definitions, revisions) = restore_captured(CAPTURED_TWO, &source);

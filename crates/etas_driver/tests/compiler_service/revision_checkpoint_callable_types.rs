@@ -66,7 +66,7 @@ flow main() -> i32 ![Error<CompileError>] {
             flow(&checked, "good"),
             flow(&checked, "bad")
         ),
-        1
+        2
     );
     let result = etas_interpreter::api::codec::checkpoint_from_json_with_revisions(
         &Default::default(),
@@ -105,7 +105,7 @@ flow main() -> i32 ![Error<CompileError>] {
             flow(&checked, "good"),
             flow(&checked, "bad")
         ),
-        1
+        2
     );
     let error = etas_interpreter::api::codec::checkpoint_from_json_with_revisions(
         &Default::default(),
@@ -148,7 +148,7 @@ flow main() -> i32 ![Error<CompileError>] {
             flow(&checked, "count"),
             flow(&checked, "incompatible")
         ),
-        1
+        2
     );
     let error = etas_interpreter::api::codec::checkpoint_from_json_with_revisions(
         &Default::default(),

@@ -42,9 +42,7 @@ flow main(args: Array<string>) -> i32 ![] ~ NoSecrets {
 
 #[test]
 fn packaged_cli_broad_secret_constraint_rejects_a_real_action() {
-    let file = fixture(
-        "secret-prelude-denied",
-        r#"
+    let source = r#"
 module app.main;
 type ApiKey;
 spec NoSecrets: trace = -Secret;
@@ -53,10 +51,19 @@ flow protected(key: SecretKey<ApiKey>) -> unit ![Error<SecretError>] ~ NoSecrets
     return;
 }
 flow main(args: Array<string>) -> i32 ![] { return 0; }
-"#,
+"#;
+    let root = package_fixture(
+        "secret-prelude-denied",
+        &[
+            (
+                "etas.toml",
+                "[package]\nname = 'secret-prelude-denied'\nversion = '0.1.0'\nedition = '2026'\n[[bin]]\nname = 'app'\nmodule = 'app.main'\nflow = 'main'\n",
+            ),
+            ("src/app/main.es", source),
+        ],
     );
     let (code, stdout, stderr) =
-        run_process_with_command(isolated_command(), ["check", "--all", path(&file)], "");
+        run_process_with_command(isolated_command(), ["check", "--all", path(&root)], "");
     assert_eq!(code, 1, "{stderr}\n{stdout}");
     assert!(stderr.contains("TraceSpecDenied"), "{stderr}");
     assert!(!stderr.contains("IncompleteEffectFacts"), "{stderr}");

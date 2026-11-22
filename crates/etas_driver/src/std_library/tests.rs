@@ -256,12 +256,16 @@ fn sdk_keeps_public_metadata_checked_bodies_and_sources_together_after_relocatio
     let path = moved.join(&first.manifest.artifact);
     let (_, public) = etas_package_metadata::package_metadata_from_artifact(&path, &bytes).unwrap();
     assert_eq!(public.package.name, "std");
-    let decoded = etas_package_metadata::decode_metadata_artifact(&path, &bytes).unwrap();
-    assert!(
-        decoded
-            .sections
-            .contains_key(&etas_package_metadata::MetadataSectionKind::LibraryBodies)
-    );
+    for object in [
+        &second_manifest.checked_objects.index,
+        &second_manifest.checked_objects.shared,
+    ]
+    .into_iter()
+    .chain(second_manifest.checked_objects.modules.values())
+    {
+        let bytes = fs::read(moved.join(&object.path)).unwrap();
+        assert_eq!(etas_package_metadata::blake3_hash(&bytes), object.hash);
+    }
     let sdk = sdk::load_standard_library_sdk(moved.parent().unwrap()).unwrap();
     assert_eq!(sdk.manifest, first.manifest);
     let checked = sdk

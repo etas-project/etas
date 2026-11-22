@@ -3,7 +3,7 @@ use super::*;
 enum Expected {
     Value(f64),
     SchemaRepair,
-    TypeError,
+    TypeRepair,
 }
 
 #[test]
@@ -18,8 +18,8 @@ fn native_tool_json_numbers_follow_checked_parameter_types() {
         ("f32", "90", Expected::Value(90.0)),
         ("f32", "90.0", Expected::Value(90.0)),
         ("i32", "90.5", Expected::SchemaRepair),
-        ("u8", "256", Expected::TypeError),
-        ("f32", "1e300", Expected::TypeError),
+        ("u8", "256", Expected::TypeRepair),
+        ("f32", "1e300", Expected::TypeRepair),
     ] {
         let arguments = format!(r#"{{"value":{literal}}}"#);
         let (url, server) = typed_output::server(vec![
@@ -91,37 +91,53 @@ public flow main(args: Array<string>) -> i32 ![Agentic, Error<IOError>] {{
         let (code, stdout, stderr) = run_process_with_command(command(), ["run", path(&root)], "");
         shutdown_mock_server(&url);
         let requests = server.join().unwrap();
-        if !matches!(expected, Expected::TypeError) {
-            assert_eq!(code, 0, "{ty}/{literal}: {stdout}\n{stderr}");
-            assert!(stderr.is_empty(), "{stderr}");
-            assert_eq!(stdout, "finished\n");
-            assert_eq!(requests.len(), 2);
-            let messages = requests[1]["messages"].as_array().unwrap();
-            let results: Vec<_> = messages
-                .iter()
-                .filter(|message| message["role"] == "tool")
-                .collect();
-            assert_eq!(results.len(), 1);
-            assert_eq!(results[0]["tool_call_id"], "echo-1");
-            let value: serde_json::Value =
-                serde_json::from_str(results[0]["content"].as_str().unwrap()).unwrap();
-            match expected {
-                Expected::Value(expected) => assert_eq!(
+        assert_eq!(code, 0, "{ty}/{literal}: {stdout}\n{stderr}");
+        assert!(stderr.is_empty(), "{stderr}");
+        assert_eq!(stdout, "finished\n");
+        assert_eq!(requests.len(), 2);
+        let messages = requests[1]["messages"].as_array().unwrap();
+        let results: Vec<_> = messages
+            .iter()
+            .filter(|message| message["role"] == "tool")
+            .collect();
+        match expected {
+            Expected::Value(expected) => {
+                assert_eq!(results.len(), 1, "{ty}/{literal}");
+                assert_eq!(results[0]["tool_call_id"], "echo-1");
+                let value: serde_json::Value =
+                    serde_json::from_str(results[0]["content"].as_str().unwrap()).unwrap();
+                assert_eq!(
                     value.as_f64().unwrap().to_bits(),
                     expected.to_bits(),
                     "{ty}/{literal}"
-                ),
-                Expected::SchemaRepair => assert_eq!(value["kind"], "InvalidToolArguments"),
-                Expected::TypeError => unreachable!(),
+                );
             }
-        } else {
-            assert_eq!(code, 3, "{ty}/{literal}: {stdout}\n{stderr}");
-            assert!(
-                stderr.contains("did not match the source tool parameter type"),
-                "{stderr}"
-            );
-            assert!(stdout.is_empty(), "{stdout}");
-            assert_eq!(requests.len(), 1);
+            Expected::SchemaRepair => {
+                let schema_feedback = messages.iter().any(|message| {
+                    message["role"] == "user"
+                        && message["content"].as_str().is_some_and(|content| {
+                            content.contains("The previous tool request was invalid")
+                        })
+                });
+                assert!(
+                    schema_feedback && results.is_empty(),
+                    "{ty}/{literal}: {messages:?}"
+                );
+            }
+            Expected::TypeRepair => {
+                assert_eq!(results.len(), 1, "{ty}/{literal}: {messages:?}");
+                assert_eq!(results[0]["tool_call_id"], "echo-1");
+                let value: serde_json::Value =
+                    serde_json::from_str(results[0]["content"].as_str().unwrap()).unwrap();
+                assert_eq!(value["name"], "Err", "{ty}/{literal}: {value}");
+                assert_eq!(value["fields"][0]["code"], "invalid_arguments");
+                assert!(
+                    value["fields"][0]["message"]
+                        .as_str()
+                        .unwrap()
+                        .contains("did not match the source tool parameter type")
+                );
+            }
         }
     }
 }

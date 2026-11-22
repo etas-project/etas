@@ -1707,7 +1707,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
 
     let checkpoint_path = checkpoints.join("checkpoint-0.json");
     let artifact = read_checkpoint_file(&checkpoint_path);
-    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v76");
+    assert_eq!(artifact["schema"], "etas.cli.interpreter-checkpoint.v102");
 }
 
 #[test]
@@ -2647,6 +2647,9 @@ flow main(args: Array<string>) -> i32 ![Console.stdout_write, Error<CompileError
             .find(|summary| summary.item.last().is_some_and(|name| name == "identity"))
             .expect("external identity must have a checked effect summary");
         source.action_trace = etas_frontend::ProjectExternalActionTraceInput::Empty;
+        source.behavior = None;
+        source.handler_requests = None;
+        source.requested_actions.tail = Some("E".into());
         let rejected = etas_frontend::Frontend.check_project(malformed);
         assert!(
             rejected.checked.is_none(),

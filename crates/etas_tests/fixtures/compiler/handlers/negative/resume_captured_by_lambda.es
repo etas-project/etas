@@ -17,7 +17,7 @@ flow main(args: Array<string>) -> i32 ![]
                 resume true;
                 return value;
             };
-            return later(1) > 0;
+            finish later(1) > 0;
         }
     };
     if accepted {

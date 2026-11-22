@@ -7,7 +7,7 @@ flow bfs(queue: List<i32>) -> i32 {
     while head < len(queue) limit Iterations(4096) {
         queue.push(queue[head]);
     }
-    return head;
+    return 0;
 }
 
 flow main(args: Array<string>) -> i32 {

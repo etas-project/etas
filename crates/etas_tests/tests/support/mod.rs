@@ -30,6 +30,17 @@ pub fn read_source(path: &Path) -> SourceFile {
 pub fn run_cli<const N: usize>(args: [&str; N]) -> (i32, String, String) {
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
+    // These compiler fixtures compare the legacy registry's exact declarations
+    // and identities; source SDK integration tests supply their own provider.
+    let mut args = Vec::from(args);
+    if !args.iter().any(|arg| {
+        matches!(*arg, "--std-provider" | "--sysroot")
+            || arg.starts_with("--std-provider=")
+            || arg.starts_with("--sysroot=")
+    }) {
+        let start = usize::from(args.first() == Some(&"etas"));
+        args.splice(start..start, ["--std-provider", "legacy"]);
+    }
     let code = etas_cli::run_with(args, &mut stdout, &mut stderr);
 
     (
