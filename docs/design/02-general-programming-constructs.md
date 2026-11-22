@@ -1106,33 +1106,14 @@ let counts: Map<string, i32> = {};
 let seen: Set<string> = #{};
 ```
 
-Sequence-like containers use the compiler-known `Index` spec for checked indexing APIs:
-
-```etas
-impl Array<T> {
-    flow len(self) -> usize;
-    flow get<I ~ Index>(self, index: I) -> Option<T>;
-    flow at<I ~ Index>(self, index: I) -> T; // infers Error<IndexError>
-    flow push(self, value: T) -> Array<T>;
-    flow pop(self) -> (Array<T>, Option<T>);
-    flow extend(self, values: Array<T>) -> Array<T>;
-}
-
-impl List<T> {
-    flow is_empty(self) -> bool;
-    flow head(self) -> Option<T>;
-    flow tail(self) -> Option<List<T>>;
-    flow push(self, value: T) -> List<T>; // cons-style push; returns value :: self
-    flow pop(self) -> (List<T>, Option<T>); // returns tail and previous head
-}
-
-impl Slice<T> {
-    flow len(self) -> usize;
-    flow get<I ~ Index>(self, index: I) -> Option<T>;
-    flow at<I ~ Index>(self, index: I) -> T; // infers Error<IndexError>
-    flow to_array(self) -> Array<T>;
-}
-```
+Sequence-like containers use the compiler-known `Index` spec for checked
+indexing APIs. The authoritative method tables, equality/hash/order bounds,
+iteration order and complexity contracts are in
+[Collections And Key Contracts](19-standard-library.md#10-collections-and-key-contracts).
+Map keys and set elements require `Hash`, which includes the standard `Eq`
+contract. Their literals do not bypass those bounds. Cached lengths and storage
+metadata are private observations; users cannot assign them to forge an
+inconsistent container or slice.
 
 `at` and `[]` are checked operations. On an out-of-bounds index, they raise
 `Error<IndexError>`. Code that wants an explicit value can capture that effect:
@@ -1234,28 +1215,12 @@ current = current.push("reviewed");
 
 Persistent mutable state is represented by `Store<K, V>` APIs, not by hidden shared mutation inside ordinary collections. Local in-place mutation may be added later as an optimization for non-escaping values, but it must remain observationally equivalent to value semantics or be exposed through explicit mutable APIs that the analyzer can see.
 
-For efficient local construction, the standard library may provide explicit
-builder types:
-
-```etas
-var b = Array.builder<Paper>();
-
-for paper in papers
-    limit Iterations(papers.len())
-{
-    b.push(paper); // mutates the local builder handle, not an Array<T>
-}
-
-let built: Array<Paper> = b.freeze();
-```
-
-Builder mutation is a visible mutable API. A builder is an opaque local
-construction handle, not an ordinary immutable collection. Builder values should
-not be prompt-encodable, schema-encodable for model tool calls, stored in
-persistent memory, or passed to agents unless a later design explicitly adds
-linear/unique ownership for them. This keeps high-performance construction
-available without making ordinary `Array<T>` or `List<T>` shared mutable
-objects.
+Bulk construction uses the specified `from_iter`, `from_entries` and iterator
+consumer APIs rather than an unspecified mutable builder protocol. Their
+implementations may reuse private buffers or immutable structure while
+preserving the same value semantics. See
+[Iteration And Effectful Consumption](19-standard-library.md#11-iteration-and-effectful-consumption)
+for pure lazy adapters and callbacks whose effects occur during consumption.
 
 ## 8. Encapsulation and Methods
 

@@ -220,6 +220,22 @@ Record field expressions are evaluated in source order. Implementations may
 then place the resulting values in a canonical layout, but must not reorder
 observable evaluation to normalize field order.
 
+Standard collection abstractions use their specified logical equality, not the
+fields of a particular source/runtime representation. Sequence collections
+compare elements in order; maps compare key/value bindings and sets compare
+membership independently of insertion order. Hash seeds, cached lengths,
+backing identity and tree/heap metadata do not participate. This exception
+attaches to the resolved standard contracts; an arbitrary user record cannot
+opt out of field comparison by hiding fields. Equality does not permit the
+compiler to reorder observable iteration.
+
+The standard `Eq` spec witnesses reflexive equality; not every type admitting
+`==` satisfies it. In particular, raw floating-point NaNs prevent automatic
+`Eq`/`Hash` evidence. `Hash` includes `Eq`, and equal values must hash equally
+under the same initial hasher. The exact standard evidence, ordered-container
+comparison semantics and API bounds are specified in
+[Collections And Key Contracts](19-standard-library.md#102-equality-hashing-and-order).
+
 ### 1.2 Structured Output Types
 
 Agent output should be schema-checked.

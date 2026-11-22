@@ -11,6 +11,29 @@ Console I/O and runtime substrate contracts remain in
 [Standard IO](03-agents-tools-prompts-memory.md#24-standard-io) and
 [Standard Substrate API Shape](03-agents-tools-prompts-memory.md#25-standard-substrate-api-shape).
 
+**API Index**
+
+Tables specify required public contracts, not implementation-status claims.
+Receiver methods omit the implicit `self` argument in API rows. Generic owner
+parameters come from the receiver or expected result type; method parameters
+such as `<U, effect E>` are shown explicitly. A row grouping several names
+assigns its contract to each name unless the behavior column distinguishes them.
+
+| Area | Owning Module | API Reference |
+|---|---|---|
+| Text and Unicode | `std.text`, `std.text.unicode`, `std.char`, `std.codec.text` | [Section 1](#1-strings-and-text-apis) |
+| Tasks and scheduling | `std.task`, `std.task.scheduler` | [Section 2](#2-task-and-scheduling-apis) |
+| JSON | `std.json` | [Section 3](#3-json-values) |
+| Model steps and native tool dispatch | `std.agent`, `std.agent.conversation`, `std.tool` | [Section 4](#4-single-step-agent-interaction) |
+| Numeric helpers | `std.math` | [Section 5](#5-numeric-helpers) |
+| Agent groups | `std.agent.group` | [Section 6](#6-round-robin-groups) |
+| Logical trace stages | `std.runtime.trace` | [Section 7](#7-virtual-trace-stages) |
+| Sanitization and release | `std.security.declassify` | [Section 8](#8-sanitization-and-declassification) |
+| Containers, equality, hashing and ordering | `std.collections` | [Section 10](#10-collections-and-key-contracts) |
+| Iteration and callback consumers | `std.collections` | [Section 11](#11-iteration-and-effectful-consumption) |
+| Sequence algorithms | `std.collections` | [Section 12](#12-generic-sequence-algorithms) |
+| Optional values and results | `std.option`, `std.result` | [Section 13](#13-option-and-result-apis) |
+
 ## 1. Strings And Text APIs
 
 ### 1.1 Modules And Value Semantics
@@ -899,21 +922,22 @@ typed failure. Such choices remain ordinary Etas code, not hidden behavior of
 ### 5.1 Signatures And Numeric Evidence
 
 The following contracts replace the signature-only legacy declarations.
-They are accepted design targets as of 2026-11-16. Their implementation and
-installed-provider acceptance remain engineering work.
+Section 5.2 specifies their numeric edge cases.
 
 ```etas
 module std.math;
 
 @std.role("std.math.Number")
 public spec Number;
-
-public flow abs<T ~ Number>(value: T) -> T ![];
-public flow min<T ~ Number>(left: T, right: T) -> T ![];
-public flow max<T ~ Number>(left: T, right: T) -> T ![];
 ```
 
-`Number` is a new compiler-known primitive numeric spec. Its declaration is
+| `std.math` API | Return Type | Contract |
+|---|---|---|
+| `abs<T ~ Number>(value: T)` | `T ![]` | Magnitude at the original numeric width; signed-minimum overflow is a checked arithmetic fault. |
+| `min<T ~ Number>(left: T, right: T)` | `T ![]` | Smaller operand under the numeric/NaN/signed-zero rules in section 5.2. |
+| `max<T ~ Number>(left: T, right: T)` | `T ![]` | Larger operand under the same rules. |
+
+`Number` is a compiler-known primitive numeric spec. Its declaration is
 owned by Etas source. Compiler evidence admits the primitive signed and
 unsigned integer families, `isize`, `usize`, `f32` and `f64`. User declarations
 cannot extend that primitive family. Generic bodies bounded by `Number` may
@@ -984,14 +1008,11 @@ public type RoundRobinResult<S> = {
     public turns: usize,
     public reason: GroupStop,
 };
-
-public flow round_robin<S, effect E>(
-    participants: Array<(S) -> S ![E]>,
-    initial: S,
-    max_turns: usize,
-    stop_when: (S) -> bool ![],
-) -> RoundRobinResult<S> ![E, Error<GroupError>];
 ```
+
+| `std.agent.group` API | Return Type | Contract |
+|---|---|---|
+| `round_robin<S, effect E>(participants: Array<(S) -> S ![E]>, initial: S, max_turns: usize, stop_when: (S) -> bool ![])` | `RoundRobinResult<S> ![E, Error<GroupError>]` | Sequential state-transforming callbacks; reject an empty roster and preserve callback effects and inherited constraints. |
 
 The source implementation performs these steps in order.
 
@@ -1079,18 +1100,12 @@ public enum SecurityError {
     Unavailable,
     StrategyMismatch,
 }
-
-public flow sanitize<T, U>(
-    value: Untrusted<T>,
-    strategy: SanitizationStrategy<T, U>,
-) -> Sanitized<U> ![Error<SecurityError>];
-
-public flow declassify<T, U>(
-    value: Secret<T>,
-    strategy: DeclassificationStrategy<T, U>,
-    reason: string,
-) -> Sanitized<U> ![Secret, Error<SecurityError>];
 ```
+
+| `std.security.declassify` API | Return Type | Contract |
+|---|---|---|
+| `sanitize<T, U>(value: Untrusted<T>, strategy: SanitizationStrategy<T, U>)` | `Sanitized<U> ![Error<SecurityError>]` | Execute the validated typed strategy and retain its processing provenance. |
+| `declassify<T, U>(value: Secret<T>, strategy: DeclassificationStrategy<T, U>, reason: string)` | `Sanitized<U> ![Secret, Error<SecurityError>]` | Authorize and audit release, execute the validated strategy, and retain release provenance. |
 
 Both strategy types are immutable opaque references issued by trusted bindings.
 Each identifies a validated strategy implementation, its revision and exact
@@ -1193,3 +1208,461 @@ protected wrapper/provenance operations.
 
 The implementation tasks, code locations and acceptance cases are recorded in
 [Legacy Flow Implementation](../migrations/legacy-flow-implementation.md).
+
+### 9.1 Cross-Provider Acceptance
+
+The API tables are the shared source/legacy contract, not permission to silently
+fall back from one provider to another. Keep implementation coverage in the
+engineering test matrix; mark a row available only for the provider actually
+checked. Intentional changes, including unordered logical map/set equality and
+new hash bounds, must be recorded as contract changes rather than concealed as
+representation-only migration.
+
+| Area | Required Acceptance Evidence |
+|---|---|
+| Container invariants | Reject external metadata writes and forged views; `len`, emptiness, lookup and iteration agree after every update. |
+| Equality/hash/order | Primitive and nominal keys, collisions, equal records with different construction order, differing map/set insertion orders, signed zeros/NaNs, lawful custom comparators and stable duplicate behavior. |
+| Snapshot preservation | Retain old values, slices and iterators while updating/removing/clearing current values; verify old observations and nested payload sharing remain correct. |
+| Cost and storage | Measure comparisons, node/header copies, allocations and retained slots separately at growing sizes, for both reusable backing and shared snapshots. Include array draining, map construction, ordered deletion and long-lived queue churn. |
+| Iterator consumption | Empty/exhausted iterators, repeated use, adapter composition, zero-sized chunks, short circuiting and bounded lazy allocation. |
+| Effects and capture | Pure lazy adapters reject state-dependent/effectful callbacks; consumers propagate callback effects/actions/capture dependencies across source imports and package metadata. |
+| Failure behavior | Invalid indexes use the specified error effect; callback failure stops later work without rolling back completed external actions; `unwrap` terminates rather than silently supplying a value. |
+| Installed delivery | Build and run against the installed source SDK, including separately compiled imports. Legacy native-container tests alone do not certify source SDK behavior or performance. |
+
+## 10. Collections And Key Contracts
+
+### 10.1 Shared Rules And Cost Model
+
+These are standard-library types and flows, not additional language keywords.
+The [literal, indexing and value-semantics rules](02-general-programming-constructs.md#7-composite-types)
+remain the source-language contract. Operations return updated values; they do
+not mutate another observer's copy or implicitly add a `var self` receiver.
+Discarding an update result leaves the original value unchanged.
+
+| Shared Contract | Required Behavior |
+|---|---|
+| Internal metadata | Cached lengths, capacity, backing storage, tree heights, hash seeds and heap indexes are private. Users cannot assign them or construct an inconsistent container. `len()` and `is_empty()` are observations, not writable fields. |
+| Snapshots | Updating one value preserves all previously retained values, slices and iterators. Physical sharing and copy-on-write are permitted. |
+| Checked access | `I ~ Index` follows the existing conversion rules. `get` returns `None` for an invalid index; `at`, indexed update and checked slicing raise `Error<IndexError>`. |
+| Allocation | Check size arithmetic and obey inherited allocation/execution limits. Overflow and resource exhaustion retain their existing execution-fault behavior; do not wrap lengths or invent successful truncated results. |
+| Value contents | Element types retain their effects, capture dependencies, secrecy and scope/affine restrictions. A container cannot hide an invalid copy or escape. |
+| Equality | Arrays, lists, slices, stacks, queues and deques compare their logical element sequences. Map equality compares key/value bindings; set equality compares membership, independently of insertion order. Private storage and hash seeds are not part of equality. |
+| Equality bounds | Sequence equality requires element equality; map equality additionally requires value equality. Ordered containers with user comparators and priority queues have no implicit equality/hash contract. |
+| Stable iteration | Map and set iteration follows first insertion order. Replacing an existing entry retains its position; removing and reinserting appends it. Literal fields/entries are evaluated in source order, including overwritten duplicates. |
+
+Costs below count elements `n`, appended elements `m`, or emitted elements `k`.
+Hashing, equality, comparison, callback and element-copy costs are additional;
+large keys are not constant-cost merely because they occupy one slot. Expected
+hash-table bounds assume a suitable hash distribution; collisions can degrade
+lookup to `O(n)`. They are not worst-case security guarantees.
+
+Update costs distinguish a value whose backing can be reused from a retained
+snapshot. An array/hash-container update may copy `O(n)` element headers when
+the old backing is shared. This is not a requirement to deep-copy payloads.
+Tree updates should copy only an `O(log n)` path when retaining an old version.
+Amortized queue/deque bounds apply to a linear update history; repeatedly
+branching from the same old version must be measured separately. Read-only
+queries must not copy a complete container.
+
+### 10.2 Equality, Hashing And Order
+
+| `std.collections` Contract / API | Result | Required Behavior |
+|---|---|---|
+| `Eq` | Type spec | Evidence that the existing value equality is reflexive, symmetric and transitive. It does not introduce an overload of `==`. |
+| `Hash: Eq` | Behavioral type spec | Requires `hash(self, state: Hasher) -> Hasher ![]`. Feed the value into a value-semantic hash state; equal values must produce the same final hash from the same initial state. |
+| `Order` | Behavioral type spec | Requires `compare(self, other: Self) -> i32 ![]`; negative, zero and positive mean less, equivalent and greater. Comparison defines a stable total order and equivalence relation. |
+| `Hasher.new(seed: u64 = 0)` | `Hasher ![]` | Create an empty deterministic non-cryptographic state. The default constructor performs no implicit entropy or host action. |
+| `Hasher.write(data: bytes)` | `Hasher ![]` | Return a state extended by these bytes, preserving the input state. Processing is linear in input bytes. |
+| `Hasher.finish()` | `u64 ![]` | Observe the current digest without changing the state. Hash values are not a persistent encoding, signature, or cryptographic digest. |
+
+Recognition of `Eq` attaches to the resolved standard spec, not its spelling.
+Standard `Eq`/`Hash` implementations cover integers, booleans, chars, strings and
+bytes. Structural equality evidence extends to finite tuples/records/enums and
+supported value collections when their components satisfy the relevant contract.
+Explicit `Eq` conformance must pass the same standard evidence checks; it is
+not an unchecked assertion that an arbitrary type's `==` is reflexive.
+`Hash` implementations use the corresponding logical value and nominal identity,
+not addresses or storage layout; structural hashing must frame fields/variants
+unambiguously. Ordinary nominal data with hashable components receive this
+checked structural implementation unless they provide an explicit conforming
+implementation. No new derive keyword is required. Functions, handlers, secrets
+and resource handles do not acquire equality or hashing merely because their
+implementation contains a comparable address.
+
+Raw `f32`/`f64` retain ordinary floating equality and do not receive `Eq`/`Hash`
+evidence: NaN breaks reflexivity. Applications needing such hash keys use a
+nominal wrapper over an integer/byte encoding, with a documented normalization
+and compatible hash contract; merely wrapping an unchanged float field does
+not establish reflexive equality. Their standard `Order` instead orders raw
+encodings: negative encodings in reverse bit order, followed by nonnegative
+encodings in bit order. It distinguishes
+signed zeros and NaN encodings; identical encodings compare as zero. `Order`
+therefore does not imply `Eq` or redefine floating `==`.
+
+Hashing and key comparators must be deterministic, non-suspending and independent
+of mutable captured/resource state while a container retains them, with no
+observable requested actions. `![]` alone does not prove those properties.
+Algebraic laws remain implementation obligations; type conformance alone does
+not prove a user's comparator transitive. Violating these obligations must not
+compromise memory safety or grant host authority.
+Hash equality is required only within the same algorithm/version and initial
+state. Hash seeds do not change iteration or logical equality. Hashing a map or
+set must be independent of its insertion order and private hasher.
+
+### 10.3 Arrays, Lists And Slices
+
+Unless a row shows an effect, its escaping row is `![]`. `from_iter` consumes
+the pure iterator in order without first making a second complete input copy.
+
+| Owner / API | Return Type | Behavior And Cost |
+|---|---|---|
+| `Array<T>.new()` | `Array<T>` | Empty array; `O(1)`. |
+| `Array<T>.from_iter(items: Iter<T>)` | `Array<T>` | Bulk construction; `O(n)` excluding iterator work. |
+| `Array<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `Array<T>.get<I ~ Index>(index: I)` | `Option<T>` | Optional access; `O(1)`. |
+| `Array<T>.at<I ~ Index>(index: I)` | `T ![Error<IndexError>]` | Checked access; `O(1)`. |
+| `Array<T>.first()`, `last()` | `Option<T>` | First/last element; `None` on empty; `O(1)`. |
+| `Array<T>.push(value: T)` | `Array<T>` | Append; amortized `O(1)` with reusable backing. |
+| `Array<T>.pop()` | `(Array<T>, Option<T>)` | Remove the last element; `O(1)` with reusable backing. Empty returns an empty array and `None`; do not rebuild the prefix by traversal. |
+| `Array<T>.extend(values: Array<T>)` | `Array<T>` | Append in argument order; amortized `O(m)` with reusable backing. |
+| `Array<T>.set<I ~ Index>(index: I, value: T)` | `Array<T> ![Error<IndexError>]` | Replace an existing element; `O(1)` with reusable backing. |
+| `Array<T>.insert<I ~ Index>(index: I, value: T)` | `Array<T> ![Error<IndexError>]` | Insert before the index; `len()` is allowed; `O(n)`. |
+| `Array<T>.remove<I ~ Index>(index: I)` | `(Array<T>, T) ![Error<IndexError>]` | Remove an existing index and return its old value; `O(n)`. |
+| `Array<T>.reverse()` | `Array<T>` | Reversed value; `O(n)`. |
+| `Array<T>.clear()` | `Array<T>` | Empty value; old snapshots remain valid. |
+| `Array<T>.iter()` | `Iter<T>` | Lazy element-order snapshot; `O(1)` construction. |
+| `List<T>.new()`, `from_iter(items: Iter<T>)` | `List<T>` | Empty / ordered bulk construction; `O(1)` / `O(n)`. |
+| `List<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `len` is `O(n)`; emptiness is `O(1)`. |
+| `List<T>.head()`, `tail()` | `Option<T>`, `Option<List<T>>` respectively | `None` on empty; otherwise observe head/tail; `O(1)`. |
+| `List<T>.get<I ~ Index>(index: I)` | `Option<T>` | Traverse to the requested position; `O(n)` worst case. |
+| `List<T>.at<I ~ Index>(index: I)` | `T ![Error<IndexError>]` | Checked positional access; `O(n)` worst case. |
+| `List<T>.push(value: T)` | `List<T>` | Prepend, equivalent to `value :: self`; `O(1)`. |
+| `List<T>.pop()` | `(List<T>, Option<T>)` | Return tail and head; empty returns itself and `None`; `O(1)`. |
+| `List<T>.extend(prepended: List<T>)` | `List<T>` | Preserve the existing cons-oriented contract: `prepended` followed by `self`; `O(m)`, sharing the old tail. Unlike array `extend`, this prepends. |
+| `List<T>.reverse()` | `List<T>` | Reversed list; `O(n)`. |
+| `List<T>.iter()` | `Iter<T>` | Lazy head-to-tail snapshot; `O(1)` construction. |
+| `Slice<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `Slice<T>.get<I ~ Index>(index: I)` | `Option<T>` | Index relative to the view; `O(1)`. |
+| `Slice<T>.at<I ~ Index>(index: I)` | `T ![Error<IndexError>]` | Checked view-relative access; `O(1)`. |
+| `Slice<T>.first()`, `last()` | `Option<T>` | First/last view element; `O(1)`. |
+| `Slice<T>.to_array()` | `Array<T>` | Materialize this view, not its full source; `O(n)`. |
+| `Slice<T>.iter()` | `Iter<T>` | Lazy view-order snapshot; `O(1)` construction. |
+
+Range-based slicing retains the established syntax and boundary rules. Creating
+an array/slice view is `O(1)` and keeps its source alive; changing the source
+binding afterwards cannot change the view. Neither `.length` assignment nor a
+public constructor may forge a view beyond its source bounds. Costs of releasing
+an unshared value, including `clear`, may be linear in the released storage.
+
+### 10.4 Maps And Sets
+
+`Map<K, V>` keys and `Set<T>` elements require the standard `Hash` contract,
+which includes `Eq`. Literal inference retains these requirements; unconstrained
+generic keys do not bypass them. Values need not be hashable merely to be stored.
+`new()` uses `Hasher.new()`; `with_hasher` stores an independent base state and
+starts each key hash from that state. Tables give expected hash-container costs,
+subject to section 10.1's collision and retained-snapshot qualifications.
+
+| Owner / API | Return Type | Behavior And Cost |
+|---|---|---|
+| `Map<K, V>.new()`, `with_hasher(base: Hasher)` | `Map<K, V>` | Empty map; `O(1)`. |
+| `Map<K, V>.from_entries(items: Iter<(K, V)>)` | `Map<K, V>` | Bulk build in iterator order; duplicate keys keep the last value and first position; expected `O(n)`. |
+| `Map<K, V>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `Map<K, V>.get(key: K)` | `Option<V>` | Missing is `None`; expected `O(1)`. |
+| `Map<K, V>.contains_key(key: K)` | `bool` | Membership; expected `O(1)`. |
+| `Map<K, V>.insert(key: K, value: V)` | `Map<K, V>` | Insert/replace, retaining an existing key's position; expected amortized `O(1)` with reusable backing. |
+| `Map<K, V>.remove(key: K)` | `Map<K, V>` | Remove if present; missing is unchanged; expected amortized `O(1)` with reusable backing. |
+| `Map<K, V>.take(key: K)` | `(Map<K, V>, Option<V>)` | Remove and return the old value; same bounds as `remove`. |
+| `Map<K, V>.update<effect E>(key: K, f: Option<V> -> Option<V> ![E])` | `Map<K, V> ![E]` | Call `f` once; `Some` inserts/replaces and `None` removes; no mutable entry reference escapes. |
+| `Map<K, V>.merge<effect E>(other: Map<K, V>, resolve: (K, V, V) -> V ![E])` | `Map<K, V> ![E]` | Visit `other` in iteration order; resolve only conflicts using key/left/right values. Retain left positions and append new right keys; expected `O(n + m)` plus callbacks. |
+| `Map<K, V>.iter()`, `keys()`, `values()` | `Iter<(K, V)>`, `Iter<K>`, `Iter<V>` respectively | Lazy insertion-order snapshots; traversal linear in live entries with amortized bounded tombstone work. |
+| `Map<K, V>.clear()` | `Map<K, V>` | Empty map retaining its hashing policy. |
+| `Set<T>.new()`, `with_hasher(base: Hasher)` | `Set<T>` | Empty set; `O(1)`. |
+| `Set<T>.from_iter(items: Iter<T>)` | `Set<T>` | Keep first occurrences in input order; expected `O(n)`. |
+| `Set<T>.from_list(items: List<T>)` | `Set<T>` | Compatibility convenience with the same semantics as `from_iter(items.iter())`. |
+| `Set<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `Set<T>.contains(value: T)` | `bool` | Membership; expected `O(1)`. |
+| `Set<T>.insert(value: T)`, `remove(value: T)` | `Set<T>` | Existing insert/missing remove leaves the logical value unchanged; expected amortized `O(1)` with reusable backing. |
+| `Set<T>.union(other: Set<T>)` | `Set<T>` | Left order, then previously absent right elements; expected `O(n + m)`. |
+| `Set<T>.intersection(other: Set<T>)`, `difference(other: Set<T>)` | `Set<T>` | Retain qualifying left elements in left order; expected `O(n + m)`. |
+| `Set<T>.symmetric_difference(other: Set<T>)` | `Set<T>` | Left-only elements, then right-only elements; expected `O(n + m)`. |
+| `Set<T>.is_subset(other: Set<T>)`, `is_disjoint(other: Set<T>)` | `bool` | Membership tests with short circuiting; expected `O(n + m)`. |
+| `Set<T>.iter()` | `Iter<T>` | Lazy insertion-order snapshot. |
+| `Set<T>.clear()` | `Set<T>` | Empty set retaining its hashing policy. |
+
+The prior `Map.from_entries(List<(K, V)>)` form remains a compatibility overload
+and delegates to the iterator form. Rehashing, removal and slot compaction must
+not reorder surviving entries. Replacing an equal key preserves the stored key
+representative. A failed update/merge callback returns no updated container;
+external actions already completed by the callback are not rolled back.
+
+### 10.5 Stacks, Queues And Deques
+
+| Owner / API | Return Type | Behavior And Cost |
+|---|---|---|
+| `Stack<T>.new()`, `Queue<T>.new()`, `Deque<T>.new()` | Respective container | Empty value; `O(1)`. |
+| Each container's `from_iter(items: Iter<T>)` | Respective container | `O(n)` bulk build; iterator order is the subsequent pop order for stack/queue and front-to-back order for deque. |
+| Each container's `len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `Stack<T>.push(value: T)`, `Queue<T>.push(value: T)` | Respective container | Add to stack top / queue back; amortized `O(1)` with reusable backing. |
+| `Stack<T>.pop()`, `Queue<T>.pop()` | `(Container<T>, Option<T>)` | Remove stack top / queue front; `None` on empty; amortized `O(1)`. `Container` here denotes the respective owner, not a new type. |
+| `Stack<T>.peek()`, `Queue<T>.peek()` | `Option<T>` | Observe the next pop result without removing it; `O(1)`. |
+| `Deque<T>.push_front(value: T)`, `push_back(value: T)` | `Deque<T>` | Add at the selected end; amortized `O(1)`. |
+| `Deque<T>.pop_front()`, `pop_back()` | `(Deque<T>, Option<T>)` | Remove at the selected end; `None` on empty; amortized `O(1)`. |
+| `Deque<T>.peek_front()`, `peek_back()` | `Option<T>` | Observe an end without removal; `O(1)`. |
+| Each container's `iter()` | `Iter<T>` | Stack pop order / FIFO order / front-to-back order; linear traversal. |
+| Each container's `clear()` | Respective container | Empty value; retained snapshots remain unchanged. |
+
+Queue/deque rebalancing may take `O(n)` for an individual operation. A sequence
+of operations must meet its amortized bound; peeking must not repeatedly rebuild
+the same entire queue/deque on every read. These APIs do not create synchronized
+shared queues; task-safe shared resources require their explicit ownership and
+synchronization contract.
+
+### 10.6 Ordered Maps And Sets
+
+Default construction requires `K ~ Order` / `T ~ Order`. The existing
+`new(compare: (K, K) -> i32 ![])` or element-equivalent overload selects a
+custom total order. Comparator equivalence, not an unrelated `==`, identifies
+keys. Replacing an equivalent key retains its original representative.
+
+| Owner / API | Return Type | Behavior And Cost |
+|---|---|---|
+| `OrderedMap<K, V>.new()`, `new(compare: (K, K) -> i32 ![])` | `OrderedMap<K, V>` | Empty map; `O(1)`. |
+| `OrderedMap<K, V>.from_entries(items: Iter<(K, V)>)`, `from_entries(items: Iter<(K, V)>, compare: (K, K) -> i32 ![])` | `OrderedMap<K, V>` | Default/custom-order bulk build; last equivalent value wins while the first key representative is retained; `O(n log n)` comparisons or better. |
+| `OrderedMap<K, V>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `OrderedMap<K, V>.get(key: K)`, `contains_key(key: K)` | `Option<V>`, `bool` respectively | Ordered lookup; `O(log n)` comparisons. |
+| `OrderedMap<K, V>.insert(key: K, value: V)`, `remove(key: K)` | `OrderedMap<K, V>` | Balanced update; `O(log n)` comparisons/path work. Missing removal preserves the value. |
+| `OrderedMap<K, V>.take(key: K)` | `(OrderedMap<K, V>, Option<V>)` | Remove and return the old value; `O(log n)`. |
+| `OrderedMap<K, V>.first()`, `last()` | `Option<(K, V)>` | Least/greatest entry; `O(log n)` or better. |
+| `OrderedMap<K, V>.lower_bound(key: K)`, `upper_bound(key: K)` | `Option<(K, V)>` | First key greater than or equal to / strictly greater than the argument; `O(log n)`. |
+| `OrderedMap<K, V>.iter()`, `keys()`, `values()` | `Iter<(K, V)>`, `Iter<K>`, `Iter<V>` respectively | Ascending key order; `O(n)` traversal and `O(log n)` cursor state. |
+| `OrderedMap<K, V>.range(lower: Option<K>, upper: Option<K>, include_lower: bool = true, include_upper: bool = false)` | `Iter<(K, V)>` | Lazy bounded traversal; `None` is unbounded; `O(log n + k)` consumption. |
+| `OrderedSet<T>.new()`, `new(compare: (T, T) -> i32 ![])` | `OrderedSet<T>` | Empty set; `O(1)`. |
+| `OrderedSet<T>.from_iter(items: Iter<T>)`, `from_iter(items: Iter<T>, compare: (T, T) -> i32 ![])` | `OrderedSet<T>` | Default/custom-order bulk build; retain the first equivalent representative; `O(n log n)` comparisons or better. |
+| `OrderedSet<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `OrderedSet<T>.contains(value: T)` | `bool` | `O(log n)`. |
+| `OrderedSet<T>.insert(value: T)`, `remove(value: T)` | `OrderedSet<T>` | Balanced update; `O(log n)`. |
+| `OrderedSet<T>.first()`, `last()`, `lower_bound(value: T)`, `upper_bound(value: T)` | `Option<T>` | Corresponding ordered-map rule; `O(log n)` or better. |
+| `OrderedSet<T>.iter()` | `Iter<T>` | Ascending order; `O(n)` traversal. |
+| `OrderedSet<T>.range(lower: Option<T>, upper: Option<T>, include_lower: bool = true, include_upper: bool = false)` | `Iter<T>` | The same bound rules and `O(log n + k)` consumption. |
+| Either container's `clear()` | Respective container | Empty value retaining the comparator. |
+
+All rows in this subsection have `![]`. Inverted or mutually exclusive bounds
+produce an empty iterator. These key bounds deliberately do not use `Range<K>`:
+the language's `Range<I>` requires `Index`, whereas ordered keys may be strings
+or other ordered data. Shape balancing and deletion must retain height/index
+invariants in both current and previously shared versions.
+
+### 10.7 Priority Queues
+
+Default construction requires `P ~ Order`; a comparator overload accepts
+`(P, P) -> i32 ![]`. Greater priority is popped first. Equal priorities are
+FIFO by insertion time, independently of physical slot reuse or compaction.
+
+| `PriorityQueue<T, P>` API | Return Type | Behavior And Cost |
+|---|---|---|
+| `new()`, `new(compare: (P, P) -> i32 ![])` | `PriorityQueue<T, P>` | Empty queue; `O(1)`. |
+| `from_entries(items: Iter<(P, T)>)`, `from_entries(items: Iter<(P, T)>, compare: (P, P) -> i32 ![])` | `PriorityQueue<T, P>` | Default/custom-order bulk heap construction; `O(n)` comparisons. Input order breaks ties. |
+| `len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
+| `push(value: T, priority: P)` | `PriorityQueue<T, P>` | `O(log n)` comparisons; amortized logarithmic update work with reusable backing. |
+| `peek()`, `peek_entry()` | `Option<T>`, `Option<(P, T)>` respectively | Observe the next pop value/entry; `O(1)` after heap initialization. |
+| `pop()` | `(PriorityQueue<T, P>, Option<T>)` | Remove the highest-priority value; empty yields `None`; amortized `O(log n)` comparisons/work. |
+| `pop_entry()` | `(PriorityQueue<T, P>, Option<(P, T)>)` | Same operation retaining the removed priority. |
+| `iter()` | `Iter<(P, T)>` | Live entries in insertion order, not priority order; amortized linear traversal in live storage. |
+| `clear()` | `PriorityQueue<T, P>` | Empty queue retaining its comparator. |
+
+All rows have `![]`. Logical backing storage must remain `O(n + 1)` in live
+entries, not cumulative pushes. Popping replaces/removes payloads and eventually
+reclaims empty slots; an empty queue retains no historical slot sequence.
+Compaction may occasionally take linear work but must be amortized across
+updates, preserve tie order and snapshots, and use checked ticket/index arithmetic.
+Retained old snapshots account for their own reachable storage, not a leak in
+the current queue. Native heap comparison counts alone do not establish these
+storage, copying or allocation contracts for the source SDK.
+
+### 10.8 Bytes
+
+`bytes` is the existing immutable byte-sequence type, not a new collection
+keyword. These free flows belong to `std.bytes`; existing receiver `len`,
+`get`, `at`, checked slicing and `iter` conveniences follow the same rules.
+All rows have `![]` unless a checked error is shown. Text encoding/decoding
+remains in `std.codec.text` as specified in section 1.10; byte operations do not
+silently decode text or normalize request bodies.
+
+| `std.bytes` API | Return Type | Behavior And Cost |
+|---|---|---|
+| `empty()` | `bytes` | Empty sequence; `O(1)`. |
+| `from_array(values: Array<u8>)` | `bytes` | Preserve every byte in order; `O(n)` or backing reuse. |
+| `to_array(value: bytes)` | `Array<u8>` | Value-preserving conversion; `O(n)` or backing reuse. |
+| `len(value: bytes)`, `is_empty(value: bytes)` | `usize`, `bool` respectively | `O(1)`. |
+| `get<I ~ Index>(value: bytes, index: I)` | `Option<u8>` | `None` for an invalid index; `O(1)`. |
+| `at<I ~ Index>(value: bytes, index: I)` | `u8 ![Error<IndexError>]` | Checked access; `O(1)`. |
+| `slice<I ~ Index>(value: bytes, range: Range<I>)` | `bytes ![Error<IndexError>]` | The established checked range rules; may share immutable backing. |
+| `iter(value: bytes)` | `Iter<u8>` | Lazy byte-order snapshot with `O(1)` construction and linear traversal. |
+| `concat(parts: Array<bytes>)` | `bytes` | Ordered bulk assembly with checked total size; `O(part count + output bytes)`. |
+| `join(parts: Array<bytes>, separator: bytes)` | `bytes` | Separator between parts only; empty input is empty; the same checked bulk-assembly bound. |
+
+## 11. Iteration And Effectful Consumption
+
+### 11.1 Pure Lazy Iterator Contract
+
+`Iterable<T>.iter(self) -> Iter<T> ![]` produces a pure lazy snapshot.
+`Iter<T>`'s step has type `() -> Option<(T, Iter<T>)> ![]`: `None` is exhausted;
+`Some` carries an item and the remaining iterator. Reusing the same iterator
+observes the same sequence, not a shared mutable cursor. Captured mutable
+binding dependencies must not violate this property. This is a semantic
+requirement beyond an empty escaping effect row.
+
+The table preserves `Iter<T>`'s single type parameter. Pure adapters delay
+their callbacks until consumption; they do not allocate a complete result on
+construction. Effectful callbacks instead use the consumers in section 11.2,
+so no callback effect is silently erased or attributed to adapter construction.
+Standard producers preserve finiteness when their inputs are finite; inherited
+limits still apply during iteration and callback execution.
+
+| `Iter<T>` API | Return Type | Contract |
+|---|---|---|
+| `empty()` | `Iter<T> ![]` | Empty iterator. |
+| `next()` | `Option<(T, Iter<T>)> ![]` | One step with no update to another observer's iterator. |
+| `map<U>(f: T -> U ![])` | `Iter<U> ![]` | Apply a pure callback once per requested element. |
+| `filter(predicate: T -> bool ![])` | `Iter<T> ![]` | Yield matching elements in input order. |
+| `filter_map<U>(f: T -> Option<U> ![])` | `Iter<U> ![]` | Yield each `Some` payload and skip `None`. |
+| `flat_map<U>(f: T -> Iter<U> ![])` | `Iter<U> ![]` | Concatenate the produced iterators in outer/inner order. |
+| `chain(other: Iter<T>)` | `Iter<T> ![]` | All left elements, then all right elements. |
+| `zip<U>(other: Iter<U>)` | `Iter<(T, U)> ![]` | Stop when either input is exhausted. |
+| `enumerate()` | `Iter<(usize, T)> ![]` | Zero-based ordinal/item pairs. |
+| `take(count: usize)`, `skip(count: usize)` | `Iter<T> ![]` | First at most `count` elements / remainder after at most that many. Zero is valid. |
+| `take_while(predicate: T -> bool ![])`, `skip_while(predicate: T -> bool ![])` | `Iter<T> ![]` | Prefix selected/rejected by the predicate; preserve order. |
+| `chunks(size: usize)` | `Iter<Array<T>> ![Error<CollectionError>]` | Non-overlapping chunks, with a possibly shorter final chunk. Reject zero at adapter construction. |
+
+`CollectionError` is the ordinary std ADT `InvalidChunkSize(usize)`. A pure
+lazy callback must not observe mutable captured state, be nondeterministic,
+or request observable actions, including actions hidden by a default handler;
+stateful/effectful work belongs in consumers, where the compiler retains its
+capture, effect and requested-action summaries. Adapters retain their input
+snapshots and constant additional cursor state; `flat_map` also retains its
+active inner iterator and `chunks` allocates its current chunk. They must not
+accumulate already consumed items in extra buffers. An input's documented
+snapshot/view may still retain its underlying source allocation.
+
+### 11.2 Consumers And Callback Effects
+
+`effect E` uses existing effect-row polymorphism, not a new annotation or
+generic-default syntax. Consumers execute callbacks sequentially in iterator
+order, at most once per visited element. They preserve requested actions,
+capture identities, determinism, inherited handlers/specs, limits and cancellation.
+Callback failure stops consumption; already completed external actions are not
+rolled back. No implicit retry, resampling or parallel execution is introduced.
+
+| `Iter<T>` API | Return Type | Contract |
+|---|---|---|
+| `collect()`, `to_array()` | `Array<T> ![]` | Ordered bulk collection; `collect` is the array convenience form, not an unconstrained generic conversion. |
+| `to_list()` | `List<T> ![]` | Ordered bulk collection. |
+| `count()` | `usize ![]` | Number of elements. |
+| `for_each<effect E>(f: T -> unit ![E])` | `unit ![E]` | Visit every element without allocating an output sequence. |
+| `map_collect<U, effect E>(f: T -> U ![E])` | `Array<U> ![E]` | Effectful ordered map with eager output. |
+| `filter_collect<effect E>(predicate: T -> bool ![E])` | `Array<T> ![E]` | Effectful ordered selection with eager output. |
+| `fold<A, effect E>(initial: A, f: (A, T) -> A ![E])` | `A ![E]` | Left fold; empty returns `initial`. |
+| `reduce<effect E>(f: (T, T) -> T ![E])` | `Option<T> ![E]` | First element initializes the accumulator; empty is `None`. |
+| `any<effect E>(predicate: T -> bool ![E])`, `all<effect E>(predicate: T -> bool ![E])` | `bool ![E]` | Short circuit; empty is `false` / `true` respectively. |
+| `find<effect E>(predicate: T -> bool ![E])` | `Option<T> ![E]` | First matching element; stop before later callbacks. |
+| `position<effect E>(predicate: T -> bool ![E])` | `Option<usize> ![E]` | First matching ordinal. |
+| `min()`, `max()` | `Option<T> ![]` | Require `T ~ Order`; first equivalent minimum/maximum; empty is `None`. |
+| `min_by(compare: (T, T) -> i32 ![])`, `max_by(compare: (T, T) -> i32 ![])` | `Option<T> ![]` | The same rule using a supplied total order. |
+| `sum()`, `product()` | `T ![]` | Require `T ~ std.math.Number`; left-to-right checked arithmetic; empty identities are zero/one. |
+
+Full traversal is `O(n)` plus iterator/callback work; output allocation is
+linear in emitted elements. Short-circuiting consumers must not visit later
+items or execute their callbacks. A `Result` returned as ordinary callback data
+is not automatically propagated; callers select explicit matching or an
+`Error<E>` effect according to the existing error model.
+Floating `min`/`max` consumers use `Order`, not `std.math`'s numeric NaN-selection
+rule; callers choose the appropriate contract rather than silently mixing them.
+
+For example, this contract permits I/O during mapping without making lazy
+`Iter.map` implicitly effectful:
+
+```etas
+flow Visit(values: Array<i32>) -> Array<i32> {
+    return values.iter().map_collect((value: i32) => {
+        std.io.println("visited");
+        return value + 1;
+    });
+}
+```
+
+The returned value is an array. Its construction executes the callbacks; the
+flow infers the callback's residual `Error<IOError>` and retains the requested
+`Console.stdout_write` actions even though the standard console handler is used.
+
+## 12. Generic Sequence Algorithms
+
+The following free flows belong to `std.collections`. They operate on arrays;
+other containers use `iter().collect()` or a slice's `to_array()` explicitly.
+They preserve the original input values and do not require new operators or
+mutable-reference APIs.
+
+| API | Return Type | Contract And Cost |
+|---|---|---|
+| `sort<T ~ Order>(values: Array<T>)` | `Array<T> ![]` | Ascending order; `O(n log n)` worst-case comparisons; equivalent items need not retain input order. |
+| `sort_by<T>(values: Array<T>, compare: (T, T) -> i32 ![])` | `Array<T> ![]` | The same bounds with a supplied total order. |
+| `stable_sort<T ~ Order>(values: Array<T>)` | `Array<T> ![]` | Ascending, preserving the order of equivalent items; `O(n log n)` comparisons. |
+| `stable_sort_by<T>(values: Array<T>, compare: (T, T) -> i32 ![])` | `Array<T> ![]` | Stable sort under the supplied order. |
+| `sort_by_key<T, K ~ Order>(values: Array<T>, key: T -> K ![])`, `stable_sort_by_key<T, K ~ Order>(values: Array<T>, key: T -> K ![])` | `Array<T> ![]` | Compute one pure key per input element in input order, then sort cached keys; the stable form preserves equivalent-key order. `O(n log n)` key comparisons plus `n` key calls. |
+| `binary_search<T ~ Order>(values: Array<T>, key: T)` | `Result<usize, usize> ![]` | Sorted input; `Ok` is a matching index, `Err` the insertion position; `O(log n)` comparisons. Any equivalent matching index is allowed. |
+| `binary_search_by<T>(values: Array<T>, compare_to_key: T -> i32 ![])` | `Result<usize, usize> ![]` | Sorted input and a monotone less/equal/greater classification relative to the sought key; same result rule. |
+| `lower_bound<T ~ Order>(values: Array<T>, key: T)`, `upper_bound<T ~ Order>(values: Array<T>, key: T)` | `usize ![]` | First index not less than / strictly greater than the key; `len()` if absent; `O(log n)`. |
+| `lower_bound_by<T>(values: Array<T>, compare_to_key: T -> i32 ![])`, `upper_bound_by<T>(values: Array<T>, compare_to_key: T -> i32 ![])` | `usize ![]` | The same boundary positions with monotone less/equal/greater classification; `O(log n)` comparisons. |
+| `merge<T ~ Order>(left: Array<T>, right: Array<T>)` | `Array<T> ![]` | Merge sorted inputs; left precedes right on ties; `O(n + m)`. |
+| `merge_by<T>(left: Array<T>, right: Array<T>, compare: (T, T) -> i32 ![])` | `Array<T> ![]` | The same stable merge under a supplied order. |
+| `dedup<T ~ Eq>(values: Array<T>)` | `Array<T> ![]` | Remove adjacent equal runs, retaining their first element; `O(n)` equality tests. |
+| `unique<T ~ Hash>(values: Array<T>)` | `Array<T> ![]` | Remove all later duplicates, retaining first-occurrence order; expected `O(n)`. |
+| `partition<T, effect E>(values: Array<T>, predicate: T -> bool ![E])` | `(Array<T>, Array<T>) ![E]` | Matching/nonmatching arrays, each retaining input order; invoke the predicate once per item; `O(n)` plus callback work. |
+
+Sort and search comparators obey section 10.2, including stability under repeated
+calls. Their call counts/order are algorithm-dependent: a comparator must not
+be used to perform logging, approvals, model calls or mutable-counter updates.
+`partition`, unlike comparison-based algorithms, explicitly supports callback
+effects. Sorting may use `O(n)` auxiliary storage. Search results use comparator
+equivalence, not a separate equality test. Inputs to merge/search must use the
+same order; the APIs do not silently sort them. Violating a sorted-input or
+comparison-law precondition gives no meaningful search-order guarantee, but
+must not cause unsafe access or bypass checked execution.
+The `Err` insertion position from binary search is ordinary result data, not
+an `Error<usize>` action; it does not need postfix `?`.
+
+## 13. Option And Result APIs
+
+These are ordinary value combinators in `std.option` / `std.result`. They do
+not redefine `?`, whose sole error-capture rule remains `Error<E>` to
+`Result<T, E>`. Callback effects are inferred/preserved through `effect E`;
+only the selected branch executes a callback. Unless shown otherwise the row
+is `![]`. Each operation is `O(1)` plus callback/value-copy work.
+
+| Owner / API | Return Type | Contract |
+|---|---|---|
+| `Option<T>.is_some()`, `is_none()` | `bool` | Inspect the variant. |
+| `Option<T>.unwrap()` | `T` | `Some` payload; `None` calls non-returning `abort`. It is not an error handler or Result conversion. |
+| `Option<T>.unwrap_or(default: T)` | `T` | Payload or supplied value; ordinary eager argument evaluation applies. |
+| `Option<T>.unwrap_or_else<effect E>(fallback: () -> T ![E])` | `T ![E]` | Evaluate fallback only on `None`. |
+| `Option<T>.map<U, effect E>(f: T -> U ![E])` | `Option<U> ![E]` | Transform only `Some`. |
+| `Option<T>.and_then<U, effect E>(f: T -> Option<U> ![E])` | `Option<U> ![E]` | Bind only `Some`; do not introduce a nested Option. |
+| `Option<T>.filter<effect E>(predicate: T -> bool ![E])` | `Option<T> ![E]` | Keep `Some` only if its predicate succeeds. |
+| `Option<T>.or_else<effect E>(fallback: () -> Option<T> ![E])` | `Option<T> ![E]` | Call fallback only on `None`. |
+| `Option<T>.ok_or<F>(error: F)` | `Result<T, F>` | `Some` becomes `Ok`; `None` becomes `Err`. Error data is an eagerly evaluated argument. |
+| `Option<T>.ok_or_else<F, effect E>(error: () -> F ![E])` | `Result<T, F> ![E]` | Construct error data only on `None`. |
+| `Result<T, F>.is_ok()`, `is_err()` | `bool` | Inspect the variant. |
+| `Result<T, F>.unwrap()` | `T` | `Ok` payload; `Err` calls `abort`; it does not re-perform `Error<F>`. |
+| `Result<T, F>.unwrap_or(default: T)` | `T` | Payload or supplied value; argument evaluation is eager. |
+| `Result<T, F>.unwrap_or_else<effect E>(fallback: F -> T ![E])` | `T ![E]` | Call fallback with error data only on `Err`. |
+| `Result<T, F>.map<U, effect E>(f: T -> U ![E])` | `Result<U, F> ![E]` | Transform only `Ok`; preserve `Err`. |
+| `Result<T, F>.map_err<G, effect E>(f: F -> G ![E])` | `Result<T, G> ![E]` | Transform only `Err`; preserve `Ok`. |
+| `Result<T, F>.and_then<U, effect E>(f: T -> Result<U, F> ![E])` | `Result<U, F> ![E]` | Bind only `Ok`. |
+| `Result<T, F>.or_else<G, effect E>(f: F -> Result<T, G> ![E])` | `Result<T, G> ![E]` | Recover only `Err`. |
+| `Result<T, F>.ok()`, `err()` | `Option<T>`, `Option<F>` respectively | Keep the selected payload or return `None`. |
+
+`Some`/`None` and `Ok`/`Err` remain the existing enum constructors. Empty
+escaping rows do not imply that `unwrap` returns on every input or that a
+callback is non-suspending. Lazy fallback APIs must not evaluate the unselected
+branch, and must retain its checked may-effect upper bound in the callable's
+contract without pretending that it executed.
