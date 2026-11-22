@@ -33,6 +33,25 @@ assigns its contract to each name unless the behavior column distinguishes them.
 | Iteration and callback consumers | `std.collections` | [Section 11](#11-iteration-and-effectful-consumption) |
 | Sequence algorithms | `std.collections` | [Section 12](#12-generic-sequence-algorithms) |
 | Optional values and results | `std.option`, `std.result` | [Section 13](#13-option-and-result-apis) |
+| Console I/O | `std.io` | [Console API table](03-agents-tools-prompts-memory.md#24-standard-io) |
+| TCP, TLS and byte streams | `std.net.tcp`, `std.tls`, `std.stream` | [Substrate API tables](06-effect-system-and-inference.md#11-minimal-standard-actions) |
+| Files, wire HTTP, codecs, secrets and browser transport | `std.fs`, `std.http.codec`, `std.codec.text`, `std.secret`, `std.crypto`, `std.browser.protocol` | [Substrate API tables](06-effect-system-and-inference.md#11-minimal-standard-actions) |
+| Prompt construction and encoding | `std.agent.prompt`, `std.agent.schema` | [Prompt values](03-agents-tools-prompts-memory.md#4-prompt-values) |
+| Session history and context publication | `std.agent.session` | [Section 16.4](#164-session-history-and-context-publication) |
+| Persistent stores | `std.memory` | [Section 16](#16-persistent-stores-and-session-publication) |
+| Concurrent combinators | `std.task` | [Full signatures and boundary cases](16-concurrency.md#4-standard-combinators) |
+| Checked code generation | `std.compiler` | [Compiler API table](18-reflection-and-checked-code-generation.md#61-standard-library-surface) |
+| Commands and sandbox profiles | `std.command`, `std.host.command`, `std.host.sandbox` | [Command sandboxing](06-effect-system-and-inference.md#3-command-sandboxing); lifecycle gaps in section 17 |
+| Time and randomness | `std.runtime.time`, `std.random` | [Section 14](#14-time-and-randomness) |
+| Resource ownership and cleanup | `std.resource`, stream/transport/filesystem APIs | [Section 15](#15-managed-resource-lifecycles) |
+| Incremental builders | `std.text.TextBuilder`, `std.bytes.BytesBuilder` | [Section 1.13](#113-incremental-text-and-byte-builders) |
+| Bit sets and bounded deques | `std.collections` | [Section 10.9](#109-bit-sets), [section 10.10](#1010-bounded-deques) |
+| Grouping, counting and Top-K | `std.collections` | [Section 12.2](#122-grouping-counting-and-selection) |
+| Effectful pull sources | `std.stream` | [Section 15.4](#154-effectful-pull-sources) |
+| Storage/query encoding | `std.memory` | [Section 16.5](#165-storage-encoding-and-query-contracts) |
+
+An index entry is not evidence of API completeness. [Section 17](#17-api-coverage-and-open-contracts)
+separates specified interfaces from contracts that still need design decisions.
 
 ## 1. Strings And Text APIs
 
@@ -60,26 +79,18 @@ are inferred from a flow body.
 
 ### 1.2 Positions And Ranges
 
-`len` and all search results use UTF-8 byte positions. `char_get` and
-`char_slice` take scalar ordinals; `grapheme_slice` takes grapheme ordinals.
-The positions emitted by `char_indices` and `grapheme_indices` are byte
-positions, so they can be passed to byte-slicing APIs. A position from one
-coordinate system must not be silently reinterpreted as another. Generic
-`s[i]` and direct range slicing on `string` are not defined.
+| Position / Range | Contract |
+|---|---|
+| `len`, search results, `char_indices`, `grapheme_indices` | UTF-8 byte positions, including the positions paired with scalars/graphemes. |
+| `char_get`, `char_slice` / `grapheme_slice` | Scalar ordinals / grapheme ordinals, not byte offsets. |
+| Input index | `I ~ Index`; negative or unrepresentable positions are invalid. No implicit numeric conversion. |
+| `Range<I>` | Normalize `[i, j)` to `i..j` and `(i, j]` to `(i + 1)..(j + 1)` with checked arithmetic. Ordered, in-bounds empty intervals are valid. |
+| Byte slice | Both normalized endpoints must be UTF-8 scalar boundaries. Never clamp, round or reverse an invalid interval. |
+| Invalid input | Optional accessor: `None`; checked accessor: `Error<TextError>`. |
+| Source syntax | Generic `s[i]` and direct range slicing on `string` are not defined; select the coordinate-specific API. |
 
-Position-taking APIs accept `I ~ Index`, following the existing
+Index conversion follows the existing
 [indexing rules](02-general-programming-constructs.md#21-numeric-conversion-and-indexing).
-This does not add general implicit integer conversion. Negative positions and
-positions that cannot fit the supported size range are invalid inputs.
-Optional accessors return `None`; checked accessors raise `Error<TextError>`.
-
-Range parameters have type `Range<I>` with `I ~ Index`. They use the same
-boundary normalization as collection slicing: `[i, j)` selects positions from
-`i` through `j - 1`, while `(i, j]` selects positions from `i + 1` through `j`.
-The normalized interval must be ordered and within bounds. Empty intervals at
-valid positions are allowed. Byte slicing additionally requires both normalized
-endpoints to be UTF-8 scalar boundaries. A start endpoint greater than the end
-endpoint is invalid, not a request to reverse the string.
 
 For example, the scalar U+00E9 occupies two UTF-8 bytes: its byte boundaries are
 `0` and `2`, but its scalar interval is `[0, 1)`. A byte position of `1` is not
@@ -290,46 +301,35 @@ public enum TextError {
 }
 ```
 
-An invalid position is `InvalidIndex`; invalid or out-of-bounds normalized
-intervals are `InvalidRange`; an in-bounds byte endpoint inside a scalar is
-`NotCharBoundary`. Parsing failures and unrepresentable numeric results use
-`ParseFailure` and `NumericOverflow`. A checked output-size arithmetic overflow
-in `repeat` uses `LengthOverflow`.
-
-Checked APIs expose `Error<TextError>`; optional accessors expose `Option`, and
-parsing/formatting expose `Result`. An expected failed search is not an error.
-These are distinct, deliberate API contracts. Postfix `?` converts a checked
-text error effect to a value-level result; it neither propagates nor unwraps an
-existing `Result`:
+| Condition | Outcome |
+|---|---|
+| Invalid position / normalized interval | `InvalidIndex` / `InvalidRange`. |
+| In-bounds byte endpoint inside a scalar | `NotCharBoundary`. |
+| Invalid numeric input / unrepresentable numeric result | `ParseFailure` / `NumericOverflow`. |
+| `repeat` output-length arithmetic overflow | `LengthOverflow`. |
+| Invalid format template | `InvalidFormat`. |
+| Failed search / optional access | `None`, not an error action. |
+| Checked access | `Error<TextError>`; postfix `?` captures it into `Result`. |
+| Parsing / formatting | Already returns `Result`; `?` does not unwrap it. |
+| Allocation failure / resource exhaustion | Existing execution-limit/fault rules; checked size arithmetic, no length wrap or truncated success. Not a recoverable `TextError` by default. |
 
 ```etas
 let piece: Result<string, TextError> = std.text.byte_slice("Etas", [1, 3))?;
 let number: Result<i32, TextError> = std.text.parse_i32("42");
 ```
 
-This chapter does not redefine the language-wide behavior of allocation failure
-or resource-limit exhaustion as a recoverable `TextError`. All allocating APIs
-must use checked size arithmetic and obey the applicable execution limits;
-unrepresentable allocations must not wrap lengths or corrupt storage.
+| Operation | Performance Contract |
+|---|---|
+| Byte length / emptiness | `O(1)`. |
+| Scalar/grapheme count or ordinal lookup | May scan input; no cached index is required. Repeated `char_get` can be quadratic. |
+| Sequential scalar traversal | Linear in input bytes. |
+| `concat`, `join` | Linear in part count plus output bytes; checked bulk assembly, not repeated prefix copying. |
+| Lazy text iterators | No complete result array; producing individual segments may allocate. |
+| Slices / trims / split segments | Sharing is permitted, not guaranteed. A small retained result may keep the source backing alive. |
 
-Performance contracts and implementation freedom are:
-
-- Byte length and emptiness are constant-time. Scalar/grapheme counts and
-  ordinal-to-byte conversion may scan the input; no cached index is assumed.
-- Sequential scalar traversal is linear in input bytes. Repeated independent
-  `char_get` calls can be quadratic and should not replace a single iterator.
-- `concat` and `join` should take time proportional to the input part count
-  plus output bytes, using checked total-size computation and bulk assembly
-  rather than repeatedly copying an accumulated prefix.
-- `split_iter`, `chars`, `char_indices`, and grapheme iterators must not allocate
-  a complete result array. Segment values may still require allocation.
-- String slices, trimming, and split segments may share immutable backing
-  storage. Zero-copy behavior is not guaranteed, and a retained small result
-  may keep a larger source allocation alive. Observable value semantics remain
-  unchanged whichever representation is selected.
-
-No mutable string builder, receiver-update sugar, regular-expression syntax,
-or general interpolation syntax is added by this API chapter.
+Incremental builders use the existing restricted `var self` rule in section
+1.13. This chapter adds no receiver-update operator, regular-expression syntax
+or general interpolation syntax.
 
 ### 1.12 Example
 
@@ -355,6 +355,37 @@ flow Prefix(input: string) -> Result<string, TextError> {
 }
 ```
 
+### 1.13 Incremental Text And Byte Builders
+
+`std.text.TextBuilder` and `std.bytes.BytesBuilder` are ordinary opaque
+value types, not shared mutable buffers. The table shows updating receivers
+explicitly; they require a direct local `var` and cannot suspend.
+
+| Owner / API | Result | Contract |
+|---|---|---|
+| `TextBuilder.new()` / `BytesBuilder.new()` | Respective builder `![]` | Empty value; no host action. |
+| `TextBuilder.append(var self, part: string)` | `unit ![]` | Append exact UTF-8 text; no normalization or implicit formatting. |
+| `TextBuilder.append_char(var self, value: char)` | `unit ![]` | Append the scalar's UTF-8 encoding. |
+| `BytesBuilder.append(var self, part: bytes)` | `unit ![]` | Append exact bytes. |
+| `BytesBuilder.push(var self, value: u8)` | `unit ![]` | Append one byte. |
+| Each builder's `len_bytes()`, `is_empty()` | `usize`, `bool`, both `![]` | Constant-time logical observations. |
+| Each builder's `clear(var self)` | `unit ![]` | Clear this binding; previously copied builders/results are unchanged. |
+| `TextBuilder.build()` / `BytesBuilder.build()` | `string ![]` / `bytes ![]` | Materialize an immutable value without consuming or clearing the builder. |
+
+| Builder Boundary | Rule |
+|---|---|
+| Snapshot / failure | Copying preserves a value snapshot. Updates use normal commit-on-return semantics; unwind does not expose a partial receiver update. |
+| Cost | A linear append history has total work O(part count + appended bytes), excluding final builds and retained snapshots. No repeated copying of the entire prefix. |
+| Retained versions | Chunk sharing/COW is allowed; retained snapshots account for their own storage. Repeated build may copy the full output each time. |
+| Limits | Check length arithmetic before commit; allocation faults and inherited execution-limit handling apply. No silent truncation or byte-to-text conversion. |
+
+```etas
+var output = std.text.TextBuilder.new();
+output.append("Result: ");
+output.append("accepted");
+let text = output.build();
+```
+
 ## 2. Task And Scheduling APIs
 
 These APIs specify structured task execution and handler-based scheduling.
@@ -363,23 +394,13 @@ Their scope, cancellation, and continuation semantics are defined in
 
 ### 2.1 Standard Types And Actions
 
-`std.task` exports `Task<T, E>`, where `T` is the result type and `E` is an
-effect-row parameter declared with `effect E`. Ordinary calls infer both.
-A task also retains its owning scope, requested-action/trace contract, and
-determinism information as checked metadata. Its result type alone cannot
-erase those facts. Package interfaces and helper calls must preserve them.
-Task handles may be shared inside their valid lifetime; repeated awaits observe
-the same completed result and do not execute the job again.
-
-The callback to `std.task.run` receives an opaque, scope-bound `SchedulerHandle`
-from `std.task.scheduler`. This running handle is distinct from the reusable
-implementation value selected by the caller. The handle's owner is inferred,
-not chosen by a runtime string. Neither tasks
-nor scheduler handles may escape their owning execution scope, including via
-returned closures or aggregate values. They are not model-schema values or
-ordinary serializable checkpoint data. Managed execution is supplied by the
-program entry and concurrency combinators; `run` creates an explicit nested
-scope for code that needs its scheduler handle.
+| Type / Context | Contract |
+|---|---|
+| `std.task.Task<T, E>` | Inferred result type and `effect E`; retain owner scope, requested/trace summary and determinism across imports and helpers. |
+| Repeated `await` | Observe the same completed result; do not execute the task again. Handles may be shared within their valid lifetime. |
+| `std.task.scheduler.SchedulerHandle` | Opaque live run handle; distinct from the reusable scheduler implementation value. The owner is inferred, not selected by a string. |
+| Lifetime | Tasks/handles cannot escape their scope, including inside aggregates or closures. No model-schema or ordinary checkpoint serialization. |
+| Managed scope | Supplied by entry/combinators; `run` creates a nested scope and passes its handle to the callback. |
 
 The standard control effect is owned by `std.task.Async`:
 
@@ -409,57 +430,30 @@ matches the generic action; the arm must work for its matched type parameters.
 | `scheduler.park(task, k)` | `never` | Consume the continuation from the matching `Async.await(task)` request and register a completion dependency. Deliver success, failure, or cancellation without losing a concurrent completion event. |
 | `std.task.scheduler.handlers(scheduler: SchedulerHandle)` | `![Async => []]` | Construct the standard scope-bound `yield`/`await` handler adapter. Construction is pure; applying it uses checked transfer primitives and the policy bound to this handle. |
 
-`run` and `start` are compiler-recognized std contracts over task-execution
-primitives. They need no new source keyword or exposed `spawn` syntax. A
-same-named user flow cannot acquire their lifetime or scheduling obligations
-by spelling alone. The scheduler is an ordinary bound value with restricted
-operations; `requeue` and `park` are registered control-transfer primitives,
-not arbitrary callbacks made special by their method names. Scheduling policy
-is Etas code implementing the `Scheduler` spec below; the running handle is
-created by `run`, not by importing a live singleton.
-
-`requeue` normally handles `Async.yield` with the unit value `()`. It can only
-resume the original suspended computation with a correctly typed value; it
-cannot move that computation into the calling task's identity or authority.
-`park` handles both already-completed and pending tasks, using atomic
-completion/registration semantics. A pending task is not runnable just because
-its waiter yielded. Waiting and runnable queues have different purposes.
-
-The `never` return describes the current arm's control path. Successful
-transfer returns control to the owning scheduler, not to the next statement
-in the arm; it does not abort the process. The scheduler later resumes or
-cancels the original task. A plain queue insertion returning `unit` cannot
-replace either operation. Operations must validate ownership and input types
-before accepting the transfer. A failed scheduler invariant cannot silently
-drop a live continuation; it fails and unwinds the affected managed scope.
+| Transfer Rule | Requirement |
+|---|---|
+| Recognition | `run`/`start` are resolved compiler-known std contracts; `requeue`/`park` are registered transfer primitives, not magic names user flows can copy. |
+| Identity | Transfer keeps the suspended task's identity, authority and owner. `yield` normally requeues with `()`. |
+| Parking | Handle completed and pending tasks with atomic completion/registration. Waiting is not runnable readiness. |
+| `never` | Leave the current arm for its scheduler; do not continue after transfer or abort the process. A plain `unit` queue insertion is not equivalent. |
+| Validation | Check owner, continuation and result type before transfer; invariant failure unwinds the scope rather than dropping a live continuation. |
+| Implementation | Etas `Scheduler` code selects ready work; `run` creates the live handle. No new keyword, `spawn` syntax or imported live singleton. |
 
 ### 2.3 Effects, Errors, And Default Handling
 
-Starting work contributes its `E` and full behavioral summary to the enclosing
-task scope immediately, even if its handle is never awaited. `await` preserves
-the declared failure obligations in `E`; it cannot forge a value of `T` for a
-failed task. Handling `Async.await` or `Async.yield` removes covered control
-actions from escaping rows, not the effects or requested actions of child work.
-The default handling of these control actions remains recorded in metadata.
-No task API provides an implicit catch-all for `Error<_>` or an ad-hoc error
-union. The postfix `?` retains its existing single-Error effect-to-Result rule.
+Default handlers cover ordinary task use; business code need not handle
+`Async` manually.
 
-The default `run` scope is fail-fast. The first unhandled failure initiates
-sibling cancellation and propagates its original typed error after cleanup;
-it is not converted into a successful task result or a default `T`. A task's
-inherited handlers may recover before failure becomes unhandled. Asynchronous
-error delivery restores the appropriate task/handler context rather than
-resuming a continuation with a value of the wrong type. Scope cancellation
-cannot be cleared by catching an incidental I/O cancellation error.
-
-Default handlers cover ordinary task use, so business code need not handle
-`Async` manually. A custom scoped handler may replace scheduling policy without
-changing child lifetime, failure propagation, authority, budgets, or trace
-requirements. Runtime adapters for models, streams, and other waiting operations
-must use non-blocking completion or managed blocking offload. Calling `start`
-or performing an action does not automatically make a blocking host function
-asynchronous. Runtime-owned waits remain tied to the same task scope; custom
-handlers do not gain permission to forge completion of protected host work.
+| Case | Effect / Failure Rule |
+|---|---|
+| `start(job)` | Contribute `E` and the full job summary immediately, even if never awaited. |
+| `await(task)` | Preserve typed failures; never forge a `T` for a failed task. |
+| Handling `Async` | Remove covered scheduling actions, not child-work effects/actions. Record default handling in metadata. |
+| Typed errors | No implicit `Error<_>` catch-all or generated error union; `?` still captures exactly one residual Error type. |
+| Unhandled failure | Fail-fast: cancel siblings, finish cleanup, propagate the original typed error. Inherited handlers may recover before it becomes unhandled. |
+| Asynchronous delivery | Restore the correct task/handler context; do not resume with a wrong-type value. Catching an I/O error cannot clear scope cancellation. |
+| Custom handler | May change scheduling policy, not lifetime, authority, budgets, tracing or cleanup obligations. |
+| Waiting substrate | Non-blocking completion or managed blocking offload. `start` alone cannot turn a blocking host call into asynchronous I/O or authorize forged completion. |
 
 See the [complete scheduling example](16-concurrency.md#126-complete-example)
 for `as k`, `start`, `await`, and handler transfer used together.
@@ -495,18 +489,14 @@ impl FifoScheduler ~ Scheduler {
 public let DefaultScheduler = FifoScheduler {};
 ```
 
-`ReadyTask` is a copyable scheduling snapshot, not `Task<T, E>`, a continuation,
-or authority to execute work. Its id is scoped to the run. Every runnable-queue
-entry gets a new enqueue order; snapshots are sorted oldest first. `select`
-receives a non-empty snapshot and returns its chosen index. A policy may retain
-ordinary value-semantic counters/configuration through `var self`; it never
-owns a continuation through this record or stores one in an ordinary array.
-
-Implementations must have empty escaping/requested-action summaries and be
-deterministic and proven non-suspending. These are checked obligations of the
-resolved standard spec, not facts inferred from `![]` alone or assertions a user
-annotation can grant. Unknown imports/callbacks cannot satisfy the proof.
-Selection runs under the existing receiver exclusivity and budget rules.
+| Scheduler Contract | Requirement |
+|---|---|
+| `ReadyTask` | Copyable metadata, not a task/continuation or execution grant; id is run-local. |
+| `select` input | Nonempty snapshot sorted by enqueue order, oldest first; each enqueue gets a new order. |
+| `select` result | Index into that snapshot. `var self` may retain value-semantic counters/configuration, not live continuations. |
+| Checked behavior | Deterministic, non-suspending, empty escaping/requested summaries; `![]` alone or an unchecked annotation is insufficient. |
+| Generic/imported calls | Preserve evidence; unknown callback/import behavior cannot satisfy the proof. |
+| Update discipline | Receiver exclusivity and execution budgets still apply. |
 
 The `std.task` implementation imports `DefaultScheduler`, `Scheduler`, and
 `SchedulerHandle` from `std.task.scheduler`. Its public call shape is:
@@ -528,16 +518,13 @@ value satisfying `Scheduler`. Callers import their custom implementation, not
 a live running handle. The result's escaping row is inferred after async
 handling, while all child-work summaries remain preserved.
 
-Each `run` creates a fresh local copy of the implementation value and fresh
-owned queue/wait state. Updating that copy never changes the supplied value or
-another run's copy. Implementations cannot carry live task/continuation/scheduler
-state across runs or smuggle it into a global constant. A factory flow may
-construct a configuration value before passing it to `run`; no separate
-factory protocol is required. Runtime worker pools and I/O drivers may be
-shared physically without sharing logical scope ownership or queue state.
-Combinators use the active run's selected policy for their owned child groups.
-An explicit nested `run` creates a new policy instance; its omitted argument
-uses `DefaultScheduler` according to normal default-parameter binding.
+| Run Isolation | Rule |
+|---|---|
+| Implementation state | Fresh local value copy and owned queue/wait state; updates do not change the supplied value or another run. |
+| Live resources | Never carry live task/continuation/scheduler state across runs or into globals. |
+| Construction | An ordinary flow can build configuration; no separate factory protocol. |
+| Physical sharing | Worker pools/I/O drivers may be shared, not logical scope ownership or queues. |
+| Combinators / nested `run` | Combinators inherit the selected policy; nested `run` creates a new instance, using `DefaultScheduler` when omitted. |
 
 ### 2.5 Standard Handlers And Runtime Responsibilities
 
@@ -573,24 +560,16 @@ The handler value captures the handle's lifetime and cannot escape that owner.
 | Runtime primitives | Own live frames/continuations and protected queue/wait registrations; validate owner, readiness, result types, one-shot transfer, wakeup/cancellation races, and cleanup. Supply non-blocking I/O completion or managed offload. |
 | Application | Choose an implementation when needed; write ordinary jobs and optional scoped handlers. It does not import active global queue state. |
 
-`run` resolves the implementation and binds its scope-local copy before
-executing the callback. New tasks, explicit yields, and completed waits enqueue
-runnable work. For each dispatch, the coordinator obtains a non-empty snapshot,
-calls the local policy's `select`, and dispatches the chosen still-live entry
-through Runtime primitives. A cancellation/completion race may invalidate an
-entry after the snapshot; refresh readiness rather than resume a dead task.
-An out-of-range index is a scheduler contract violation: fail and unwind the
-affected scope rather than execute an arbitrary task or silently choose another.
-No-ready-work with outstanding waits parks the coordinator for completion;
-it is not a busy-yield loop. Scope closure drains or cancels owned work before
-releasing live handlers and continuations.
-
-The default FIFO policy selects index zero. New, yielded, and woken tasks enter
-the tail, so older runnable work is chosen first. This is cooperative fairness,
-not a guarantee of CPU preemption or bounded model/provider latency. Existing
-limits and cancellation still apply. Custom implementations can choose another
-ready order or maintain local policy state; this contract does not claim to
-replace OS scheduling, I/O drivers, or protected task-execution primitives.
+| Dispatch Event | Required Behavior |
+|---|---|
+| Run entry | Resolve and copy the implementation before the callback. |
+| New / yielded / woken task | Enqueue runnable work; take a nonempty snapshot, call `select`, dispatch the still-live entry through checked primitives. |
+| Completion/cancellation race | Refresh readiness; never resume a dead task. |
+| Out-of-range selection | Contract violation: fail/unwind the scope, not arbitrary fallback selection. |
+| No ready task, outstanding waits | Park for completion; no busy-yield loop. |
+| Scope closure | Drain/cancel owned work before releasing handlers and continuations. |
+| Default FIFO | Select index zero; enqueue at the tail. Cooperative fairness, not CPU preemption or a provider-latency bound. |
+| Custom scheduling | May change ready order/state, not OS scheduling, I/O drivers or protected execution rules. |
 
 ## 3. JSON Values
 
@@ -720,50 +699,19 @@ public type Usage = {
 }
 ```
 
-`C` is the resolved agent method identity, including its applicable revision and
-declared tool surface, not a user-supplied runtime string. It is a checked
-contract parameter, as in `Agentic.infer<C, O>`, rather than an ordinary data
-type parameter chosen to acquire authority. It allows a call/result to retain
-the relevant upper-bound summary; it is not evidence that a transparent record
-has already been validated or executed.
-
-`ToolRef.id` encodes a resolved package/module/item identity, not just a display
-name. `revision` identifies the registered implementation snapshot. The same
-`ToolRef` is used by reflection metadata. `std.tool.reference` constructs its
-normal value from a resolved native tool declaration. Manually constructing or
-editing the record is allowed, but never registers a tool or grants authority.
-`step` resolves provider tool names against `C` to create these references;
-an unresolvable name produces `Stopped(InvalidToolCall(...))`. This does not
-replace argument or authorization checks at `invoke`, which must also work
-safely on caller-constructed records.
-
-`AssistantTurn` represents the assistant side of one protocol turn, not an
-application `Message<T>` with sender/session provenance. Tool requests occur
-only in `StepDecision.CallTools`, avoiding a second independently editable copy
-in `AssistantTurn`. `provider_data` retains provider continuation metadata that
-must survive the next request; it cannot override the model profile, tool
-surface, policy, or budget. Adapters must preserve required continuation data
-through the public protocol instead of relying on an inaccessible host object.
-The initial content alternatives are text and structured JSON; this does not
-claim a complete multimodal media API.
-
-When produced by `step`, `Final(value)` guarantees successful decoding and
-validation against `Schema<O>`, and `CallTools` is non-empty and contains
-requests, not executed operations. A step does not both return a final answer
-and request tools. These are API guarantees, not restrictions on constructing
-transparent values: a caller-built `Final` is not proof of a model response,
-and assembly must reject an empty `CallTools` or another invalid transition.
-Invalid model output or tool-call syntax produces the corresponding `Stopped`
-case without hidden repair. `StepDiagnostic.code` is a stable machine-readable
-category, `message` is explanatory text, and `path` optionally identifies the
-invalid schema field or tool argument; applications must not branch on message
-wording.
-
-An absent `usage`, token field, or cost means unknown, not zero. A provider that
-does report usage must not have its cost discarded by the standard projection.
-Unknown usage still follows conservative admission/accounting rules and cannot
-disable parent limits. Fabricated protocol usage is not authoritative runtime
-resource-accounting evidence.
+| Protocol Value | Required Meaning / Validation |
+|---|---|
+| `C` | Checked agent-method identity, revision and tool surface, not a runtime string or authority-granting type argument. Retain the upper-bound summary; it does not certify a transparent record. |
+| `ToolRef` | Resolved package/module/item id and implementation revision, shared with reflection metadata. Construction/editing never registers a tool or grants authority. |
+| Tool-name resolution | `step` resolves against `C`; an unknown name yields `Stopped(InvalidToolCall(...))`. `invoke` still validates arguments/authority, including caller-built records. |
+| `AssistantTurn` | One protocol assistant turn, not application `Message<T>` provenance. Requests live only in `StepDecision.CallTools`, not a second editable copy. |
+| `provider_data` | Preserve required continuation data through the public protocol. It cannot override profile, tools, policy or budget; no inaccessible host-only continuation object. |
+| Content | Text/JSON alternatives do not imply a complete multimodal API. |
+| Produced `Final` | Successfully decoded/validated against `Schema<O>`; a caller-constructed value is not evidence of a model response. |
+| Produced `CallTools` | Nonempty requests, not executed tools. A step cannot simultaneously return a final answer; assembly rejects invalid transitions and empty request batches. |
+| Invalid output | Corresponding `Stopped` case; no hidden repair call. |
+| `StepDiagnostic` | Stable machine-readable `code`, explanatory `message`, optional schema/argument `path`; never branch on message wording. |
+| Usage | Missing fields mean unknown, not zero. Preserve reported cost; conservative accounting still enforces parent limits. Caller-built usage is not protected execution evidence. |
 
 ### 4.3 Public APIs
 
@@ -937,27 +885,14 @@ public spec Number;
 | `min<T ~ Number>(left: T, right: T)` | `T ![]` | Smaller operand under the numeric/NaN/signed-zero rules in section 5.2. |
 | `max<T ~ Number>(left: T, right: T)` | `T ![]` | Larger operand under the same rules. |
 
-`Number` is a compiler-known primitive numeric spec. Its declaration is
-owned by Etas source. Compiler evidence admits the primitive signed and
-unsigned integer families, `isize`, `usize`, `f32` and `f64`. User declarations
-cannot extend that primitive family. Generic bodies bounded by `Number` may
-use same-type comparisons and supported binary arithmetic. Operations with a
-narrower domain require their checked primitive contract. In particular,
-`Number` alone does not establish that unsigned unary negation is valid.
-The magnitude primitive used by `abs` covers unsigned, signed and floating
-inputs according to section 5.2. This evidence must survive
-package imports and checked-code restoration, following the existing compiler
-contract pattern for `Index`.
-
-The operands of `min` and `max` have the same numeric type. Existing literal
-inference applies, and conversions between concrete types remain explicit.
-Each operation returns the same type and width. Nominal numeric wrappers must
-use their declared conversion or their own ordinary helper. Strings, booleans,
-collections and unconstrained generic values do not satisfy `Number`.
-
-The single-argument legacy `min<T>(T) -> T` and `max<T>(T) -> T` were incomplete
-declarations. Their replacements are binary numeric operations. Collection
-reduction requires a separate API with its own empty-input contract.
+| Numeric Evidence | Rule |
+|---|---|
+| Ownership | Source-declared compiler-known spec; preserve evidence across imports and checked-code restoration as for `Index`. |
+| Admitted types | Primitive signed/unsigned integer widths, `isize`, `usize`, `f32`, `f64`. User declarations cannot extend this primitive family. |
+| Generic operations | Same-type comparisons and supported binary arithmetic. Narrower operations need their own primitive evidence; `Number` does not make unsigned unary negation valid. |
+| Operands/results | Same concrete type and width; normal literal inference, explicit numeric conversions. |
+| Nominal wrappers | Use declared conversion or their own helper; strings, bools, collections and unconstrained generics do not satisfy `Number`. |
+| Arity | `min`/`max` are binary. Iterator reductions in section 11 define empty-input behavior separately. |
 
 ### 5.2 Results And Edge Cases
 
@@ -989,6 +924,71 @@ share the numeric rules across constant evaluation and runtime execution.
 Ordinary Etas bodies own selection and branching. Checked primitive arithmetic
 and float bit classification use declared primitive bindings where required.
 
+### 5.3 Integer Arithmetic
+
+`std.math.Integer ~ Number` and `std.math.Float ~ Number` are resolved
+standard numeric specs. `Integer` admits the primitive integer families;
+`Float` admits only `f32`/`f64`. They do not authorize user-defined primitive
+representations. All APIs below have `![]`; checked failures are Result data.
+
+```etas
+public enum ArithmeticError {
+    Overflow,
+    DivisionByZero,
+    InvalidShift,
+}
+
+public enum MathError {
+    InvalidBounds,
+}
+```
+
+| `std.math` API | Result | Contract |
+|---|---|---|
+| `min_value<I ~ Integer>()`, `max_value<I ~ Integer>()` | `I` | Representable bounds at the selected width; unsigned minimum is zero. |
+| `bit_width<I ~ Integer>()` | `u32` | Width of `I`; pointer-sized widths follow the checked target profile. |
+| `checked_add<I ~ Integer>(a: I, b: I)`, `checked_sub<I ~ Integer>(a: I, b: I)`, `checked_mul<I ~ Integer>(a: I, b: I)` | `Result<I, ArithmeticError>` | Exact integer result or `Err(Overflow)`; no narrowing or wrap. |
+| `checked_div<I ~ Integer>(a: I, b: I)`, `checked_rem<I ~ Integer>(a: I, b: I)` | `Result<I, ArithmeticError>` | Quotient truncates toward zero; remainder has the dividend's sign. Zero divisor fails. Signed minimum divided by -1 overflows; its remainder is zero. |
+| `checked_abs<I ~ Integer>(value: I)` | `Result<I, ArithmeticError>` | Unsigned identity; signed-minimum magnitude fails. |
+| `checked_pow<I ~ Integer>(base: I, exponent: u32)` | `Result<I, ArithmeticError>` | Nonnegative integer power; exponent zero returns one, including `0^0`; overflow fails. |
+| `div_euclid<I ~ Integer>(a: I, b: I)`, `rem_euclid<I ~ Integer>(a: I, b: I)` | `Result<I, ArithmeticError>` | `a = q*b + r`, `0 <= r < abs(b)` mathematically; reject zero divisor or unrepresentable result. |
+| `wrapping_add<I ~ Integer>(a: I, b: I)`, `wrapping_sub<I ~ Integer>(a: I, b: I)`, `wrapping_mul<I ~ Integer>(a: I, b: I)` | `I` | Arithmetic modulo `2^width`; interpret signed results as two's complement. |
+| `saturating_add<I ~ Integer>(a: I, b: I)`, `saturating_sub<I ~ Integer>(a: I, b: I)`, `saturating_mul<I ~ Integer>(a: I, b: I)` | `I` | Clamp the exact mathematical result to `I`'s bounds. |
+| `checked_shl<I ~ Integer>(value: I, count: u32)`, `checked_shr<I ~ Integer>(value: I, count: u32)` | `Result<I, ArithmeticError>` | Reject `count >= width`. Left shift drops high bits; signed right shift extends the sign, unsigned right shift inserts zeros. This checks shift count, not multiplication overflow. |
+| `rotate_left<I ~ Integer>(value: I, count: u32)`, `rotate_right<I ~ Integer>(value: I, count: u32)` | `I` | Rotate the fixed-width bit representation by `count % width`. |
+| `count_ones<I ~ Integer>(value: I)`, `leading_zeros<I ~ Integer>(value: I)`, `trailing_zeros<I ~ Integer>(value: I)` | `u32` | Count in the fixed-width representation; zero has `width` leading/trailing zeros. |
+| `clamp<T ~ Number>(value: T, lower: T, upper: T)` | `Result<T, MathError>` | Reject reversed bounds or any NaN input; otherwise return the value or the appropriate bound. |
+
+### 5.4 Floating-Point Operations
+
+These `std.math` APIs preserve `F ~ Float` and have `![]`. They do not
+convert through a different public width or read the host's ambient rounding mode.
+
+| API | Result | Contract |
+|---|---|---|
+| `is_nan<F ~ Float>(x: F)`, `is_finite<F ~ Float>(x: F)`, `is_infinite<F ~ Float>(x: F)`, `is_normal<F ~ Float>(x: F)`, `is_sign_negative<F ~ Float>(x: F)` | `bool` | Classify the encoding; normal excludes zero, subnormal, infinity and NaN. Sign testing includes signed zero/NaN. |
+| `floor<F ~ Float>(x: F)`, `ceil<F ~ Float>(x: F)`, `trunc<F ~ Float>(x: F)`, `round<F ~ Float>(x: F)` | `F` | Toward -infinity / +infinity / zero / nearest with ties to even. Remain floating values, not implicit integer conversions. |
+| `sqrt<F ~ Float>(x: F)` | `F` | Square root; negative nonzero input produces NaN; preserve signed zero. |
+| `exp<F ~ Float>(x: F)`, `exp2<F ~ Float>(x: F)`, `ln<F ~ Float>(x: F)`, `log2<F ~ Float>(x: F)`, `log10<F ~ Float>(x: F)` | `F` | Natural/base-2 exponentials and natural/base-2/base-10 logarithms. Log zero is -infinity; negative input is NaN. |
+| `sin<F ~ Float>(x: F)`, `cos<F ~ Float>(x: F)`, `tan<F ~ Float>(x: F)`, `asin<F ~ Float>(x: F)`, `acos<F ~ Float>(x: F)`, `atan<F ~ Float>(x: F)` | `F` | Radians; asin/acos outside [-1, 1] and trig of infinity produce NaN. |
+| `atan2<F ~ Float>(y: F, x: F)` | `F` | Quadrant-aware angle in [-pi, pi], including signed-zero quadrants. |
+| `pow<F ~ Float>(base: F, exponent: F)` | `F` | Real power: negative finite base with noninteger finite exponent is NaN; integer exponent parity controls its sign. |
+| `hypot<F ~ Float>(x: F, y: F)` | `F` | Nonnegative Euclidean magnitude; avoid intermediate square overflow when the result is representable. Infinity dominates NaN. |
+| `copysign<F ~ Float>(magnitude: F, sign: F)` | `F` | Copy only the sign bit, preserving magnitude/payload bits. |
+| `total_cmp<F ~ Float>(a: F, b: F)` | `i32` | The bit-total `Order` rule in section 10.2, not numeric `min`/`max` selection. |
+| `pi<F ~ Float>()`, `tau<F ~ Float>()`, `e<F ~ Float>()`, `epsilon<F ~ Float>()` | `F` | Width-specific constants; epsilon is the gap from one to the next larger representable value. |
+
+| Floating Boundary | Rule |
+|---|---|
+| Ordinary domain failure | NaN, not an `Error` action; overflow yields signed infinity and underflow retains subnormals/signed zero. |
+| Nonfinite rounding | floor/ceil/trunc/round preserve infinity, NaN and signed zero; no integer-range fault. |
+| Power exceptions | `x^0 = 1`, `1^y = 1`, including NaN operands in those positions. For signed zero/infinity with finite nonzero exponent, odd integer exponents retain the negative sign; exponent sign selects zero versus infinity. |
+| Infinite exponent | For magnitude below/above one, positive infinity exponent gives zero/infinity and negative infinity reverses them; magnitude one gives one. Other NaN cases produce NaN. |
+| Reproducibility | The numeric compatibility profile pins algorithm/version, rounding and documented error bounds. Constant evaluation and runtime use the same profile; changing it invalidates numerical replay/cache assumptions. |
+| Accuracy | sqrt, rounding and constants are correctly rounded at the selected width. Transcendentals must publish per-operation accuracy bounds and pass profile conformance tests; no unspecified host-libm substitution. |
+| Scope | Big integers, decimal financial arithmetic, complex numbers and locale formatting remain separate library designs. |
+
+
 ## 6. Round-Robin Groups
 
 ### 6.1 Public Contract
@@ -1014,24 +1014,14 @@ public type RoundRobinResult<S> = {
 |---|---|---|
 | `round_robin<S, effect E>(participants: Array<(S) -> S ![E]>, initial: S, max_turns: usize, stop_when: (S) -> bool ![])` | `RoundRobinResult<S> ![E, Error<GroupError>]` | Sequential state-transforming callbacks; reject an empty roster and preserve callback effects and inherited constraints. |
 
-The source implementation performs these steps in order.
-
-1. Reject an empty participant array with `Error<GroupError>.raise(EmptyParticipants)`.
-2. Set `state = initial` and `turns = 0`. Evaluate `stop_when(state)` once.
-   If true, return `PredicateSatisfied` with zero turns.
-3. While `turns < max_turns`, invoke participant `turns % participants.len()`
-   with the current state. Replace the state only after the callback returns
-   successfully, then increment `turns` once.
-4. Evaluate `stop_when` after each completed turn. Return immediately with
-   `PredicateSatisfied` when true, including on the final permitted turn.
-5. Otherwise return the current state and `TurnLimitReached` after the budget
-   of turns is consumed. With a nonempty roster and `max_turns = 0`, this
-   returns the initial state unless the initial predicate already succeeded.
-
-One turn means one callback invocation. `max_turns` counts across all
-participants. A three-participant group with five allowed turns invokes
-indices `0, 1, 2, 0, 1`. Each call to `round_robin` starts at index zero.
-The function returns the final state and completion reason.
+| Boundary | Required Step |
+|---|---|
+| Entry | Reject an empty roster with `Error<GroupError>.raise(EmptyParticipants)`. |
+| Initial state | Set `state = initial`, `turns = 0`; test `stop_when` once. Success returns `PredicateSatisfied` with zero turns. |
+| Each allowed turn | Call index `turns % participants.len()`; after success replace state and increment turns once. |
+| After each turn | Test `stop_when`; success wins even on the final allowed turn. |
+| Exhausted turn allowance | Return state and `TurnLimitReached`. With a nonempty roster and zero allowance, return the initial state unless the initial predicate succeeded. |
+| Counting | One turn is one callback, across all participants; three participants and five turns invoke `0, 1, 2, 0, 1`. Every call starts at zero. |
 
 ### 6.2 Effects, Failure And Ownership
 
@@ -1051,36 +1041,19 @@ state rollback. Its implementation is an ordinary checked Etas loop.
 
 ## 7. Virtual Trace Stages
 
-The public runtime signature remains
-`VirtualStages(stages: Array<TraceLabel>) -> TraceLabel ![]` in
-`std.runtime.trace`.
+| `std.runtime.trace` API / Value | Type | Contract |
+|---|---|---|
+| `VirtualStages(stages: Array<TraceLabel>)` | `TraceLabel ![]` | Construct an immutable composite label; execute no stage or host request. |
+| `Logical` | `TraceLabel` | Existing logical-stage label. |
 
-The flow constructs an immutable composite label containing its child labels
-in order. Empty input constructs an empty composite. Single-element input
-retains a composite node, duplicates are retained and nested composites retain
-their hierarchy. It creates metadata without executing the stages. `Logical`
-continues to denote the existing logical trace label.
-
-`TraceLabel` retains its source-declared opaque nominal type for this migration.
-The source flow calls a private, pure binding that allocates the structured
-label payload. That binding validates the label inputs and preserves their
-checked identities. It performs no host request, trace emission or provider
-call. The opaque storage codec preserves this tree through checkpointing.
-
-An annotation such as `@trace(VirtualStages([Researcher, Critic]))` uses
-annotation-specific elaboration. The frontend resolves agent, flow or tool
-declaration references to checked stage labels with their callable identity,
-revision and source provenance. Label expressions such as `Logical` are also
-accepted. Import aliases preserve the resolved identity. Unresolved or
-non-callable declaration references produce a diagnostic. Ordinary runtime
-calls to `VirtualStages` require actual `TraceLabel` values.
-
-Trace metadata records a plan of logical stages. Physical inference, tool,
-permission and usage events come from actual execution. A virtual stage label
-alone cannot certify a model call, an approval or a tool invocation. Fusion
-records the source-stage mapping and the actual physical invocation separately.
-Display strings may accompany the structured plan, while runtime checks and
-replay use its checked identities.
+| Trace-Label Rule | Requirement |
+|---|---|
+| Tree shape | Preserve order, duplicates and nesting. Empty/single-element inputs still construct composite nodes. |
+| Storage | Opaque nominal type; a private pure binding validates identities and allocates the tree. Checkpoint encoding preserves it. |
+| Annotation references | `@trace(VirtualStages([Researcher, Critic]))` resolves callable references to identity/revision/provenance labels. Import aliases preserve identity; unresolved/non-callable references are errors. |
+| Ordinary calls | Require actual `TraceLabel` values; annotation elaboration is not general implicit conversion. |
+| Evidence | Labels describe a plan, not proof of inference, approval or tool execution. Actual physical actions/usage are recorded separately. |
+| Fusion / replay | Preserve source-stage mapping and physical invocation identities. Display strings cannot replace checked identities. |
 
 ## 8. Sanitization And Declassification
 
@@ -1105,58 +1078,34 @@ public enum SecurityError {
 | `std.security.declassify` API | Return Type | Contract |
 |---|---|---|
 | `sanitize<T, U>(value: Untrusted<T>, strategy: SanitizationStrategy<T, U>)` | `Sanitized<U> ![Error<SecurityError>]` | Execute the validated typed strategy and retain its processing provenance. |
-| `declassify<T, U>(value: Secret<T>, strategy: DeclassificationStrategy<T, U>, reason: string)` | `Sanitized<U> ![Secret, Error<SecurityError>]` | Authorize and audit release, execute the validated strategy, and retain release provenance. |
+| `declassify<T, U>(value: Secret<T>, strategy: DeclassificationStrategy<T, U>, reason: string)` | `Sanitized<U> ![Error<SecurityError>]` | Standard handling consumes `Secret.declassify`; retain it in requested/default metadata, authorize release and preserve provenance. |
 
-Both strategy types are immutable opaque references issued by trusted bindings.
-Each identifies a validated strategy implementation, its revision and exact
-input/output types. An installed strategy may execute a checked Etas body with
-signature `(T) -> Result<U, SecurityError> ![]`. Binding installation supplies
-the evidence associating that body with the strategy contract. The public APIs
-validate this evidence and execute that body under the caller's limits.
-Issuing a strategy handle and granting secret release use the existing trusted
-binding and runtime authority mechanisms.
-
-These signatures replace the two unrestricted legacy `T -> T` declarations.
-Every call supplies a strategy explicitly. A strategy has a concrete contract,
-such as removing designated HTML constructs or projecting approved incident
-fields. The `Sanitized` wrapper records processing under that contract. Prompt
-encoding retains data-channel placement and nested trust labels. A subsequent
-conversion to a trusted instruction channel requires its own existing evidence.
-
-These APIs and their strategy types are imported explicitly from
-`std.security.declassify`. The illustrative `sanitize.html` and `sanitize.text`
-names used in earlier examples denote application or EDK helpers. Those helpers
-provide their own source definitions, choose a concrete strategy and handle
-its errors.
-
-`Secret<T>` is the trust wrapper containing a typed secret value.
-`std.secret.SecretValue<K>` is an opaque host-secret reference indexed by a key
-type. This `declassify` signature accepts the former. Handling an opaque host
-secret requires a separately declared host operation and its authority checks.
+| Strategy / Value | Contract |
+|---|---|
+| Strategy handle | Immutable opaque reference issued through a trusted binding; carries implementation, revision and exact input/output types. |
+| Strategy body | May be checked Etas `T -> Result<U, SecurityError> ![]`; binding evidence associates it with the protected contract. |
+| Selection | Explicit argument on every call. Application/EDK helpers such as `sanitize.html` must define and select their own strategy. |
+| Result | `Sanitized<U>` records the processing contract, not universal safety. Preserve nested trust labels and data-channel placement; instruction-channel promotion needs separate evidence. |
+| Secret input | `Secret<T>` is a typed trust wrapper. It is not `std.secret.SecretValue<K>`, an opaque host-secret handle requiring its own authorized operations. |
+| Ownership | Import strategies/APIs from `std.security.declassify`; granting release uses the existing runtime authority mechanism. |
 
 ### 8.2 Sanitization
 
-`sanitize` validates the strategy and input/output types, passes the untrusted
-payload only to that strategy's protected execution frame, and returns
-`Sanitized<U>` after successful output validation. An explicit strategy may be
-a validator that preserves the input when its checks pass, or a transformer
-that produces a different type. Rejection raises `Error<SecurityError>`.
-Missing or incompatible strategy evidence raises `Unavailable` or
-`StrategyMismatch`.
-
-The operation performs the strategy's declared deterministic computation.
-It obtains neither secret access nor an implicit model/host request. Boundary
-primitives provide validated payload access and wrapper construction. The
-strategy's actual validation and transformation can be implemented in Etas.
+| Sanitization Step | Outcome |
+|---|---|
+| Validate strategy and input/output evidence | Missing: `Unavailable`; incompatible: `StrategyMismatch`. |
+| Execute deterministic validation/transformation | Only the strategy's protected frame receives the untrusted payload; rejection raises `Error<SecurityError>`. |
+| Validate output | Construct `Sanitized<U>` with processing provenance. |
+| Authority | No secret access, implicit model call or host request. Etas may implement transformation; protected bindings own wrapper access/construction. |
 
 ### 8.3 Secret Release And Audit
 
-`declassify` rejects a reason that is empty after whitespace trimming. It then
-validates strategy identity, revision and type correspondence and checks the
-current authority for the exact strategy before exposing the secret payload
-to its protected strategy frame. Denial produces `Denied`, while an absent
-implementation produces `Unavailable`. Strategy rejection produces `Rejected`.
-Successful output validation constructs `Sanitized<U>` with release provenance.
+| Release Step | Outcome |
+|---|---|
+| Trim/check reason | Empty reason: `InvalidReason`. |
+| Validate strategy identity/revision/types | Missing implementation: `Unavailable`; mismatched evidence: `StrategyMismatch`. |
+| Authorize exact strategy before payload access | Denied: `Denied`; inherited trace specs and approvals still apply. |
+| Execute and validate | Rejection: `Rejected`; success: `Sanitized<U>` with release provenance. |
 
 The operation requests a new checked action `Secret.declassify` on the existing
 Secret owner. Its inferred signature binders carry `T` and `U`, with zero static
@@ -1173,41 +1122,29 @@ impl std.effects.Secret {
 ```
 
 The default handler enforces strategy-scoped grants, current trace specs and
-approvals, then performs the protected transformation. The public row is
-`![Secret, Error<SecurityError>]`. Custom handler support must preserve the
+approvals, then performs the protected transformation. The residual public row
+is `![Error<SecurityError>]`; authorization follows requested
+`Secret.declassify`, not a fabricated escaping `Secret` tag. A raw perform with
+no covering handler also carries that action in its escaping row.
+Custom handler support must preserve the
 protected release check before any secret access or result-wrapper creation.
 
-The audit record includes strategy identity and revision, input/output type
-identities, caller trace, authorization outcome, the supplied reason and result
-status. The reason is caller-supplied audit data and follows the existing
-redaction policy. Secret payloads and strategy intermediate values are excluded
-from ordinary errors, logs and trace payloads. Permission failures and strategy
-failures produce trace-visible outcomes through the existing runtime mechanism.
-
-Raw access to the secret and construction of release provenance belong to
-explicit protected bindings. Ordinary casts or trust-wrapper constructors must
-retain nested secrecy and cannot manufacture a successful release. A checked
-strategy executes under inherited budgets and cancellation. An identity
-release requires an explicitly configured strategy and the same authorization
-as any other release.
+| Audit / Protection Rule | Requirement |
+|---|---|
+| Record | Strategy identity/revision, input/output type identities, caller trace, authorization outcome, reason and result status. |
+| Redaction | The reason is caller-supplied audit data; redact normally. Exclude secret payloads/intermediates from ordinary errors, logs and traces. |
+| Failure | Record authorization and strategy failures through the existing trace mechanism. |
+| Protected operations | Raw access and release-provenance construction require protected bindings; casts/wrapper constructors cannot discard nested secrecy or forge release. |
+| Limits | Inherit budgets/cancellation. Identity release still requires an explicit strategy and ordinary authorization. |
 
 ## 9. Implementation And Migration Acceptance
 
-The seven legacy declarations are historical API inventory entries with
-incomplete execution contracts. The corrected signatures above are intentional
-API changes. Preserve the recorded legacy baseline and classify each change
-explicitly when comparing providers. Retain the Rust registry during migration.
-Apply the new contracts to supported execution paths before advertising their
-availability. Unsupported paths must report an actionable diagnostic.
-
-Source flows, ordinary enums, result records and policy bodies live in the
-existing `etas_std/library/std` modules. Their compilation reuses the existing
-pass manager, pipelines and installed std artifact mechanism. Native bindings
-own primitive numeric operations, opaque payload storage, secret authority and
-protected wrapper/provenance operations.
-
-The implementation tasks, code locations and acceptance cases are recorded in
-[Legacy Flow Implementation](../migrations/legacy-flow-implementation.md).
+| Ownership / Migration | Rule |
+|---|---|
+| API contract changes | Record intentional changes against the baseline; advertise only verified execution paths. Unsupported paths report a diagnostic. |
+| Etas source | Ordinary flows, enums, records and policy bodies belong in `etas_std/library/std`. |
+| Primitive bindings | Own primitive arithmetic, opaque storage, secret authority and protected provenance operations. |
+| Engineering details | Provider migration, registries, pipelines and task status belong in [Legacy Flow Implementation](../migrations/legacy-flow-implementation.md), not duplicate SPEC prose. |
 
 ### 9.1 Cross-Provider Acceptance
 
@@ -1269,45 +1206,25 @@ queries must not copy a complete container.
 | `std.collections` Contract / API | Result | Required Behavior |
 |---|---|---|
 | `Eq` | Type spec | Evidence that the existing value equality is reflexive, symmetric and transitive. It does not introduce an overload of `==`. |
-| `Hash: Eq` | Behavioral type spec | Requires `hash(self, state: Hasher) -> Hasher ![]`. Feed the value into a value-semantic hash state; equal values must produce the same final hash from the same initial state. |
+| `Hash ~ Eq` | Behavioral type spec | Requires `hash(self, state: Hasher) -> Hasher ![]`. Feed the value into a value-semantic hash state; equal values must produce the same final hash from the same initial state. |
 | `Order` | Behavioral type spec | Requires `compare(self, other: Self) -> i32 ![]`; negative, zero and positive mean less, equivalent and greater. Comparison defines a stable total order and equivalence relation. |
 | `Hasher.new(seed: u64 = 0)` | `Hasher ![]` | Create an empty deterministic non-cryptographic state. The default constructor performs no implicit entropy or host action. |
 | `Hasher.write(data: bytes)` | `Hasher ![]` | Return a state extended by these bytes, preserving the input state. Processing is linear in input bytes. |
 | `Hasher.finish()` | `u64 ![]` | Observe the current digest without changing the state. Hash values are not a persistent encoding, signature, or cryptographic digest. |
 
-Recognition of `Eq` attaches to the resolved standard spec, not its spelling.
-Standard `Eq`/`Hash` implementations cover integers, booleans, chars, strings and
-bytes. Structural equality evidence extends to finite tuples/records/enums and
-supported value collections when their components satisfy the relevant contract.
-Explicit `Eq` conformance must pass the same standard evidence checks; it is
-not an unchecked assertion that an arbitrary type's `==` is reflexive.
-`Hash` implementations use the corresponding logical value and nominal identity,
-not addresses or storage layout; structural hashing must frame fields/variants
-unambiguously. Ordinary nominal data with hashable components receive this
-checked structural implementation unless they provide an explicit conforming
-implementation. No new derive keyword is required. Functions, handlers, secrets
-and resource handles do not acquire equality or hashing merely because their
-implementation contains a comparable address.
-
-Raw `f32`/`f64` retain ordinary floating equality and do not receive `Eq`/`Hash`
-evidence: NaN breaks reflexivity. Applications needing such hash keys use a
-nominal wrapper over an integer/byte encoding, with a documented normalization
-and compatible hash contract; merely wrapping an unchanged float field does
-not establish reflexive equality. Their standard `Order` instead orders raw
-encodings: negative encodings in reverse bit order, followed by nonnegative
-encodings in bit order. It distinguishes
-signed zeros and NaN encodings; identical encodings compare as zero. `Order`
-therefore does not imply `Eq` or redefine floating `==`.
-
-Hashing and key comparators must be deterministic, non-suspending and independent
-of mutable captured/resource state while a container retains them, with no
-observable requested actions. `![]` alone does not prove those properties.
-Algebraic laws remain implementation obligations; type conformance alone does
-not prove a user's comparator transitive. Violating these obligations must not
-compromise memory safety or grant host authority.
-Hash equality is required only within the same algorithm/version and initial
-state. Hash seeds do not change iteration or logical equality. Hashing a map or
-set must be independent of its insertion order and private hasher.
+| Equality / Hash / Order Rule | Requirement |
+|---|---|
+| Standard identity | Recognize the resolved `Eq` spec, not its spelling. Explicit conformance must pass the same evidence checks; it cannot assert arbitrary non-reflexive equality. |
+| Primitive evidence | Integers, booleans, chars, strings and bytes receive `Eq`/`Hash`. |
+| Structural evidence | Finite tuples/records/enums and supported collections require corresponding component evidence. Ordinary nominal data gets checked structural hashing unless an explicit conforming implementation is supplied; no derive keyword. |
+| Hash representation | Hash logical values and nominal identity, not addresses/layout; frame fields and variants unambiguously. |
+| Non-data values | Functions, handlers, secrets and resource handles do not acquire equality/hash from a comparable implementation address. |
+| Raw floats | `f32`/`f64` have no `Eq`/`Hash`: NaN breaks reflexivity. A nominal wrapper over normalized integer/byte encodings can define a key; wrapping an unchanged float field is insufficient. |
+| Float `Order` | Negative encodings in reverse bit order, then nonnegative encodings in bit order. Distinguish signed zeros/NaN encodings; identical encodings compare as zero. This neither implies `Eq` nor changes float `==`. |
+| Callback behavior | Hashing/comparators are deterministic, non-suspending, independent of mutable captured/resource state, and have no observable requested actions. `![]` alone is insufficient. |
+| Algebraic laws | User lawfulness is an implementation obligation, not proved by conformance. Violations must not cause memory unsafety or authority bypass. |
+| Reproducibility | Equal hashes are required within the same algorithm/version and initial state, not across releases. |
+| Container hashing | Seeds cannot change iteration or logical equality; map/set hashing is independent of insertion order and private hasher. |
 
 ### 10.3 Arrays, Lists And Slices
 
@@ -1318,6 +1235,10 @@ the pure iterator in order without first making a second complete input copy.
 |---|---|---|
 | `Array<T>.new()` | `Array<T>` | Empty array; `O(1)`. |
 | `Array<T>.from_iter(items: Iter<T>)` | `Array<T>` | Bulk construction; `O(n)` excluding iterator work. |
+| `Array<T>.init<effect E>(count: usize, f: usize -> T ![E])` | `Array<T> ![E]` | Call f once per index from 0 to count-1 in order; O(count) plus callback work. Zero calls none. Failure stops later callbacks; no partial array returned. |
+| `Array<T>.repeat(count: usize, value: T)` | `Array<T>` | Value copies in every position; O(count). T must permit repetition; this cannot clone an affine handle or introduce a shared mutable object. |
+| `Array<T>.split_at<I ~ Index>(index: I)` | `(Slice<T>, Slice<T>) ![Error<IndexError>]` | Views before/from index; 0 and len are valid; O(1) construction. |
+| `Array<T>.retain<effect E>(predicate: T -> bool ![E])` | `Array<T> ![E]` | Return a filtered value, not receiver mutation; input-order callbacks once per item, O(n) plus callback work. |
 | `Array<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
 | `Array<T>.get<I ~ Index>(index: I)` | `Option<T>` | Optional access; `O(1)`. |
 | `Array<T>.at<I ~ Index>(index: I)` | `T ![Error<IndexError>]` | Checked access; `O(1)`. |
@@ -1340,6 +1261,7 @@ the pure iterator in order without first making a second complete input copy.
 | `List<T>.pop()` | `(List<T>, Option<T>)` | Return tail and head; empty returns itself and `None`; `O(1)`. |
 | `List<T>.extend(prepended: List<T>)` | `List<T>` | Preserve the existing cons-oriented contract: `prepended` followed by `self`; `O(m)`, sharing the old tail. Unlike array `extend`, this prepends. |
 | `List<T>.reverse()` | `List<T>` | Reversed list; `O(n)`. |
+| `List<T>.clear()` | `List<T>` | Empty value; old snapshots remain valid. Releasing unshared nodes may take `O(n)`. |
 | `List<T>.iter()` | `Iter<T>` | Lazy head-to-tail snapshot; `O(1)` construction. |
 | `Slice<T>.len()`, `is_empty()` | `usize`, `bool` respectively | `O(1)`. |
 | `Slice<T>.get<I ~ Index>(index: I)` | `Option<T>` | Index relative to the view; `O(1)`. |
@@ -1445,9 +1367,17 @@ keys. Replacing an equivalent key retains its original representative.
 | `OrderedSet<T>.first()`, `last()`, `lower_bound(value: T)`, `upper_bound(value: T)` | `Option<T>` | Corresponding ordered-map rule; `O(log n)` or better. |
 | `OrderedSet<T>.iter()` | `Iter<T>` | Ascending order; `O(n)` traversal. |
 | `OrderedSet<T>.range(lower: Option<T>, upper: Option<T>, include_lower: bool = true, include_upper: bool = false)` | `Iter<T>` | The same bound rules and `O(log n + k)` consumption. |
+| `OrderedSet<T>.union(other: OrderedSet<T>)`, `intersection(other: OrderedSet<T>)`, `difference(other: OrderedSet<T>)`, `symmetric_difference(other: OrderedSet<T>)` | `OrderedSet<T> ![Error<CollectionError>]` | Ascending merge, O(n + m) comparisons/output work; equivalent representatives prefer the left input. |
+| `OrderedSet<T>.is_subset(other: OrderedSet<T>)`, `is_disjoint(other: OrderedSet<T>)` | `bool ![Error<CollectionError>]` | Short-circuit ordered merge; O(n + m) comparisons or better. |
+| `OrderedMap<K, V>.split_at_key(key: K)` | `(OrderedMap<K, V>, OrderedMap<K, V>)` | Keys below / at-or-above key; same comparator; O(log n) tree-path work with sharing. |
+| `OrderedSet<T>.split_at_value(value: T)` | `(OrderedSet<T>, OrderedSet<T>)` | Same split rule for values. |
 | Either container's `clear()` | Respective container | Empty value retaining the comparator. |
 
-All rows in this subsection have `![]`. Inverted or mutually exclusive bounds
+Rows without an explicit effect have `![]`. Binary ordered-set operations
+require the same comparator identity/profile; copied containers preserve it.
+Different custom comparator instances raise `IncompatibleComparator`, even if
+users believe them equivalent; do not attempt extensional flow equality.
+Inverted or mutually exclusive bounds
 produce an empty iterator. These key bounds deliberately do not use `Range<K>`:
 the language's `Range<I>` requires `Index`, whereas ordered keys may be strings
 or other ordered data. Shape balancing and deletion must retain height/index
@@ -1469,6 +1399,9 @@ FIFO by insertion time, independently of physical slot reuse or compaction.
 | `pop()` | `(PriorityQueue<T, P>, Option<T>)` | Remove the highest-priority value; empty yields `None`; amortized `O(log n)` comparisons/work. |
 | `pop_entry()` | `(PriorityQueue<T, P>, Option<(P, T)>)` | Same operation retaining the removed priority. |
 | `iter()` | `Iter<(P, T)>` | Live entries in insertion order, not priority order; amortized linear traversal in live storage. |
+| `push_pop(value: T, priority: P)` | `(PriorityQueue<T, P>, T)` | Equivalent to push then pop, including FIFO ties; O(log(n + 1)) comparisons, and empty input returns the new value with an empty queue. |
+| `replace_top(value: T, priority: P)` | `(PriorityQueue<T, P>, Option<T>)` | Pop old top then push new value; on empty insert and return None; O(log(n + 1)). |
+| `to_sorted_array()` | `Array<T>` | Descending priority, FIFO ties; O(n log(n + 1)) comparisons; original queue unchanged. |
 | `clear()` | `PriorityQueue<T, P>` | Empty queue retaining its comparator. |
 
 All rows have `![]`. Logical backing storage must remain `O(n + 1)` in live
@@ -1501,6 +1434,47 @@ silently decode text or normalize request bodies.
 | `iter(value: bytes)` | `Iter<u8>` | Lazy byte-order snapshot with `O(1)` construction and linear traversal. |
 | `concat(parts: Array<bytes>)` | `bytes` | Ordered bulk assembly with checked total size; `O(part count + output bytes)`. |
 | `join(parts: Array<bytes>, separator: bytes)` | `bytes` | Separator between parts only; empty input is empty; the same checked bulk-assembly bound. |
+| `starts_with(value: bytes, prefix: bytes)`, `ends_with(value: bytes, suffix: bytes)` | `bool` | Exact byte comparison; empty prefix/suffix matches. |
+| `find(value: bytes, pattern: bytes)`, `rfind(value: bytes, pattern: bytes)` | `Option<usize>` | First/last starting byte offset; absent is `None`. Empty pattern matches at `0` / `len(value)` respectively. |
+| `contains(value: bytes, pattern: bytes)` | `bool` | Equivalent to `find(...).is_some()`; no text decoding. |
+
+### 10.9 Bit Sets
+
+`std.collections.BitSet` represents a fixed universe [0, size), with immutable
+value semantics. Let w be its number of storage words and k its set-bit count.
+
+| API | Result | Contract / Cost |
+|---|---|---|
+| `BitSet.new(size: usize)` | `BitSet ![]` | All bits clear; zero-size universe is valid; O(w). |
+| `BitSet.from_indices(size: usize, indices: Iter<usize>)` | `BitSet ![Error<IndexError>]` | Insert checked indices; duplicates harmless; O(w + input count). |
+| `universe_len()`, `count()`, `is_empty()` | `usize`, `usize`, `bool`, all `![]` | Universe size / set-bit count / no set bits; O(1) / O(w) or cached / O(w) or cached. |
+| `contains<I ~ Index>(index: I)` | `bool ![]` | False for invalid/out-of-universe indices; O(1). |
+| `insert<I ~ Index>(index: I)`, `remove<I ~ Index>(index: I)` | `BitSet ![Error<IndexError>]` | Checked value update; O(1) with reusable storage, up to O(w) with shared backing. |
+| `union(other: BitSet)`, `intersection(other: BitSet)`, `difference(other: BitSet)`, `symmetric_difference(other: BitSet)` | `BitSet ![Error<CollectionError>]` | Word-wise operation; equal universe lengths required, otherwise IncompatibleBounds; O(w). |
+| `is_subset(other: BitSet)`, `is_disjoint(other: BitSet)` | `bool ![Error<CollectionError>]` | Same universe check; short-circuit word scan, O(w). |
+| `complement()`, `clear()` | `BitSet ![]` | Flip within the universe / clear all bits; preserve size, mask unused tail bits; O(w). |
+| `iter()` | `Iter<usize> ![]` | Ascending set indices; O(w + k) traversal, no array materialization. |
+
+Eq/Hash include both universe length and membership, never padding or storage
+capacity. This type is not implicitly interchangeable with Set<usize>.
+
+### 10.10 Bounded Deques
+
+`std.collections.BoundedDeque<T>` is a value container, not a channel.
+`OverflowPolicy` is the enum `Reject, DropFront, DropBack`.
+
+| API | Result | Contract |
+|---|---|---|
+| `BoundedDeque<T>.new(capacity: usize, overflow: OverflowPolicy = Reject)` | `BoundedDeque<T> ![Error<CollectionError>]` | Positive capacity; zero is InvalidCapacity. |
+| `push_front(value: T)`, `push_back(value: T)` | `(BoundedDeque<T>, Option<T>) ![Error<CollectionError>]` | If full, Reject raises Full; otherwise evict the selected old end before inserting, and return the evicted value. No eviction returns None. |
+| `pop_front()`, `pop_back()` | `(BoundedDeque<T>, Option<T>) ![]` | Empty returns unchanged value and None; normal deque order. |
+| `peek_front()`, `peek_back()` | `Option<T> ![]` | Observe without removal. |
+| `len()`, `capacity()`, `is_empty()`, `is_full()` | `usize`, `usize`, `bool`, `bool`, all `![]` | O(1) observations. |
+| `iter()`, `clear()` | `Iter<T> ![]`, `BoundedDeque<T> ![]` | Snapshot traversal / empty value retaining capacity and overflow policy. |
+
+Deque amortized/COW costs apply. Eq/Hash require corresponding T evidence and
+include capacity, overflow policy and logical sequence. Overflow never blocks
+a task or silently changes policy; backpressure belongs to stream/synchronization.
 
 ## 11. Iteration And Effectful Consumption
 
@@ -1523,6 +1497,12 @@ limits still apply during iteration and callback execution.
 | `Iter<T>` API | Return Type | Contract |
 |---|---|---|
 | `empty()` | `Iter<T> ![]` | Empty iterator. |
+| `once(value: T)`, `repeat_n(value: T, count: usize)` | `Iter<T> ![]` | One item / a finite repeated value; preserve value-copy and affine restrictions; O(1) cursor state. |
+| `init(count: usize, f: usize -> T ![])` | `Iter<T> ![]` | Lazy indexed generation; no callback at construction, increasing indices when consumed. |
+| `unfold<S>(state: S, step: S -> Option<(T, S)> ![])` | `Iter<T> ![]` | Explicit state transition; None ends the sequence. Reusing an iterator repeats the same observation; no shared mutable cursor. |
+| `peek()` | `Option<T> ![]` | Observe the next element without returning a different cursor. May recompute pure work; not an implicit memoization promise. |
+| `scan<A, U>(initial: A, step: (A, T) -> (A, U) ![])` | `Iter<U> ![]` | Thread explicit accumulator state, emitting one U per input; does not emit initial itself. |
+| `Iter<Iter<U>>.flatten()` | `Iter<U> ![]` | Concatenate in outer/inner order, equivalent to flat_map(identity). |
 | `next()` | `Option<(T, Iter<T>)> ![]` | One step with no update to another observer's iterator. |
 | `map<U>(f: T -> U ![])` | `Iter<U> ![]` | Apply a pure callback once per requested element. |
 | `filter(predicate: T -> bool ![])` | `Iter<T> ![]` | Yield matching elements in input order. |
@@ -1534,16 +1514,31 @@ limits still apply during iteration and callback execution.
 | `take(count: usize)`, `skip(count: usize)` | `Iter<T> ![]` | First at most `count` elements / remainder after at most that many. Zero is valid. |
 | `take_while(predicate: T -> bool ![])`, `skip_while(predicate: T -> bool ![])` | `Iter<T> ![]` | Prefix selected/rejected by the predicate; preserve order. |
 | `chunks(size: usize)` | `Iter<Array<T>> ![Error<CollectionError>]` | Non-overlapping chunks, with a possibly shorter final chunk. Reject zero at adapter construction. |
+| `windows(size: usize)` | `Iter<Array<T>> ![Error<CollectionError>]` | Overlapping full windows, advancing one item each time; no output when the input is shorter than `size`. Reject zero at construction. |
+| `step_by(step: usize)` | `Iter<T> ![Error<CollectionError>]` | Yield input ordinals `0, step, 2 * step, ...`; reject zero at construction. |
 
-`CollectionError` is the ordinary std ADT `InvalidChunkSize(usize)`. A pure
-lazy callback must not observe mutable captured state, be nondeterministic,
-or request observable actions, including actions hidden by a default handler;
-stateful/effectful work belongs in consumers, where the compiler retains its
-capture, effect and requested-action summaries. Adapters retain their input
-snapshots and constant additional cursor state; `flat_map` also retains its
-active inner iterator and `chunks` allocates its current chunk. They must not
-accumulate already consumed items in extra buffers. An input's documented
-snapshot/view may still retain its underlying source allocation.
+`CollectionError` is an ordinary standard ADT:
+
+```etas
+public enum CollectionError {
+    InvalidChunkSize(usize),
+    InvalidWindowSize(usize),
+    InvalidStep(usize),
+    InvalidCapacity(usize),
+    Full,
+    IncompatibleBounds,
+    IncompatibleComparator,
+}
+```
+
+| Lazy Adapter Rule | Requirement |
+|---|---|
+| Callbacks | Deterministic; no mutable captured-state observation or observable actions, including default-handled actions. Stateful/effectful callbacks use section 11.2 consumers. |
+| Storage | Constant cursor state plus retained input; `flat_map` also keeps its active inner iterator. `chunks`/`windows` may buffer up to `size` items, not all consumed prefixes. |
+| Output snapshots | Previously emitted arrays remain unchanged. Copying a window can cost `O(size)`; overlapping output does not promise linear total copying. |
+| Failures | Validate zero sizes/steps at construction. Callback/iteration execution still obeys inherited limits. |
+
+An input's documented snapshot/view may still retain its source allocation.
 
 ### 11.2 Consumers And Callback Effects
 
@@ -1558,7 +1553,11 @@ rolled back. No implicit retry, resampling or parallel execution is introduced.
 |---|---|---|
 | `collect()`, `to_array()` | `Array<T> ![]` | Ordered bulk collection; `collect` is the array convenience form, not an unconstrained generic conversion. |
 | `to_list()` | `List<T> ![]` | Ordered bulk collection. |
+| `Iter<(A, B)>.unzip()` | `(Array<A>, Array<B>) ![]` | One traversal, preserving both component orders; O(n) work/storage. |
+| `min_by_key<K ~ Order>(key: T -> K ![])`, `max_by_key<K ~ Order>(key: T -> K ![])` | `Option<T> ![]` | Compute each visited key once; first equivalent extremum, None on empty. |
 | `count()` | `usize ![]` | Number of elements. |
+| `nth<I ~ Index>(index: I)` | `Option<T> ![]` | Zero-based access by traversal; invalid/out-of-range is `None`; no shared cursor is advanced. |
+| `last()` | `Option<T> ![]` | Traverse to the final item; empty is `None`. |
 | `for_each<effect E>(f: T -> unit ![E])` | `unit ![E]` | Visit every element without allocating an output sequence. |
 | `map_collect<U, effect E>(f: T -> U ![E])` | `Array<U> ![E]` | Effectful ordered map with eager output. |
 | `filter_collect<effect E>(predicate: T -> bool ![E])` | `Array<T> ![E]` | Effectful ordered selection with eager output. |
@@ -1597,6 +1596,8 @@ flow infers the callback's residual `Error<IOError>` and retains the requested
 
 ## 12. Generic Sequence Algorithms
 
+### 12.1 Sorting, Search And Basic Transforms
+
 The following free flows belong to `std.collections`. They operate on arrays;
 other containers use `iter().collect()` or a slice's `to_array()` explicitly.
 They preserve the original input values and do not require new operators or
@@ -1619,17 +1620,46 @@ mutable-reference APIs.
 | `unique<T ~ Hash>(values: Array<T>)` | `Array<T> ![]` | Remove all later duplicates, retaining first-occurrence order; expected `O(n)`. |
 | `partition<T, effect E>(values: Array<T>, predicate: T -> bool ![E])` | `(Array<T>, Array<T>) ![E]` | Matching/nonmatching arrays, each retaining input order; invoke the predicate once per item; `O(n)` plus callback work. |
 
-Sort and search comparators obey section 10.2, including stability under repeated
-calls. Their call counts/order are algorithm-dependent: a comparator must not
-be used to perform logging, approvals, model calls or mutable-counter updates.
-`partition`, unlike comparison-based algorithms, explicitly supports callback
-effects. Sorting may use `O(n)` auxiliary storage. Search results use comparator
-equivalence, not a separate equality test. Inputs to merge/search must use the
-same order; the APIs do not silently sort them. Violating a sorted-input or
-comparison-law precondition gives no meaningful search-order guarantee, but
-must not cause unsafe access or bypass checked execution.
-The `Err` insertion position from binary search is ordinary result data, not
-an `Error<usize>` action; it does not need postfix `?`.
+| Algorithm Boundary | Rule |
+|---|---|
+| Comparators | Section 10.2 applies; call order/count is algorithm-dependent. No logging, approvals, model calls or mutable-counter updates. |
+| Effectful predicate | `partition` explicitly supports callback effects and preserves input order within each output. |
+| Storage | Sorting may use `O(n)` auxiliary storage; original values remain unchanged. |
+| Search / merge precondition | Inputs use the same comparator order; no implicit sorting. Search uses comparator equivalence, not separate `==`. |
+| Invalid precondition/law | No meaningful search-order guarantee, but no unsafe access or authority bypass. |
+| Binary-search `Err` | Insertion position is ordinary result data, not `Error<usize>`; no postfix `?` is needed. |
+
+### 12.2 Grouping, Counting And Selection
+
+These flows also belong to `std.collections`. They return existing containers;
+no Counter/MultiMap language construct or implicit shared mutation is needed.
+
+| API | Result | Contract / Cost |
+|---|---|---|
+| `group_by<T, K ~ Hash, effect E>(items: Iter<T>, key: T -> K ![E])` | `Map<K, Array<T>> ![E]` | Global grouping; keys in first-seen order and items in input order. Key called once per item; expected O(n), O(n) output. |
+| `count_by<T, K ~ Hash, effect E>(items: Iter<T>, key: T -> K ![E])` | `Map<K, usize> ![E]` | First-seen key order; checked counts; expected O(n), O(distinct keys) storage. |
+| `frequencies<T ~ Hash>(items: Iter<T>)` | `Map<T, usize> ![]` | count_by with identity. |
+| `merge_counts<K ~ Hash>(left: Map<K, usize>, right: Map<K, usize>)` | `Map<K, usize> ![]` | Checked addition on conflicts; left order then new right keys; expected O(n + m). Zero is retained as explicit data. |
+| `group_adjacent_by<T, K ~ Eq>(items: Iter<T>, key: T -> K ![])` | `Iter<(K, Array<T>)> ![]` | Only consecutive equal keys; no sorting. Cache boundary lookahead/key. O(n) traversal; buffer the current run, which may be large. |
+| `top_k<T ~ Order>(items: Iter<T>, k: usize)`, `bottom_k<T ~ Order>(items: Iter<T>, k: usize)` | `Array<T> ![]` | Highest/lowest k in descending/ascending order; equal items retain input order. Zero consumes none; k > n returns all sorted. |
+| `top_k_by<T>(items: Iter<T>, k: usize, compare: (T, T) -> i32 ![])`, `bottom_k_by<T>(items: Iter<T>, k: usize, compare: (T, T) -> i32 ![])` | `Array<T> ![]` | Same tie/output rules with a lawful total comparator. |
+| `top_k_by_key<T, K ~ Order>(items: Iter<T>, k: usize, key: T -> K ![])`, `bottom_k_by_key<T, K ~ Order>(items: Iter<T>, k: usize, key: T -> K ![])` | `Array<T> ![]` | Cache exactly one key per visited item; no callback when k = 0. |
+| `select_nth<T ~ Order, I ~ Index>(values: Array<T>, index: I)` | `(Array<T>, T) ![Error<IndexError>]` | Return a reordered value and its nth item; preceding/following items compare <=/>= it. Original unchanged; equivalent items need not be stable. O(n) comparisons. |
+| `select_nth_by<T, I ~ Index>(values: Array<T>, index: I, compare: (T, T) -> i32 ![])` | `(Array<T>, T) ![Error<IndexError>]` | Same partition contract; invalid index, including any index on empty, raises IndexError. |
+| `is_sorted<T ~ Order>(items: Iter<T>)`, `is_sorted_by<T>(items: Iter<T>, compare: (T, T) -> i32 ![])` | `bool ![]` | Nondecreasing; empty/singleton true; stop at first inversion; O(n) comparisons. |
+| `partition_point<T>(values: Array<T>, predicate: T -> bool ![])` | `usize ![]` | True-prefix/false-suffix input; return first false or len; O(log n) predicate calls. Invalid monotonicity gives no meaningful boundary, never unsafe access. |
+| `dedup_by<T>(values: Array<T>, equal: (T, T) -> bool ![])` | `Array<T> ![]` | Collapse adjacent equivalence runs, retaining first representatives; lawful equivalence required; O(n) comparisons. |
+| `dedup_by_key<T, K ~ Eq>(values: Array<T>, key: T -> K ![])`, `unique_by_key<T, K ~ Hash>(values: Array<T>, key: T -> K ![])` | `Array<T> ![]` | Adjacent/global duplicate removal; first representatives retained, key computed once per item. O(n) / expected O(n). |
+| `rotate_left<T>(values: Array<T>, count: usize)`, `rotate_right<T>(values: Array<T>, count: usize)` | `Array<T> ![]` | Empty unchanged; count modulo len otherwise; O(n) work, original unchanged. |
+
+| Algorithm Boundary | Rule |
+|---|---|
+| Top-K cost | For k > 0, retain at most min(k, n) candidates; O(n log(k + 1) + k log(k + 1)) comparisons and O(k) working storage as an upper bound. Do not fully materialize/sort n items when k is small. |
+| Pure callbacks | Same deterministic/non-suspending/no-requested-action checks as comparators and lazy Iter adapters. An empty escaping row alone is insufficient. |
+| Effectful grouping | group_by/count_by preserve E and callback summaries, call once per input in order, and stop on failure; no rollback of completed actions. |
+| Counts / sizes | Checked usize arithmetic and existing execution-fault rules; no wrap. Global grouping and one adjacent run can grow with input; inherited limits still apply. |
+| Infinite input | Top-K/global grouping need exhaustion; lazy grouping may never finish an infinite equal-key run. Apply take or a bounded source consumer explicitly. |
+| Value semantics | No in-place mutation visible through another value; reuse/COW is an implementation choice. Existing snapshot/copy costs still apply. |
 
 ## 13. Option And Result APIs
 
@@ -1651,6 +1681,9 @@ is `![]`. Each operation is `O(1)` plus callback/value-copy work.
 | `Option<T>.or_else<effect E>(fallback: () -> Option<T> ![E])` | `Option<T> ![E]` | Call fallback only on `None`. |
 | `Option<T>.ok_or<F>(error: F)` | `Result<T, F>` | `Some` becomes `Ok`; `None` becomes `Err`. Error data is an eagerly evaluated argument. |
 | `Option<T>.ok_or_else<F, effect E>(error: () -> F ![E])` | `Result<T, F> ![E]` | Construct error data only on `None`. |
+| `Option<T>.zip<U>(other: Option<U>)` | `Option<(T, U)>` | `Some` only when both inputs are `Some`; argument evaluation is eager. |
+| `Option<Option<T>>.flatten()` | `Option<T>` | Remove one Option layer; either `None` becomes `None`. |
+| `Option<Result<T, F>>.transpose()` | `Result<Option<T>, F>` | `None` becomes `Ok(None)`; `Some(Ok(v))` becomes `Ok(Some(v))`; `Some(Err(e))` becomes `Err(e)`. |
 | `Result<T, F>.is_ok()`, `is_err()` | `bool` | Inspect the variant. |
 | `Result<T, F>.unwrap()` | `T` | `Ok` payload; `Err` calls `abort`; it does not re-perform `Error<F>`. |
 | `Result<T, F>.unwrap_or(default: T)` | `T` | Payload or supplied value; argument evaluation is eager. |
@@ -1660,9 +1693,471 @@ is `![]`. Each operation is `O(1)` plus callback/value-copy work.
 | `Result<T, F>.and_then<U, effect E>(f: T -> Result<U, F> ![E])` | `Result<U, F> ![E]` | Bind only `Ok`. |
 | `Result<T, F>.or_else<G, effect E>(f: F -> Result<T, G> ![E])` | `Result<T, G> ![E]` | Recover only `Err`. |
 | `Result<T, F>.ok()`, `err()` | `Option<T>`, `Option<F>` respectively | Keep the selected payload or return `None`. |
+| `Result<Result<T, F>, F>.flatten()` | `Result<T, F>` | Remove one Result layer with the same error type; preserve the first `Err`. |
+| `Result<Option<T>, F>.transpose()` | `Option<Result<T, F>>` | `Ok(None)` becomes `None`; `Ok(Some(v))` becomes `Some(Ok(v))`; `Err(e)` becomes `Some(Err(e))`. |
 
 `Some`/`None` and `Ok`/`Err` remain the existing enum constructors. Empty
 escaping rows do not imply that `unwrap` returns on every input or that a
 callback is non-suspending. Lazy fallback APIs must not evaluate the unselected
 branch, and must retain its checked may-effect upper bound in the callable's
 contract without pretending that it executed.
+
+## 14. Time And Randomness
+
+### 14.1 Time Values And Arithmetic
+
+`std.runtime.time` is the canonical module; clocks/deadlines are not calendar
+or timezone APIs. Pure conversions return Result data; observed time and waits
+use Clock actions. Existing `WallTime(Duration)` limits use the same Duration.
+
+| Public Type | Definition / Invariant |
+|---|---|
+| `Duration` | Value record `{ millis: u128 }`; nonnegative elapsed milliseconds. Zero is valid. |
+| `Time` | Value record `{ unix_millis: i128 }`; UTC milliseconds relative to the Unix epoch, including earlier dates. Not a monotonic deadline. |
+| `Instant` | Opaque monotonic sample tied to one clock domain/run. Not ordinary serializable or cross-run comparable data. |
+| `TimeError` | Enum: `Overflow`, `InvalidOrder`, `ClockMismatch`, `Unavailable`, `Host(string)`. |
+
+| `std.runtime.time` API | Result | Contract |
+|---|---|---|
+| `Duration.from_millis(value: u128)` | `Duration ![]` | Exact construction. |
+| `Duration.from_seconds(value: u128)` | `Result<Duration, TimeError> ![]` | Checked multiplication by 1000. |
+| `Duration.as_millis()`, `as_seconds()` | `u128 ![]` | Milliseconds / whole seconds rounded down. |
+| `Duration.checked_add(other: Duration)`, `checked_sub(other: Duration)`, `checked_mul(factor: u128)` | `Result<Duration, TimeError> ![]` | Overflow fails; negative subtraction is `InvalidOrder`. |
+| `Time.checked_add(duration: Duration)`, `checked_sub(duration: Duration)` | `Result<Time, TimeError> ![]` | Exact timestamp arithmetic or `Overflow`. |
+| `Time.since(earlier: Time)` | `Result<Duration, TimeError> ![]` | Nonnegative elapsed wall time; reversed order fails. Not suitable for timeout enforcement. |
+| `Instant.since(earlier: Instant)` | `Result<Duration, TimeError> ![]` | Reject different clock domains or reversed samples. |
+| `now()` | `Time ![Error<TimeError>]` | Request/default-handle `Clock.now`; wall time may move backwards. |
+| `monotonic()` | `Instant ![Error<TimeError>]` | Request/default-handle `Clock.monotonic`; samples do not decrease within a domain. |
+| `elapsed(start: Instant)` | `Duration ![Error<TimeError>]` | Read monotonic time and validate its relation to `start`. |
+| `sleep(duration: Duration)` | `unit ![Error<TimeError>]` | Request/default-handle `Clock.sleep`; suspend the current task without blocking the scheduler. |
+
+| Time Boundary | Rule |
+|---|---|
+| Sleep / deadlines | Timer uses monotonic time; wake no earlier than the requested duration unless cancelled. Actual wake may be later. Zero completes without a delay; it is not a guaranteed yield. |
+| Inheritance | Local timeouts only shorten the parent deadline. Partial progress/retry cannot reset the enclosing deadline or budget. |
+| Cancellation | Keeps structured unwind semantics; no successful timer completion is forged. Catching an incidental adapter error cannot uncancel the scope. |
+| Replay | Record clock observations and wake decisions; replay uses them, not current wall time. A saved wall timestamp cannot recreate a live Instant. |
+| Precision | Millisecond API precision does not promise millisecond scheduler latency. Calendar parsing, timezone and business-day arithmetic belong in separate packages. |
+
+### 14.2 Seeded And Secure Randomness
+
+`std.random` separates deterministic value computation from external entropy.
+`Rng` is a value-semantic, non-cryptographic generator; copying it copies its
+sequence position, not a shared mutable source.
+
+| Public Type / Action | Definition / Invariant |
+|---|---|
+| `Rng` | Opaque ordinary value holding algorithm/version and state; no live host resource. |
+| `RandomError` | Enum: `InvalidRange`, `Unavailable`, `Host(string)`. |
+| `Random.entropy(count: usize) -> bytes` | Standard action for protected platform entropy. It is not a Time or Secret action, and adds no source keyword. |
+
+| `std.random` API | Result | Contract |
+|---|---|---|
+| `Rng.new(seed: u64)` | `Rng ![]` | Deterministic seed initialization; no implicit clock/entropy request. |
+| `Rng.next_u64()` | `(Rng, u64) ![]` | Return successor state and the next 64-bit pseudorandom word. |
+| `Rng.next_f64()` | `(Rng, f64) ![]` | Uniform choice from the 53-bit grid in [0, 1); never one. |
+| `Rng.int_range<I ~ std.math.Integer>(lower: I, upper: I)` | `Result<(Rng, I), RandomError> ![]` | Uniform half-open interval by rejection sampling; reject `lower >= upper`. Do not use biased modulo reduction. |
+| `Rng.choose<T>(values: Array<T>)` | `(Rng, Option<T>) ![]` | Uniform index; empty input returns unchanged state and `None`. |
+| `Rng.shuffle<T>(values: Array<T>)` | `(Rng, Array<T>) ![]` | Value-preserving unbiased permutation; preserve original input; linear swaps/draws in expectation. |
+| `secure_bytes(count: usize)` | `bytes ![Error<RandomError>]` | Request/default-handle `Random.entropy`; exact byte count from the platform cryptographic source, or failure. Zero returns empty without requesting entropy. |
+
+| Randomness Boundary | Rule |
+|---|---|
+| Seeded reproducibility | Algorithm/version and output test vectors are part of the std compatibility profile; no host-random implementation substitution. Preserve successor state explicitly. |
+| Concurrency | Sharing the same Rng value repeats its stream. No implicit independent stream splitting or hidden mutable global generator. |
+| Security | Rng is not for keys/tokens. Secure entropy must fail closed when unavailable, never fall back to Rng, timestamps or predictable data. |
+| Data versus secrecy | Returned bytes are ordinary data, not an automatic `Secret` wrapper or permission to disclose a secret. Applications remain responsible for their use and exposure. |
+| Trace / replay | Entropy is a nondeterministic requested action. Sensitive payload capture follows protected trace storage; replay needs retained authorized bytes or reports unavailable replay, never silently draws new bytes. |
+| Bounds | All draws/allocations obey inherited limits; rejection sampling is not exempt from cancellation/budget checks. |
+
+## 15. Managed Resource Lifecycles
+
+### 15.1 Scope And Cleanup
+
+`std.resource.scope` exposes the cleanup contract already required by managed
+task frames. It is a compiler-recognized std flow, not a `using`/`finally`
+keyword or a general shared-reference feature.
+
+| Public Type / API | Result / Definition | Contract |
+|---|---|---|
+| `CleanupFailure` | Record: `resource_kind: string`, `code: string`, `message: string` | Redacted diagnostic, not a live resource or permission token. |
+| `ResourceError` | Enum: `CleanupFailed(Array<CleanupFailure>)` | Failures encountered while releasing a normally completed scope. |
+| `std.resource.scope<R, effect E>(body: () -> R ![E])` | `R ![E, Error<ResourceError>]` | Establish a fresh resource owner, run body, join owned child work and release owned resources before returning. |
+
+| Lifecycle Boundary | Required Behavior |
+|---|---|
+| Registration | Successful standard resource creation registers with the nearest resource scope, or otherwise the managed task/root owner, before exposing the handle. Failed acquisition cleans up any partial allocation. Ordinary helper returns do not create an owner boundary. |
+| Escape | Newly owned handles cannot escape through R, captured closures, handlers or outer mutable bindings. Compiler summaries preserve owner relationships; unknown external escape is rejected. |
+| Existing handles | Borrowing an outer resource does not transfer ownership or close it at inner-scope exit. Ordinary data/results may escape. |
+| Alias | Handle copies identify one resource; they do not copy a connection/file. Closing invalidates all aliases. Concurrent use obeys the resource's access contract. |
+| Release order | Reverse successful acquisition order, respecting dependencies; children finish/cancel first. Explicit close marks a registration released; it is not closed twice. |
+| Wrapping | Admitted TLS upgrade transfers the TCP registration into the TLS handle atomically. Every raw TCP alias becomes unusable; handshake failure closes the connection. Pre-admission validation/busy failure does not transfer ownership. |
+| Normal return | Release everything; if cleanup fails, raise `ResourceError.CleanupFailed` rather than return a successful value. |
+| Existing failure / finish / cancellation | Preserve the primary control outcome, continue cleanup, and attach cleanup failures to trace diagnostics. No replacement of an original typed error by an unrelated cleanup error. |
+| Authority | Cleanup retains action/provenance/spec checks. Denied remote flushing or protocol operations are not performed; local disposal still prevents leaked handles and the denial is recorded. |
+| Observability | Requested close/flush actions and their possible failures belong to the owning scope summary, including implicit cleanup. Cleanup is not an invisible purity escape. |
+| Limits | Cleanup has a bounded runtime cleanup allowance, not a fresh application budget. Forced process termination cannot guarantee remote cleanup or durable completion. |
+| Extension | Standard bindings register resource release primitives. This API does not allow an arbitrary library to forge ownership/evidence by naming a method `close`. |
+
+### 15.2 Stream And Transport Values
+
+| Type / Configuration | Public Contract |
+|---|---|
+| `std.stream.ByteLimit` | Record `{ bytes: usize }`; zero is valid; no signed count or token-to-byte reinterpretation. |
+| `std.stream.Timeout` | Alias of `std.runtime.time.Duration`; APIs use `Option<Timeout>`, with `None` retaining parent deadlines. |
+| `std.net.tcp.Host` | Opaque validated hostname/IP value. `Host.parse(text: string) -> Result<Host, NetworkError> ![]` rejects empty input, schemes, paths and embedded ports; does not resolve DNS. `to_string() -> string ![]` returns its canonical spelling. |
+| `std.net.tcp.Port` | Opaque connect-port value. `Port.new(value: u16) -> Result<Port, NetworkError> ![]` accepts 1..65535; `value() -> u16 ![]` observes it. |
+| `std.tls.Host` | Re-export/alias of `std.net.tcp.Host`, never a second incompatible nominal type. |
+| `std.net.tcp.NetworkError` | Record `{ code: string, message: string }`. Stable codes: invalid_input, resolve_failed, refused, timed_out, unavailable, host. Messages are redacted diagnostics, not machine-readable codes. |
+| `std.tls.TlsError` | Record `{ code: string, message: string }`. Stable codes: invalid_config, busy, certificate, hostname, protocol, timed_out, host. Validation failure never falls back to plaintext. |
+| `TcpOptions` | Record `{ timeout: Option<Timeout>, nodelay: bool }`; `DefaultTcpOptions` is `{ timeout = None, nodelay = true }`. |
+| `TlsVersion` / `TlsTrust` | Enums `V12, V13` / `Platform, Bundle(bytes)`; bundles contain public trust anchors, not secret client keys. |
+| `TlsConfig` | Record `{ timeout: Option<Timeout>, minimum: TlsVersion, trust: TlsTrust, alpn: Array<string> }`; `DefaultTlsConfig` uses None, V12, Platform and an empty ALPN list. |
+| TLS validation | Always check certificate chain and server identity; no implicit insecure fallback. Empty ALPN makes no application-protocol claim; requested unsupported negotiation fails with `TlsError`. |
+
+The existing connect/handshake APIs gain ordinary default arguments
+`options = DefaultTcpOptions` and `config = DefaultTlsConfig`. DNS/connect and
+handshake each respect a single local timeout and the inherited parent deadline.
+
+| Additional `std.stream` API | Result | Requested Action / Contract |
+|---|---|---|
+| `read_exact<S ~ ByteStream>(stream: S, count: usize, timeout: Option<Timeout> = None)` | `bytes ![Error<StreamError>]` | `Stream.read<S>`; exactly count bytes or `UnexpectedEof`. Consumed prefixes are not restored. Zero validates an open readable handle, then completes without a read. |
+| `write_all<S ~ ByteStream>(stream: S, body: bytes, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.write<S>`; extends the existing API with an optional whole-write deadline. Partial failure is not rollback. |
+| `flush<S ~ ByteStream>(stream: S, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.flush<S>`; bounded adapter flush, not remote acknowledgment or filesystem durability. |
+
+`StreamError` additionally includes `UnexpectedEof`, `Busy` and
+`UnsupportedOperation`. File mode violations use the latter. `ByteStream`
+does not statically promise both read and write access; no general subtyping or
+unchecked readable/writable cast is introduced.
+
+| Same-Resource Operations | Required Admission Rule |
+|---|---|
+| Two reads, or two writes | Reject the later overlapping call with `StreamError.Busy`; do not silently split input or interleave output. Admission is atomic across aliases. |
+| TCP/TLS read plus write | Permit one reader and one writer concurrently. Protocol-level request ordering remains the application's responsibility. |
+| FileStream read plus write | Reject overlap: the stream has one shared file position. Separate opens have distinct cursors but still share file/region authority and conflict checks. |
+| Compound operation | `read_exact`/`read_until_limit` hold the read slot for the whole call; `write_all`/`flush` hold the write slot. Internal chunks do not release it or reacquire as unrelated calls. |
+| Close | Mark closed atomically, wake pending operations and release the resource. Close is idempotent, never Busy; no successful I/O may be fabricated after closure. |
+| TLS upgrade | Require no active I/O before transfer; pre-admission busy/validation failure leaves TCP ownership unchanged. Once handshake begins, failure closes the underlying connection. |
+| Cancellation | Release admission slots on every unwind path. A local typed error cannot clear cancellation of the enclosing scope. |
+| Analysis / ordering | Known conflicting calls must not be parallelized automatically. Explicit overlapping calls retain the dynamic guard; the winning admission/order is trace-visible. Different resources are not serialized globally. |
+
+### 15.3 Filesystem Lifecycle And Bounded Operations
+
+`std.io.IOError` is the shared nominal error enum, re-exported by `std.fs`
+and `std.runtime.error`. Independent same-named error types are not equivalent.
+
+| Supporting Type | Contract |
+|---|---|
+| `IOError` | Existing Eof/Interrupted/PermissionDenied/InvalidUtf8/Host plus `NotFound`, `AlreadyExists`, `InvalidInput`, `NotDirectory`, `IsDirectory`, `DirectoryNotEmpty`, `Closed`, `TimedOut`, `LimitExceeded`, `Unsupported`. |
+| `FileMode` | Enum: `Read`, `WriteTruncate`, `Append`, `ReadWrite`, `CreateNew`. |
+| `FileStream<R>` | Opaque region-indexed handle satisfying `ByteStream`; registration/aliases follow section 15.1. |
+| `FsStat` | Record `{ is_file: bool, is_dir: bool, len: u64 }`; flags describe the resolved target and len is file bytes. Directory length is zero, not a portable entry count. |
+
+All following signatures use `R ~ std.fs.Region`, inherit path-escape guards,
+and leave `Error<IOError>` after standard handling.
+
+| `std.fs` API | Result | Requested Action / Contract |
+|---|---|---|
+| `open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)` | `FileStream<R> ![Error<IOError>]` | `Fs.read<R>` and/or `Fs.write<R>` according to mode; a dynamic mode conservatively requires both. Stream identity retains the mode and concrete region. |
+| `read_bytes_limited<R ~ Region>(path: WorkspacePath<R>, max_bytes: usize)` | `bytes ![Error<IOError>]` | `Fs.read<R>`; inclusive size cap, `LimitExceeded` rather than truncation. Reading/stat races cannot bypass the bound. |
+| `list_limited<R ~ Region>(path: WorkspacePath<R>, max_entries: usize, max_bytes: usize)` | `List<WorkspacePath<R>> ![Error<IOError>]` | `Fs.list<R>`; cap entry count and UTF-8 bytes of relative names; no successful partial listing. |
+| `create_dir<R ~ Region>(path: WorkspacePath<R>, recursive: bool = false)` | `unit ![Error<IOError>]` | `Fs.create_dir<R>`; existing directory succeeds; other existing targets fail. Nonrecursive creation requires existing parents. |
+| `rename<R ~ Region>(source: WorkspacePath<R>, destination: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.rename<R>`; same region, no replacement of an existing destination, no cross-device copy fallback. |
+| `remove_file<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_file<R>`; unlink the file/link, not the link's target; missing raises NotFound. |
+| `remove_dir<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_dir<R>`; empty directories only. Recursive deletion remains an explicit checked traversal. |
+| `sync<R ~ Region>(file: FileStream<R>)` | `unit ![Error<IOError>]` | `Fs.sync<R>`; request backend stable-storage synchronization or Unsupported, not merely flush user buffers. |
+
+| Open / Mutation Boundary | Rule |
+|---|---|
+| Read | Existing file, read-only; no creation. |
+| WriteTruncate / Append | Create if missing; respectively truncate on open / place each accepted write at current end. Append does not imply atomic multi-write records. |
+| ReadWrite | Existing file, no truncation or creation. |
+| CreateNew | Atomically create a missing file for writing; existing target is AlreadyExists. |
+| Close / durability | Close releases ownership; it does not implicitly fsync. `atomic_replace` promises visibility atomicity, not crash durability. |
+| Failure | Observe partial/uncertain effects honestly; no automatic retry of writes, append, rename or deletion. |
+| Region provenance | Stream reads/writes over FileStream remain covered by the originating FileIO region; erasing its concrete type cannot broaden authority. |
+
+
+### 15.4 Effectful Pull Sources
+
+`std.stream.Source<T, E>` is a managed, single-cursor resource, not the
+repeatable pure `Iter<T>`. E is its latent effect row, including release work.
+The result schemes below infer G as the union of E and callback row F; G is
+notation for an inferred row, not a new source operator or generic argument.
+
+| Public Type | Definition / Contract |
+|---|---|
+| `Source<T, effect E>` | Opaque managed source with a checked owner, current state, pull/release callbacks and latent action/effect/capture summaries. No ordinary serialization or independent cursor copy. |
+| `SourceError` | Enum: `Busy`, `Closed`, `InvalidChunkSize(usize)`, `InvalidLineLimit(usize)`, `LineTooLong`, `InvalidUtf8`. |
+| Source aliases | Refer to the same cursor. One successful next advances it for all aliases; overlapping next fails Busy rather than fetching two values unpredictably. |
+
+| `std.stream` API / Method | Result Scheme | Contract |
+|---|---|---|
+| `unfold<S, T, effect E>(state: S, step: S -> (S, Option<T>) ![E], release: S -> unit ![E])` | `Source<T, E> ![]` | Register state and callbacks in the active managed owner; do not invoke them on construction. E covers both callbacks. |
+| `from_iter<T>(items: Iter<T>)` | `Source<T, E> ![]`, E empty | Adapt a pure iterator to one managed cursor; does not make the original iterator effectful or consume it yet. |
+| `chunks<S ~ ByteStream>(stream: S, size: usize, timeout: Option<Timeout> = None)` | `Source<bytes, E> ![Error<SourceError>, Error<StreamError>]` | E is the residual `Error<StreamError>` row for stream read/close. Reject zero size; each item has 1..size bytes; EOF ends. |
+| `lines<S ~ ByteStream>(stream: S, max_line_bytes: usize, timeout: Option<Timeout> = None)` | `Source<string, E> ![Error<SourceError>, Error<StreamError>]` | Same stream E; positive line bound, strict UTF-8. Strip LF or CRLF; yield a final unterminated nonempty line once. Empty lines are valid items. |
+| `Source<T, E>.next()` | `Option<T> ![E, Error<SourceError>]` | None means exhausted, never a swallowed transport error. Successful step commits successor state before returning its item. |
+| `Source<T, E>.close()` | `unit ![E, Error<SourceError>]` | Idempotent disposal, not traversal/draining. Release callback runs at most once. |
+| `map<U, effect F>(f: T -> U ![F])` | `Source<U, G> ![Error<SourceError>]` | Validate a non-busy open input, transfer it into a lazy adapter; callback runs once per pulled item, not at construction. |
+| `filter<effect F>(predicate: T -> bool ![F])` | `Source<T, G> ![Error<SourceError>]` | Same transfer checks; pull until one item passes or input ends, with no unbounded prefetch. |
+| `take(count: usize)` | `Source<T, E> ![Error<SourceError>]` | Same transfer checks; bound delivered items and close input at the bound. Zero performs no pull, but disposal still occurs when consumed/closed. |
+| `collect(max_items: usize)` | `Array<T> ![E, Error<SourceError>]` | Consume at most max_items, then close; bounded-prefix result, not proof of EOF. Zero closes without pulling. |
+| `for_each<effect F>(f: T -> unit ![F], max_items: usize)` | `unit ![E, F, Error<SourceError>]` | Sequential callback consumption with the same prefix bound and cleanup. |
+| `fold<A, effect F>(initial: A, f: (A, T) -> A ![F], max_items: usize)` | `A ![E, F, Error<SourceError>]` | Thread an ordinary accumulator in input order, then close; earlier external effects are not rolled back. |
+
+| Source Boundary | Required Rule |
+|---|---|
+| Creation / latent summaries | Preserve owner, E, requested/default actions and callback dependencies through imports, containers and adapters. Creating an adapter performs no callback/I/O; consuming or closing exposes the relevant summaries. |
+| Local state / optimization | Cursor allocation and view transfers retain resource/ownership dependencies even without external actions. An empty escaping row does not allow duplicating, memoizing or reordering these transitions as pure value computation. |
+| Ownership transfer | chunks/lines take operational ownership of the supplied stream; reject an already-busy/closed stream before transfer. Old raw aliases cannot bypass the wrapper or its buffering. Closing the source closes the underlying stream. |
+| Adapter transfer | map/filter/take invalidate prior input views while the returned adapter owns the cursor. Old aliases fail Closed. This is a checked resource contract, not shared mutable ordinary data. |
+| EOF / explicit close | EOF runs release, records exhaustion and makes subsequent next return None. Explicit close makes next fail Closed. Neither path repeats release. |
+| Admission failure | Busy/Closed before starting work neither advances the cursor nor disposes another active operation/owner. |
+| Step failure | Once a step starts, preserve its original typed failure, dispose the source and retain cleanup failures as diagnostics. No implicit retry of a partial read or callback; later next fails Closed. |
+| Early exit / cancellation | Terminal consumers dispose on success, error, bound exhaustion or unwind. Dropping a source relies on managed-owner cleanup; a collector cannot survive termination of its own scope. |
+| Backpressure | Each next admits only the work needed for its next item; no detached producer. filter may inspect many inputs, but inherited budgets remain active. |
+| Timeout | The optional adapter timeout bounds one complete logical pull, including all chunks of one line, not each underlying read afresh. Parent deadline never resets. |
+| Line framing | max_line_bytes counts bytes excluding the final LF/CRLF; excess raises LineTooLong. Buffering is bounded by this cap plus a bounded transport chunk/lookahead; do not accumulate the entire stream. |
+| Concurrent close | Mark disposed, cancel/wake an in-flight pull, then release its final owned state exactly once. A late completion cannot publish another item or resurrect the source. |
+| Async / var self | Pull/release may suspend under standard handlers. These are resource operations, not updating value receivers; they do not hold a caller's var-self access over suspension. |
+| Pure distinction | Source does not satisfy the pure Iterable contract. Use its explicit consumers; there is no implicit for-loop/Iter conversion hiding I/O. |
+
+```etas
+flow ReadPreview<S ~ ByteStream>(stream: S) -> Array<string> {
+    let lines = std.stream.lines(stream, max_line_bytes = 4096);
+    return lines.collect(max_items = 20);
+}
+```
+
+This transfers and closes the stream, returns a bounded prefix, and infers
+StreamError/SourceError plus requested read/close metadata. It does not turn
+transport failure into EOF or use `?` to unwrap a Result.
+
+## 16. Persistent Stores And Session Publication
+
+### 16.1 Shared Storage Types
+
+`std.memory` owns the types below. Public records are data; constructing a
+version, cursor, operation reference or receipt never creates backend evidence.
+The backend validates binding, generation, schema and retained operation state.
+
+| Public Type | Shape / Contract |
+|---|---|
+| `MemoryRegion<S>`, `Store<K, V>` | Declarative schema/store handles with checked stable region provenance; not in-memory Map values. |
+| `MemoryVersion`, `MemoryTombstone`, `MemoryCursor` | Opaque token values. Versions/tombstones belong to one key/generation; cursors to one store/query snapshot. |
+| `MemoryEntry<K, V>` | Record `{ key: K, value: V, version: MemoryVersion }`. |
+| `MemoryPage<K, V>` | Record `{ entries: List<MemoryEntry<K, V>>, cursor: Option<MemoryCursor> }`. |
+| `StorageOperationRef` | Record `{ key: string, fingerprint: string }`; one operation identity bound to one exact request. |
+| `StorageError` | Record `{ code: string, message: string, operation: Option<StorageOperationRef> }`; stable codes below, redacted explanatory message. |
+| `WriteCondition` | Enum `Any`, `Missing`, `Exists`, `Match(MemoryVersion)`. |
+| `MemoryWriteIntent<K, V>` | Immutable prepared mutation plus operation reference and receiver provenance; preparing does not publish a write. |
+| `MemoryWriteTarget<K>` | Record `{ region: string, store: Array<string>, schema_fingerprint: Option<string>, key: K }`. |
+| `MemoryWriteChange` | Enum `Written(MemoryVersion)`, `Deleted(MemoryTombstone)`. |
+| `MemoryWriteReceipt<K>` | Record `{ operation: StorageOperationRef, target: MemoryWriteTarget<K>, change: MemoryWriteChange, durability: StorageDurability }`. |
+| `StorageDurability` | Portable enum `Volatile`, `Durable`. Durable means stable storage under the backend's documented failure model, not immunity to all failures. Backend labels such as SQLite modes are metadata, not portable guarantees. |
+| `MemoryWriteRejection` | Enum `ConditionConflict(Option<MemoryVersion>, Option<MemoryVersion>)`, `Rejected(StorageError)`, `Unchanged`. Conflict payloads are expected/actual versions. |
+| `WriteOutcome<A, B>` | Enum `Committed(A)`, `NotCommitted(StorageOperationRef, B)`, `Unknown(StorageOperationRef)`. |
+| `ConfirmedOutcome<A, B>` | Enum `Committed(A)`, `NotCommitted(StorageOperationRef, B)`; no uncertain variant. |
+| `ReconcileResult<A, B>` | Enum `Found(ConfirmedOutcome<A, B>)`, `Unresolved`, `Expired`. Expired does not prove non-commit. |
+
+| `StorageError.code` | Meaning |
+|---|---|
+| `invalid_request`, `unsupported` | Invalid option/token/query or an unsupported backend operation. |
+| `schema_mismatch`, `invalid_cursor` | Stored schema incompatible with the checked binding, or stale/foreign cursor. |
+| `condition_conflict`, `rejected` | Convenience mutation did not satisfy its declared condition or was otherwise confirmed rejected. |
+| `outcome_unknown` | A convenience write may have committed; `operation` must be Some for reconciliation. |
+| `unavailable`, `timed_out`, `host` | Backend failure; use an uncertain outcome instead if commitment cannot be ruled out. |
+| `limit_exceeded`, `measure_unavailable` | Explicit API data bound exceeded or required selection measurement unavailable. Exhausting an enclosing execution budget instead ends that scope and delivers BudgetExceeded outside its boundary; it is not a StorageError. |
+
+### 16.2 Store APIs
+
+In this table `R` denotes the receiver's checked persistent place, not a new
+type argument. Standard handlers leave the shown error rows while requested
+Memory actions retain that place. K must satisfy `StorageKey`, V must satisfy
+`StorageData`, and both need the codecs in section 16.5. Encoding failure is not
+silently converted into missing data.
+
+| API | Result | Requested Action / Contract |
+|---|---|---|
+| `std.memory.region<S>(stable_id: string, store: string)` | `MemoryRegion<S> ![]` | Declare a binding; no connection or mutation at module initialization. Schema/store identity must resolve in deployment metadata. |
+| `std.memory.version(token: string)` | `MemoryVersion ![]` | Reconstruct token data only; backend validation remains mandatory. |
+| `Store<K, V>.get(key: K)` | `Option<V> ![Error<StorageError>]` | `Memory.read<R>`; None only for absent key, never backend failure. |
+| `get_entry(key: K)` | `Option<MemoryEntry<K, V>> ![Error<StorageError>]` | Value and version from the same read. |
+| `contains(key: K)` | `bool ![Error<StorageError>]` | Same existence/failure semantics as get. |
+| `page(cursor: Option<MemoryCursor>, page_size: u32)` | `MemoryPage<K, V> ![Error<StorageError>]` | `Memory.read<R>`; positive entry bound, None starts a scan. A changed snapshot invalidates the cursor rather than silently skipping/duplicating entries. |
+| `keys()` | `List<K> ![Error<StorageError>]` | Bounded full scan under inherited storage limits; same snapshot rules as pages. Use page for large stores. |
+| `prepare_put(key: K, value: V, condition: WriteCondition)` | `MemoryWriteIntent<K, V> ![Error<StorageError>]` | Validate encoding/target and bind a fresh operation identity; no backend mutation. Retain execution-context identity, not an assumed pure constant. |
+| `prepare_delete(key: K, condition: WriteCondition)` | `MemoryWriteIntent<K, V> ![Error<StorageError>]` | Same preparation contract for deletion. |
+| `MemoryWriteIntent<K, V>.operation_ref()` | `StorageOperationRef ![]` | Observe the reference before submission so it can be retained for recovery. |
+| `MemoryWriteIntent<K, V>.commit()` | `WriteOutcome<MemoryWriteReceipt<K>, MemoryWriteRejection> ![Error<StorageError>]` | `Memory.write<R>`; atomically evaluate the condition and apply this one mutation. Reusing the same intent/reference reconciles/deduplicates, not a second write. |
+| `Store<K, V>.reconcile(operation: StorageOperationRef)` | `ReconcileResult<MemoryWriteReceipt<K>, MemoryWriteRejection> ![Error<StorageError>]` | `Memory.read<R>`; query retained evidence without submitting the mutation again. |
+
+| Convenience Mutation On `Store<K, V>` | Condition / Outcome |
+|---|---|
+| `put(key: K, value: V)`, `upsert(key: K, value: V)` | Any; create or replace. Upsert is an alias, not a read/modify/write callback. |
+| `insert(key: K, value: V)` | Missing; existing key is a condition conflict. |
+| `update(key: K, value: V)` | Exists; absent key is a condition conflict. |
+| `put_versioned(key: K, value: V, version: MemoryVersion)` | Match the exact version. |
+| `delete(key: K)` | Any; absent key is successful no-op. |
+| `delete_versioned(key: K, version: MemoryVersion)` | Match the exact version; a mismatch is not successful deletion. |
+| All rows above | Return `unit ![Error<StorageError>]`; prepare and commit once, preserving `Memory.write<R>` as requested metadata. Confirmed rejection becomes condition_conflict/rejected error; Unknown becomes outcome_unknown with its operation reference. |
+| `clear()` | `unit ![Error<StorageError>]`; snapshot entries, then conditional per-key deletes. Records read and write actions; **not atomic**. Concurrent replacement causes a conflict instead of being silently deleted. Earlier deletes remain committed. |
+
+| Storage Boundary | Required Rule |
+|---|---|
+| Identity across recompilation | Same deployment binding/stable region id/store path and compatible schema reach the same persistent data. A new source revision alone does not reset it. |
+| Schema change | Reject incompatibility until an explicit migration runs; no automatic lossy coercion. |
+| Atomicity | One prepared key mutation and its condition are atomic. Multiple commits or clear are not a transaction. |
+| Idempotency | Same operation key with a different fingerprint is invalid. Deduplication is limited to the backend's retained evidence window. |
+| Cancellation / timeout | If commitment may have occurred, preserve the operation ref and reconcile; cancellation is not rollback. Crash-recoverable operation mode must durably record the ref before dispatch and reject admission if that record cannot be saved. Volatile mode promises in-run reconciliation only, not recovery after process loss. |
+| Durability | Receipt reports the achieved durability, never upgrades Volatile to Durable. |
+| Query ordering | Backend-selected but stable for a valid scan snapshot; not Map insertion order. Unsupported snapshot retention returns a clear error, not fabricated consistency. |
+| Multi-store transactions | No portable API is approved here. A `MemoryTransaction` implementation type alone does not establish atomicity, callback restrictions or retry semantics. |
+
+### 16.3 Deferred Selections
+
+`MemorySelection<V>` is a compiler-known deferred query value, not a pure
+`Iter<V>`. It retains store identity, query encoding, limits and latent
+requested/error summaries through captures, imports and prompt encoding.
+
+| API | Result | Contract |
+|---|---|---|
+| `Store<K, V>.scan()` | `MemorySelection<V> ![]` | Describe a full scan without reading it yet. |
+| `select(query: MemoryQuery<V>)`, `query(query: MemoryQuery<V>)` | `MemorySelection<V> ![Error<StorageError>]` | Validate the explicit query language/version against the bound store; query is an alias. Arbitrary Q is not accepted without query encoding. |
+| `related_to(query: MemoryQuery<V>)` | `MemorySelection<V> ![Error<StorageError>]` | Same explicit encoding contract for a registered similarity query/index. Missing support is unsupported, not an implicit model/embedding call. |
+| `MemorySelection<V>.take(count: usize)` | `MemorySelection<V> ![]` | At most count entries; zero selects none. Multiple entry bounds use the minimum. |
+| `limit(bound: Limit)` | `MemorySelection<V> ![Error<StorageError>]` | Accept Tokens/ContextTokens as content budgets, not row counts. Other dimensions are invalid here; ordinary enclosing limits still apply. |
+| `collect()` | `Array<V> ![Error<StorageError>]` | Execute bounded retrieval, recording `Memory.read<R>`. Each call is a new observation unless explicitly replayed; no hidden cross-call cache. |
+| Prompt encoding of a selection | Inferred read/error summary | Materialize under the prompt's resolved measurement context. Missing tokenizer/measurement gives measure_unavailable; no implicit inference or summary generation. |
+
+### 16.4 Session History And Context Publication
+
+`std.agent.session` reuses the storage outcome/error types above.
+
+| Public Type | Shape / Contract |
+|---|---|
+| `SessionId` | Nominal string value; constructing it does not create/authorize a session. |
+| `SessionCursor`, `SessionHistoryFence` | Backend-validated tokens tied to session, generation and selected history/context state. |
+| `SessionContextContent` | Record `{ text: string, provenance: Map<string, string> }`; caller-produced derived content, not proof of correctness. |
+| `SessionPublishedContext` | Record `{ content: SessionContextContent, fence: SessionHistoryFence, version: u64 }`. |
+| `SessionSummary` | Record `{ text: string, message_count: usize }`; compatibility view of existing published content, never a summarizer request. |
+| `SessionHistoryPage` | Record `{ fence: SessionHistoryFence, messages: Array<Message<JsonValue>>, published_context: Option<SessionPublishedContext>, summary: Option<SessionSummary>, cursor: Option<SessionCursor> }`. |
+| `SessionContextReceipt` | Record `{ operation: StorageOperationRef, session: SessionId, generation: string, context_version: u64, durability: StorageDurability }`. |
+| `SessionContextRejection` | Enum `StaleHistory`, `Rejected(StorageError)`. |
+
+| API | Result | Requested Action / Contract |
+|---|---|---|
+| `history_page(config: SessionConfig, cursor: Option<SessionCursor>, page_size: u32)` | `SessionHistoryPage ![Error<StorageError>]` | `Session.read`; positive bounded page, no implicit session creation or model call. |
+| `Conversation.load(config: SessionConfig)` | `Conversation ![Error<StorageError>]` | Load selected history/published context; preserve fence and cursor. Do not catch storage failure and silently abort or create an empty conversation. |
+| `SessionConfig.prepare_context(fence: SessionHistoryFence, content: SessionContextContent)` | `StorageOperationRef ![Error<StorageError>]` | Bind exact config/fence/content to an operation; no publication or generated summary. |
+| `SessionConfig.publish_context(fence: SessionHistoryFence, content: SessionContextContent, operation: StorageOperationRef)` | `WriteOutcome<SessionContextReceipt, SessionContextRejection> ![Error<StorageError>]` | `Session.publish`; atomic generation/history/context-version validation and publication, or confirmed/unknown outcome. |
+| `SessionConfig.reconcile_context(operation: StorageOperationRef)` | `ReconcileResult<SessionContextReceipt, SessionContextRejection> ![Error<StorageError>]` | `Session.reconcile`; resolve evidence without regenerating or republishing content. |
+
+| Session Boundary | Rule |
+|---|---|
+| Effect coverage | `Session extends Memory`; read/reconcile require history-read authority, publication requires context-write authority. Concrete session ids are runtime payloads, not arbitrary static type selectors. |
+| Cursor / fence | A changed generation or incompatible history invalidates it; stale publication never overwrites newer context. |
+| Retry | Reuse the exact operation and request. Changed content/fence requires a new prepared operation; unresolved/expired evidence is not a reason to blindly resend. |
+| Retention | Publication does not delete history; retention/deletion remains separate. SummaryPlusRecent only selects existing published content. |
+| Trust / limits | Provenance, nested secrecy, admission limits and cancellation remain checked; a public receipt record cannot manufacture backend confirmation. |
+
+
+### 16.5 Storage Encoding And Query Contracts
+
+These are standard data/spec APIs, not a universal serialization keyword.
+Custom codecs are Etas values; they cannot grant resource access or export
+protected values. A store view keeps its original resource identity.
+
+| Public Contract | Definition / Rule |
+|---|---|
+| `StorageData` | Compiler-recognized marker spec for finite, persistable data. Primitive values, tuples, ordinary records/enums and data collections qualify recursively. Nominal identity is retained. |
+| Excluded data | Live handles, tasks, continuations, flows, handlers, Sources and host secret handles are not admitted by a custom codec. Secret payload export still requires its explicit protected contract. |
+| Trust-labelled data | Standard codecs may persist admitted Trusted/Untrusted/Public/Sanitized values only with their labels and protected provenance intact. User-defined decoding cannot manufacture trusted provenance or discard nested secrecy. |
+| `StorageKey ~ StorageData + Eq` | Stable key identity. Equal keys require identical canonical encoded bytes; distinct unequal keys must not collide in their encoding. Raw float keys lack Eq. |
+| `StorageCodec<T>` | Record `{ format: string, version: u32, encode: T -> Result<bytes, StorageError> ![], decode: bytes -> Result<T, StorageError> ![] }`. Format is nonempty; version is positive. |
+| Codec callbacks | Deterministic, non-suspending, no mutable-capture observations or requested actions, including default-handled actions. The compiler checks behavior; semantic round-trip laws remain the implementer's obligation. |
+| `MemoryQuery<V>` | Transparent record `{ language: string, version: u32, payload: bytes }`. V names the expected stored value type, not evidence that the backend accepted the query. |
+
+| `std.memory` API | Result | Contract |
+|---|---|---|
+| `codec<T ~ StorageData>()` | `StorageCodec<T> ![]` | Derive a value codec when structural representation is available; otherwise require an explicit codec. Missing derivation is a compile-time error, not a runtime abort. |
+| `key_codec<K ~ StorageKey>()` | `StorageCodec<K> ![]` | Derive canonical key encoding consistent with Eq, including order-independent map/set keys. |
+| `Store<K, V>.with_codecs(key: StorageCodec<K>, value: StorageCodec<V>)` | `Store<K, V> ![]` | Declarative view with checked callback evidence and the same persistent place; no connection, migration or authority change. It does not modify other views. |
+| `query<Q ~ StorageData, V>(language: string, version: u32, value: Q, codec: StorageCodec<Q> = std.memory.codec<Q>())` | `MemoryQuery<V> ![Error<StorageError>]` | Validate nonempty language/positive version, encode the payload and raise encoding failure. No backend query executes here; V is inferred from the receiving store. |
+
+| Encoding / Backend Boundary | Rule |
+|---|---|
+| Defaults | Store operations use key_codec for K and codec for V unless a view installs explicit ones. Declaration of a region is declarative; every executable store use must resolve its codec evidence. Imported summaries preserve that evidence. |
+| Standard encoding | Versioned binary data, not JSON/f64 conversion. Preserve integer widths/ranges, float encodings, record/enum identity, field names and logical container order. Match fields independently of construction-expression order. The selected storage-format profile publishes byte layout/test vectors; backend-native serialization is not an interchangeable encoding. |
+| Key canonicalization | Key encoding ignores construction order and map/set insertion order where equality ignores them. Stable nominal/schema identity participates in the encoding. No physical addresses or randomized hashes as keys. |
+| Schema compatibility | Codec format/version, nominal schema and representation fingerprint are part of the persistent binding. A different view cannot reinterpret existing bytes without compatibility validation or explicit migration. |
+| Round trip | Value codecs preserve representation, including float bits and sequence order. Key codecs preserve Eq identity and may normalize irrelevant map/set order. Invalid bytes return a typed storage error; size/depth validation precedes unbounded allocation. |
+| Custom code | Ordinary data with private representation can publish a codec from its defining module. Supplying one bypasses neither StorageData restrictions nor validation of decoded values. |
+| Query extension | An EDK/application adapter supplies a language/version encoder and matching backend decoder/executor for the declared store. Register this pair in the deployment binding; unknown language/version or wrong result schema is unsupported/schema_mismatch. |
+| Query safety | Validate payloads and parameterize database access. A language string or payload never grants raw SQL, network access, secret access or cross-region authority. Retrieval remains Memory.read on the original place. |
+| Backend variation | Query languages/index features are explicitly adapter-specific; CRUD and canonical storage contracts remain portable. No implicit embedding/model request on an unsupported similarity query. |
+
+## 17. API Coverage And Open Contracts
+
+This is a SPEC coverage audit, not an implementation checklist. A module is not
+complete merely because it has exported names or a runtime binding. The API
+index identifies the owning contract; do not duplicate it in multiple chapters.
+
+| API Review Item | Required Before Calling A Contract Complete |
+|---|---|
+| Surface | Canonical module, exact parameter/result types, defaults, generic/spec bounds and visibility. |
+| Behavior | Empty/invalid input, ordering, equality, units, encoding and allocation/complexity rules. |
+| Effects | Separate residual effects from requested/default actions; preserve callback summaries. |
+| Failure | Distinguish `None`, `Result`, `Error<E>`, execution faults and cancellation. No accidental redefinition of `?`. |
+| Resources | Creation, use, close/cleanup, alias behavior, timeouts and partial/uncertain outcomes. |
+| Verification | Examples and cross-provider tests for the stated contract, not only happy-path execution. |
+
+| Area | Specified Surface | Remaining API Design Work |
+|---|---|---|
+| Text, collections, iterators, Option/Result | Tables in sections 1, 10-13, including builders, BitSet, bounded deques, generation/scan, grouping, Top-K and boundary/error/cost rules | Cross-provider implementation conformance remains separate from SPEC coverage. Specialized graph, tensor, cache and index libraries are package-level, not implicit standard types. |
+| Numeric operations | Checked/wrapping/saturating integer operations, float helpers and profile rules in section 5 | Big integers, decimals and complex numbers are separate library designs. |
+| Console | Six string APIs, UTF-8, EOF and residual I/O error behavior | Bounded/streaming input and explicit flushing are not yet specified. No generic `Display` requirement is implied. |
+| TCP / TLS | Connect/handshake, canonical host/port/config values and upgrade ownership in section 15 | Server/listen/accept and client-certificate APIs are not specified. |
+| Streams | Read/write/flush/close, checked concurrent admission, exact/bounded reads and effectful Source with bounded line/chunk adapters in section 15 | Seek, shared duplex adapters, multicast and statically refined access modes remain separate extensions. A Source is not a channel or broadcast stream. |
+| Filesystem | Shared errors, modes, bounded read/list, create/rename/remove and sync in section 15 | Seek, link metadata/watch APIs and durable atomic-replace recipes need separate contracts. |
+| HTTP codec | Wire types, fallible encoding, complete/incremental decoding | Request-aware HEAD/CONNECT and upgrade framing; bounded header/body/trailer options; a reusable incremental-state API and its cumulative cost. An EOF reader is not a general HTTP client. |
+| Bytes / text codecs | Byte conversion/search/assembly and strict/lossy UTF-8 | Explicit additional charsets, hex/base64 and endian numeric codecs need separate contracts; no ambient-charset fallback. |
+| JSON | Shared recursive value type and pure parse/stringify | Depth/size bounds, typed schema conversion and exact-number alternatives are not specified by the current `Number(f64)` representation. |
+| Clock / randomness | Monotonic versus wall time, duration arithmetic, timers, seeded RNG and protected entropy in section 14 | Calendar/timezone APIs remain package-level; implementation profiles must supply accuracy/RNG conformance vectors. |
+| Commands / environment | Sandboxed command execution and support types | Canonical wrapper ownership, streaming process lifecycle, exit versus launch errors, output bounds, environment/argument APIs and cancellation/cleanup. |
+| Tasks / synchronization | Full combinator signatures, limits, empty/race/error rules in the concurrency chapter | Locks, channels, semaphores and atomics still require their own ownership/coordination design. |
+| Persistent memory / sessions | CRUD, conditional commit/reconciliation, paging, explicit storage/query codecs, deferred selection and context publication in section 16 | Portable multi-store transactions and explicit session creation/append/retention administration remain open. Storage-format profiles and backend query registrations require conformance tests. |
+| Secrets / crypto / browser | Protected secret read/use; hashing/comparison; browser protocol operations | Secret rotation/lifecycle, complete digest/encoding contracts, browser event bounds/deadlines and cancellation. No secret byte-export or high-level browser automation is implied. |
+| Agent / compiler / security | Step/tool-dispatch, checked-code-generation and sanitization API tables | Keep frozen-contract, tool-context and trusted-strategy restrictions when adding overloads; an arbitrary callback is not a substitute for checked evidence. |
+| Trace / checkpoint | Trace labels and runtime recovery principles | Public query/export and checkpoint result/error/durability APIs are not fully specified by `VirtualStages` or a `checkpoint(...)` example. |
+
+HTTP clients, databases, vector search, email, browser automation and integration
+retries remain EDK/package responsibilities over public std substrate. This table
+does not approve new keywords, mutable-reference APIs or private host shortcuts.
+
+### 17.1 Acceptance Cases For These Extensions
+
+| Contract | Required Test Cases |
+|---|---|
+| Budget boundary | Handle a child-local BudgetExceeded in a live parent; reject attempts to continue an exhausted shared scope; no budget reset through ?/collect/retry. |
+| Stream admission | Two reads, two writes, duplex TCP, shared file cursor, alias use after TLS/Source transfer, close racing a read, and slot release on failure. |
+| Codec / query | Exact wide integers; float bits; canonical equal record/map keys; incompatible schema/version; unsupported query language; protected-label round trips; forged receipt/query does not grant access. |
+| Builders | Retained snapshots, non-ASCII text, empty parts, update unwind, checked lengths and linear append-history allocation/copy measurements. |
+| BitSet / bounded deque | Zero universe, word-boundary padding, mismatched universes, invalid indices, full/empty deque, every overflow policy and returned eviction value. |
+| Algorithms | Empty/k=0/k>n, stable ties, lawful custom comparisons, large equal-key groups, callback-once/order, early failures, and partial selection without full sorting. |
+| Source | No pull on construction, alias/adapter invalidation, early close, EOF versus error, release once, invalid UTF-8, line overflow, pull/close races and preserved latent effects. |
+
+### 17.2 Library Design References And Scope
+
+These are design precedents, not claims that Etas implements those libraries
+or shares their mutation/error semantics.
+
+| Official Reference | Adopted Direction / Boundary |
+|---|---|
+| [Rust Iterator](https://doc.rust-lang.org/std/iter/trait.Iterator.html), [slice algorithms](https://doc.rust-lang.org/std/primitive.slice.html) | Generation, scan/unzip and selection/search APIs; Etas preserves value snapshots and checked callback behavior. |
+| [Java BitSet](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/BitSet.html), [Collectors](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/stream/Collectors.html) | Compact bit membership and global grouping; Etas BitSet has an explicit finite universe and grouping returns existing Map/Array values. |
+| [Python collections](https://docs.python.org/3/library/collections.html), [itertools](https://docs.python.org/3/library/itertools.html), [heapq](https://docs.python.org/3/library/heapq.html) | Bounded deques, counts, adjacent grouping and Top-K; no new Counter type or implicit shared cursor in pure Iter. |
+| [OCaml Buffer](https://ocaml.org/manual/5.4/api/Buffer.html), [Seq](https://ocaml.org/manual/5.4/api/Seq.html) | Incremental assembly and explicit-state unfold; Etas separates updating value receivers from suspendable live sources. |
+| [Rust BufRead](https://doc.rust-lang.org/std/io/trait.BufRead.html) | Bounded line/chunk consumption belongs with resource lifetime, errors and cancellation, not the pure Iterable contract. |
+| [Python graphlib](https://docs.python.org/3/library/graphlib.html) | Topological ordering is useful for Agent DAGs; place graph representations, cycle diagnostics and ready-set algorithms in an EDK/package contract, not a new std/compiler graph construct. |

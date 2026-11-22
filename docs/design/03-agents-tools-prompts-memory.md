@@ -80,10 +80,10 @@ type Review = {
 @model("gpt-5.5-thinking")
 @tools([latex.check])
 @limits([ContextTokens(32_000), Tokens(8_000)])
-agent Reviewer(input: Draft) -> Review ![FileIO, Memory.read<ProjectMemory.Papers>] {
+agent Reviewer(input: Draft) -> Review ![FileIO, Error<StorageError>, Error<BudgetExceeded>] {
     let papers =
         ProjectMemory.Papers
-            .related_to(input)
+            .related_to(std.memory.query("project.draft-similarity", 1, input))
             .limit(Tokens(16_000));
 
     let prompt = Prompt.new()
@@ -122,7 +122,7 @@ callable `run` method:
 
 ```text
 Reviewer : AgentComponent<ReviewerConfig>
-Reviewer.run : Draft -> Review ![FileIO, Memory.read<ProjectMemory.Papers>]
+Reviewer.run : Draft -> Review ![FileIO, Error<StorageError>, Error<BudgetExceeded>]
 ```
 
 The generated `run` entrypoint is what participates in ordinary calls and stage
@@ -409,35 +409,23 @@ Standard input/output belongs in the standard library. Its low-level authority
 is modeled as effect actions, while the user-facing API is ordinary stdlib
 flows.
 
-The user-facing API should be ordinary Etas flows exported from module `std.io`.
-Under the standard default console handler, their signatures expose the possible
-host I/O error. Console requests remain in separate analysis/interface metadata,
-not extra source declaration clauses:
+All APIs below belong to `std.io`. Under the standard console handler they
+retain `Error<IOError>`; the handled Console action remains in requested/default
+metadata. That metadata is not an additional source declaration clause.
 
-```text
-std.io.print(text: string)    -> unit   ![Error<IOError>]
-  requested_actions = [Console.stdout_write]
-  default_actions = [Console.stdout_write]
-std.io.println(text: string)  -> unit   ![Error<IOError>]
-  requested_actions = [Console.stdout_write]
-  default_actions = [Console.stdout_write]
-std.io.eprint(text: string)   -> unit   ![Error<IOError>]
-  requested_actions = [Console.stderr_write]
-  default_actions = [Console.stderr_write]
-std.io.eprintln(text: string) -> unit   ![Error<IOError>]
-  requested_actions = [Console.stderr_write]
-  default_actions = [Console.stderr_write]
-std.io.read_line()            -> string ![Error<IOError>]
-  requested_actions = [Console.stdin_read_line]
-  default_actions = [Console.stdin_read_line]
-std.io.read_all()             -> string ![Error<IOError>]
-  requested_actions = [Console.stdin_read_all]
-  default_actions = [Console.stdin_read_all]
-```
+| API | Return Type | Requested / Default Action | Behavior |
+|---|---|---|---|
+| `print(text: string)` | `unit ![Error<IOError>]` | `Console.stdout_write` | Write exactly the supplied text to stdout. |
+| `println(text: string)` | `unit ![Error<IOError>]` | `Console.stdout_write` | Write text followed by LF; no atomicity guarantee across concurrent calls. |
+| `eprint(text: string)` | `unit ![Error<IOError>]` | `Console.stderr_write` | Write exactly the supplied text to stderr. |
+| `eprintln(text: string)` | `unit ![Error<IOError>]` | `Console.stderr_write` | Write text followed by LF to stderr. |
+| `read_line()` | `string ![Error<IOError>]` | `Console.stdin_read_line` | Read through LF or EOF; omit LF and a preceding CR. Empty line returns `""`; EOF before any data raises `Eof`; a final unterminated line is returned once. |
+| `read_all()` | `string ![Error<IOError>]` | `Console.stdin_read_all` | Read through EOF, preserving line endings; immediate EOF returns `""`. Obey inherited size/resource limits. |
 
-These flows are not pure. They do not catch `Error<IOError>` by default; they
-perform lower-level standard actions and expose the same observable failure to
-callers:
+Input uses strict UTF-8 decoding; malformed input raises `InvalidUtf8`.
+I/O failure may occur after consuming input or writing a prefix; neither errors
+nor cancellation promise rollback. These flows are not pure and do not catch
+their I/O errors by default.
 
 ```etas
 effect Console extends FileIO {
@@ -447,14 +435,17 @@ effect Console extends FileIO {
     action stdin_read_all() -> string;
 }
 
-enum IOError {
-    Eof;
-    Interrupted;
-    PermissionDenied;
-    InvalidUtf8;
-    Host(string);
+public enum IOError {
+    Eof, Interrupted, PermissionDenied, InvalidUtf8,
+    NotFound, AlreadyExists, InvalidInput, NotDirectory, IsDirectory,
+    DirectoryNotEmpty, Closed, TimedOut, LimitExceeded, Unsupported,
+    Host(string),
 }
 ```
+
+This is the canonical `std.io.IOError`, re-exported rather than redeclared by
+filesystem/runtime modules. File and stream lifecycle APIs are tabulated in
+[Managed Resource Lifecycles](19-standard-library.md#15-managed-resource-lifecycles).
 
 For example, these are Etas implementations under the standard default console
 handler. The wrapper bodies are source code; only the final platform write/read
@@ -475,33 +466,9 @@ flow read_line() -> string ![Error<IOError>]
 }
 ```
 
-The public stdlib flows expose only residual effects such as possible host
-failure. The performed console action remains visible as requested/default
-action metadata for trace-spec checking, runtime-policy checking, trace, replay, and runtime mediation.
-The analysis metadata for these wrappers is:
-
-```text
-println:
-    escaping_effects  = [Error<IOError>]
-    requested_actions = [Console.stdout_write]
-    default_actions   = [Console.stdout_write]
-read_line:
-    escaping_effects  = [Error<IOError>]
-    requested_actions = [Console.stdin_read_line]
-    default_actions   = [Console.stdin_read_line]
-```
-
-These fields are compiler output, not syntax accepted after a flow signature.
-The value-level result types remain:
-
-```text
-std.io.read_line()  : string ![Error<IOError>]
-std.io.read_line()? : Result<string, IOError>
-std.io.println("x") : unit ![Error<IOError>]
-```
-
-The postfix `?` form captures `Error<IOError>` into a value-level `Result`; it
-does not unwrap a `Result`.
+The requested actions in the table remain visible to trace-spec checking,
+runtime policy, trace and replay. `std.io.read_line()?` has type
+`Result<string, IOError>`: postfix `?` captures the error, not unwraps a result.
 
 This split keeps the surface API ergonomic while preserving the effect/action
 discipline:
@@ -939,7 +906,10 @@ authority and records its outcome. The complete contracts are defined in
 
 ### 5.1 Typed Persistent State
 
-Persistent memory is represented by compiler-known standard/runtime support types, not dedicated source syntax. A memory schema is expressed as an ordinary type built from `MemoryRegion<S>` and `Store<K, V>`, then bound to an immutable top-level runtime resource handle.
+Persistent memory uses compiler-known std support types, not dedicated syntax.
+The schema `S` is an ordinary record of `Store<K, V>` fields;
+`std.memory.region<S>` returns one `MemoryRegion<S>` handle. Do not wrap the
+schema in `MemoryRegion` again, which would introduce a second region layer.
 
 ```etas
 type PaperRecord = {
@@ -960,10 +930,10 @@ type DecisionRecord = {
     trace: TraceId
 }
 
-type ProjectMemorySchema = MemoryRegion<{
+type ProjectMemorySchema = {
     Papers: Store<PaperId, PaperRecord>,
     Decisions: Store<TraceId, DecisionRecord>,
-}>;
+};
 
 let ProjectMemory =
     std.memory.region<ProjectMemorySchema>(
@@ -985,7 +955,7 @@ code before `perform infer`:
 agent Researcher(input: Topic) -> Notes {
     let papers =
         ProjectMemory.Papers
-            .select(input)
+            .select(std.memory.query("project.topic", 1, input))
             .limit(Tokens(20_000));
 
     let prompt = Prompt.new()
@@ -997,7 +967,10 @@ agent Researcher(input: Topic) -> Notes {
 }
 ```
 
-The compiler infers corresponding effects such as `Memory.read<ProjectMemory.Papers>` and records the accessed
+The project supplies the query language/version adapters used above; these names
+are not universal database query formats. See [storage encoding and query contracts](19-standard-library.md#165-storage-encoding-and-query-contracts).
+
+The compiler retains requested actions such as `Memory.read<ProjectMemory.Papers>` and records the accessed
 region in summaries, manifests, AIR, and traces. Persistent memory writes
 should normally happen in surrounding `flow` code after validation and approval,
 not inside an agent method unless the write is intentionally part of that
@@ -1005,12 +978,16 @@ method's public behavior.
 
 ### 5.3 Versioned Persistent State
 
-Every memory write creates a versioned update:
+Every committed memory change creates a versioned update; a confirmed no-op
+need not create a new version:
 
 ```text
 Memory.write(agent, region, key, old_value, new_value, trace_id, timestamp)
 ```
 
-This supports replay, rollback, provenance, debugging, audit, and abstract interpretation over memory effects.
+This supports replay, provenance, debugging, audit and memory analysis.
+It does not imply automatic rollback after cancellation or unknown commitment.
+The authoritative CRUD, condition, receipt, reconciliation and session API
+tables are in [Persistent Stores And Session Publication](19-standard-library.md#16-persistent-stores-and-session-publication).
 
 ---

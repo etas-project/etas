@@ -41,7 +41,7 @@ let (summary, risks, citations) = join((
     () => draft ~> Summarizer,
     () => draft ~> RiskReviewer,
     () => draft ~> CitationChecker,
-), limit = [
+), limits = [
     Concurrency(3),
     Tokens(80_000),
     WallTime(seconds(45)),
@@ -94,65 +94,63 @@ scope and a trace region.
 
 ## 4. Standard Combinators
 
-The MVP should provide these standard combinators:
-
-| Combinator | Behavior | Typical use |
-|---|---|---|
-| `join` | Return all values, or fail fast by propagating the primary unhandled error | Fan-out/fan-in where all results are required |
-| `try_join` | Return `Result<Output, E>` for a common typed error, cancelling siblings on the first error | All-or-nothing work with an explicit error value |
-| `collect` | Wait for all branches and return per-branch `Result` values | Batch work where partial success is useful |
-| `race` | Return the first successful branch and cancel losers | Fallback providers, redundant retrieval, latency hedging |
-| `map_concurrent` | Apply a flow with bounded concurrency and fail-fast errors | Batch work where every result is required |
-| `map_concurrent_collect` | Apply a flow with bounded concurrency and retain a `Result` for every input | Batch work where partial success is useful |
-
-Example:
+`std.task` owns these APIs; the prelude re-exports the six combinator names.
+They schedule closures, not already-completed values. Callback effects,
+requested actions, captures and trace summaries are preserved. `limits` is an
+ordinary parameter name, distinct from the source `limit` clause.
 
 ```etas
-let reports = map_concurrent(
+public enum TaskError {
+    EmptyRace,
+    InvalidConcurrency,
+}
+```
+
+| `std.task` API | Result / Escaping Row | Completion Contract |
+|---|---|---|
+| `join<T, effect E>(jobs: Array<() -> T ![E]>, limits: Array<Limit> = [])` | `Array<T> ![E, Error<TaskError>, Error<BudgetExceeded>]` | Input-ordered results; first unhandled failure initiates sibling cancellation. |
+| `try_join<T, X, effect E>(jobs: Array<() -> T ![E, Error<X>]>, limits: Array<Limit> = [])` | `Result<Array<T>, X> ![E, Error<TaskError>, Error<BudgetExceeded>]` | Same fail-fast scheduling, but capture the common `Error<X>`. |
+| `collect<T, X, effect E>(jobs: Array<() -> T ![E, Error<X>]>, limits: Array<Limit> = [])` | `Array<Result<T, X>> ![E, Error<TaskError>, Error<BudgetExceeded>]` | Wait for every branch; capture each selected `Error<X>`; input-ordered output. |
+| `race<T, effect E>(jobs: Array<() -> T ![E]>, limits: Array<Limit> = [])` | `T ![E, Error<TaskError>, Error<BudgetExceeded>]` | First success; cancel/clean up losers. If all fail recoverably, propagate the primary original typed error. |
+| `map_concurrent<A, B, effect E>(values: Array<A>, f: A -> B ![E], limits: Array<Limit> = [])` | `Array<B> ![E, Error<TaskError>, Error<BudgetExceeded>]` | Bounded fan-out, input-ordered results, fail-fast errors. |
+| `map_concurrent_collect<A, B, X, effect E>(values: Array<A>, f: A -> B ![E, Error<X>], limits: Array<Limit> = [])` | `Array<Result<B, X>> ![E, Error<TaskError>, Error<BudgetExceeded>]` | Bounded fan-out, one result per input; selected typed errors do not cancel other items. |
+
+| Parameter / Boundary | Rule |
+|---|---|
+| `limits = []` | Inherit the active scope's limits and scheduler; it does not remove parent budgets or create an unbounded detached scope. |
+| `Concurrency(n)` | Positive local admission cap; duplicate/nested caps combine by minimum. Invalid constants are rejected statically; a dynamic zero/out-of-range cap raises `InvalidConcurrency` before starting jobs, including on empty input. |
+| Other dimensions | Existing `Limit` composition/accounting rules; siblings share budgets, including tokens and wall time. Execution-limit exhaustion retains its normal termination semantics. |
+| Admission | Do not start all work before applying the cap; enqueue pending closures and start at most the admitted number. Started descendants remain owned until cleanup. |
+| Empty input | `join`, `collect` and mapping return `[]`; `try_join` returns `Ok([])`; `race` raises `EmptyRace`. Validate options first. |
+| Error type `X` | Select one concrete error family from context/annotation or unique inference; factor `Error<X>` out of `E`. Multiple candidates without a selection are ambiguous, not an inferred union. |
+| Other errors | Other `Error<Y>` in `E` escape and fail the scope. A surviving parent may collect a child's boundary-delivered `Error<BudgetExceeded>` when X selects that family. Cancellation, hard faults and termination of the collecting scope itself are not per-item `Err` results. |
+| Race timing | Defer recoverable failed branches while a success remains possible. Same-dispatch-turn successes use lowest source index; all-failed selection follows section 11. |
+| Retry / result reuse | No automatic retry/resample. Each admitted closure is invoked once; completion waits for loser/sibling cleanup before returning. |
+| Scope | Install the group completion policy before starting children; wait-all/race must not inherit the parent's fail-fast handling for the errors they explicitly collect/defer. |
+
+Fixed heterogeneous tuples are also accepted by `join`, `try_join` and
+`collect`. This is a compiler-known tuple signature scheme, not new variadic
+generic syntax. For branches `job_i: () -> T_i ![E_i]`:
+
+| Tuple Operation | Output Shape |
+|---|---|
+| `join((job_1, ..., job_n))` | `(T_1, ..., T_n)`; union of branch rows plus `Error<TaskError>` and `Error<BudgetExceeded>`. |
+| `try_join((job_1, ..., job_n))` | `Result<(T_1, ..., T_n), X>`; one selected common error family, as above. |
+| `collect((job_1, ..., job_n))` | `(Result<T_1, X>, ..., Result<T_n, X>)`; capture the same selected error family in every branch. |
+| Empty tuple | Corresponding `()`, `Ok(())`, `()` after option validation. |
+| `race` / mapping | Homogeneous array surface only; adapt heterogeneous values into an ordinary enum explicitly. |
+
+```etas
+let reports = std.task.map_concurrent(
     papers,
     paper => paper ~> PaperSummarizer,
-    limit = [Concurrency(8), Tokens(120_000)]
+    limits = [Concurrency(8), Tokens(120_000)]
 );
-```
 
-The exact stdlib surface can evolve, but the semantic requirement is stable:
-these combinators create structured concurrent scopes visible to type checking,
-effect inference, policy analysis, limit checking, runtime scheduling, and trace
-recording.
-
-The error surface is intentionally not selected by an option flag:
-
-```text
-map_concurrent(xs, f)         : Array<B> ![E, Error<X>]
-map_concurrent_collect(xs, f) : Array<Result<B, X>> ![E]
-```
-
-Both preserve input order in their result arrays. `map_concurrent` cancels
-unfinished items after an error; `map_concurrent_collect` waits for every item.
-
-`join` and `try_join` are both fail-fast. Their distinction is representation,
-not scheduling: `join` propagates the primary unhandled error effect, while
-`try_join` handles one common typed `Error<E>` from its branches and returns
-`Result<Output, E>`. Other unhandled effects still escape normally. `collect`
-is the wait-all per-branch-result operation.
-
-`join` should support two input shapes:
-
-- tuple input for fixed heterogeneous branches, returning a tuple;
-- array input for homogeneous branches, returning an array.
-
-For example:
-
-```etas
-let (a, b) = join((
+let (profile, history) = std.task.join((
     () => LoadProfile(user),
     () => LoadHistory(user),
 ));
-
-let summaries = join([
-    () => Summarize(paper_a),
-    () => Summarize(paper_b),
-]);
 ```
 
 ## 5. Type And Effect Rules
@@ -163,7 +161,7 @@ For a fixed tuple of branches:
 branch_i : () -> T_i ![E_i]
 ----------------------------------------
 join((branch_1, ..., branch_n))
-  : (T_1, ..., T_n) ![E_1 union ... union E_n]
+  : (T_1, ..., T_n) ![E_1 union ... union E_n, Error<TaskError>, Error<BudgetExceeded>]
 ```
 
 For homogeneous collection branches:
@@ -172,7 +170,7 @@ For homogeneous collection branches:
 branch_i : () -> T ![E_i]
 ----------------------------------------
 join([branch_1, ..., branch_n])
-  : Array<T> ![E_1 union ... union E_n]
+  : Array<T> ![E_1 union ... union E_n, Error<TaskError>, Error<BudgetExceeded>]
 ```
 
 For concurrent mapping:
@@ -181,7 +179,7 @@ For concurrent mapping:
 f  : A -> B ![E]
 xs : Array<A>
 ----------------------------------------
-map_concurrent(xs, f) : Array<B> ![E]
+map_concurrent(xs, f) : Array<B> ![E, Error<TaskError>, Error<BudgetExceeded>]
 ```
 
 `join` and `map_concurrent` do not hide effects. The resulting expression keeps
@@ -304,7 +302,7 @@ budgets merely because they run in parallel.
 let result = join((
     () => topic ~> Researcher,
     () => topic ~> CompetitorResearcher,
-), limit = [
+), limits = [
     Concurrency(2),
     Tokens(50_000),
     Cost(usd(2.00)),
@@ -327,8 +325,10 @@ Rules:
   scope;
 - child branches may have stricter nested limits;
 - a child cannot widen a parent limit;
-- if the scope exhausts a required limit, the runtime cancels unfinished branches
-  and raises the appropriate error, such as `Error<BudgetExceeded>`.
+- exhaustion stops the owning scope and its unfinished branches, completes
+  bounded cleanup, then delivers `Error<BudgetExceeded>` outside that scope.
+  An inner handler cannot keep the exhausted scope alive. See the canonical
+  [limit outcome table](04-flows-human-gates-and-protocols.md#1-flow).
 
 ## 11. Error And Cancellation Semantics
 
@@ -339,7 +339,7 @@ The default task scope and fail-fast combinators use these semantics:
 | `join` | Propagate the deterministic primary unhandled error | Cancel unfinished siblings and wait for cleanup |
 | `try_join` | Return `Err(primary)` for its common typed error | Cancel unfinished siblings and wait for cleanup |
 | `collect` | Convert each branch to `Result<T, E>` | Does not cancel siblings just because one branch fails |
-| `race` | Return first success; if all fail, propagate the deterministic primary error | Cancel losing branches after success |
+| `race` | Return first success; if all fail, propagate the deterministic primary error; empty input raises `TaskError.EmptyRace` | Cancel losing branches after success |
 | `map_concurrent` | Propagate the deterministic primary error | Cancel unfinished items and wait for cleanup |
 | `map_concurrent_collect` | Return one input-ordered `Result` per item | Does not cancel siblings just because one item fails |
 
@@ -350,8 +350,10 @@ owning scope. `join` and `try_join` have the same fail-fast behavior here;
 collection requires a declared common error type or explicit error mapping;
 it does not change the single-Error rule of `?` or invent implicit error unions.
 The original typed failure is propagated after cancellation and cleanup, not
-fabricated as a normal task result. `try_join` is the explicit exception that
-converts its declared common error to `Err`. Competing failures and the selected
+fabricated as a normal task result. `try_join`, `collect` and
+`map_concurrent_collect` explicitly capture their selected error family as
+specified in section 4; they cannot catch shutdown from inside their own
+exhausted scope. Competing failures and the selected
 primary failure are trace-visible.
 
 Fail-fast scopes choose the primary error by the lowest source branch index

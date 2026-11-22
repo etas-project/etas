@@ -382,10 +382,12 @@ Example:
 ```text
 Package: edk-http
 Attempted implementation: HTTPS client over std.stream and std.net.tcp
-Missing primitive: TLS client session with certificate validation
+Required substrate: TLS client session with certificate validation
 Desired signature:
   std.tls.connect(stream: TcpStream, server_name: Host, config: TlsConfig)
-      -> TlsStream ![Tls.handshake<_>, Error<TlsError>]
+      -> TlsStream ![Error<TlsError>]
+Requested/default action: Tls.handshake<_>
+SPEC status: specified by std.tls; verify implementation conformance separately
 Safety impact:
   host name and certificate validation must be trace/runtime-policy-visible and traceable
 Alternative considered:
@@ -464,19 +466,12 @@ effect EdkHttp extends Network {
 }
 
 public let EdkHttpDefault:
-    ![
-        EdkHttp.request<_, _>
-        => Net.tcp_connect<_, _>,
-           Tls.handshake<_>,
-           Stream.write<_>,
-           Stream.read<_>,
-           Error<HttpError>
-    ] = handler {
+    ![EdkHttp.request<_, _> => Error<HttpError>] = handler {
     EdkHttp.request(req) => {
         let tls = EdkHttp.open_tls(req);
         let wire = EdkHttp.to_wire_request(req);
         EdkHttp.write_wire_request(tls, wire);
-        let raw = EdkHttp.read_wire_response(tls, req.limit, req.timeout);
+        let raw = EdkHttp.read_to_close(tls, req.limit, req.timeout);
 
         match std.http.codec.decode_response_head(raw) {
             Ok(head) => {
@@ -495,6 +490,12 @@ public flow request(req: HttpRequest) -> HttpResponse
     return (perform EdkHttp.request(req)) with EdkHttpDefault;
 }
 ```
+
+This sketch assumes a restricted connection-close HTTP/1 exchange. Its
+`to_wire_request` helper must select that connection policy; `read_to_close`
+is not a general response reader. Production requests need the framing and
+cleanup contracts below. The sketch illustrates handler/error composition,
+not a complete reusable HTTP client.
 
 ### 8.1 Implementing `edk.http`
 
@@ -516,8 +517,9 @@ The implementation pipeline should be explicit:
 3. open TCP with `std.net.tcp.connect`;
 4. wrap the stream with `std.tls.connect` for HTTPS;
 5. write encoded wire bytes with `std.stream.write_all`;
-6. read response bytes with `std.stream.read_until_limit`;
-7. decode wire response metadata with `std.http.codec`;
+6. read bounded chunks with `std.stream.read`;
+7. incrementally decode HTTP framing with `std.http.codec`, stopping at message
+   completion and retaining unconsumed bytes rather than waiting for socket EOF;
 8. translate the wire response back to EDK `HttpResponse`;
 9. map substrate errors into the public `HttpError` type.
 
@@ -545,11 +547,7 @@ For example:
 
 ```etas
 flow EdkHttp.open_tls(req: HttpRequest) -> TlsStream
-    ![
-        Net.tcp_connect<_, _>,
-        Tls.handshake<_>,
-        Error<HttpError>
-    ]
+    ![Error<HttpError>]
 {
     handle {
         let tcp = std.net.tcp.connect(req.host, req.port, req.options);
@@ -566,10 +564,17 @@ flow EdkHttp.open_tls(req: HttpRequest) -> TlsStream
 }
 
 flow EdkHttp.write_wire_request(stream: TlsStream, req: HttpWireRequest) -> unit
-    ![Stream.write<TlsStream>, Error<HttpError>]
+    ![Error<HttpError>]
 {
+    let encoded = match std.http.codec.encode_request(req) {
+        Ok(body) => body,
+        Err(error) => {
+            perform Error<HttpError>.raise(HttpError.Codec(error));
+        },
+    };
+
     handle {
-        std.stream.write_all(stream, std.http.codec.encode_request(req));
+        std.stream.write_all(stream, encoded);
     } with {
         Error<StreamError>.raise(err) => {
             perform Error<HttpError>.raise(HttpError.Stream(err));
@@ -577,12 +582,12 @@ flow EdkHttp.write_wire_request(stream: TlsStream, req: HttpWireRequest) -> unit
     }
 }
 
-flow EdkHttp.read_wire_response(
+flow EdkHttp.read_to_close(
     stream: TlsStream,
     limit: ByteLimit,
-    timeout: Timeout?
+    timeout: Option<Timeout>
 ) -> bytes
-    ![Stream.read<TlsStream>, Error<HttpError>]
+    ![Error<HttpError>]
 {
     handle {
         return std.stream.read_until_limit(stream, limit, timeout);
@@ -594,18 +599,32 @@ flow EdkHttp.read_wire_response(
 }
 ```
 
-This keeps the public application contract small:
+Under the package handler and standard substrate handlers, the residual row is:
 
 ```etas
-![EdkHttp.request<"GET", "api.github.com">, Error<HttpError>]
+![Error<HttpError>]
 ```
 
-while still letting EDK itself be checked against the lower-level substrate
-actions:
+The requested/default-action summary still contains the package action and
+actual lower-level requests. For a statically known target, it may include:
 
-```etas
-![Net.tcp_connect<"api.github.com", 443>, Tls.handshake<"api.github.com">, Stream.write<_>, Stream.read<_>]
+```text
+EdkHttp.request<"GET", "api.github.com">
+Net.tcp_connect<"api.github.com", 443>
+Tls.handshake<"api.github.com">
+Stream.write<TlsStream>, Stream.read<TlsStream>
 ```
+
+Dynamic targets use conservative selectors with concrete values checked at
+runtime. These are analysis results, not a replacement source effect row.
+
+| Transport Boundary | Required Package Behavior |
+|---|---|
+| Codec `Result` | Explicitly match and translate errors; `?` does not unwrap an existing Result. |
+| Framed response | Complete content-length/chunked/bodyless responses without waiting for connection close; retain extra bytes for the next message. |
+| Bounds / deadline | Bound headers, wire input and decoded body; one request deadline is not reset by each chunk. |
+| Cleanup | Release owned connections on success, failure and cancellation, or transfer them to a checked pool. The helper sketch alone does not establish this lifecycle. |
+| Protocol scope | Request-aware HEAD/CONNECT, upgrades and full decoder options require the open std codec contracts; do not claim support from the generic response parser alone. |
 
 The first reference implementation should not include every HTTP client feature.
 Redirects, connection pooling, cookies, proxy support, compression, streaming

@@ -429,8 +429,8 @@ implementation type while preserving spec evidence:
 let stream: ? ~ ByteStream = tls;
 let streams: Array<? ~ ByteStream> = [tcp, tls, file];
 
-flow read_one(stream: ? ~ ByteStream) -> bytes {
-    return std.stream.read_until_limit(stream, ByteLimit(4096), Timeout.ms(1000));
+flow read_one(stream: ? ~ ByteStream, limit: ByteLimit) -> bytes {
+    return std.stream.read_until_limit(stream, limit, None);
 }
 ```
 
@@ -685,10 +685,10 @@ AgentClause   ::= DeclarationConformance
 Persistent agent state is represented with compiler-known standard/runtime support types such as `MemoryRegion<S>` and `Store<K, V>`, usually bound to an immutable top-level resource handle:
 
 ```etas
-type ProjectMemorySchema = MemoryRegion<{
+type ProjectMemorySchema = {
     Papers: Store<PaperId, PaperRecord>,
     Decisions: Store<DecisionId, DecisionRecord>,
-}>;
+};
 
 let ProjectMemory =
     std.memory.region<ProjectMemorySchema>(

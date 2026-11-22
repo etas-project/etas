@@ -141,8 +141,10 @@ host execution is needed only for the specified primitive endpoints.
 |---|---|---|
 | `Console extends FileIO` | `stdin_read_line`, `stdin_read_all`, `stdout_write`, `stderr_write` | CLI input/output used by `std.io` |
 | `Approval extends Human` | `request` | Human approval and UI-mediated decisions |
-| `Clock extends Time` | `now`, `sleep` | Time reads and timers |
+| `Clock extends Time` | `now`, `monotonic`, `sleep` | Wall-clock observations, monotonic samples and timers |
+| `Random` | `entropy` | Protected platform entropy; deterministic seeded generators do not perform this action |
 | `Memory` | `read<R>`, `write<R>` | Typed memory regions and stores |
+| `Session extends Memory` | `read`, `publish`, `reconcile` | Session history, conditional context publication and retained outcome evidence |
 | `Secret` | `read<K>`, `use<K>` | Host-mediated secret handles and non-revealing secret-backed operations |
 | `Command` | `run<S>` | Sandboxed process execution scoped by sandbox profile |
 | `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
@@ -153,6 +155,12 @@ host execution is needed only for the specified primitive endpoints.
 execution; custom handlers can bind `as k` and use checked scheduler transfer.
 Handling these control actions does not hide child-work effects or create a
 new broad authority root. See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis).
+
+`Random` is a standard action owner outside the minimal broad-root hierarchy;
+it is not implicitly covered by Time or Secret authority. All three clock
+actions and entropy retain requested/default metadata under standard handling.
+See [Time And Randomness](19-standard-library.md#14-time-and-randomness) for
+their value, error, determinism and replay contracts.
 
 The following modules define the standard substrate contracts. Their inclusion
 in the SPEC does not imply that every backend already implements them:
@@ -195,47 +203,70 @@ The source naming convention is:
 | Effect/action owner | uppercase effect name, no `Std` prefix | `Net.tcp_connect<_, _>` |
 | Types | uppercase type names | `TcpStream`, `TlsStream`, `WorkspacePath<ReportsRoot>` |
 
-EDK-facing substrate wrappers should expose their authority action in the public
-effect row. For example:
+Public wrapper contracts distinguish returned values/errors from requested
+authority. The rows below assume the standard handlers: the listed actions
+remain in requested/default metadata; residual errors remain in `![...]`.
+Without a covering handler, the corresponding action also escapes. Neither
+case erases authority checks or makes I/O pure.
 
-```etas
-std.net.tcp.connect(host: Host, port: Port, options: TcpOptions)
-    -> TcpStream ![Net.tcp_connect<_, _>, Error<NetworkError>]
+| API | Return Type Under Standard Handling | Requested Action | Contract |
+|---|---|---|---|
+| `std.net.tcp.connect(host: Host, port: Port, options: TcpOptions = DefaultTcpOptions)` | `TcpStream ![Error<NetworkError>]` | `Net.tcp_connect<_, _>` | Connect to the concrete host/port payload under the active network boundary. |
+| `std.tls.connect(stream: TcpStream, server_name: Host, config: TlsConfig = DefaultTlsConfig)` | `TlsStream ![Error<TlsError>]` | `Tls.handshake<_>` | Validate the peer/server name; return a precise TLS stream, not an untyped byte handle. |
+| `std.stream.read<S ~ ByteStream>(stream: S, max_bytes: usize, timeout: Option<Timeout> = None)` | `StreamRead ![Error<StreamError>]` | `Stream.read<S>` | At most `max_bytes`; partial reads are normal. EOF is a distinct value. |
+| `std.stream.read_until_limit<S ~ ByteStream>(stream: S, byte_limit: ByteLimit, timeout: Option<Timeout> = None)` | `bytes ![Error<StreamError>]` | `Stream.read<S>` | Read through EOF with an inclusive byte limit and one whole-operation timeout. Not an HTTP message reader. |
+| `std.stream.write_all<S ~ ByteStream>(stream: S, body: bytes, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.write<S>` | Complete only after all bytes are accepted, or fail; an error may follow a partial write. |
+| `std.stream.flush<S ~ ByteStream>(stream: S, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.flush<S>` | Flush adapter buffering; not proof of remote receipt or durable storage. |
+| `std.stream.close<S ~ ByteStream>(stream: S)` | `unit ![Error<StreamError>]` | `Stream.close<S>` | Close the resource; repeated close is harmless. Aliases observe closure, not a copied connection. |
+| `std.fs.path<R ~ Region>(relative: string)` | `Result<WorkspacePath<R>, IOError> ![]` | None | Validate a relative path's lexical form; no filesystem lookup or authority grant. |
+| `std.fs.root<R ~ Region>()` | `WorkspacePath<R> ![]` | None | Describe the runtime-bound region root; construction does not grant access. |
+| `std.fs.relative_name<R ~ Region>(path: WorkspacePath<R>)` | `string ![]` | None | Return the region-relative name, not a host absolute-path escape. |
+| `std.fs.read_bytes<R ~ Region>(path: WorkspacePath<R>)` | `bytes ![Error<IOError>]` | `Fs.read<R>` | Read file bytes; no implicit text decoding. |
+| `std.fs.write_bytes<R ~ Region>(path: WorkspacePath<R>, body: bytes)` | `unit ![Error<IOError>]` | `Fs.write<R>` | Replace contents; failure can leave partial output. No atomicity/durability promise. |
+| `std.fs.list<R ~ Region>(path: WorkspacePath<R>)` | `List<WorkspacePath<R>> ![Error<IOError>]` | `Fs.list<R>` | Direct children, not recursive traversal; enumeration order is unspecified. |
+| `std.fs.stat<R ~ Region>(path: WorkspacePath<R>)` | `FsStat ![Error<IOError>]` | `Fs.stat<R>` | Observe current file metadata; not a promise that a later operation sees the same file. |
+| `std.fs.canonicalize<R ~ Region>(path: WorkspacePath<R>)` | `WorkspacePath<R> ![Error<IOError>]` | `Fs.canonicalize<R>` | Resolve an existing path within its region; reject escape. Subsequent operations must recheck access safely. |
+| `std.fs.atomic_replace<R ~ Region>(path: WorkspacePath<R>, body: bytes)` | `unit ![Error<IOError>]` | `Fs.atomic_replace<R>` | Replace as one visibility change on supported backends; report unsupported operation rather than silently use a non-atomic write. Crash durability is a separate contract. |
+| `std.secret.read<K>(key: SecretKey<K>)` | `SecretValue<K> ![Error<SecretError>]` | `Secret.read<K>` | Return a redaction-safe secret handle, not inspectable bytes. |
+| `std.crypto.hmac_sha256<K>(key: SecretValue<K>, body: bytes)` | `Digest ![Error<CryptoError>]` | `Secret.use<K>` | Authorize secret use without exporting key bytes. |
 
-std.stream.read<S ~ ByteStream>(stream: S, max_bytes: usize, timeout: Timeout?)
-    -> StreamRead ![Stream.read<S>, Error<StreamError>]
+| `std.browser.protocol` API | Return Type Under Standard Handling | Requested Action | Contract |
+|---|---|---|---|
+| `attach(profile: BrowserProfile)` | `BrowserSession ![Error<BrowserError>]` | `Browser.attach<_>` | Attach under the concrete endpoint/profile policy; the profile is data, not a grant. |
+| `create(profile: BrowserProfile)` | `BrowserSession ![Error<BrowserError>]` | `Browser.create<_>` | Create an owned browser session under runtime enforcement. |
+| `send(session: BrowserSession, message: BrowserMessage)` | `unit ![Error<BrowserError>]` | `Browser.send<_>` | Send protocol data, not a high-level click/navigation API. Recheck the concrete session and requested operation. |
+| `recv(session: BrowserSession)` | `BrowserMessage ![Error<BrowserError>]` | `Browser.recv<_>` | Receive a protocol response/event; obey inherited cancellation and limits. |
+| `screenshot(session: BrowserSession)` | `BrowserScreenshot ![Error<BrowserError>]` | `Browser.screenshot<_>` | Return image bytes and format metadata from this session. |
+| `close(session: BrowserSession)` | `unit ![Error<BrowserError>]` | `Browser.close<_>` | Release this session; repeated close is harmless. Detaching must not silently terminate an externally owned browser. |
 
-std.stream.read_until_limit<S ~ ByteStream>(stream: S, limit: ByteLimit, timeout: Timeout?)
-    -> bytes ![Stream.read<S>, Error<StreamError>]
+| Browser Support Type | Shape / Meaning |
+|---|---|
+| `BrowserMessage` | Alias of `std.json.JsonValue`, not a second JSON tree. |
+| `BrowserProfile` | Record: `name: string`, `endpoint: Option<std.host.url.Url>`, `headless: bool`. |
+| `BrowserSession` | Opaque live connection; copying a handle does not copy a browser or grant new authority. |
+| `BrowserScreenshot` | Record: `content: bytes`, `mime_type: string`, `width: Option<usize>`, `height: Option<usize>`. |
+| `BrowserError` | Record: `code: string`, `message: string`; diagnostics must not disclose session secrets. |
 
-std.stream.write_all<S ~ ByteStream>(stream: S, body: bytes)
-    -> unit ![Stream.write<S>, Error<StreamError>]
+Every filesystem operation enforces the concrete region binding and canonical
+path containment at execution, including symlinks and rename races. Calling
+`canonicalize` first is not a substitute for that enforcement. A static `R`
+cannot grant an arbitrary runtime root.
 
-std.tls.connect(stream: TcpStream, server_name: Host, config: TlsConfig)
-    -> TlsStream ![Tls.handshake<_>, Error<TlsError>]
-
-std.fs.read_bytes<R ~ Region>(path: WorkspacePath<R>)
-    -> bytes ![Fs.read<R>, Error<IOError>]
-
-std.fs.write_bytes<R ~ Region>(path: WorkspacePath<R>, body: bytes)
-    -> unit ![Fs.write<R>, Error<IOError>]
-
-std.secret.read<K>(key: SecretKey<K>)
-    -> SecretValue<K> ![Secret.read<K>, Error<SecretError>]
-
-std.crypto.hmac_sha256<K>(key: SecretValue<K>, body: bytes)
-    -> Digest ![Secret.use<K>, Error<CryptoError>]
-```
+Configuration values, exact/bounded reads, file modes, conditional cleanup and
+canonical error identities are specified in
+[Managed Resource Lifecycles](19-standard-library.md#15-managed-resource-lifecycles).
+Filesystem extensions use the same `Fs extends FileIO` owner; none is a private
+untracked host call. Generic stream wrappers retain origin/mode provenance.
 
 `ByteStream` is a standard marker spec, not a concrete stream supertype.
-Concrete opaque handles such as `TcpStream`, `TlsStream`, `FileStream`, and
+Concrete opaque handles such as `TcpStream`, `TlsStream`, `FileStream<R>`, and
 `BrowserStream` satisfy `ByteStream`. This keeps stream APIs generic without
 introducing general subtyping:
 
 ```etas
 impl TcpStream ~ ByteStream;
 impl TlsStream ~ ByteStream;
-impl FileStream ~ ByteStream;
+impl<R ~ Region> FileStream<R> ~ ByteStream;
 impl BrowserStream ~ ByteStream;
 ```
 
@@ -279,22 +310,50 @@ The runtime still records concrete paths in traces and enforces canonical
 project-root path checks. The static effect row exposes the region boundary so
 trace specs and runtime policies do not depend only on string patterns.
 
-Pure substrate helpers should not introduce effects:
+Pure helpers have `![]`; malformed input is ordinary `Result`/decode-state
+data, not an implicit host request or an `Error` action.
+
+| API | Return Type | Contract |
+|---|---|---|
+| `std.http.codec.encode_request(req: HttpWireRequest)` | `Result<bytes, HttpCodecError>` | Validate and encode HTTP/1 wire bytes. Invalid request/header/framing data returns `Err`; never emit it unchecked. |
+| `std.http.codec.decode_response_head(input: bytes)` | `Result<HttpWireResponseHead, HttpCodecError>` | Decode a complete header prefix; this convenience API does not return the body offset. |
+| `std.http.codec.decode_response_head_incremental(input: bytes, end_of_stream: bool)` | `HttpDecodeStep<HttpWireResponseHead>` | Return a complete head and consumed offset, need more input, or a malformed-input diagnostic. |
+| `std.http.codec.decode_response(input: bytes)` | `Result<HttpWireResponse, HttpCodecError>` | Decode one complete ordinary response; reject trailing unconsumed data. |
+| `std.http.codec.decode_response_incremental(input: bytes, end_of_stream: bool)` | `HttpDecodeStep<HttpWireResponse>` | Complete according to framing, not merely socket EOF; retain trailing bytes using the consumed offset. |
+| `std.codec.text.utf8_encode(text: string)` | `bytes` | Exact UTF-8 bytes. |
+| `std.codec.text.utf8_decode(body: bytes, malformed: MalformedInput)` | `Result<string, TextCodecError>` | `Strict` rejects malformed UTF-8; `Replace` explicitly permits replacement. |
+| `std.crypto.sha256(body: bytes)` | `Digest` | Deterministic hashing of public bytes. |
+| `std.crypto.constant_time_eq(a: bytes, b: bytes)` | `bool` | Compare public byte values without content-dependent early exit; different lengths may be observed. Physical timing guarantees require backend verification. |
+
+| `std.http.codec` Type | Shape / Meaning |
+|---|---|
+| `HttpHeader` | Record: `name: string`, `value: string`; duplicate header entries are retained. |
+| `HttpWireRequest` | Record: `method: string`, `target: string`, `version: string`, `headers: List<HttpHeader>`, `body: bytes`. |
+| `HttpWireResponseHead` | Record: `version: string`, `status: i32`, `reason: string`, `headers: List<HttpHeader>`. |
+| `HttpWireResponse` | Record: `head: HttpWireResponseHead`, `body: bytes`. |
+| `HttpDecodeStep<T>` | Enum: `NeedMore`, `Complete(T, usize)`, `Malformed(HttpDecodeFailure)`; the `usize` is consumed bytes from the start of this input. |
+| `HttpDecodeFailure` | Record: `kind: HttpCodecFailureKind`, `offset: usize`; byte offset in the supplied input. |
+| `HttpCodecError` | Coarse convenience-codec error enum: `MalformedMessage`. Detailed incremental failures use `HttpDecodeFailure`. |
+| `HttpCodecFailureKind` | Closed failure-kind enum defined below; callers can distinguish incomplete, malformed, unsupported and over-limit input. |
 
 ```etas
-std.http.codec.encode_request(req: HttpWireRequest) -> bytes
-std.http.codec.decode_response_head(bytes: bytes) -> Result<HttpWireResponseHead, HttpCodecError>
-std.codec.text.utf8_decode(body: bytes, malformed: MalformedInput)
-    -> Result<string, TextCodecError>
-std.crypto.sha256(body: bytes) -> Digest
-std.crypto.constant_time_eq(a: bytes, b: bytes) -> bool
+public enum HttpCodecFailureKind {
+    InvalidLineEnding, InvalidStatusLine, InvalidStatusCode, InvalidHeader,
+    InvalidContentLength, ConflictingContentLength, ConflictingMessageFraming,
+    InvalidChunkSize, InvalidChunkExtension, InvalidChunkTerminator,
+    InvalidTrailer, ForbiddenResponseBody, UnsupportedHttpVersion,
+    UnsupportedTransferEncoding, UnexpectedEof, LimitExceeded,
+}
 ```
 
-`HttpWireRequest`, `HttpWireResponseHead`, header blocks, transfer-encoding
-state, and body-limit values are `std.http.codec` wire-level types. They are not
-EDK's high-level `edk.http.HttpRequest` or `edk.http.HttpResponse` types. EDK
-packages should explicitly translate between their user-facing request/response
-types and the standard wire-level codec types.
+| Decode Boundary | Rule |
+|---|---|
+| Incomplete input | `NeedMore` only when more bytes could complete the message. At `end_of_stream = true`, incompleteness is `UnexpectedEof`. |
+| `Complete(value, consumed)` | Keep `input[consumed, input.len())` for the next message; do not silently discard over-read bytes. |
+| Resource bounds | Callers bound accumulated input/header/body sizes; codec allocations obey inherited limits. Repeated whole-prefix decoding does not promise linear cumulative work. |
+| HTTP scope | These are wire-level values, not EDK request/response types. Request-aware HEAD/CONNECT, upgrades, streaming state and bounded decoder options remain open contracts in the API coverage table. |
+
+EDK explicitly translates its high-level values to/from these wire types.
 
 `StreamRead` distinguishes ordinary EOF from data and errors:
 
@@ -310,15 +369,24 @@ enum StreamError {
     Closed,
     Interrupted,
     LimitExceeded,
+    UnexpectedEof,
+    Busy,
+    UnsupportedOperation,
     Host(string),
 }
 ```
 
-Timeout, cancellation, closed streams, and body-limit violations are typed
-errors. EOF is a normal stream result, not an error. `read_until_limit` returns
-the accumulated bytes when the stream reaches EOF before the limit, and raises
-`Error<StreamError>` if the configured limit, timeout, cancellation, or host
-failure occurs first.
+| Stream Boundary | Rule |
+|---|---|
+| Positive-size `read` | `Data` contains `1..max_bytes` bytes; an empty transient read must not masquerade as EOF or cause a busy loop. |
+| Zero-size `read` | On a valid open stream, return `Data(empty bytes)` without consuming input; do not probe EOF. |
+| EOF | `Eof` is normal completion, not `Error<StreamError>`. |
+| Exact byte limit | EOF at exactly the limit succeeds. To distinguish it from oversized input, `read_until_limit` may consume at most one additional byte, then raise `LimitExceeded`. The error does not restore consumed data. |
+| Timeout | `None` adds no local timeout but retains inherited deadlines. `Some` bounds the whole call, not each chunk afresh; never reset it on partial progress. |
+| Failure / cancellation | Local failures raise the typed error; consumed input or accepted output is not rolled back. Scope cancellation still unwinds the scope: a Cancelled diagnostic cannot make it resumable. Budget errors are delivered outside the exhausted boundary under the [limit outcome rules](04-flows-human-gates-and-protocols.md#1-flow). |
+| Concurrent aliases | Same-direction overlap fails Busy; TCP/TLS permit one reader plus one writer, while a shared file cursor does not. Compound operations retain admission until completion. See [stream admission](19-standard-library.md#152-stream-and-transport-values). |
+| Closing | Closing a stream wakes pending operations; later reads/writes fail with `Closed`. Resource cleanup must not depend on receiving remote EOF. |
+| HTTP keep-alive | `read_until_limit` waits for EOF; use incremental HTTP framing to stop at a complete message on a still-open connection. |
 
 `SecretValue<K>` is opaque and redaction-safe. Pure code cannot reveal or
 inspect its bytes. Operations such as HMAC that use secret material are ordinary
@@ -436,7 +504,7 @@ may escape through `run`. `Agentic.infer<C, O>` itself is consumed by the standa
 agent runtime boundary:
 
 ```text
-Reviewer.run : Draft -> Review ![Memory.read<ProjectMemory>, AcademicSearch.search]
+Reviewer.run : Draft -> Review ![Error<StorageError>, AcademicSearch.search]
 requested actions include [Agentic.infer<Reviewer.run, Review>, Memory.read<ProjectMemory>, AcademicSearch.search]
 escaping effects exclude [Agentic.infer<Reviewer.run, Review>]
 ```
@@ -586,10 +654,10 @@ R =
 The leftmost name must resolve to an immutable top-level resource handle created by a compiler-known standard resource constructor such as `std.memory.region<...>`. Import aliases do not create a new memory identity; they resolve to the same region handle.
 
 ```etas
-type ProjectMemorySchema = MemoryRegion<{
+type ProjectMemorySchema = {
     Papers: Store<PaperId, PaperRecord>,
     Drafts: Store<Topic, Draft>,
-}>;
+};
 
 let ProjectMemory =
     std.memory.region<ProjectMemorySchema>(
@@ -602,10 +670,11 @@ flow LoadPaper(id: PaperId) {
 }
 ```
 
-The compiler infers:
+Under the standard memory handler, the compiler infers:
 
 ```text
-LoadPaper : PaperId -> Option<PaperRecord> ![Memory.read<ProjectMemory.Papers>]
+LoadPaper : PaperId -> Option<PaperRecord> ![Error<StorageError>]
+requested/default actions = [Memory.read<ProjectMemory.Papers>]
 ```
 
 Memory effect coverage is hierarchical:
@@ -619,27 +688,28 @@ Memory.read<R> does not cover Memory.write<R>
 Memory.write<R> does not cover Memory.read<R>
 ```
 
-This lets public boundaries choose either a broad region-level contract or a narrow store-level contract:
+Trace specs can choose a broad region or a narrow store without misusing the
+residual error row as an authority declaration:
 
 ```etas
-flow ReadAnyProjectMemory(topic: Topic) -> Option<Draft> ![Memory.read<ProjectMemory>] {
-    return ProjectMemory.Drafts.get(topic);
-}
-
-flow ReadOnlyDrafts(topic: Topic) -> Option<Draft> ![Memory.read<ProjectMemory.Drafts>] {
-    return ProjectMemory.Drafts.get(topic);
-}
+spec ReadAnyProjectMemory: trace = +Memory.read<ProjectMemory>;
+spec ReadOnlyDrafts: trace = +Memory.read<ProjectMemory.Drafts>;
 ```
 
-Store API calls contribute memory effects by rule:
+Store APIs preserve these requested-action facts even when standard handlers
+consume the actions. Actual backend errors remain `Error<StorageError>`:
 
-| API family | Inferred effect |
+| API family | Requested / Latent Action |
 |---|---|
-| `get`, `select`, `query`, `contains`, `keys`, `scan` | `Memory.read<R>` |
-| `put`, `insert`, `delete`, `update`, `clear` | `Memory.write<R>` |
-| `upsert`, transactional read-modify-write APIs | `Memory.read<R>` and `Memory.write<R>` |
+| `get`, `get_entry`, `contains`, `keys`, `page`, `reconcile` | `Memory.read<R>` |
+| `select`, `query`, `related_to`, `scan` | Deferred selection retains latent `Memory.read<R>`; collect/prompt materialization executes it. |
+| Prepared `commit`, `put`, `upsert`, `insert`, `delete`, `update`, versioned mutations | `Memory.write<R>`; conditional validation is part of that atomic mutation. |
+| `clear` or explicit read/modify/write composition | Both read and write; not an atomic transaction. |
 
-The exact API names are owned by the standard memory library, but their signatures must expose whether they read, write, or do both. User code should normally omit these effects and let inference attach them to the enclosing flow, agent, or tool signature.
+Full signatures, preparation, receipt and unknown-outcome rules are in
+[Persistent Stores](19-standard-library.md#16-persistent-stores-and-session-publication).
+Public summaries preserve both residual errors and requested/latent actions;
+ordinary source declarations may continue to infer them.
 
 Libraries and applications may define narrower effects and actions by extending a root effect:
 
@@ -1669,9 +1739,9 @@ The compiler infers:
 For non-deterministic flows:
 
 ```etas
-type ResearchMemorySchema = MemoryRegion<{
+type ResearchMemorySchema = {
     Reports: Store<string, Draft>,
-}>;
+};
 
 let ResearchMemory =
     std.memory.region<ResearchMemorySchema>(
@@ -1690,7 +1760,7 @@ flow Research(topic: string) -> Report {
 The compiler infers:
 
 ```text
-escaping effects  = [AcademicSearch.search, Memory.write<ResearchMemory.Reports>]
+escaping effects  = [AcademicSearch.search, Error<StorageError>]
 requested actions = [Agentic.infer<Writer.run, Draft>, AcademicSearch.search, Memory.write<ResearchMemory.Reports>]
 ```
 
@@ -1699,7 +1769,7 @@ contract. The explicit row is an upper-bound constraint, not a request to turn
 off inference:
 
 ```etas
-flow Research(topic: string) -> Report ![AcademicSearch.search, Memory.write<ResearchMemory.Reports>]
+flow Research(topic: string) -> Report ![AcademicSearch.search, Error<StorageError>]
 {
     ...
 }
@@ -1839,8 +1909,8 @@ Effect inference computes an upper bound over effects that may occur during exec
 | Etas tool call | Tool boundary effects plus inferred body effects |
 | Runtime-provided primitive call | Declared effect metadata |
 | Agent call | Callee agent method summary: ordinary method-body effects, declared model-callable tool effects, typed memory API effects, other runtime effects, and requested actions from `perform infer` such as `Agentic.infer<Agent.method, O>` |
-| Typed memory read | `Memory.read<R>` |
-| Typed memory write | `Memory.write<R>` |
+| Typed memory read | Request `Memory.read<R>`; standard handling retains `Error<StorageError>` rather than hiding failure. |
+| Typed memory write | Request `Memory.write<R>`; standard handling retains storage errors/outcome data and the operation reference. |
 | Support flow call such as `approve(...)` | Callee effect set, usually `Approval.request` |
 | Branch / `match` | Union of branch effects |
 | `for` / `while` | Body effects, plus required limit checks |

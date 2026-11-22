@@ -39,10 +39,10 @@ tool web.search_papers(topic: Topic) -> Array<Citation>
 
 tool pdf.fetch(citation: Citation) -> Paper ![ReadPDF.fetch<_>];
 
-type ResearchMemorySchema = MemoryRegion<{
+type ResearchMemorySchema = {
     Papers: Store<Citation, Paper>,
     Drafts: Store<Topic, Draft>,
-}>;
+};
 
 let ResearchMemory =
     std.memory.region<ResearchMemorySchema>(
@@ -223,11 +223,11 @@ type ImplementationPlan = { tasks: Array<string>, files: Array<Path> }
 type ReviewReport = { accepted: bool, comments: Array<string> }
 type ProjectResult = { spec: ProductSpec, architecture: Architecture, plan: ImplementationPlan }
 
-type CompanyMemorySchema = MemoryRegion<{
+type CompanyMemorySchema = {
     Specs: Store<string, ProductSpec>,
     Architectures: Store<string, Architecture>,
     Plans: Store<string, ImplementationPlan>,
-}>;
+};
 
 let CompanyMemory =
     std.memory.region<CompanyMemorySchema>(
@@ -401,9 +401,9 @@ type MaintenanceRequest = { repo: Path, package: string }
 type MaintenancePlan = { changes: Array<string>, commands: Array<Command> }
 type MaintenanceResult = { changed: bool, summary: string }
 
-type MaintenanceMemorySchema = MemoryRegion<{
+type MaintenanceMemorySchema = {
     Runs: Store<string, MaintenanceResult>,
-}>;
+};
 
 let MaintenanceMemory =
     std.memory.region<MaintenanceMemorySchema>(
@@ -687,9 +687,9 @@ type TenantContext = { tenant_id: TenantId, user_id: UserId, request_id: TraceId
 type AccountQuestion = { ctx: TenantContext, customer: CustomerId, question: string }
 type AccountAnswer = { body: string }
 
-type AccountMemorySchema = MemoryRegion<{
+type AccountMemorySchema = {
     Notes: Store<{ tenant_id: TenantId, customer: CustomerId }, string>,
-}>;
+};
 
 let AccountMemory =
     std.memory.region<AccountMemorySchema>(
@@ -865,9 +865,9 @@ type CaseId = string;
 type CaseRecord = { id: CaseId, status: string, updated_at: Time }
 type CaseReply = { body: string }
 
-type CaseMemorySchema = MemoryRegion<{
+type CaseMemorySchema = {
     Cases: Store<CaseId, CaseRecord>,
-}>;
+};
 
 let CaseMemory =
     std.memory.region<CaseMemorySchema>(

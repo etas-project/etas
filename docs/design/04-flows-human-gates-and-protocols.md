@@ -284,7 +284,20 @@ continue =
   && WallTime_remaining
 ```
 
-For `for`, an `Iterations(...)` limit caps how many elements are consumed and normal completion means "processed at most this many items." For `while`, exhausting an iteration limit while the condition still holds performs `Error<BudgetExceeded>.raise(...)` by default, because the loop did not establish its intended postcondition. Budget limits such as `Tokens(...)`, `ContextTokens(...)`, `Cost(...)`, and `WallTime(...)` perform the same error operation when exhausted unless the flow explicitly handles it.
+| Limit Outcome | Control / Error Contract |
+|---|---|
+| `for` reaches `Iterations(n)` | Normal bounded-prefix completion: process at most n elements. It does not claim to have exhausted the input. |
+| `while` exhausts iterations while its condition remains true | End the bounded loop and report `Error<BudgetExceeded>` outside that loop's limit boundary. |
+| Tokens, context, cost, wall time or attempts exhausted | Stop admission in the scope owning the exhausted bound, cancel its unfinished work and finish bounded cleanup. Then report `Error<BudgetExceeded>.raise(...)` to the surviving enclosing computation. |
+| Handler placement | Handlers inside the exhausted scope cannot suppress its shutdown. An enclosing handler or `?` around the bounded computation may capture the delivered error; the ordinary single-Error rule still applies. |
+| Declaration limits | A flow/agent declaration's limits enclose its body and trailing handler. Handle a failure of those limits at the call site; a trailing handler cannot revive its own declaration. |
+| Recovery | `Error.raise` returns `never`; recovery uses `finish` or Result matching, not resumption of exhausted work. Handling the error neither refunds usage nor widens an inherited limit. |
+| Error data versus budget state | An application may raise BudgetExceeded as ordinary error data; doing so does not change counters or cancel a scope. Only runtime enforcement establishes actual exhaustion before reporting the boundary error. |
+| Parent versus child | A child's own bound may fail while its parent remains live. Exhausting a shared parent bound ends the whole parent group, not merely one child. |
+| Effect inference | A checked source limit or limit annotation that may fail contributes `Error<BudgetExceeded>` at its boundary; explicit rows constrain this inferred result. Successful bounded `for` prefix completion alone does not add that error. |
+| Local API bounds | A read timeout or explicit collection-size cap may return its documented typed error without cancelling a live parent. It is not the same as exhausting the parent's execution budget. |
+| Hard termination | Forced shutdown, process death and unrecoverable host faults need not deliver a source Error or complete cleanup. They are not ordinary `Err` results. |
+| External actions | Completed or uncertain writes remain real. Budget failure is not rollback. |
 
 The compiler uses limits for static cost analysis and flow graph construction. The runtime enforces limits dynamically.
 

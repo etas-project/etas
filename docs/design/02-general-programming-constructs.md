@@ -228,7 +228,7 @@ Generic flows can require spec bounds. Multiple bounds use `+`:
 
 ```etas
 flow read_all<S ~ ByteStream>(stream: S, limit: ByteLimit) -> bytes {
-    return std.stream.read_until_limit(stream, limit, Timeout.none());
+    return std.stream.read_until_limit(stream, limit, None);
 }
 
 flow render<T ~ PromptEncode + Schema>(value: T) -> PromptPart {
@@ -474,10 +474,10 @@ Top-level immutable bindings are allowed only for:
 ```etas
 let DefaultDraftLimit = Tokens(40_000);
 
-type ProjectMemorySchema = MemoryRegion<{
+type ProjectMemorySchema = {
     Papers: Store<PaperId, PaperRecord>,
     Drafts: Store<Topic, Draft>,
-}>;
+};
 
 let ProjectMemory =
     std.memory.region<ProjectMemorySchema>(
@@ -516,9 +516,9 @@ or types:
 // company/memory.es
 module company.memory;
 
-public type ProjectMemorySchema = MemoryRegion<{
+public type ProjectMemorySchema = {
     Papers: Store<PaperId, PaperRecord>,
-}>;
+};
 
 public let ProjectMemory =
     std.memory.region<ProjectMemorySchema>(

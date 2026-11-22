@@ -392,7 +392,7 @@ Generic APIs use `~` bounds:
 flow read_until_limit<S ~ ByteStream>(
     stream: S,
     limit: ByteLimit,
-    timeout: Timeout?
+    timeout: Option<Timeout>
 ) -> bytes;
 ```
 
@@ -453,8 +453,8 @@ let xs: Array<? ~ ByteStream> = [tcp, tls, file];
 flow make_stream(kind: StreamKind) -> ? ~ ByteStream;
 flow copy_any(from: ? ~ ByteStream, to: ? ~ ByteStream) -> unit;
 
-flow read_one(stream: ? ~ ByteStream) -> bytes {
-    return std.stream.read_until_limit(stream, ByteLimit(4096), Timeout.ms(1000));
+flow read_one(stream: ? ~ ByteStream, limit: ByteLimit) -> bytes {
+    return std.stream.read_until_limit(stream, limit, None);
 }
 ```
 
@@ -813,7 +813,7 @@ Agent systems have special error modes. Etas should make them explicit.
 | `SandboxViolation` | Tool or command attempted to escape its sandbox profile |
 | `PromptInjectionRisk` | Taint analysis detected unsafe flow |
 | `MissingCitation` | Claim lacks evidence |
-| `BudgetExceeded` | Token, cost, or time budget exceeded |
+| `BudgetExceeded` | Failure reported outside an exhausted limit scope after its work is stopped; handling it cannot revive that scope or reset budgets. See [limit outcomes](04-flows-human-gates-and-protocols.md#1-flow). |
 | `ProtocolViolation` | Communication violated declared protocol |
 | `HumanRejected` | Human approval was denied |
 

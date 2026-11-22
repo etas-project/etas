@@ -22,5 +22,5 @@ Etas is an agent-native general-purpose programming language design for multi-ag
 16. [Concurrency](16-concurrency.md)
 17. [EDK Official Packages](17-edk-official-packages.md)
 18. [Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md)
-19. [Standard Library](19-standard-library.md), including container, iterator, algorithm and Option/Result API tables.
+19. [Standard Library](19-standard-library.md), including the API index, contract tables and remaining coverage gaps.
 20. [Lambda And Handler Capture](20-lexical-capture.md)
