@@ -362,11 +362,12 @@ impl Report ~ PromptEncode {
 }
 ```
 
-Generic implementations may declare bounds before the owner type, as in
-`impl<T ~ PromptEncode> Array<T> ~ PromptEncode { ... }`. These bounds apply
-to the owner's parameters and are available in every method; they do not add
-method generic parameters. Without an explicit parameter list, parameters are
-inferred from the owner type pattern.
+Generic implementations declare bounds in the owner pattern:
+`impl List<T ~ PromptEncode> ~ PromptEncode { ... }`. Here `T ~ PromptEncode`
+binds an implementation parameter (or constrains an explicitly declared one);
+the owner type is `List<T>`. Unbounded parameters are still inferred from the
+owner pattern. Parameters and bounds scope over the entire impl; multiple
+bounds use `+`. Ordinary type arguments do not introduce parameters.
 
 Behavioral type specs may require the restricted updating receiver:
 

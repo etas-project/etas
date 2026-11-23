@@ -216,9 +216,11 @@ ImplDecl      ::= TypeImplDecl
                 | SpecImplDecl
                 | AgentImplDecl
 TypeImplDecl  ::= "impl" TypeParams? ImplTarget "{" ImplItem* "}"
-SpecImplDecl ::= "impl" TypeParams? TypeExpr SpecSatisfaction (";" | "{" SpecImplItem* "}")
+SpecImplDecl ::= "impl" TypeParams? (TypeExpr | ImplTarget) SpecSatisfaction (";" | "{" SpecImplItem* "}")
 AgentImplDecl ::= "impl" "agent" Path SpecSatisfaction? (";" | "{" AgentImplItem* "}")
-ImplTarget    ::= Path TypeArgs?
+ImplTarget    ::= Path ImplArgs?
+ImplArgs      ::= "<" ImplArg ("," ImplArg)* ","? ">"
+ImplArg       ::= TypeExpr | Ident "~" BoundList
 ImplItem      ::= Annotation* Visibility? FlowDecl
                 | EffectActionDecl
 SpecImplItem ::= Annotation* Visibility? FlowDecl

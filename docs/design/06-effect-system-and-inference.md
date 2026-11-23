@@ -266,7 +266,7 @@ introducing general subtyping:
 ```etas
 impl TcpStream ~ ByteStream;
 impl TlsStream ~ ByteStream;
-impl<R ~ Region> FileStream<R> ~ ByteStream;
+impl FileStream<R ~ Region> ~ ByteStream;
 impl BrowserStream ~ ByteStream;
 ```
 
