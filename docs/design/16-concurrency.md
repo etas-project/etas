@@ -97,7 +97,9 @@ scope and a trace region.
 `std.task` owns these APIs; the prelude re-exports the six combinator names.
 They schedule closures, not already-completed values. Callback effects,
 requested actions, captures and trace summaries are preserved. `limits` is an
-ordinary parameter name, distinct from the source `limit` clause.
+ordinary parameter name, not a keyword or annotation. It establishes the
+combinator's checked budget scope; an enclosing `@limits(...)` scope still
+applies, and concurrent branches share its aggregate allowance.
 
 ```etas
 public enum TaskError {

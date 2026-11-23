@@ -57,9 +57,8 @@ flow SummarizeAll(
 {
     var summaries: Array<Summary> = [];
 
-    for paper in papers
-        limit Iterations(20), Tokens(20_000)
-    {
+    @limits([Iterations(20), Tokens(20_000)])
+    for paper in papers {
         summaries = summaries.push(step(paper));
     }
 
@@ -125,7 +124,9 @@ The effect set of a composed flow is the union of the stage effects. Its determi
 Deterministic < NonDeterministic
 ```
 
-So any composition containing an agent or another non-deterministic flow is itself `NonDeterministic`.
+Any composition containing a stage whose method/body summary is
+`NonDeterministic` is itself `NonDeterministic`. An agent's nominal identity
+alone does not change this classification.
 
 `|` composes stages into a flow value. `~>` applies a value to a stage or composed flow:
 
@@ -200,23 +201,24 @@ for paper in papers {
     index.add(paper);
 }
 
-while not done
-    limit Iterations(10)
-{
+@limits([Iterations(10)])
+while not done {
     done = Checker.run(state);
 }
 ```
 
 The important distinction is that loops may contain agent calls and compose other flows. They may also contain tool calls, typed memory access, and human gates. Non-deterministic loops are part of the analyzable flow graph rather than opaque runtime callbacks.
 
-### 1.8 Bounded and Budgeted Loops
+### 1.8 Resource Contracts and Budgeted Loops
 
-Unbounded non-deterministic loops are unreliable because they may never converge and can consume unlimited tokens, context, money, time, tool calls, approval requests, or memory API operations. Etas requires any loop whose termination cannot be statically proven to declare an explicit `limit`.
+Unbounded non-deterministic loops may never converge and can consume unbounded
+resources. Etas requires a loop whose termination cannot be statically proven
+to declare an enforceable `@limits(...)` contract. An annotation inside the
+loop body alone does not bound the whole loop.
 
 ```etas
-while review.score < 8
-    limit Iterations(3), Tokens(40_000), Cost(usd(2.00))
-{
+@limits([Iterations(3), Tokens(40_000), Cost(usd(2.00))])
+while review.score < 8 {
     draft = Writer.run({ draft, review });
     review = Reviewer.run(draft);
 }
@@ -225,21 +227,19 @@ while review.score < 8
 `for` loops can also declare limits. This is useful when the collection comes from retrieval, model output, a stream, or any source whose size should be capped by runtime policy:
 
 ```etas
-for paper in papers
-    limit Iterations(20), Tokens(20_000)
-{
+@limits([Iterations(20), Tokens(20_000)])
+for paper in papers {
     summaries = summaries.push(Summarizer.run(paper));
 }
 ```
 
 A `for` loop over values with statically known or runtime-bounded size may omit `Iterations(...)`, but it may still need budget limits if the body performs expensive effects. If both the collection size and `Iterations(...)` are present, the loop processes at most the smaller of the two bounds.
 
-Retry and validation patterns should use `while` with an explicit limit:
+Retry and validation patterns should use `while` with an explicit resource annotation:
 
 ```etas
-while true
-    limit Iterations(3), ContextTokens(128_000)
-{
+@limits([Iterations(3), ContextTokens(128_000)])
+while true {
     let review = Reviewer.run(draft);
 
     if review.accepted {
@@ -250,23 +250,56 @@ while true
 }
 ```
 
-Limit dimensions are typed runtime support constructors, not keywords:
+`@limits(bounds)` is a compiler-recognized semantic annotation; neither `limits`
+nor `limit` is a keyword. Its argument is `Array<Limit>`, built from typed std
+support values. Resource scopes apply to executable declarations, `for`,
+`while`, `retry`, and blocks; no postfix pipeline-stage resource clause exists.
+
+| Scope / Evaluation | Contract |
+|---|---|
+| Declaration | Arguments are compile-time values. Each invocation establishes a child scope enclosing the body and trailing handler, not a global counter shared by every invocation. |
+| Local loop, retry, or block | Arguments may read parameters/local values and call deterministic, non-suspending, action-free helpers. Evaluate once, left to right, under enclosing budgets before scope entry; freeze the resulting bounds for this activation. |
+| Loop / retry lifetime | The scope encloses iterable/condition evaluation and all iterations or attempts. Neither a back-edge nor `continue` resets its budget. `Iterations` counts entries into the annotated loop body, not nested-loop entries. |
+| Block lifetime | Covers all work in the block, including calls and owned child tasks. Normal completion, `return`, `break`, and error unwinding leave the scope with ordinary structured cleanup. |
+| Nested scopes | Every active bound applies. Consumptive usage is charged to each enclosing scope; a new child budget never replenishes its parent. Constraints on the same measured work use the stricter remaining allowance; iteration counters remain attached to their own loops. |
+| Concurrent children | Share the enclosing aggregate budget, not one copy of it per child. Admission/accounting must prevent concurrent overspending. |
+| Multiple annotations | Conjoin their bounds; duplicate dimensions use the stricter bound. `@limits([])` adds no bound and never removes an inherited one. |
+| Checkpoint / resume | Restore scope identity, evaluated bounds and remaining counters; do not re-evaluate annotation arguments or restart accounting. |
+| Validation | Reject wrong argument types, unsupported targets/dimensions and invalid constants statically. Validate dynamic values before entering the target; never ignore an invalid bound. `Iterations` requires a loop target. |
+| Required coverage | Mere annotation presence is insufficient: the checker must establish that its dimensions bound the relevant repeated work. A context-window cap alone does not bound total iterations. |
+
+For a parameter-dependent budget, use a local annotated block rather than a
+runtime-valued item annotation:
+
+```etas
+flow BuildReport(topic: string, token_budget: u64) -> Report {
+    return @limits([Tokens(token_budget)]) {
+        let notes = Researcher.run(topic);
+        Writer.run(notes)
+    };
+}
+```
+
+The annotated block retains the block's result type; it does not introduce a
+closure or a new `return` target. In this example both calls consume one shared
+token allowance. Limits are mandatory in every execution backend, including
+native code; they are not advisory metadata that optimization may discard.
 
 | Limit | Meaning |
 |---|---|
-| `Iterations(n)` | Maximum number of loop iterations |
-| `Tokens(n)` | Maximum model input and output tokens consumed in the loop |
-| `ContextTokens(n)` | Maximum context window used by any agent call in the loop |
-| `Cost(money)` | Maximum monetary cost |
-| `WallTime(duration)` | Maximum wall-clock time |
-| `Attempts(n)` | Maximum retry attempts |
+| `Iterations(n)` | Maximum entries into the annotated loop body |
+| `Tokens(n)` | Maximum cumulative model input and output tokens in the scope |
+| `ContextTokens(n)` | Maximum context window used by any agent call in the scope |
+| `Cost(money)` | Maximum cumulative monetary cost |
+| `WallTime(duration)` | Maximum elapsed wall-clock time for the scope |
+| `Attempts(n)` | Maximum retry attempts under the retry/agent execution contract |
+| `Concurrency(n)` | Maximum active concurrent work under the structured-concurrency admission contract |
 
 Multiple limits are conjunctive. A loop may continue only while all declared limits still allow the next iteration or effect. If the same limit dimension appears more than once, the effective bound is the stricter one.
 
 ```etas
-for paper in papers
-    limit Iterations(20), Tokens(20_000)
-{
+@limits([Iterations(20), Tokens(20_000)])
+for paper in papers {
     summaries = summaries.push(Summarizer.run(paper));
 }
 ```
@@ -290,11 +323,11 @@ continue =
 | `while` exhausts iterations while its condition remains true | End the bounded loop and report `Error<BudgetExceeded>` outside that loop's limit boundary. |
 | Tokens, context, cost, wall time or attempts exhausted | Stop admission in the scope owning the exhausted bound, cancel its unfinished work and finish bounded cleanup. Then report `Error<BudgetExceeded>.raise(...)` to the surviving enclosing computation. |
 | Handler placement | Handlers inside the exhausted scope cannot suppress its shutdown. An enclosing handler or `?` around the bounded computation may capture the delivered error; the ordinary single-Error rule still applies. |
-| Declaration limits | A flow/agent declaration's limits enclose its body and trailing handler. Handle a failure of those limits at the call site; a trailing handler cannot revive its own declaration. |
+| Declaration limits | A flow/agent/tool declaration's limits enclose its body and trailing handler. Handle a failure of those limits at the call site; a trailing handler cannot revive its own declaration. |
 | Recovery | `Error.raise` returns `never`; recovery uses `finish` or Result matching, not resumption of exhausted work. Handling the error neither refunds usage nor widens an inherited limit. |
 | Error data versus budget state | An application may raise BudgetExceeded as ordinary error data; doing so does not change counters or cancel a scope. Only runtime enforcement establishes actual exhaustion before reporting the boundary error. |
 | Parent versus child | A child's own bound may fail while its parent remains live. Exhausting a shared parent bound ends the whole parent group, not merely one child. |
-| Effect inference | A checked source limit or limit annotation that may fail contributes `Error<BudgetExceeded>` at its boundary; explicit rows constrain this inferred result. Successful bounded `for` prefix completion alone does not add that error. |
+| Effect inference | A checked `@limits(...)` scope that may exhaust its budget contributes `Error<BudgetExceeded>` at its boundary; explicit rows constrain this inferred result. Successful bounded `for` prefix completion alone does not add that error. |
 | Local API bounds | A read timeout or explicit collection-size cap may return its documented typed error without cancelling a live parent. It is not the same as exhausting the parent's execution budget. |
 | Hard termination | Forced shutdown, process death and unrecoverable host faults need not deliver a source Error or complete cleanup. They are not ordinary `Err` results. |
 | External actions | Completed or uncertain writes remain real. Budget failure is not rollback. |
@@ -312,7 +345,10 @@ Typical frameworks expose similar knobs as runtime configuration, for example ma
 - `join([...])` and other combinators can use budgets to cancel losing branches, cap fan-out, or choose sequential fallback when a parallel plan would exceed trace specs or runtime policy;
 - traces can explain why execution stopped: success, ordinary control flow, runtime-policy denial, or `BudgetExceeded`.
 
-In short, `limit` is not just a loop guard. It is the language-visible resource contract for agentic computation.
+In short, `@limits(...)` is a checked execution contract, not just a loop guard.
+Ordinary APIs such as `join(..., limits = [...])` and memory-selection
+`.limit(...)` remain library calls with their documented contracts; their names
+do not create new syntax or implicit authority.
 
 ---
 

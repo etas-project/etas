@@ -29,6 +29,11 @@ agent Name(input: I) -> O {
 Annotations hold static metadata such as model choice, model-visible tools,
 default limits, trace mode, retention profile, optimization hints, and
 documentation tags. These names are annotation paths, not language keywords.
+`@limits(...)` is a mandatory resource contract: an agent's declaration bounds
+apply per method invocation, including generated `run`, not when the nominal
+component is declared. A method's own resource annotation conjoins with the
+agent and caller bounds; it cannot override them. Parameter-dependent budgets
+use local annotated blocks. See [Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops).
 
 `agent Name;` declares only the nominal component. The ergonomic form
 `agent Name(input: I) -> O { ... }` declares the same component and provides a

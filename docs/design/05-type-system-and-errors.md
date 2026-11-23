@@ -362,6 +362,12 @@ impl Report ~ PromptEncode {
 }
 ```
 
+Generic implementations may declare bounds before the owner type, as in
+`impl<T ~ PromptEncode> Array<T> ~ PromptEncode { ... }`. These bounds apply
+to the owner's parameters and are available in every method; they do not add
+method generic parameters. Without an explicit parameter list, parameters are
+inferred from the owner type pattern.
+
 Behavioral type specs may require the restricted updating receiver:
 
 ```etas
@@ -423,16 +429,8 @@ flow read_report<R ~ Region + Within<ReportsRoot>>(
 The judgment for `R ~ Within<ReportsRoot>` is based on explicit imported spec
 implementations. It does not make `WorkspacePath<R>` a subtype of
 `WorkspacePath<ReportsRoot>`, and it does not derive facts from runtime path
-strings. If code needs to widen a region-indexed value, it should use an
-ordinary flow whose signature states the required relation:
-
-```etas
-flow widen_path<Child ~ Region + Within<Parent>, Parent ~ Region>(
-    path: WorkspacePath<Child>
-) -> WorkspacePath<Parent> {
-    return path;
-}
-```
+strings. Changing a value's region index requires an explicitly specified
+checked conversion; spec evidence alone does not coerce values.
 
 #### 1.5.2 Existential Spec Objects
 
@@ -523,8 +521,10 @@ must be declared in `<...>`; otherwise names such as `Brief`, `Draft`, and
 
 If a callable spec omits `![...]`, it imposes no effect constraint. The
 implementation still has its own inferred effect row, but the spec does not
-restrict it. To require an effect-free computation, write `![]` explicitly, as
-in `Pure<I, O>` above.
+restrict it. To require no escaping effects, write `![]` explicitly, as in
+`Pure<I, O>` above. Despite its illustrative name, this spec only constrains
+the escaping row: handled actions, mutable captures and suspension require
+separate behavior checks.
 
 When a flow, agent, or tool writes `~ SpecName`, the compiler may infer the
 spec's type and effect arguments from the declaration signature:
@@ -1112,9 +1112,8 @@ and [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
 
 ```etas
 flow ReviewWithRetry(draft: Draft) -> Review {
-    retry
-        limit Attempts(2)
-    {
+    @limits([Attempts(2)])
+    retry {
         return Reviewer.run(draft);
     }
 }

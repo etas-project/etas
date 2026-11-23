@@ -24,3 +24,8 @@ Etas is an agent-native general-purpose programming language design for multi-ag
 18. [Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md)
 19. [Standard Library](19-standard-library.md), including the API index, contract tables and remaining coverage gaps.
 20. [Lambda And Handler Capture](20-lexical-capture.md)
+
+## Proposal
+
+[Action Signature Generics](18-action-signature-generics.md) is a separate
+extension proposal, not an adopted replacement for the source grammar.

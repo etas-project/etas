@@ -20,13 +20,13 @@ This gives Etas a different safety model from ordinary host-language agent frame
    The trace records what was attempted, handled, executed by a default action implementation, approved, denied, retried, replayed, or resampled. Safety is not only a pre-run check; it is also an auditable execution artifact.
 
 4. **Effects describe behavior; trace specs constrain behavior.**
-   An effect row such as `![AcademicSearch.search, ProjectWorkspace.write<"reports/**">]` says what a computation may do. A `spec ...: trace` says which of those actions are allowed, denied, or guarded by approval, sanitization, review, or other conditions.
+   An effect row bounds escaping obligations. Requested-action summaries retain handled behavior, and trace/transfer summaries retain ordering. Trace specs and runtime policy constrain those actions, including default-handled actions; a small escaping row does not imply broad permission or absence of external behavior.
 
 5. **Handlers interpret actions; they do not grant authority.**
    A handler may turn `ProjectWorkspace.write` into a dry-run log entry, request approval before resuming, or convert `Error<IOError>` into a value. It does not bypass effect rows, trace-spec checks, limits, sandboxing, or trace recording.
 
 6. **Limits are reliability contracts.**
-   `limit` is not just a runtime timeout. It is a source-level resource contract that supports static rejection of unbounded non-deterministic loops and runtime enforcement of tokens, steps, cost, wall time, context, and user-defined budgets.
+   `@limits(...)` is not just a runtime timeout. It is a source-level resource contract that supports static rejection of unbounded non-deterministic loops and runtime enforcement of tokens, steps, cost, wall time, context, and user-defined budgets.
 
 The result is a two-layer safety story:
 
@@ -77,7 +77,7 @@ The exact choice can depend on compiler mode, deployment profile, and trace-spec
 | Trace spec `>>` / `<<` | Expand either temporal spelling into local allow entries plus a prerequisite; check dominance and obvious missing guards on analyzable paths. `A << B` requires `B` before `A`, without requiring `A` to occur. | Enforce the allowed patterns and verify valid outcome- and scope-matched approval, sanitization, audit, or review evidence. | Control flow and agent behavior can depend on runtime choices. | `Approval.request >> CompanyEmail.send<WorkAccount>` includes its operand permissions but still requires matching accepted approval before sending. |
 | Handler effect elimination | Infer which handled effects are consumed and which effects escape from the handler body. | Dispatch performed actions to the nearest scoped handler or the action's default implementation. | Handler types are statically visible, but handler execution is dynamic. | A dry-run handler consumes `ProjectWorkspace.write<_>` and produces `Log.write`. |
 | Error handling | Check whether `Error<E>` is handled, transformed, returned, or allowed to escape. | Raise concrete errors and execute handler/default behavior. | Error possibilities are static; occurrence is dynamic. | `read_line()?` converts `Error<IOError>` into a value-level result at the call site. |
-| Limits and budgets | Require limits for unbounded or non-deterministic loops; check declared resource contracts. | Decrement actual step, token, cost, time, context, and custom budgets. | Resource use depends on model output, tool latency, and runtime data. | A reviewer loop needs `limit Iterations(5), Tokens(50_000)`; runtime stops when the first bound is exhausted. |
+| Limits and budgets | Require limits for unbounded or non-deterministic loops; check declared resource contracts. | Decrement actual step, token, cost, time, context, and custom budgets. | Resource use depends on model output, tool latency, and runtime data. | A reviewer loop needs `@limits([Iterations(5), Tokens(50_000)])`; runtime stops when the first bound is exhausted. |
 | Determinism inference | Classify flows as `Deterministic` or `NonDeterministic` from their constructs and effects. | Record actual model calls, random choices, external observations, and replay/resample decisions. | Whether a flow contains non-deterministic constructs is statically approximable; concrete results are runtime facts. | A pure normalization flow can be recomputed; an agent call is replayed from trace unless explicitly resampled. |
 | Approval dominance | Check that sensitive actions are guarded by dominating approval where the control-flow graph is precise enough. | Confirm approval identity, result, scope, input hash, and freshness in the trace. | Static dominance can be conservative; runtime has exact event history. | If `CompanyEmail.send` occurs after approval of a different draft hash, runtime must reject or request approval again. |
 | Parallel safety | Detect obvious effect conflicts and independent branches. | Schedule, lock, retry, or serialize based on concrete resources. | Alias, tenant, and path equality may be runtime-dependent. | Two branches writing the same report path cannot be freely parallelized. |
@@ -213,7 +213,10 @@ cannot authorize an action whose temporal check is taken from another. See
 | `G >> A` | Local permissions for `G` and `A`, plus whether valid `G` evidence exists for the relevant scope | Authority check fails, or current action matches `A` without valid matching `G` evidence | Every non-Bad state |
 | `A << B` | Local permissions for `A` and `B`, plus valid matching `B` evidence for the relevant scope | Authority check fails, or current action matches `A` without valid matching prior `B` evidence | Every non-Bad state |
 | Constrained action pattern | Static spec facts and residual runtime argument checks | Constraint is statically false or a residual check fails | Constraint is proven or checked |
-| `limit L` | Resource summary/counter abstraction | A hard limit may be exceeded | No exceeded hard limit |
+
+Resource annotations are separate checked scopes, not trace-spec atoms. Their
+counter analysis composes with the trace monitor under the resource contracts
+in [Flows](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops).
 
 Action-pattern constraints can include type-level spec predicates, such as
 `Fs.read<R ~ Within<ReportsRoot>>`, or concrete argument patterns that may leave
@@ -389,12 +392,12 @@ The compiler should reject these cases immediately and ask the programmer to pro
 | Trace dependency graph has a cycle | The trace spec is unsatisfiable or too hard to explain. | `A >> B` and `B >> A`. |
 | Definite deny violation | The compiler knows the action is forbidden on every path. | `-Command.run; perform Command.run(cmd);` |
 | Definite allow violation | The action ref is statically known and outside the allowed set. | `+ProjectWorkspace.write<"reports/**">; perform ProjectWorkspace.write("tmp/a.md", body);` |
-| Unbounded non-deterministic loop | Waiting until runtime may consume unbounded tokens, context, cost, or time. | An agent refinement loop without `limit`. |
+| Unbounded non-deterministic loop | Waiting until runtime may consume unbounded tokens, context, cost, or time. | An agent refinement loop without `@limits(...)`. |
 | Definite prompt-trust violation | Control-plane prompt injection must be blocked before deployment. | Passing `Untrusted<string>` directly to `Prompt.system(...)`. |
 | Unsound handler type | The handler claims to eliminate an effect but lets it escape. | A handler typed as `![ProjectWorkspace.write<_> => []]` still delegates to the default implementation of `ProjectWorkspace.write`. |
-| Violates core call-graph restrictions | The MVP can restrict dangerous recursion or model-callable boundaries. | A `tool` recursively calls an `agent` if that restriction is active. |
+| Violates core call-graph restrictions | Enforce the tool-to-agent restriction transitively, including through helper flows. | A model-callable tool calls an agent through a private flow. |
 
-These errors should produce diagnostics that point to the missing evidence: a narrower type, an explicit effect row, a declared `limit`, a dominating approval, a handler type fix, trusted host-binding metadata, or a clearer trace-spec scope.
+These errors should produce diagnostics that point to the missing evidence: a narrower type, an explicit effect row, a declared `@limits(...)`, a dominating approval, a handler type fix, trusted host-binding metadata, or a clearer trace-spec scope.
 
 #### Residual Runtime Checks
 
@@ -472,7 +475,7 @@ Recommended composition rules:
 | `G >> A` | Accumulate prerequisites; its local permissions cannot reopen an action excluded by another active scope. | If outer requires approval and inner requires sanitization before publish, both are required. |
 | `A << B` | Accumulate prerequisites on `A`. | Each `Audit.log` can require matching prior `StripePayment.charge` evidence. |
 | Action-pattern constraints | Conjoin constraints. | `tenant == request.tenant` and `region == "us"` must both hold. |
-| `limit` | Conjoin limits; for the same dimension use the stricter bound. | `Tokens(10_000)` inside `Tokens(50_000)` yields `Tokens(10_000)`. |
+| `@limits(...)` | Conjoin active contracts on the same measured work; charge nested work to parent budgets. | A local `Tokens(10_000)` is also constrained by the parent's remaining allowance, even if its original bound was `Tokens(50_000)`. |
 
 The compiler should check two levels:
 

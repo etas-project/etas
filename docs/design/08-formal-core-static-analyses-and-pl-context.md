@@ -13,8 +13,9 @@ e ::= x
     | e1 e2
     | let x = e1 in e2
     | if e then e1 else e2
-    | for x in e1 limit b do e2
-    | while e1 limit b do e2
+    | for x in e1 do e2
+    | while e1 do e2
+    | budget(b, e)
     | agentcall A e
     | flowcall F e
     | toolcall t e
@@ -42,7 +43,13 @@ v ::= n
 
 ### 1.3 Limits
 
-Loop limits are part of the static and dynamic semantics, not comments.
+Resource annotations are part of the static and dynamic semantics, not comments.
+Source `@limits(bounds)` elaborates to the internal `budget(b, e)` scope around
+the annotated computation, including the entire loop or retry when applicable.
+`budget` is calculus notation, not a source keyword. Local bound expressions
+are checked as deterministic, non-suspending and action-free, evaluated once
+before entry under the parent budget, and validated before executing `e`.
+Declaration bounds are static; their scopes are entered per invocation.
 
 ```text
 b ::= LimitValue
@@ -73,7 +80,12 @@ A loop may be accepted when either:
 1. the compiler proves that it is finite; or
 2. the loop has sufficient limits for the effects in its body.
 
-For example, a loop that performs `AgentCall` must be bounded by `Iterations(...)` or another budget that the runtime can monotonically decrement.
+For example, a loop that performs `AgentCall` must be bounded by `Iterations(...)`
+or another enforceable budget that bounds its repeated work. `ContextTokens`
+alone is a per-call cap, not a decreasing bound on the number of iterations.
+Nested scopes retain parent accounting; retries and checkpoint/resume do not
+reset it. A potentially exhausted budget contributes the boundary-delivered
+`Error<BudgetExceeded>` described in [Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops).
 
 ### 1.4 Configurations
 
@@ -295,20 +307,16 @@ evidence that the concrete loop terminates or stays within a resource bound.
 
 ### 2.8 Loop Limit Analysis
 
-Checks that loops are compatible with the effects they may perform.
+| Analysis Fact | Resource Check |
+|---|---|
+| Proven finite loop | No explicit iteration cap is required; inherited token, cost and time contracts still apply. |
+| Termination not proved | Require an enforceable `@limits(...)` contract covering repeated work, not just a fresh budget inside each iteration. |
+| Requested model/tool/memory actions | Check resource admission and trace-spec/runtime-policy constraints even when default handlers remove escaping effects. |
+| Empty escaping row | Does not prove termination, purity or absence of requested actions. |
 
-```text
-LoopEffects(body) ⊆ {Pure}
-  allowed without explicit limit if termination is proved
-
-LoopEffects(body) contains AgentCall
-  requires Iterations(...) or another enforceable token/context/cost/time budget
-
-LoopEffects(body) contains ToolCall
-  checked through the same loop budget plus trace-spec/runtime-policy constraints
-```
-
-The analyzer rejects non-deterministic `while` forms with neither a proven termination argument nor an enforceable `limit`.
+The analysis uses checked behavior summaries, not a synthetic `Pure` effect tag.
+Dimension and exhaustion semantics are defined by the resource contract rather
+than duplicated in the effect-set analysis.
 
 ---
 

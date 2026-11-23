@@ -1,8 +1,11 @@
 # Action Signature Generics
 
-## 1. Proposal And Implementation Status
+## 1. Proposal Scope
 
-Proposed design, 2026-11-16. This remains a language extension proposal. Its implementation is being validated on the std source migration draft branch; whole-library acceptance and release remain pending.
+This remains a language extension proposal, not a replacement for the current
+[source grammar](09-syntax-principles.md). It separates inferred signature
+parameters from explicit action selectors; adoption requires synchronizing
+that grammar and the standard action declarations.
 
 An action may declare inferred type and effect-row parameters between `action`
 and its name. Parameters after the name retain their static selector semantics.
@@ -13,15 +16,9 @@ effect Async {
 }
 ```
 
-The existing Rust registry already describes this signature with two generic
-binders and zero selectors. The draft implementation now retains prefix binders separately from selectors,
-preserves Type and Effect kinds, and declares `Async.await` in std source. The
-source uses renamed binders to exercise positional, kind-aware ABI correspondence.
-
 ## 2. Declaration And Reference Syntax
 
-The proposed grammar appears in [Syntax Principles](09-syntax-principles.md).
-The two parameter lists may appear independently or together.
+In this proposal the two parameter lists may appear independently or together.
 
 ```etas
 effect Examples {
@@ -112,144 +109,23 @@ The existing `resume`, `finish`, forwarding, continuation ownership, scheduler
 scope, cancellation and resource rules apply to these actions. Matching and
 type checking use the same checked signature throughout execution.
 
-## 5. Compiler Representation And Pipeline
+## 5. Portable Contract And Conformance
 
-Use the existing pass manager and source, HIR, type, Effect and publication
-pipelines for action compilation.
+This proposal adds no new authority or continuation privilege. If adopted,
+checked package metadata and code restoration must preserve these facts:
 
-In syntax, `EffectActionDecl.type_params` records the prefix signature binders
-and `selector_params` records suffix selector declarations. Record them
-separately so formatting, source restoration and diagnostics preserve their
-placement. Existing suffix-only declarations obtain their binders from
-`selector_params`. Update consumers that currently read the duplicated suffix
-binders from `type_params`.
+| Contract | Requirement |
+|---|---|
+| Binder identity | Keep signature binders separate from selectors, including kinds, bounds and owner scope. Renaming a binder does not change its meaning. |
+| Request instantiation | Infer fresh signature arguments per request; retain the solved payload, result and produced-row relationship. |
+| Matching | Effect rows and handler patterns match action identity plus static selectors, not inferred payload instantiations. |
+| Generic handlers | Check uniform behavior for every admitted instantiation, not only requests observed in one run. |
+| Default handling | Substitute the request's effect-row arguments into the default-handler contract without erasing requested-action metadata. |
+| Separate compilation | Preserve the same signature and selector meaning through imports, reflection, cached code and checkpoint restoration. |
+| Diagnostics | Reject duplicate binders, invalid kinds/bounds, selector arity mismatches, unresolved inference and incompatible resume values. |
 
-HIR creates one action scope and lowers prefix binders first, then suffix
-binders. `HirEffectActionDecl.type_params` contains the complete ordered binder
-set. `selector_params` references only the suffix symbols. Resolve selector
-references through their declaration mapping. The current lowering pairs
-selectors with the first generic symbols, which would bind them to prefix
-parameters after this extension.
-
-Reuse `EffectActionSignature.generic_params`, including each binder's actual
-Type or Effect kind, together with `effect_args`, `selector_param_names` and
-selector defaults. The existing row-aware generic instantiation machinery
-handles signature parameters. Preserve kind, bounds, binder correspondence and
-selector subsets in package metadata, std artifacts, source restoration,
-reflection and cache fingerprints. Serialized AST/HIR compatibility follows
-the existing artifact schema and cache-version mechanism.
-
-The compiler and interpreter resolve the action through checked identities and
-the existing action ABI. Binder correspondence is positional and kind-aware
-after checking, so renaming `T` or `E` in source preserves its meaning.
-
-## 6. Standard Library Migration
-
-Add the declaration to `etas-core/crates/etas_std/library/std/task/mod.es` after
-the frontend supports the syntax.
-
-```etas
-@std.role("std.task.Async")
-public effect Async {
-    action yield() -> unit;
-    action<T, effect E> await(task: Task<T, ![E]>) -> T;
-}
-```
-
-The checked source owns the generic binders, their kinds and bounds, payload,
-result and selector list. The existing action role retains stable execution
-identity, scheduler requirements and its default-handler execution contract.
-The default-handler row tail must map to the checked source Effect binder by
-binder correspondence, including after renaming it.
-
-Validate the source signature against the existing TaskAwait ABI before
-publishing an artifact. Both generic binders, the `Task<T, ![E]>` payload, the
-result `T`, the empty selector list and the default-handler row mapping must
-agree. Retain the legacy registry during migration and run provider comparison
-through the existing selection mechanism. Artifact mode must execute with its
-selected checked source declarations and existing scheduler binding.
-
-## 7. Engineering Tasks And Acceptance
-
-Paths below are relative to the named repository. Complete the work in order.
-
-| Task | Code locations | Required result |
-| --- | --- | --- |
-| 1. Parse and retain both lists | `etas-frontend` — `crates/etas_syntax/src/grammar/item.rs`, `ast/item.rs`, `format/`, `dump.rs` and retained-source visitors | Prefix Type/Effect binders and suffix selectors round-trip in their original positions. Old declarations parse and format with their existing meaning. |
-| 2. Lower and resolve binders | `etas-frontend` — `crates/etas_hir/src/lower/item.rs` and action-scope resolution | Prefix and suffix binders have distinct symbols in one scope. Selector mappings remain correct when prefix binders precede them. |
-| 3. Check and instantiate signatures | `etas-frontend` — `crates/etas_types/src/pipeline/signature/collect/effect_actions.rs`, `pipeline/body/collect/perform.rs`, `action_selector.rs` and `handler_request.rs`, `solver/handler.rs` | Type/Effect kinds and bounds are preserved. Each request infers its own arguments. Handler payload/resume checking covers every request instantiation and abstract reusable handlers. |
-| 4. Propagate Effect rows | `etas-frontend` — `crates/etas_effects/src/infer/semantics/actions.rs`, `default_handlers.rs` and existing row substitution | Requested action coverage uses selectors. Standard default handlers substitute the request's `E`. Explicit handlers preserve their checked produced rows. |
-| 5. Publish portable metadata | `etas-frontend` — `crates/etas_frontend/src/package_metadata/projection.rs`, `passes/analysis/type_check_bridge.rs`, `external_metadata_validation.rs`, `artifact/external_fingerprint.rs` and checked-source restoration | Importing a separately built action retains both binder kinds, their scope, selector subset and row relationships. Cache identity reflects these semantics. |
-| 6. Migrate await declaration | `etas-core` — `crates/etas_std/library/std/task/mod.es`; `etas-frontend` — `passes/analysis/standard_library.rs` and existing source-role publication | Source await passes ABI validation with zero selectors. Renamed binders and their default-handler row mapping publish correctly. |
-| 7. Validate installed execution | `etas` — `crates/etas_cli/tests/cli/std_source_sdk.rs`; `etas-interpreter` — checked-action dispatch, task handlers and checkpoint restoration | Installed artifact mode imports and executes source await with the existing scheduler. Local interception, completion, cancellation and checkpoint/resume retain their contracts. |
-
-Extend the existing syntax, action selector, handler instantiation, task type,
-Effect and installed SDK suites with these acceptance cases.
-
-- Prefix-only, suffix-only and combined lists parse, format and restore.
-- Duplicate binder names, suffix `effect E`, kind errors, unsatisfied bounds,
-  invalid selector arity and unresolved inference produce useful diagnostics.
-- Integer and string requests to one generic action infer independently. A
-  uniform reusable handler accepts both, while an incompatible resume fails.
-- Awaiting `Task<T, ![]>`, a concrete nonempty row and an open `![E]` preserves
-  the corresponding result type and Effect facts. A boundary excluding a
-  surviving produced effect is rejected.
-- Combined prefix/suffix actions preserve selector matching. Existing
-  `Query.choose<Output>`, Error and Fs selector suites pass.
-- A user-defined prefix-generic action compiles and executes through the same
-  mechanism. Separately compiled imports preserve its signature and handler
-  behavior.
-- Renaming both await binders in `.es` preserves ABI validation and default
-  Effect propagation. Adding a selector or changing the payload, result or
-  binder kind causes ABI validation to fail before publication.
-- The installed std artifact exercises await with different task result types
-  and rows, local handlers, cancellation and checkpoint/resume. Legacy/artifact
-  behavior comparison passes for the covered cases.
-
-Update migration reports with measured acceptance results. The language feature
-implementation receives the version increment required by repository policy in
-its implementation change set.
-
-## 8. Draft Implementation Evidence
-
-The migration branch parses and checks prefix, suffix and combined declarations,
-independent integer/string requests, Task rows and reusable uniform handlers.
-Installed SDK acceptance compiles a new generic action and forwarding flow from
-`.es`, imports them in another process, and runs source `await` with integer and
-string tasks. An unannotated closure yields before saving an already parked
-await; a fresh process resumes the checkpoint successfully. The common scheduler
-sample also agrees between legacy and artifact providers.
-
-Effect analysis requests missing concrete request ABI types through a typed phase
-handoff. The frontend appends those solved types and reruns analysis before
-publishing facts; unresolved rows retain their constraints. Generic callable
-templates preserve their checked declaration scope during checkpoint projection.
-
-Caller Handler interception across a source std task wrapper now retains the
-lexical owning task and single-shot continuation. Root and nested generic arms
-can save state, call another source std generic flow and resume after a fresh
-process restores the checkpoint. The `finish` case returns to the lexical owner.
-Portable generic type parameters use canonical Effect identity, action name and
-parameter position; no session-local symbol or type ID becomes a portable binder.
-Known checked requests materialize contextual body types and native generic calls,
-while parametric Handler checking remains independent of request enumeration.
-Queued task/scope completions are committed before the next task body executes,
-so a ready parent's lexical Handler stays available to another child. The
-installed fixture saves and restores this completed wait while the generic arm
-calls source std. Continuation transfer validation uses the checked program that
-owns the token's ABI.
-
-Host completion uses an operation-owned wait rather than one reply slot per task.
-The wait stays with the suspended Handler continuation; native replies settle in
-their issuing checked program and dynamic context without running source code.
-Independent arm-local frames prevent an interleaved request from overwriting an
-earlier request's parameters, while their shared lexical parent preserves outer
-mutation. Checkpoint v80 retains these parent identities and settled inputs.
-Task resource permits remain owned until abandoned Host supervisors settle.
-Native Console fixtures exercise root/scheduled overlap, checkpoint restore and
-`finish` followed by a new Host request.
-
-This evidence does not close the full std migration gate. Remaining work includes
-source I/O Host coverage, broader budget/cancellation/trace compatibility, the
-remaining std modules, minimal bootstrap contract review and whole-library
-compatibility and performance acceptance. Release continues to default to legacy.
+Conformance tests cover prefix-only, suffix-only and combined declarations;
+integer/string requests to one generic action; empty, concrete and open task
+rows; reusable handlers; and separately compiled imports. Release coverage,
+migration branches, artifact versions and engineering task assignments are not
+part of this language proposal.

@@ -776,7 +776,7 @@ The exact CLI names can change, but the checked artifacts should be stable:
 | Handler examples | Dry-run, retry, error, and approval handlers have expected escaping effects | Dry-run workspace handler still lets `EdkWorkspace.write` escape |
 | Golden traces | Stable action order, handler dispatch, default execution, limits, and errors | Email example sends before approval in the trace |
 | Interpreter smoke | Executable examples run on the reference interpreter | `edk.http` parser uses unsupported language behavior |
-| Diagnostics | Negative tests produce useful errors | Missing `limit` in an agent loop is accepted |
+| Diagnostics | Negative tests produce useful errors | An unbounded agent loop without an enforceable `@limits(...)` contract is accepted |
 | Substrate coverage | EDK uses only approved `std` substrate primitives | `edk.db` requires an unapproved private socket binding |
 
 Golden effect summaries should be checked as source-level semantic contracts:

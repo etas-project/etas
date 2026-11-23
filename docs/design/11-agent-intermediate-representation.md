@@ -113,8 +113,8 @@ This table records where current Etas features belong. The rule of thumb is:
 | Local bindings and variables | Preserve `let`, `var`, patterns, names, scopes, and mutation syntax | Convert to SSA values, use-def chains, and explicit updates/phi-like region outputs | Store runtime locals/value slots only where needed for interpretation, checkpoint, and resume |
 | Pure expressions | Preserve source expression tree and operator syntax | Normalize to pure operations such as const, record, field, tuple, list, unary, binary, and pure calls | Execute or precompute remaining pure operations |
 | `if` / `match` | Preserve source branches and patterns | Build explicit branch/match regions with dominance and effect summaries | Execute branch dispatch and trace selected path |
-| `for` / `while` | Preserve source loop syntax, bindings, condition, and `limit` clauses | Build loop regions with carried values, loop effects, limit requirements, and hoistable dependencies | Execute loop state machine with budget accounting, checkpoint/resume at loop boundaries, and limit enforcement |
-| Stage `limit` clauses | Preserve source limit clauses attached to a pipeline stage | Normalize to stage-local budget/resource checks | Execute concrete limit checks before or around the stage |
+| `for` / `while` | Preserve source loop syntax, bindings, condition, and local `@limits` annotations | Build loop regions with carried values, loop effects, resource requirements, and hoistable dependencies | Execute loop state machine with budget accounting, checkpoint/resume at loop boundaries, and limit enforcement |
+| Annotated block around a stage call | Preserve block scope and `@limits` arguments | Evaluate dynamic bounds once and normalize to scoped budget checks around the block | Execute concrete checks around the stage without resetting enclosing budgets |
 | `~>` pipeline | Preserve source operator and stage list | Desugar to explicit stage graph with data edges and per-stage metadata | Execute lowered stage calls; emit normal call/message/trace events |
 | Stage composition operator | Preserve source composition expression | Type as a composed flow and lower to sequence/graph of stage calls with unioned effects and determinism | Execute the generated composed flow; no special runtime operator required |
 | `join([...])` stdlib combinator | Resolve as library flow call | Recognize join shape when signature and arguments allow parallel scheduling analysis | Execute as structured concurrent branches or sequential fallback, preserving trace and failure policy |
@@ -132,7 +132,7 @@ This table records where current Etas features belong. The rule of thumb is:
 | Trace spec operators `+A`, `-A`, `A >> B`, `A << B` | Preserve source trace spec expressions and resolved action patterns | Expand `A >> B` and `B << A` into local permissions for both patterns plus a `Before` constraint; preserve alternative/scope boundaries when deriving allow/deny and dominance checks | Insert/check runtime trace-spec guards when dynamic state is involved; emit satisfaction or violation evidence |
 | `spec ...: trace` declarations | Preserve source trace spec items and references | Compile to analyzable constraints over effects and actions, agents, tools, messages, and paths | Evaluate runtime-dependent trace predicates and emit allow/deny events |
 | Persistent memory support types and resource handles | Preserve `MemoryRegion<S>`, `Store<K, V>`, top-level `std.memory.region<...>` handles, store field names, resolved import aliases, resolved std memory API calls, and source names | Track memory read/write regions, aliasing, versions, region-sensitive effects, and manifest schema requirements | Execute persistent reads/writes, version checks, retention, checkpoint, and replay integration through runtime-bound memory backends |
-| Limits / budgets | Preserve `limit` clauses and recognized limit annotations; `with` applies handlers only | Attach limit dimensions to loop/stage/flow regions; prove required limits are present | Enforce token/context/cost/time/iteration counters and checkpoint active limit state |
+| Limits / budgets | Preserve recognized `@limits` annotations on executable declarations, loops, retries, and blocks; `with` applies handlers only | Check static/local argument rules, evaluate local bounds once, and attach resource scopes; prove required coverage | Enforce token/context/cost/time/iteration counters and checkpoint evaluated bounds and remaining budgets |
 | `main` entry | Preserve source entry flow and return expression | Check `main(args: Array<string>) -> i32`, summarize reachable effects/actions, and validate entry requirements | Select `main` as the entry `AirFlow`, verify host grants, execute it, and return its status code |
 | Source comments and trivia | Ignored after syntax except source spans/formatting | Not represented | Not represented |
 | Trace events | Not represented as source constructs | Planned from node ids/effects/checkpoint points but not executed | Materialized as runtime events linked to AIR node ids |
@@ -387,7 +387,7 @@ AirOp =
 
 The source stage composition operator `|` is eliminated before AIR. A composition such as `Researcher | Writer | Publisher` is typed as a flow and lowered as the corresponding sequence of `AgentCall`, `FlowCall`/`PureCall`, and `ToolCall` nodes. The composed flow's effects are the union of stage effects, and its determinism is the maximum of the stage determinism classes.
 
-The source pipeline operator `~>` is also eliminated before AIR. Each pipeline stage lowers to the ordinary node for that stage: `AgentCall` for an agent, `FlowCall` or `PureCall` for a flow depending on its inferred runtime class, or `ToolCall` for a tool. If the stage is a composed flow created by `|`, the pipeline lowers to that composed sequence. A stage-local `limit ...` clause lowers to explicit budget checks around that stage. Extra prompt context should appear as explicit input values or be selected inside the agent context harness; model/tool configuration belongs in agent declarations, wrapper flows/tools, package metadata, or runtime configuration. These operators do not hide effects and actions, trace-spec/runtime-policy checks, approval requirements, or trace nodes.
+The source pipeline operator `~>` is also eliminated before AIR. Each pipeline stage lowers to the ordinary node for that stage: `AgentCall` for an agent, `FlowCall` or `PureCall` for a flow depending on its inferred runtime class, or `ToolCall` for a tool. If the stage is a composed flow created by `|`, the pipeline lowers to that composed sequence. An `@limits(...)` block enclosing a stage application lowers to explicit budget checks around the block; there is no stage-specific resource suffix. Extra prompt context should appear as explicit input values or be selected inside the agent context harness; model/tool configuration belongs in agent declarations, wrapper flows/tools, package metadata, or runtime configuration. These operators do not hide effects and actions, trace-spec/runtime-policy checks, approval requirements, or trace nodes.
 
 When a pipeline value is `Message<T>`, lowering preserves message metadata. Passing a message into an agent can produce a `MessageAppend` for the active session and may produce a `Handoff` event if ownership/control moves from one agent stage to another. This keeps MAS communication visible in AIR without adding a source-level `msg`, `message`, or `handoff` keyword.
 
@@ -470,9 +470,8 @@ Multiple limits are conjunctive. The runtime must enforce every active limit.
 Example:
 
 ```etas
-while needs_revision(draft)
-    limit Iterations(3), Cost(usd(1.00))
-{
+@limits([Iterations(3), Cost(usd(1.00))])
+while needs_revision(draft) {
     draft = Writer.run(draft);
 }
 ```
@@ -682,9 +681,8 @@ flow WritePaper(topic: string) -> Draft {
     let papers = Researcher.run(topic);
     var draft = Writer.run({ topic, papers });
 
-    while needs_revision(draft)
-        limit Iterations(3), Cost(usd(2.00))
-    {
+    @limits([Iterations(3), Cost(usd(2.00))])
+    while needs_revision(draft) {
         let review = Reviewer.run(draft);
         draft = Writer.run({ topic, papers, review });
     }

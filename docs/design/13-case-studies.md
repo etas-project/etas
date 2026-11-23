@@ -77,7 +77,7 @@ The status column describes SPEC coverage, not implementation completeness.
 | Sandboxed commands | `Command` effect plus default `DefaultCommandSandbox` runtime support | Strong |
 | Structured output | ordinary `type`, `Schema<T>`, `ResponseDecode` evidence, validation flows, `ValidationError` | Strong enough for MVP |
 | Prompt trust | `Prompt`, `PromptEncode` evidence, `Trusted<T>`, `Untrusted<T>`, `Sanitized<T>`, explicit prompt channels | Strong |
-| Bounded loops | `for`, `while`, `retry`, and `limit` with typed `Limit` values | Strong |
+| Bounded loops | `for`, `while`, `retry`, and `@limits(...)` with typed `Limit` values | Strong |
 | Flow composition | `\|`, `~>`, first-class flow values, structured-concurrency combinators | Strong for code-first harnesses |
 | Non-determinism | inferred `Deterministic` / `NonDeterministic` flow facts | Strong conceptually |
 | Trace planning | AIR nodes, effect summaries, memory versions, approval ids, checkpoint metadata | Strong design direction |
@@ -117,9 +117,8 @@ flow SafeResearch(req: ResearchRequest) -> Report {
 
     var report = ResearchWriter.run({ req, pages });
 
-    while !validate_report(report).ok
-        limit Iterations(3), Tokens(60_000)
-    {
+    @limits([Iterations(3), Tokens(60_000)])
+    while !validate_report(report).ok {
         let feedback = validate_report(report).error;
         report = ResearchWriter.run({ req, pages = apply_feedback(pages, feedback) });
     }
@@ -138,7 +137,7 @@ This is a harness, not just a prompt:
 - raw pages are `Untrusted<...>` until sanitized;
 - the agent receives selected context through typed input;
 - the validator controls the revision loop;
-- `limit` bounds non-deterministic retry cost;
+- `@limits(...)` bounds non-deterministic retry cost;
 - publication is a high-impact tool behind approval and effect/action checks;
 - AIR can trace the search, sanitization, model calls, validation attempts, approval, and publish action.
 
@@ -169,7 +168,7 @@ Harness engineering should not become a pile of new keywords. The core source la
 |---|---:|---|
 | Tool boundary | Yes | `tool`, effect/action contracts, and `~` trace specs |
 | Agent boundary | Yes | `agent` |
-| Flow orchestration | Yes | `flow`, `\|`, `~>`, `if`, `match`, loops, `limit` |
+| Flow orchestration | Yes | `flow`, `\|`, `~>`, `if`, `match`, loops, `@limits(...)` |
 | Human gate | No special expression | `approve(...)` support flow, `Approval.request` action, trace specs/runtime policy |
 | Checkpoint | No keyword | `runtime.checkpoint(...)` stdlib/runtime support |
 | Parallelism | No keyword | `join([...])` stdlib combinator |

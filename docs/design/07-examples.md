@@ -74,9 +74,8 @@ flow Research(topic: Topic) -> Draft {
     let citations = web.search_papers(topic);
     var papers: Array<Paper> = [];
 
-    for citation in citations
-        limit Iterations(10), Tokens(40_000)
-    {
+    @limits([Iterations(10), Tokens(40_000)])
+    for citation in citations {
         let paper = pdf.fetch(citation);
         ResearchMemory.Papers.put(citation, paper);
         papers = papers.push(paper);
@@ -277,9 +276,8 @@ flow BuildProject(brief: Brief) -> ProjectResult {
     var plan = Engineer.run({ spec, architecture });
 
     var review = Reviewer.run(plan);
-    while !review.accepted
-        limit Iterations(3), Tokens(20_000)
-    {
+    @limits([Iterations(3), Tokens(20_000)])
+    while !review.accepted {
         plan = Engineer.run({ spec, architecture });
         review = Reviewer.run(plan);
     }
@@ -438,7 +436,8 @@ flow Maintain(req: MaintenanceRequest) -> MaintenanceResult {
     }
 
     var last = TestResult { passed = false, log = "" };
-    retry limit Attempts(2) {
+    @limits([Attempts(2)])
+    retry {
         last = shell.test(plan.commands[0]);
     }
 
@@ -490,9 +489,8 @@ flow WriteSurvey(req: SurveyRequest) -> Message<Survey> {
     var survey = claims ~> Synthesizer;
     var critique = survey ~> Critic;
 
-    while !critique.body.accepted
-        limit Iterations(2)
-    {
+    @limits([Iterations(2)])
+    while !critique.body.accepted {
         survey = claims ~> Synthesizer;
         critique = survey ~> Critic;
     }
@@ -515,7 +513,7 @@ flow WriteSurvey(req: SurveyRequest) -> Message<Survey> {
 | Typed message conversations | Literature survey |
 | `~>` stage application | Company, support, survey |
 | `join` | Data analysis |
-| `limit` | Research, company, maintenance, survey |
+| `@limits(...)` | Research, company, maintenance, survey |
 | Runtime checkpoint | Maintenance |
 | Handler recovery | Email |
 | Safety case studies | Section 10 |
@@ -621,9 +619,8 @@ flow ApplyApprovedPatch(req: PatchRequest) -> unit {
     }
 
     if std.ui.approve("Write patch?", plan, risk = High) {
-        for file in plan.files
-            limit Iterations(req.allowed_files.len())
-        {
+        @limits([Iterations(req.allowed_files.len())])
+        for file in plan.files {
             repo.write(file, plan.diff);
         }
     }
@@ -848,9 +845,8 @@ effect ReportFile extends FileIO {
 tool report.write(req: ExportRequest) -> ExportResult ![ReportFile.write<_>];
 
 flow ExportReport(req: ExportRequest) -> Result<ExportResult, AppError> {
-    retry
-        limit Attempts(3), WallTime(seconds(10))
-    {
+    @limits([Attempts(3), WallTime(seconds(10))])
+    retry {
         return Ok(report.write(req));
     }
 }
@@ -922,9 +918,8 @@ flow WriteUntilAccepted(req: DraftRequest) -> Draft {
     var draft = Writer.run(req);
     var review = Reviewer.run(draft);
 
-    while !review.accepted
-        limit Iterations(3), Tokens(50_000), Cost(usd(2.00))
-    {
+    @limits([Iterations(3), Tokens(50_000), Cost(usd(2.00))])
+    while !review.accepted {
         runtime.checkpoint("before-revision");
         draft = Writer.run({ topic = req.topic, comments = review.comments });
         review = Reviewer.run(draft);
@@ -973,9 +968,8 @@ agent Synthesizer(input: Transcript) -> Answer {
 flow Debate(question: Question) -> Answer {
     var transcript = Transcript { turns = [Message.user(question.text)] };
 
-    while !mentions_final(transcript)
-        limit Iterations(6), Tokens(60_000), WallTime(minutes(5))
-    {
+    @limits([Iterations(6), Tokens(60_000), WallTime(minutes(5))])
+    while !mentions_final(transcript) {
         transcript = Transcript { turns = transcript.turns.push(Researcher.run(transcript)) };
         transcript = Transcript { turns = transcript.turns.push(Critic.run(transcript)) };
     }
@@ -1452,9 +1446,8 @@ flow RefineDraft(topic: string, initial: Draft) -> Draft {
     var draft = initial;
     var review = Reviewer.run(draft);
 
-    while !review.accepted
-        limit Iterations(3), Tokens(30_000)
-    {
+    @limits([Iterations(3), Tokens(30_000)])
+    while !review.accepted {
         draft = Rewriter.run({ topic, draft, papers });
         review = Reviewer.run(draft);
     }
@@ -1566,9 +1559,8 @@ agent ProductReviewer(input: Draft) -> Review {
 flow ReviewPanel(jobs: Array<ReviewJob>) -> PanelReview {
     var reviews: Array<Review> = [];
 
-    for job in jobs
-        limit Iterations(3), Tokens(30_000)
-    {
+    @limits([Iterations(3), Tokens(30_000)])
+    for job in jobs {
         if !should_run(job) {
             continue;
         }
@@ -1678,9 +1670,8 @@ flow BuildLaunchPacket(req: LaunchRequest, cfg: LaunchConfig) -> LaunchPacket
     var reviews: Array<Review> = [];
     var review_ok = false;
 
-    while !review_ok
-        limit Iterations(3), Tokens(80_000), Cost(usd(3.00))
-    {
+    @limits([Iterations(3), Tokens(80_000), Cost(usd(3.00))])
+    while !review_ok {
         draft = Writer.run({ req, evidence, instructions });
 
         let review_options = join([
@@ -1973,18 +1964,21 @@ can choose an execution strategy:
 flow quorum<T, effect E>(
     candidates: Array<() -> Vote<T> ![E]>,
     k: usize,
-) -> T ![E] {
-    let votes = join(candidates, limit Quorum(k));
+) -> T {
+    let votes = join(candidates);
     return select_quorum(votes, k);
 }
 ```
 
-The same combinator can be planned differently depending on the inferred
-execution summary:
+This baseline joins all candidates before the application-defined
+`select_quorum` chooses a result; quorum is not a `Limit` dimension. Early
+completion requires a quorum-aware scheduler/combinator and is an optimization
+proposal, not behavior supplied by `join`. The inferred row includes the
+standard join errors. The execution summary can guide these planning choices:
 
 | Inferred summary | Strategy |
 |---|---|
-| requested actions include only `Agentic.infer<_, _>` plus read-only memory effects | Parallel quorum with early stop. |
+| requested actions include only `Agentic.infer<_, _>` plus read-only memory effects | Parallel candidates; quorum early stop additionally requires an explicit completion/cancellation contract. |
 | escaping effects include `Workspace.write<P>` | Parallel only if write regions are disjoint; otherwise serialize. |
 | requested actions include `Approval.request` | Preserve approval order and input hashes. |
 | escaping effects include `Command.run<S>` | Use sandbox-aware scheduling and stricter trace capture. |

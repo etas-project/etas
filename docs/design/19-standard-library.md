@@ -869,8 +869,7 @@ typed failure. Such choices remain ordinary Etas code, not hidden behavior of
 
 ### 5.1 Signatures And Numeric Evidence
 
-The following contracts replace the signature-only legacy declarations.
-Section 5.2 specifies their numeric edge cases.
+Section 5.2 specifies the numeric edge cases for these signatures.
 
 ```etas
 module std.math;
@@ -1026,11 +1025,11 @@ public type RoundRobinResult<S> = {
 ### 6.2 Effects, Failure And Ownership
 
 Calls are sequential. The next participant observes the state returned by its
-predecessor. `E` includes the checked effects of the supplied callbacks, with
-the existing row-inclusion rules determining a common row. A callback that
-invokes an agent therefore exposes its Agentic actions. Pure callbacks are
-also valid. The predicate is pure under its declared row and is evaluated once
-at each specified boundary.
+predecessor. `E` joins callback escaping rows; requested actions and capture
+dependencies propagate separately, including Agentic actions when inference
+is reachable. `stop_when` must be deterministic, non-suspending, independent of
+mutable captures and free of requested actions; `![]` alone is insufficient.
+It is evaluated once at each specified boundary.
 
 The combinator inherits handlers, policies, budgets, cancellation, trace and
 session context. `max_turns` is an algorithm bound. Inherited execution limits
@@ -1137,23 +1136,19 @@ protected release check before any secret access or result-wrapper creation.
 | Protected operations | Raw access and release-provenance construction require protected bindings; casts/wrapper constructors cannot discard nested secrecy or forge release. |
 | Limits | Inherit budgets/cancellation. Identity release still requires an explicit strategy and ordinary authorization. |
 
-## 9. Implementation And Migration Acceptance
+## 9. Implementation Conformance
 
-| Ownership / Migration | Rule |
+| Ownership | Rule |
 |---|---|
-| API contract changes | Record intentional changes against the baseline; advertise only verified execution paths. Unsupported paths report a diagnostic. |
+| API contract | All supported execution paths implement the same specified behavior. Unsupported paths report a diagnostic rather than silently selecting another implementation. |
 | Etas source | Ordinary flows, enums, records and policy bodies belong in `etas_std/library/std`. |
 | Primitive bindings | Own primitive arithmetic, opaque storage, secret authority and protected provenance operations. |
-| Engineering details | Provider migration, registries, pipelines and task status belong in [Legacy Flow Implementation](../migrations/legacy-flow-implementation.md), not duplicate SPEC prose. |
 
-### 9.1 Cross-Provider Acceptance
+### 9.1 Acceptance Evidence
 
-The API tables are the shared source/legacy contract, not permission to silently
-fall back from one provider to another. Keep implementation coverage in the
-engineering test matrix; mark a row available only for the provider actually
-checked. Intentional changes, including unordered logical map/set equality and
-new hash bounds, must be recorded as contract changes rather than concealed as
-representation-only migration.
+API availability belongs in the implementation's test matrix. Representation
+changes must preserve the specified equality, error, ownership and cost
+contracts; they do not justify changing public behavior.
 
 | Area | Required Acceptance Evidence |
 |---|---|
@@ -1164,7 +1159,7 @@ representation-only migration.
 | Iterator consumption | Empty/exhausted iterators, repeated use, adapter composition, zero-sized chunks, short circuiting and bounded lazy allocation. |
 | Effects and capture | Pure lazy adapters reject state-dependent/effectful callbacks; consumers propagate callback effects/actions/capture dependencies across source imports and package metadata. |
 | Failure behavior | Invalid indexes use the specified error effect; callback failure stops later work without rolling back completed external actions; `unwrap` terminates rather than silently supplying a value. |
-| Installed delivery | Build and run against the installed source SDK, including separately compiled imports. Legacy native-container tests alone do not certify source SDK behavior or performance. |
+| Installed delivery | Build and run against the installed source SDK, including separately compiled imports. Testing a different backend alone does not certify source SDK behavior or performance. |
 
 ## 10. Collections And Key Contracts
 

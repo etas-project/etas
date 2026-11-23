@@ -1,11 +1,9 @@
 # Lambda And Handler Capture
 
-## 1. Design Status
+## 1. Scope
 
-This chapter specifies the shared capture rules for anonymous flows (lambdas)
-and Handler values as of 2026-11-18. These rules complete the previously
-unspecified relationship between mutable lexical bindings and captured
-environments. Compiler and runtime conformance remains implementation work.
+This chapter specifies the shared lexical capture, lifetime and task-affinity
+rules for anonymous flows (lambdas) and Handler values.
 
 ## 2. Binding Identity And Assignment
 
@@ -185,23 +183,12 @@ one checkpoint create independent executions. Recompilation and source
 restoration relocate binding identities using the existing checked-code
 mapping mechanisms.
 
-## 8. Engineering Work
+## 8. Conformance Cases
 
-Paths below are relative to the named repository. Implement the capture batch
-before consolidated verification and fixes, following repository conventions.
-
-| Area | Existing code | Required result |
-| --- | --- | --- |
-| Capture facts | `etas-frontend` — `crates/etas_hir_analysis/src/closures/`, `crates/etas_types` binding mutability and callable facts | Classify captured declarations and retain read/write behavior and task affinity through higher-order use. |
-| Runtime environments | `etas-interpreter` — `crates/etas_interpreter/src/plan/captures.rs`, `src/control/frame.rs`, lambda and Handler evaluation | Same-task captures alias the original mutable binding. Fresh invocations keep distinct parameter/local slots and distinct declaring activations keep distinct captured state. |
-| Task and optimization checks | `etas-frontend` — concurrency analysis and HIR optimization legality; `etas-interpreter` — task admission and inherited Handler environments | Enforce task-local capture constraints and use captured-state facts when proving independent or repeatable execution. |
-| Persistence and imports | `etas-interpreter` — `src/api/codec/machine/frame/`, `src/eval/machine/snapshot/capture_*`; `etas-frontend` — package metadata and checked-source restoration | Preserve environment ownership and aliases across imports, serialization and resumed executions. |
-
-Extend existing capture and Handler suites with focused regression cases.
-Verify the reader/snapshot distinction, scoped counter aliases, independent declaring activations, and mutation visible to a resumed
-continuation. Check checkpoint restoration of shared captures and rejection
-at a task boundary with an immutable-snapshot alternative. Cover both lambda
-and Handler execution through normal source entry points.
-
-This is a language-semantic implementation change. Include the version update
-required by repository policy in the implementing change set.
+| Case | Required Result |
+|---|---|
+| Reader versus snapshot | A captured `var` observes later rebinding; a captured immutable snapshot does not. |
+| Copies and activations | Callable copies share the same captured binding; separate declaring activations do not. |
+| Handler completion | Resumed code observes completed assignments; `finish` does not roll them back. |
+| Scope/task boundary | Reject captured-var escape or cross-task sharing; permit an independently captured immutable value when its type allows it. |
+| Imports and checkpoint | Preserve binding ownership, aliases and capture summaries across separate compilation and restoration. |

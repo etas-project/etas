@@ -14,9 +14,8 @@ Etas source uses four spaces per indentation level. It supports `//` line commen
 
 ```etas
 // Good: semantic constraints are written as source constructs.
-while needs_revision(draft)
-    limit Iterations(3)
-{
+@limits([Iterations(3)])
+while needs_revision(draft) {
     draft = Rewriter.run(draft);
 }
 ```
@@ -101,10 +100,10 @@ Effect rows and handler types keep the distinct `![...]` notation. Plain
 `[...]` remains expression syntax for arrays, indexing, slicing, and value lists
 passed to annotations such as `@tools([repo.read])`.
 
-### 2.2 Item Annotations
+### 2.2 Annotations
 
-Annotations attach static metadata to the following item. They use `@` and do
-not introduce a new keyword:
+Annotations use `@` and do not introduce a new keyword. Item annotations attach
+metadata or compiler-recognized contracts to the following declaration:
 
 ```etas
 @model("gpt-5.5-thinking")
@@ -126,7 +125,7 @@ flow parser_accepts_record() -> unit {
 }
 ```
 
-Annotation arguments must be statically evaluable. Literals, paths, arrays,
+Item annotation arguments must be statically evaluable. Literals, paths, arrays,
 records, named arguments, and compile-time constants are allowed. Runtime
 effects are rejected:
 
@@ -136,6 +135,37 @@ agent Bad(input: Draft) -> Review {
     return perform infer<Review>(build_review_prompt(input));
 }
 ```
+
+`@limits(bounds)` is also permitted immediately before a `for`, `while`, `retry`,
+or block. It establishes a checked resource scope, not an optional optimization
+hint. Local bounds may depend on current parameters or local values:
+
+```etas
+flow Revise(draft: Draft, token_budget: u64) -> Draft {
+    var current = draft;
+    @limits([Iterations(3), Tokens(token_budget)])
+    while needs_revision(current) {
+        current = Rewriter.run(current);
+    }
+    return current;
+}
+```
+
+| Placement | Argument and Scope Rules |
+|---|---|
+| Executable `flow`, `agent`, or `tool` declaration, including methods | Static arguments; each invocation establishes a child budget around the body and trailing handler. |
+| `for`, `while`, `retry` | Local arguments are evaluated once before entry, not once per iteration or attempt; the budget covers the whole construct. |
+| Block | Local arguments are evaluated once; the budget covers all computation and owned child tasks in the block. The block retains its result type and ordinary `return` target. |
+| Local argument expressions | Must be deterministic, non-suspending and action-free; an empty escaping effect row alone is insufficient. Evaluation remains subject to enclosing budgets. |
+| Invalid annotation | Wrong argument types, unsupported targets, or invalid constant bounds are compile errors. Dynamic bounds must be validated before entering the annotated computation; invalid values cannot disable enforcement. |
+
+`bounds` has type `Array<Limit>`; the dimension constructors are std support
+values. Only `@limits` is admitted on these local constructs; this does not
+enable arbitrary expression annotations or runtime evaluation of other item
+metadata. Use a local annotated block for a parameter-dependent declaration
+budget. Nested bounds only restrict inherited budgets, and checkpoint/resume
+retains remaining counters. See [Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops)
+for composition, exhaustion, and error semantics.
 
 Compiler-known annotations may affect checking or lowering. MVP examples are
 `@model`, `@tools`, `@limits`, `@derive`, `@test`, `@deprecated`, `@trace`, and
@@ -155,263 +185,66 @@ sandboxing, and runtime checks.
 
 ### 2.3 Specs And Spec Polymorphism
 
-Etas uses `spec` for static evidence. A spec is not a parent class, a runtime
-object interface, or a general subtyping relation. The `~` relation means
-"satisfies this spec" or "entails this spec":
+A `spec` is a static constraint, not a value type or parent class. `:`
+annotates a value's type; `~` expresses spec satisfaction or entailment.
+The declaration's form determines its kind; explicit kind annotations are
+optional.
 
-```text
-:   value/type annotation
-~  spec satisfaction or spec entailment
-```
-
-Specs have three kinds:
-
-| Kind | Target | Example | Meaning |
+| Kind | Target | Example | Full Rules |
 |---|---|---|---|
-| Type spec | nominal types and generic applied types | `impl TlsStream ~ ByteStream;` | Type-level evidence about values of a type. |
-| Callable spec | flows, agents, tools, and composed flows | `flow Normalize(...) ~ Pure { ... }` | Computation-shape evidence about input, output, and effects. |
-| Trace spec | flows, agents, tools, and composed flows | `flow Send(...) ~ SafeEmail { ... }` | Temporal and authority evidence about requested actions. |
+| Type | Types, type parameters, and effect rows | `impl TlsStream ~ ByteStream;` | [Type specs](05-type-system-and-errors.md#151-type-specs) |
+| Callable | Flows, tools, and generated agent methods | `flow Normalize(...) ~ Pure { ... }` | [Callable specs](05-type-system-and-errors.md#153-callable-specs) |
+| Trace | Computations' requested-action traces | `flow Send(...) ~ SafeEmail { ... }` | [Trace specs](05-type-system-and-errors.md#154-trace-specs) |
 
 #### 2.3.1 Type Specs
 
-Type specs can be marker specs, relation specs, or behavioral specs:
+Type specs can require markers, relations, or methods:
 
 ```etas
-public spec ByteStream;
-public spec Region;
-public spec Within<Parent>;
-
-public spec PromptEncode {
+spec ByteStream;
+spec Within<Parent>;
+spec PromptEncode {
     flow encode(self) -> PromptPart;
 }
 ```
 
-Types satisfy type specs through explicit evidence:
-
-```etas
-public type TcpStream;
-public type TlsStream;
-
-impl TcpStream ~ ByteStream;
-impl TlsStream ~ ByteStream;
-
-impl Report ~ PromptEncode {
-    flow encode(self) -> PromptPart {
-        return PromptPart.data(self);
-    }
-}
-```
-
-An implementation can declare its own generic bounds before the receiver type:
-
-```etas
-impl<T ~ PromptEncode> Array<T> ~ PromptEncode {
-    flow encode(self) -> PromptPart {
-        var text = "[";
-        var separator = "";
-        for value in self limit Iterations(18446744073709551615) {
-            let part = value::PromptEncode.encode();
-            text = text + separator + part.text;
-            separator = ",";
-        }
-        return PromptPart { text= text + "]" };
-    }
-}
-```
-
-These bounds are conditions on the implementation's owner parameters and are
-available to every method. They do not add method generic parameters. An impl
-without an explicit parameter list continues to infer parameters from its owner
-type pattern.
-
-Generic flows can require spec bounds. Multiple bounds use `+`:
-
-```etas
-flow read_all<S ~ ByteStream>(stream: S, limit: ByteLimit) -> bytes {
-    return std.stream.read_until_limit(stream, limit, None);
-}
-
-flow render<T ~ PromptEncode + Schema>(value: T) -> PromptPart {
-    return value.encode();
-}
-```
-
-Relation specs express facts between types. The subject appears on the left of
-`~`, and spec type arguments are the other participants in the relation:
-
-```etas
-public type WorkspaceRoot;
-public type ReportsRoot;
-public type DraftsRoot;
-
-impl WorkspaceRoot ~ Region;
-impl ReportsRoot ~ Region;
-impl DraftsRoot ~ Region;
-
-impl ReportsRoot ~ Within<WorkspaceRoot>;
-impl DraftsRoot ~ Within<ReportsRoot>;
-```
-
-`impl DraftsRoot ~ Within<ReportsRoot>;` means "the `DraftsRoot` region is
-within the `ReportsRoot` region". It does not mean `DraftsRoot` is a subtype of
-`ReportsRoot`; it is explicit type-level evidence that generic code can ask for.
-
-Indexed support types can use the same relation:
-
-```etas
-public type WorkspacePath<R ~ Region> = string;
-
-flow read_report_path<R ~ Region + Within<ReportsRoot>>(
-    path: WorkspacePath<R>
-) -> bytes {
-    return std.fs.read_bytes(path);
-}
-```
-
-This accepts `WorkspacePath<ReportsRoot>` and `WorkspacePath<DraftsRoot>`, but it
-does not accept an unrelated `WorkspacePath<TempRoot>` unless there is imported
-evidence `impl TempRoot ~ Within<ReportsRoot>;`. The compiler checks imported
-spec evidence; it should not invent region relationships from path strings.
+Generic bounds use `T ~ PromptEncode + Schema`. Heterogeneous containers use
+an explicit existential element type such as `Array<? ~ ByteStream>`, not
+`Array<ByteStream>`; see [Existential Spec Objects](05-type-system-and-errors.md#152-existential-spec-objects).
 
 #### 2.3.2 Callable Specs
 
-Callable specs describe computation shape. They are bodiless and use a function
-signature form:
-
 ```etas
-public spec Stage<I, O, effect E>: callable I => O ![E];
-public spec Pure<I, O>: callable I => O ![];
-public spec ReportWriter: callable Brief => Draft ![WriterEffects];
-```
+spec Pure<I, O> I => O ![];
 
-Generic names used by a callable spec must be declared in `<...>`. Names not
-declared there, such as `Brief`, `Draft`, or `WriterEffects`, must resolve to
-existing types or effect rows.
-
-If a callable spec omits `![...]`, it imposes no effect constraint. The
-implementation still has its own inferred effect row, but the spec does not
-restrict it. To require an effect-free computation, write `![]` explicitly, as
-in `Pure<I, O>` above.
-
-Flows, tools, composed flows, and generated agent entrypoints can satisfy callable
-specs. The `agent` declaration itself is a nominal component; its generated
-`Name.run` entrypoint is the flow-like callable value. If the spec arguments can
-be inferred from the declaration signature, the implementation may write only
-the spec name:
-
-```etas
 flow Normalize(text: string) -> string ~ Pure {
     return std.text.trim(text);
 }
-
-@model("gpt-5")
-agent Writer(input: Brief) -> Draft {
-    return perform infer<Draft>(Prompt.new().user(input));
-}
 ```
 
-`Normalize` is checked against `Pure<string, string>`; the user does not need to
-write those arguments. The generated `Writer.run` entrypoint can be checked
-against the callable spec `ReportWriter`; the `agent` declaration itself
-remains a nominal component, not a flow value. If inference is ambiguous, the
-compiler asks for an explicit instantiation such as
-`~ Stage<Brief, Draft, WriterEffects>`.
-
-Type specs and callable specs do not share targets:
-
-```etas
-impl Report ~ PromptEncode;       // ok: type spec
-flow F(x: X) -> Y ~ Stage { ... } // ok: callable spec
-
-impl Report ~ Stage;              // rejected
-flow F(x: X) -> Y ~ PromptEncode  // rejected
-```
+The compiler infers `Pure<string, string>`. Omitting a spec's effect row
+imposes no effect constraint; `![]` requires no escaping effects, not purity,
+determinism, or non-suspension.
 
 #### 2.3.3 Trace Specs
 
-Trace specs describe authority and temporal constraints over requested actions.
-They are static constraints, not runtime values:
-
 ```etas
-public spec ReportsOnly: trace =
-    +Fs.read<R ~ Within<ReportsRoot>>;
-
-public spec SafeEmail: trace =
-    Approval.request >> CompanyEmail.send<WorkAccount>;
+spec ReportsOnly = +Fs.read<R ~ Within<ReportsRoot>>;
+spec SafeEmail = Approval.request >> CompanyEmail.send<WorkAccount>;
 ```
 
-Trace spec operators are compile-time spec operators:
-
-| Operator | Meaning |
-|---|---|
-| `+A` | Allow requested action pattern `A`. |
-| `-A` | Deny requested action pattern `A`. |
-| `A >> B` | Include local permissions for `A` and `B`, and require valid matching `A` evidence before every `B`. |
-| `A << B` | Include local permissions for `A` and `B`, and require valid matching `B` evidence before every `A`; equivalent to `B >> A`. It does not require `A` to occur. |
-| `S & T` | Require both trace specs. |
-| `S \| T` | Reserved for trace specs; either spec may accept in the MVP. |
-
-`>>` does not require repeated `+` declarations for its operands. Explicit `+`
-still allows independent actions. Denials and outer restrictions remain in
-force; permission and ordering checks stay within their own `|` alternative.
-See [Trace Specs](05-type-system-and-errors.md#154-trace-specs) for normalization
-and approval-evidence rules.
-
-The same type-level evidence used by ordinary values can refine action
-patterns. `+Fs.read<R ~ Within<ReportsRoot>>` means reads are allowed only for
-regions with imported evidence that they are within `ReportsRoot`.
+`>>` includes local permissions for its operands and requires matching
+successful prerequisite evidence. It does not invoke either action or override
+denials and outer restrictions. The [trace-spec operator table](05-type-system-and-errors.md#154-trace-specs)
+defines composition, normalization, and alternative matching.
 
 #### 2.3.4 Spec Entailment And Diamonds
 
-Specs can entail other specs:
-
-```etas
-spec ReadableStream ~ ByteStream;
-spec WritableStream ~ ByteStream;
-spec ReadWriteStream ~ ReadableStream + WritableStream;
-```
-
-This is constraint entailment, not subtyping. If `TcpStream ~
-ReadWriteStream`, then the compiler can also use evidence that `TcpStream ~
-ReadableStream`, `TcpStream ~ WritableStream`, and `TcpStream ~ ByteStream`.
-But `ByteStream` is still not a value type:
-
-```etas
-let s: ByteStream = tcp; // rejected
-```
-
-Diamond-shaped spec hierarchies are allowed because they only create duplicate
-evidence paths. The compiler deduplicates those paths. Two restrictions keep the
-system simple:
-
-1. the spec entailment graph must be acyclic;
-2. inherited behavioral method requirements must merge without signature
-   conflicts.
-
-Spec satisfaction is a separate type-checking judgment:
-
-```text
-Type equality / unification      checks ordinary value compatibility
-Spec satisfaction               checks bounds such as S ~ ByteStream
-Effect row inclusion/inference   checks computation effects
-```
-
-Effect and trace-spec checks may reuse the same indexed types and spec evidence:
-
-```etas
-flow read_path<R ~ Region>(path: WorkspacePath<R>) -> bytes
-    ![Fs.read<R>, Error<IOError>]
-{
-    return std.fs.read_bytes(path);
-}
-
-spec ReportsOnly: trace =
-    +Fs.read<R ~ Within<ReportsRoot>>;
-```
-
-The important point is that resource constraints are expressed once, at the type
-level, then reused by ordinary value typing, effect rows, and trace-spec
-matching.
+`spec ReadWriteStream ~ ReadableStream + WritableStream;` combines evidence,
+not value inheritance. Diamond paths are deduplicated; cycles and conflicting
+method requirements are rejected. See [Spec Entailment And Diamonds](05-type-system-and-errors.md#156-spec-entailment-and-diamonds).
+Region evidence can be reused in generic bounds and action patterns, but does
+not create implicit conversions between region-indexed values.
 
 ## 3. Bindings and Mutation
 
@@ -889,18 +722,22 @@ Etas statically infers a determinism class for every flow. This is separate from
 
 | Class | Meaning | Typical lowering |
 |---|---|---|
-| `Deterministic` | Depends only on explicit input values and deterministic computation | Direct internal function |
-| `NonDeterministic` | May observe or change external state, call a runtime-provided primitive symbol, call an Etas tool whose body is non-deterministic, read time or randomness, use typed memory APIs, call agents, perform model inference, request human approval, call a non-deterministic subflow, or use runtime choice | Flow runtime mediation; durable orchestration when trace/replay/checkpoint behavior is needed |
+| `Deterministic` | No reachable non-deterministic operation or callee; captured/local-state dependencies are checked separately | Direct internal calls when suspension and lifetime rules permit |
+| `NonDeterministic` | May observe or change external state, perform model inference, read time or randomness, use persistent memory, request human approval, or invoke another computation whose checked summary is non-deterministic | Runtime mediation; durable orchestration when trace/replay/checkpoint behavior is needed |
 
 Examples:
 
 ```text
 normalize_title       => Deterministic, effects = []
-read_config           => NonDeterministic, effects = [FileRead]
+read_config           => NonDeterministic, requested actions include [Fs.read<ProjectRoot>], escaping effects = [Error<IOError>]
 Draft                 => NonDeterministic, requested actions include [Agentic.infer<Writer.run, Draft>]
 ```
 
-Determinism affects optimization, caching, replay, test behavior, and whether the runtime needs durable orchestration. It does not replace the effect system. A deterministic flow can still be rejected by type checking, and a non-deterministic flow can still require effect/action, trace-spec, or runtime-policy checks.
+Agent/tool calls use their callee summaries; the declaration kind does not
+itself force model inference or non-determinism. A pure runtime primitive may
+also remain deterministic. Determinism does not replace effects, requested
+actions, capture dependencies, or suspension/lifetime checks; optimization and
+replay decisions must preserve all of them.
 
 ## 6. Program Entry Point
 
@@ -1329,20 +1166,18 @@ match (is_valid, draft) {
     (false, _) => request_revision(),
 }
 
-for paper in papers
-    limit Iterations(20)
-{
+@limits([Iterations(20)])
+for paper in papers {
     process(paper);
 }
 
-while needs_revision(draft)
-    limit Iterations(3)
-{
+@limits([Iterations(3)])
+while needs_revision(draft) {
     draft = revise(draft);
 }
 ```
 
-In pattern position, `true`, `false`, integer literals, string literals, and char literals are constant matches rather than variable bindings. The `limit` clause is required when a non-deterministic loop cannot be statically proven to terminate.
+In pattern position, `true`, `false`, integer literals, string literals, and char literals are constant matches rather than variable bindings. A non-deterministic loop whose termination cannot be statically proven requires an enforceable `@limits(...)` resource contract; an annotation inside its body does not bound the whole loop.
 
 ## 10. Modules, Packages, And Imports
 

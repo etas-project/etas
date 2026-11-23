@@ -799,7 +799,10 @@ ActionPattern >> ActionPattern -> TraceSpec
 
 ## 2. Effect Actions And Runtime-Scoped Handlers
 
-An effect row is primarily a static authority and audit summary. Etas separates effect tags from effect actions:
+An effect row summarizes escaping obligations after handling. Requested-action
+and trace summaries retain handled behavior for authority checks and audit;
+the row alone neither enumerates all actions nor grants permission. Etas
+separates effect tags from effect actions:
 
 1. an `effect` declaration defines a tag;
 2. an optional `effect` block defines the actions attached to that tag;
@@ -1037,7 +1040,7 @@ Relative to general-purpose effect-handler languages:
 | Host-provided actions | Standard authority is modeled as effect actions; non-standard host adapters use package metadata with action-based effect rows | Usually modeled as language effects or library effects | Usually modeled as effects/abilities | Usually library/runtime concern | Can be modeled as abilities |
 | Agentic inference action | `Agentic.infer<C, O>(Prompt, Schema<O>)` carries agent method identity, model profile, prompt/messages, tool surface, schema, limits, trace, replay, and runtime policy context | Can encode an operation, but the language does not know agent-runtime semantics | Can encode an operation, but agent semantics are library-level | Can encode via effects/callbacks, but agent semantics are library-level | Can encode via abilities, but agent semantics are library-level |
 | Authority model | Effect actions plus sandbox, trace specs, runtime policy, approval, limits, and deployment grants over effect instances | Usually orthogonal to handlers | Ability-oriented, but not agent-runtime specific | Mostly outside the core effect mechanism | Abilities constrain programs, but are not an agent sandbox model |
-| Error handling | `Error<E>` is an effect action; `?` lowers effectful errors to `Result<T, E>` at value boundaries | Exceptions/effects can both be modeled | Effect handlers can model errors | Exceptions and effects are separate mechanisms | Abilities can model errors |
+| Error handling | `Error<E>.raise` is the error action; `?` lowers effectful errors to `Result<T, E>` at value boundaries | Exceptions/effects can both be modeled | Effect handlers can model errors | Exceptions and effects are separate mechanisms | Abilities can model errors |
 | Effect inference | Default inference; explicit rows are optional public contracts | Strong inference | Static effect information | No complete static effect-row inference | Static ability information |
 | Parameterized effects | Yes, for example `Memory.read<R>` and `Error<E>` | Yes, through parametric effect rows | Yes, through parametric abstractions | Can be simulated with ordinary types | Yes, through parametric abilities |
 | Replay, trace, audit | First-class runtime design goal | Not a core language goal | Not a core language goal | Not a core language goal | Not a core language goal |
@@ -1073,16 +1076,15 @@ Allowed:
   - transfer a single-shot continuation to its owning structured scheduler
   - park a task awaiting completion, or requeue a runnable task
 
-Not MVP goals:
-  - use handlers as generators
-  - encode arbitrary coroutines
+Outside the supported continuation contract:
   - store continuations outside their owning task scope or in copying data structures
   - resume a continuation multiple times
   - use handlers to grant denied effect actions
   - use handlers to bypass sandbox, trace specs, runtime policy, approval, or limit checks
 ```
 
-This makes Etas less expressive than Koka-style handlers, but more aligned with static effect inference, runtime authorization, checkpointing, replay, and auditability.
+These restrictions concern continuation ownership and authority, not a blanket
+ban on yielding or deferred resumption within the supported scheduler scope.
 
 Handlers affect inferred effects. If a handler fully handles `Error<AppError>`
 and `Approval`, those effects do not escape the handled expression. Effects
@@ -1871,9 +1873,8 @@ Higher-order flows must preserve latent effects:
 flow map_docs<A, B, E>(docs: Array<A>, f: A -> B ![E]) -> Array<B> {
     var out: Array<B> = [];
 
-    for doc in docs
-        limit Iterations(docs.len())
-    {
+    @limits([Iterations(docs.len())])
+    for doc in docs {
         out = out.push(f(doc));
     }
 
@@ -1913,13 +1914,13 @@ Effect inference computes an upper bound over effects that may occur during exec
 | Typed memory write | Request `Memory.write<R>`; standard handling retains storage errors/outcome data and the operation reference. |
 | Support flow call such as `approve(...)` | Callee effect set, usually `Approval.request` |
 | Branch / `match` | Union of branch effects |
-| `for` / `while` | Body effects, plus required limit checks |
+| `for` / `while` | Iterable/condition and body effects, plus boundary errors from any resource annotation |
 | `join([...])` | Union of joined branch effects |
-| `retry` | Retried body effects |
+| `retry` | Retried body effects, plus boundary errors from any resource annotation |
 | <code>A &#124; B</code> | Union of composed stage effects; result is a `flow` |
 | `x ~> Stage` | Stage summary; agent stages include requested actions from their method bodies, usually `Agentic.infer<Agent.method, O>` |
 | <code>x ~&gt; (A &#124; B)</code> | Effect set of the composed flow |
-| `x ~> Stage limit ...` | Stage effect plus effects from limit expressions; limits become stage-local checks |
+| `@limits(bounds)` on a declaration, loop, retry, or block | Preserve the computation's effects and requested actions; add `Error<BudgetExceeded>` when the budget may be exhausted. Local bound expressions must be deterministic, non-suspending and action-free. Bounded-prefix `for` completion alone does not add this error. |
 | `perform E.action_name(...)` | Action reference `E.action_name` or `E.action_name<_>` unless a static selector is known, plus its root coverage |
 | `e?` | Effects of `e` minus the captured `Error<E>`, result type becomes `Result<T, E>` |
 | `expr with h` / `handle expr with h` | Expression effects minus fully handled effects, plus handler arm effects |

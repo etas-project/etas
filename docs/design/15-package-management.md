@@ -620,7 +620,7 @@ requirements:
 - entry effects can be matched against available deployment grants;
 - trace specs reachable from the entry are syntactically valid and can be
   checked against inferred actions;
-- non-deterministic loops and retries have required `limit` clauses;
+- non-deterministic loops and retries have enforceable `@limits(...)` contracts where required;
 - handler scopes eliminate only the effects they claim to handle;
 - generated runtime metadata includes source spans, stable item ids, entry
   effects, trace-spec summaries, limits, and tool schemas.
