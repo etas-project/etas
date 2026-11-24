@@ -1,64 +1,13 @@
 # Concurrency
 
-## 1. Goal
+## 1. Scope
 
-Etas concurrency should be structured, analyzable, and safe for agent systems.
-The language should not expose unrestricted threads as the first abstraction.
-Instead, concurrency is expressed through standard-library combinators and
-compiled with effect, policy, limit, and trace information.
+Concurrency uses standard combinators and scoped `Async` handlers.
+There are no `parallel`, `async`, `await` or `suspend` keywords.
+Optional `as k` exposes single-shot, scope-bound continuations to schedulers.
+Recognized standard symbols carry these contracts; same-named user flows do not.
 
-This chapter specifies a language and standard-library design, not current
-implementation coverage. Ordinary programs use default scheduling through
-combinators. Scheduler authors can use optional `as k` handler bindings and
-the scoped task APIs without adding `async`, `await`, or `suspend` keywords.
-
-The core design is:
-
-```text
-Effect-free deterministic flow:
-    may run concurrently when data-independent
-
-Effectful flow:
-    may run concurrently only when effect/action/resource conflicts are safe
-
-Agent/tool flow:
-    may run concurrently only under explicit runtime mediation, limits, policy,
-    handler dispatch, trace recording, and cancellation rules
-```
-
-This gives Etas a stronger concurrency story than ordinary host-language agent
-frameworks. A Python or TypeScript callback may hide arbitrary side effects;
-Etas can make the effect/action surface of each branch visible before the
-runtime schedules it.
-
-## 2. No `parallel` Keyword In MVP
-
-Etas does not need a source-level `parallel` statement in the MVP. Concurrent
-composition is a library/runtime feature:
-
-```etas
-let (summary, risks, citations) = join((
-    () => draft ~> Summarizer,
-    () => draft ~> RiskReviewer,
-    () => draft ~> CitationChecker,
-), limits = [
-    Concurrency(3),
-    Tokens(80_000),
-    WallTime(seconds(45)),
-]);
-```
-
-`join` is a standard-library combinator with compiler recognition and runtime
-support. The compiler can still lower independent branches to AIR regions that
-the runtime may schedule concurrently.
-
-These are distinct responsibilities in the [five-layer model](01-overview.md#53-feature-map-by-layer):
-Etas can implement combinator logic, the compiler recognizes the resolved
-standard contract, and the runtime provides structured task execution. A
-user-defined same-named `join` does not acquire scheduling or analysis rules
-merely from its spelling.
-
-## 3. Structured Concurrency
+## 2. Structured Concurrency
 
 Etas concurrency is structured:
 
@@ -88,11 +37,15 @@ when there is no explicit selection. The behavioral `Scheduler` spec, default
 value, and protected execution contract are specified in
 [Scheduler Spec And Default Value](19-standard-library.md#24-scheduler-spec-and-default-value).
 
-This matches agent-system needs better than free `spawn`: side effects, model
-calls, approvals, and budget consumption must remain attributable to a source
-scope and a trace region.
+Active instances are scope-owned lightweight concurrent entities, not OS
+processes or dedicated threads. Construction registers a mailbox; methods
+execute as coroutine requests. Scope exit stops admission, cancels/joins active
+requests and autonomous work, then destroys instances and owned descendants.
+An idle mailbox does not make ordinary scope completion wait forever.
+A scoped reference may be shared, but copying it does not reparent the instance.
+See [Agent Ownership](03-agents-tools-prompts-memory.md#15-ownership-budgets-and-supervision).
 
-## 4. Standard Combinators
+## 3. Standard Combinators
 
 `std.task` owns these APIs; the prelude re-exports the six combinator names.
 They schedule closures, not already-completed values. Callback effects,
@@ -126,7 +79,7 @@ public enum TaskError {
 | Empty input | `join`, `collect` and mapping return `[]`; `try_join` returns `Ok([])`; `race` raises `EmptyRace`. Validate options first. |
 | Error type `X` | Select one concrete error family from context/annotation or unique inference; factor `Error<X>` out of `E`. Multiple candidates without a selection are ambiguous, not an inferred union. |
 | Other errors | Other `Error<Y>` in `E` escape and fail the scope. A surviving parent may collect a child's boundary-delivered `Error<BudgetExceeded>` when X selects that family. Cancellation, hard faults and termination of the collecting scope itself are not per-item `Err` results. |
-| Race timing | Defer recoverable failed branches while a success remains possible. Same-dispatch-turn successes use lowest source index; all-failed selection follows section 11. |
+| Race timing | Defer recoverable failed branches while a success remains possible. Same-dispatch-turn successes use lowest source index; all-failed selection follows section 10. |
 | Retry / result reuse | No automatic retry/resample. Each admitted closure is invoked once; completion waits for loser/sibling cleanup before returning. |
 | Scope | Install the group completion policy before starting children; wait-all/race must not inherit the parent's fail-fast handling for the errors they explicitly collect/defer. |
 
@@ -155,7 +108,7 @@ let (profile, history) = std.task.join((
 ));
 ```
 
-## 5. Type And Effect Rules
+## 4. Type And Effect Rules
 
 For a fixed tuple of branches:
 
@@ -197,7 +150,7 @@ Handling scheduling actions cannot discharge unrelated child effects. An empty
 escaping row after default handling is not proof of determinism or absence of
 external requests.
 
-## 6. Effect-Free Concurrency
+## 5. Effect-Free Concurrency
 
 An effect-free deterministic flow has no observable interaction with the
 outside world:
@@ -224,7 +177,7 @@ neither call has effects and neither depends on the other's result.
 This is safe because Etas ordinary values have value semantics. Implementations
 may use sharing internally, but accidental shared mutation is not observable.
 
-## 7. Data Dependencies
+## 6. Data Dependencies
 
 Effect freedom does not remove data dependencies:
 
@@ -239,7 +192,7 @@ parallel execution even if both are effect-free.
 The compiler should use ordinary data-dependency analysis before scheduling
 branches concurrently.
 
-## 8. Effect And Resource Conflicts
+## 7. Effect And Resource Conflicts
 
 Effectful branches may still be safe to run concurrently when their actions and
 resource parameters do not conflict.
@@ -263,7 +216,7 @@ effect tag + action name + resource parameters
 
 not only on the coarse effect tag.
 
-## 9. Policy Happens-Before
+## 8. Policy Happens-Before
 
 Policies can impose ordering constraints. For example:
 
@@ -295,7 +248,7 @@ if ok {
 Concurrency analysis therefore reasons over a partial order of actions, not only
 over a set of effects.
 
-## 10. Limits And Budgets
+## 9. Limits And Budgets
 
 Concurrent scopes share parent limits. Child branches must not receive fresh
 budgets merely because they run in parallel.
@@ -332,7 +285,7 @@ Rules:
   An inner handler cannot keep the exhausted scope alive. See the canonical
   [limit outcome table](04-flows-human-gates-and-protocols.md#1-flow).
 
-## 11. Error And Cancellation Semantics
+## 10. Error And Cancellation Semantics
 
 The default task scope and fail-fast combinators use these semantics:
 
@@ -354,7 +307,7 @@ it does not change the single-Error rule of `?` or invent implicit error unions.
 The original typed failure is propagated after cancellation and cleanup, not
 fabricated as a normal task result. `try_join`, `collect` and
 `map_concurrent_collect` explicitly capture their selected error family as
-specified in section 4; they cannot catch shutdown from inside their own
+specified in section 3; they cannot catch shutdown from inside their own
 exhausted scope. Competing failures and the selected
 primary failure are trace-visible.
 
@@ -396,7 +349,7 @@ termination is not a guarantee that arbitrary cleanup code can run. Catching a
 local cancellation error cannot clear the parent's cancellation state or reset
 its budgets.
 
-## 12. Handlers In Concurrent Scopes
+## 11. Handlers In Concurrent Scopes
 
 Handlers are scoped dynamically. A handler around a concurrent expression applies
 to all child branches in that scope:
@@ -417,7 +370,13 @@ arms still escape normally.
 Handler arms must not hide audit evidence: even when a branch action is handled,
 the trace records the attempted action and the handler decision.
 
-### 12.1 Handler-Based Scheduling
+Constructor `@inject` requests use these same scoped handlers in each task;
+they are not thread-local/global registry lookups. Concurrent constructions
+request independently and obey normal capture, cancellation and lifetime
+checks. Saved fields retain their values across later calls; injecting a shared
+agent reference neither reparents it nor shares one caller's grants.
+
+### 11.1 Handler-Based Scheduling
 
 The standard `std.task.Async` effect has `yield() -> unit` and
 `await<T, effect E>(task: Task<T, E>) -> T` actions. `yield` keeps the current
@@ -443,7 +402,7 @@ answer, remaining effects, and owner. A `never`-returning action cannot bind it.
 Without `as k`, existing immediate `resume value;` remains unchanged. With
 `as k`, immediate resume and deferred transfer use the same one-shot handle.
 
-### 12.2 Ownership And Transfer
+### 11.2 Ownership And Transfer
 
 Continuations are affine, scope-bound handles, not ordinary copyable values.
 Passing one to an owner-preserving helper or scheduler queue consumes/transfers
@@ -477,7 +436,7 @@ as the scheduler or as another task. Arbitrary cross-thread transfer and
 detachment are not source-language facilities. The owner cannot return while
 an accepted continuation is still live: it must resume or cancel and unwind it.
 
-### 12.3 Waiting And Wakeup
+### 11.3 Waiting And Wakeup
 
 `std.task.start(job)` schedules work without waiting for its result. Starting
 two jobs and then awaiting the first allows both to make progress; starting
@@ -499,7 +458,7 @@ can choose another order without replacing wait-registration or result checks.
 A custom handler can also change control behavior through the protected
 transfer APIs, not the validity of task results or authorization of host work.
 
-### 12.4 Handler Lifetime And Early Finish
+### 11.4 Handler Lifetime And Early Finish
 
 Resuming a task reinstalls the captured handler environment (deep resumption).
 Handler arms themselves follow ordinary enclosing-handler lookup rules. A
@@ -526,7 +485,7 @@ child's handled region. Competing finish/error/cancellation decisions cannot
 complete the same region twice. No explicit continuation can resume a region
 after it has finished.
 
-### 12.5 Context And Analysis Preservation
+### 11.5 Context And Analysis Preservation
 
 Parking, requeueing, and wakeup retain task/parent scope ids, handler frames,
 trace-spec state, current authorization checks, cancellation, remaining budgets,
@@ -544,7 +503,7 @@ approval happens-before; task dependencies and action order remain necessary.
 No unrestricted multi-shot continuation or general shared-reference system is
 introduced by this extension.
 
-### 12.6 Complete Example
+### 11.6 Complete Example
 
 This design example uses the standard task protocol and optional `as k`. It is
 not a claim that the current interpreter implements these APIs. The two jobs
@@ -567,24 +526,27 @@ impl NewestFirst ~ Scheduler {
 }
 
 @model("gpt-5.5")
-agent Reviewer(request: string) -> string {
-    perform Async.yield();
+agent Reviewer = {};
+impl Reviewer {
+    public flow run(self, request: string) -> string {
+        perform Async.yield();
 
-    let prompt = Prompt.new()
-        .system(Trusted("Review the request and report concrete issues."))
-        .data(request);
+        let prompt = Prompt.new()
+            .system(Trusted("Review the request and report concrete issues."))
+            .data(request);
 
-    return perform infer(prompt);
+        return perform infer(prompt);
+    }
 }
 
 flow main(args: Array<string>) -> i32 {
     return std.task.run(scheduler => {
         handle {
             let correctness = std.task.start(
-                () => Reviewer.run("Check correctness")
+                () => (Reviewer {}).run("Check correctness")
             );
             let security = std.task.start(
-                () => Reviewer.run("Check security")
+                () => (Reviewer {}).run("Check security")
             );
 
             let a = std.task.await(correctness);
@@ -618,117 +580,40 @@ Omitting the explicit `handle ... with ...` layer uses the standard handler
 adapter automatically. Ready-order selection is independent of that adapter;
 neither choice grants authority or permits a task/continuation to escape.
 
-## 13. Trace And Replay
+### 11.7 Active Agent Requests
 
-A concurrent scope produces structured trace events:
+| Boundary | Contract |
+|---|---|
+| Call | `a.method(x)` submits a typed request and suspends the caller without blocking a host thread. `start(() => a.method(x))` permits other work before awaiting the reply. |
+| Admission | Preserve request identity, caller handlers/restrictions, accounts, cancellation and causal links. Do not reuse another client's approvals. |
+| Updating request | One pending state per instance; exclusive update right survives suspension. Only normal completion commits, once before reply. |
+| Read request | Committed snapshot at admission; may overlap updates but never observes pending state. |
+| Upward action | Dispatch to the nearest applicable request handler, then its caller environment; not automatically to the lifecycle owner. |
+| Handler safety | Cross-request handlers cannot capture caller-local `var` or a live updating receiver. Handler frames remain live until associated requests are cleaned up. |
+| Resume / finish | Resume exactly the suspended request. Finish unwinds the handled subtree and discards its pending updates; unrelated requests and prior commits survive. |
+| Reentrancy | No automatic updating reentrancy. Direct same-turn helper calls share pending state; external-reference callbacks are separate requests. |
+| Deadlock | Reject proven unavoidable waits statically; detect concrete closed request-wait cycles at runtime and fail the affected structured execution. Arbitrary communication graphs need not be acyclic. |
+| Scheduler/budgets | A blocked request releases its runnable slot, not its update right. Descendants share applicable accounts; execution stacks do not reset quotas. |
+| Lifecycle | Autonomous work is owned and cancelled; replacement/retry is explicit. A shared reference is not supervision ownership. |
 
-```text
-JoinEnter(scope_id)
-  TaskStart(task_id = 1)
-  TaskStart(task_id = 2)
-  ActionAttempt(AcademicSearch.search, task_id = 1)
-  AgentCall(Reviewer, task_id = 2)
-  TaskEnd(task_id = 1)
-  TaskEnd(task_id = 2)
-JoinExit(scope_id)
-```
+The runtime traces instance, request, parent-request and committed-state-version
+identities. Replay must preserve request order, admission snapshots, commit and
+cancel outcomes; recording only model replies is insufficient. Pure snapshots
+do not make effects through stored resource references conflict-free.
 
-Trace events must preserve:
+## 12. Trace And Replay
 
-- source span and stable AIR node id;
-- selected scheduler implementation/revision, configuration fingerprint, and
-  ready-selection decisions for each run;
-- branch/task id;
-- parent concurrent scope id;
-- park, runnable-queue, wakeup, and continuation transfer/consumption events;
-- the completion or cancellation decision that won a wakeup race;
-- action attempts, handler dispatch decisions, and default-action execution decisions;
-- concrete budget usage;
-- cancellation and failure events;
-- replay/recompute/resample decisions.
+Concurrent traces retain task/scope identity, scheduler selection and decisions,
+action/handler events, continuation transfers, wakeup winners, budget usage and
+cancellation/failure outcomes. Replay preserves the recorded logical ordering;
+it need not reproduce wall-clock timing.
 
-This allows replay to restore the logical behavior of a concurrent run without
-depending on the original wall-clock interleaving.
+`Task`, `SchedulerHandle` and continuation handles cannot be serialized,
+hashed, compared, persisted or supplied to models/hosts as ordinary values.
+Checkpoint restoration must preserve their scope/ownership and single-shot
+state, not expose them through source-level decoding. Reusable values satisfying
+`Scheduler` are distinct from live handles.
 
-`Task`, `SchedulerHandle`, and continuation handles are runtime capabilities,
-not user data. They cannot be serialized, hashed, compared, persisted, sent to
-a host/model payload, or decoded as ordinary Etas values. Runtime checkpoints
-use a separate versioned scheduler snapshot for task ids, owner scopes,
-ready/parked state, waiters, and continuation-arena state. That internal encoding
-is valid only with its checkpoint, not through source serialization APIs.
-Ordinary reusable values satisfying the `Scheduler` spec are distinct from
-these live runtime handles.
-
-## 14. Automatic Scheduling
-
-The compiler/runtime may automatically schedule independent work concurrently
-when all of these are true:
-
-1. data dependencies permit it;
-2. inferred effects are absent or conflict-free;
-3. policy ordering is preserved;
-4. limits allow concurrency;
-5. trace and replay semantics are preserved.
-
-This permits optimization such as:
-
-- running independent deterministic preprocessing in parallel;
-- parallelizing independent retrievals;
-- scheduling independent reviewers concurrently;
-- serializing conflicting writes automatically;
-- falling back to sequential execution when resource conflicts are unclear.
-
-Automatic scheduling must be semantics-preserving. If the compiler cannot prove
-safety, it should keep the source order or require an explicit combinator plus
-runtime checks.
-
-## 15. Advantages Over Ordinary Agent Frameworks
-
-| Dimension | Etas | Typical Python/TypeScript agent framework |
-|---|---|---|
-| Side-effect visibility | Effects/actions are inferred and attached to branches | Callback may hide arbitrary SDK calls or global mutation |
-| Race safety | Value semantics plus effect/resource conflict checks | User must reason about shared objects, closures, and clients |
-| Policy preservation | Trace-spec `>>`/`<<` requirements become ordering constraints | Usually runtime guardrails or manual hooks |
-| Budget control | Concurrent scope shares typed limits | Separate timeouts or per-call options can accidentally reset budgets |
-| Replay | Structured task trace with action metadata | Often logs concrete events, but lacks language-level replay semantics |
-| Optimization | Compiler can schedule, hoist, deduplicate, and serialize safely | Optimizations are manual and local |
-| Agent/tool mediation | Model/tool calls remain under effect, policy, handler, and trace checks | Tool calls are often ordinary functions exposed to a model runtime |
-
-The main benefit is not that Etas can run things in parallel. Existing
-frameworks can do that. The benefit is that Etas can decide when parallelism is
-safe, what authority it requires, what budget it consumes, how it is traced, and
-how recovery should behave.
-
-## 16. MVP Scope
-
-MVP should include:
-
-- `join`;
-- `try_join`;
-- `collect`;
-- `race`;
-- `map_concurrent`;
-- `map_concurrent_collect`;
-- `Concurrency(n)` limit;
-- effect/action/resource conflict checks for standard effects;
-- structured trace events for concurrent scopes;
-- fail-fast and collect-style error semantics;
-- runtime cancellation at mediation points;
-- `std.task.run`, scoped `start`/`await`, and default `Async` handlers;
-- optional `as k` with single-shot ownership and scope-preserving transfer;
-- scheduler `requeue`/`park` contracts, wakeup races, and unwind/cleanup rules.
-
-MVP should not include:
-
-- unrestricted `spawn`;
-- `async` / `await` keywords;
-- a `suspend` keyword, continuation cloning, or multi-shot resume;
-- channels and `select`;
-- shared mutable state;
-- preemptive thread interruption as a source-language guarantee;
-- actor syntax;
-- detached background tasks.
-
-Those features can be added later if they earn their complexity. The first
-version should make common fan-out/fan-in agent workflows safe, bounded,
-traceable, and optimizable.
+Any scheduling transformation must preserve dependencies, action ordering,
+handler behavior, limits and replay obligations. Missing proof does not permit
+reordering observable effects.

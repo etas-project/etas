@@ -1,6 +1,6 @@
 # Legacy Flow Implementation
 
-The accepted contracts are in [Standard Library, sections 5 through 9](../design/19-standard-library.md#5-numeric-helpers).
+The accepted contracts are in [Standard Library, sections 5 through 8](../design/19-standard-library.md#5-numeric-helpers).
 This document records engineering work pending as of 2026-11-16. Publishing the
 design does not establish runtime or provider acceptance.
 

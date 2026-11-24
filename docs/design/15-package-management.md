@@ -153,7 +153,7 @@ Rules:
   normal package metadata;
 - source code only sees logical import roots, not dependency source forms.
 
-The [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts)
+The [compiler-recognized std contracts](01-overview.md#4-language-and-library-boundaries)
 bind to resolved standard package/item identities, not local import roots or
 unqualified names. Aliases and re-exports preserve recognition; a different
 package or local declaration with the same spelling does not acquire it.
@@ -219,109 +219,33 @@ checking, policy checking, generated tool schemas, and public API resolution.
 
 ### 7.1 Using the installed standard library
 
-`etas std install --prefix <prefix>` installs the executable at
-`<prefix>/bin/etas` and its matching SDK at
-`<prefix>/lib/etas/<toolchain-id>/std/`. The SDK includes the compiled
-interfaces, checked bodies and the corresponding `library/std/**/*.es` files.
-Moving the entire prefix preserves offline execution and source navigation.
+The selected standard library must satisfy the manifest version requirement
+and locked identity. Its recognized symbols and public contracts must match
+the selected execution target; mismatch is a diagnostic, not a silent fallback.
 
-SDK schema 2 stores checked IR and analysis facts as a shared declaration/type
-object plus disjoint module body objects in `artifacts/objects/`. The manifest
-names their content hashes; the object index records semantic dependencies and
-stable definition IDs. Module containers index individual definition payloads;
-the runtime selects a dependency closure, decodes its bodies and links the saved
-facts. Installed interpreter layouts and public ABI projections are
-prepared once for the matching toolchain. Ordinary installed execution does not
-parse or solve standard-library sources.
+Changing a standard-library dependency requires explicit lock resolution.
+Installation paths, artifact formats, caches and provider-selection commands
+are toolchain documentation, not language semantics.
 
-Selected object packs are optional caches outside the SDK, keyed by the SDK
-manifest, entry definitions and compiler/runtime ABI. Delete
-`$XDG_CACHE_HOME/etas/std-objects` (or `~/.cache/etas/std-objects`) to discard them;
-`ETAS_STD_CACHE_ROOT` selects a separate directory. The next run reads canonical
-objects and rebuilds the pack. No precomputed execution-closure images are
-required in a release.
+## 8. Exported Contracts
 
-To try a change to the Etas sources in a checkout of `etas-core`, build an
-SDK and point the consumer at the directory containing `std/manifest.json`.
+Dependencies checked from source or metadata must expose the same public
+semantics. File formats and compiler pipelines are outside this SPEC.
 
-```sh
-etas std build --manifest-path ../etas-core/crates/etas_std/etas.toml --out-dir /tmp/etas-sdk/std
-etas check app.es --std-provider artifact --sysroot /tmp/etas-sdk
-etas run app.es --std-provider artifact --sysroot /tmp/etas-sdk
-```
+| Contract | Required Information |
+|---|---|
+| Identity and visibility | Package identity/version, logical modules, public items and expanded re-exports. |
+| Types and callables | Type/spec signatures, generic constraints, parameter names/defaults, receiver modes and transitive suspension facts. Unknown suspension is not non-suspension. |
+| Constructors | Field order, types/visibility, resolved `@inject` action identities/static selectors and omitted-field behavior; imports do not rebind provider names. |
+| Active agents | State schema, dispatch/role evidence, scoped-reference/capture bounds and temporal/state-dependence contracts. |
+| Effects and tools | Escaping and requested-action summaries, model schemas, required concrete bindings and trace constraints. |
+| Defaults | Definition-site bindings and revision identity; callers do not reinterpret default expressions. |
+| Reflection | Body retention/export visibility and source/dependency fingerprints. Retained private bodies remain private. |
+| Standard symbols | Recognized symbol identities and compatible public contracts; package metadata cannot self-assign intrinsic status or authority. |
 
-A project with an older `builtin:std` lock entry upgrades explicitly. Set its
-`etas.toml` std requirement to a version range that admits the installed SDK
-(for example, `"0.4"` for std 0.4.0), then run the lock command.
-
-```sh
-etas pkg lock ./project --std-provider artifact --sysroot /tmp/etas-sdk
-```
-
-The resulting builtin entry identifies the SDK version and native ABI. A
-source body change invalidates the compilation cache even when this lock entry
-stays the same. A version or ABI mismatch produces a diagnostic during check
-or run. The explicit `--std-provider legacy` option selects the legacy registry
-and its original builtin lock identity for the entire session.
-
-## 8. Package Metadata
-
-Published packages should include generated public API metadata. The metadata
-lets the compiler type-check downstream packages without loading all dependency
-source code.
-
-The authoritative metadata artifact is a sectioned binary file:
-
-```text
-.etas/package.etasmeta
-```
-
-The artifact header records the package identity, compiler schema version,
-source payload hash, manifest hash, dependency lock hash, and target that
-created it. Section payloads carry exports, type contracts, effect contracts,
-action contracts, tool contracts, trace-spec contracts, runtime-policy
-requirements, std contracts, package graph, and public symbols. JSON output is
-only a debug dump format; it is not a build input.
-
-```text
-EtasMetadataArtifact
-  header
-  section table
-  compressed protobuf sections
-```
-
-Public metadata should include:
-
-- public modules and exported item names;
-- public type, enum, spec, flow, agent, tool, effect, action, and protocol
-  signatures;
-- parameter names, required/defaulted status, and checked default expressions
-  or executable references with declaration-site bindings and fingerprints;
-- method receiver modes and checked transitive may-suspend summaries, including
-  behavioral-spec evidence; omission is unknown, not a non-suspension proof;
-- generated effect/action summaries for exported flows, agents, and tools;
-- tool schemas for model-callable public tools;
-- trace-spec summaries that affect exported APIs;
-- re-export expansion for wildcard public imports;
-- fingerprints for incremental compilation and LSP invalidation.
-- resolved body-retention/export entries, body availability, and source
-  fingerprints for reflection; unexported retained bodies remain private.
-
-The std-contract section identifies the resolved standard symbols, their
-contract versions, and required backend bindings for primitives. The toolchain
-must validate these against the selected standard library and target; arbitrary
-package metadata cannot self-assign a compiler-recognized role or runtime
-authority. Ordinary Etas bodies remain checked code, while a primitive without
-a source body must expose its type, effects/actions, failures, and runtime
-contract. Missing or incompatible required contracts/bindings are diagnostics,
-not permission to substitute an unchecked same-named implementation. Merely
-belonging to std or appearing in a prelude does not authorize external actions.
-
-Effect summaries such as `requested_actions` and `default_actions` belong to
-this generated metadata, not to source declaration syntax. Etas implementations
-and contract-preserving backend optimizations expose the same public semantic
-contract; standard-library self-implementation does not require changing
-callers' imports.
+Inferred public signatures are permitted, but the resulting contracts must be
+available to dependents. `requested_actions` and `default_actions` describe
+analysis metadata, not source declaration clauses.
 
 ## 9. Import Resolution
 
@@ -354,8 +278,7 @@ the import lowers to a stable identity:
 PackageId(company-agents@1.2.3) + ModuleId(company.agents) + ItemId(Writer)
 ```
 
-This identity, not the physical source path, is what the type checker, effect
-checker, policy checker, LSP, FIR, AIR, and runtime-facing metadata should use.
+Item identity is independent of physical source location.
 
 ## 10. Workspace
 
@@ -430,65 +353,13 @@ Rules:
   row must be included in the source-level tool signature;
 - binding configuration is not source syntax.
 
-## 13. Project Compilation Model
+## 13. Project Checking
 
-Project-level compilation starts from a package root, not from an isolated source
-file. A source file can still be parsed or checked alone for editor feedback, but
-a runnable or publishable package is compiled through the package model.
+A package is checked using its manifest, locked dependencies, source root and
+selected entries. Source or metadata dependencies have identical obligations;
+checking does not execute the selected entry.
 
-The project compilation input is:
-
-```text
-etas.toml
-etas.lock?
-[source].root/**/*.es
-dependency package metadata or dependency source
-runtime/tool binding metadata when compiling a runnable target
-```
-
-The project compilation output is one or more of:
-
-```text
-checked package
-public package metadata
-runnable entry artifact
-diagnostics
-LSP/index metadata
-```
-
-### 13.1 Compilation Steps
-
-The compiler should process a package in this order:
-
-1. Discover the package root by locating `etas.toml`.
-2. Parse `etas.toml` and determine package name, version, edition, source root,
-   dependencies, and declared entry points.
-3. Resolve dependencies from `etas.lock` when present. If the lockfile is absent
-   or stale, package management tooling resolves dependency constraints and
-   produces a new lockfile before normal compilation.
-4. Build the package graph from the current package plus resolved dependencies.
-5. Collect source files from `[source].root`, normally `src`.
-6. Parse source files into ASTs.
-7. Validate module declarations against the resolved logical module paths.
-8. Build the module index for the current package.
-9. Load dependency public API metadata, or dependency source when metadata is not
-   available or when source-level checking is requested.
-10. Resolve imports using the package graph and module index.
-11. Lower AST to HIR with stable package/module/item identities.
-12. Run name resolution, visibility checks, type checking, effect inference,
-   handler checking, policy checking, limit checking, and determinism inference.
-13. Validate declared entry points.
-14. Validate reachable bodyless tool bindings for runnable targets.
-15. Emit public package metadata, runnable artifacts, diagnostics, and index data.
-
-The result of step 11 must not encode semantic identity as a filesystem path.
-Resolved names use:
-
-```text
-PackageId + ModuleId + ItemId
-```
-
-### 13.2 Source Collection And Module Validation
+### 13.1 Module Membership
 
 The source root defaults to `src`:
 
@@ -520,55 +391,7 @@ Rules:
 - generated or virtual modules are allowed only when the package resolver maps
   them to stable logical module identities.
 
-### 13.3 Dependency Compilation Modes
-
-A dependency can be compiled in one of three modes:
-
-| Mode | Input | Use case |
-|---|---|---|
-| Metadata mode | Generated public API metadata | Fast downstream type/effect/policy checking |
-| Source mode | Dependency source files | Workspace development, debugging, local path dependencies |
-| Built-in mode | Compiler-known metadata and optional source | Standard library and compiler-provided packages |
-
-All modes must expose the same semantic surface to the current package:
-
-- public modules and items;
-- exported type, spec, flow, agent, tool, effect, action, and protocol
-  signatures;
-- checked default-argument contracts, including definition-site bindings and
-  fingerprints, not caller-reinterpreted source strings;
-- method receiver modes and transitive suspension facts required for checked
-  `var self` calls;
-- generated effect/action summaries;
-- tool schemas and binding requirements;
-- re-export expansion;
-- package identity and version.
-
-### 13.4 Import Resolution During Compilation
-
-Import resolution is project-level because an import path may refer to the
-current package or to a dependency import root.
-
-For:
-
-```etas
-import company.agents.Writer;
-```
-
-the compiler checks:
-
-1. whether `company.agents.Writer` is a current-package module/item;
-2. whether any dependency declares an import root that is a prefix of
-   `company.agents.Writer`;
-3. whether the longest matching prefix resolves to a public module or item;
-4. whether the imported item is visible;
-5. whether wildcard imports introduce ambiguity.
-
-If multiple dependencies provide the same longest matching import root, the
-import is ambiguous and compilation fails. The package manifest should use
-different `import` roots or aliases to disambiguate.
-
-### 13.5 Entry Point Validation
+### 13.2 Entry Points
 
 Runnable targets are declared in `etas.toml`:
 
@@ -592,95 +415,13 @@ the entry becomes the authority summary for deployment and runtime grant checks.
 A package may define multiple runnable entries. Each entry is checked
 independently, but they share the same package graph and module index.
 
-### 13.6 Library Package Compilation
+### 13.3 Library And Executable Boundaries
 
-A package without `[[bin]]` entries can still be compiled as a library. Library
-compilation validates the package and emits public package metadata. Public
-exports must have stable signatures:
+| Target | Required Checks |
+|---|---|
+| Library | Name resolution, visibility, type/effect/spec contracts and exported constructor/default/capture contracts; an entry point is not required. |
+| Executable | Library checks plus a valid selected entry and compatible concrete definitions/bindings for reachable bodyless tools. Required actions remain subject to execution authority. |
+| Isolated file | May provide local diagnostics, but cannot establish project-wide imports, entry points or external bindings without the package environment. |
 
-- public type and enum definitions;
-- public flow, agent, and tool signatures;
-- public effect and action declarations;
-- public trace specs and protocol declarations;
-- public re-exports after wildcard expansion;
-- inferred or explicit effect/action summaries for public flows, agents, and
-  tools.
-
-The compiler should allow local/private flows to rely on inference, but public
-metadata must record the resulting API contract for downstream packages.
-
-### 13.7 Runnable Package Compilation
-
-For a runnable target, compilation additionally checks runtime-facing
-requirements:
-
-- every reachable bodyless tool has a concrete binding;
-- runtime-provided bindings declare effect/action rows compatible with source
-  signatures;
-- entry effects can be matched against available deployment grants;
-- trace specs reachable from the entry are syntactically valid and can be
-  checked against inferred actions;
-- non-deterministic loops and retries have enforceable `@limits(...)` contracts where required;
-- handler scopes eliminate only the effects they claim to handle;
-- generated runtime metadata includes source spans, stable item ids, entry
-  effects, trace-spec summaries, limits, and tool schemas.
-
-Compiling a runnable package does not execute it. Execution starts only when the
-interpreter or runtime calls the selected entry flow.
-
-### 13.8 Single-File And Editor Modes
-
-Tools may support single-file parsing or checking for editor feedback:
-
-```text
-etas check file.es
-```
-
-Single-file mode is limited. It may parse syntax, infer local types, and report
-local diagnostics, but full import resolution, dependency metadata loading,
-entry validation, public API metadata generation, and tool binding validation
-require project-level compilation.
-
-## 14. Frontend Contract
-
-The package manager may be implemented as a separate tool, but it must provide
-the frontend with a resolved project input containing:
-
-- the current package root and source root;
-- package name, version, and edition;
-- the selected entry module and flow;
-- resolved dependency package identities;
-- dependency import roots;
-- dependency public API metadata;
-- dependency effect/action metadata;
-- dependency tool schemas and binding metadata when needed;
-- lockfile fingerprints for reproducible checking and caching.
-
-The frontend must not infer package identity from path strings alone. It should
-lower every resolved reference to:
-
-```text
-PackageId + ModuleId + ItemId
-```
-
-## 15. Design Summary
-
-| Concern | Location | Source syntax? |
-|---|---|---|
-| Module namespace | `.es` source via `module` | Yes |
-| Importing names | `.es` source via `import` | Yes |
-| Package name and version | `etas.toml` | No |
-| Dependency source and version | `etas.toml` | No |
-| Exact resolved dependency versions | `etas.lock` | No |
-| Registry URLs and cache root | user/global config | No |
-| Public API signatures and effects | generated package metadata | No |
-| Tool host bindings | package metadata or runtime config | No |
-| EDK official packages | ordinary dependencies such as `edk.http`, `edk.web`, and `edk.workspace` | No |
-
-The source language stays small: `module`, `import`, visibility, and public
-re-exports. Package management supplies the package graph and metadata that make
-those imports reproducible, checkable, and analyzable.
-
-EDK is the official package layer built on top of `std`, not a privileged source
-language feature. Its package set and compatibility rules are described in
-[EDK Official Packages](17-edk-official-packages.md).
+Dependency import roots and ambiguity follow section 9. The SPEC does not
+prescribe compiler phase order, intermediate representations or artifact formats.

@@ -1,31 +1,25 @@
-# Etas Design
+# Etas Language Specification
 
-Etas is an agent-native general-purpose programming language design for multi-agent systems. It treats flows, agents, tools, prompt values, typed persistent memory APIs, trace specs, approvals, and traces as explicit program elements that can be checked, compiled, executed, audited, and optimized.
+This directory defines the language and its public library contracts.
+Compiler architecture, IR design, implementation plans and framework surveys
+are outside its scope. A specified feature is not an implementation-status claim.
 
-## Documents
+| Chapter | Contents |
+|---|---|
+| [Overview](01-overview.md) | Constructs, keywords and language/library boundaries |
+| [General Constructs](02-general-programming-constructs.md) | Bindings, values, calls, initialization, modules and imports |
+| [Agents And Tools](03-agents-tools-prompts-memory.md) | Active instances, requests, model boundaries, context and resources |
+| [Flows And Resource Bounds](04-flows-human-gates-and-protocols.md) | Composition, loops, limits, human gates and protocols |
+| [Types And Errors](05-type-system-and-errors.md) | Nominal/structural types, specs, existentials and `?` |
+| [Effects And Handlers](06-effect-system-and-inference.md) | Actions, rows, inference, handlers and authority boundaries |
+| [Examples](07-examples.md) | Small examples of the normative constructs |
+| [Source Grammar](09-syntax-principles.md) | EBNF and syntax references |
+| [Safety Contracts](14-safety-analysis-static-dynamic.md) | Trace constraints, scope composition, rejection and dynamic checks |
+| [Packages](15-package-management.md) | Manifest, dependency identity, lockfile and project boundaries |
+| [Concurrency](16-concurrency.md) | Structured tasks, handlers, cancellation and active requests |
+| [Reflection Extension](18-reflection-and-checked-code-generation.md) | Definition access and checked code revision |
+| [Standard Library](19-standard-library.md) | Public API tables and behavior contracts |
+| [Lexical Capture](20-lexical-capture.md) | Lambda/handler capture, mutation and lifetime |
 
-1. [Overview](01-overview.md)
-2. [General Programming Constructs](02-general-programming-constructs.md)
-3. [Agents, Tools, Messages, Prompt Values, and Persistent Memory APIs](03-agents-tools-prompts-memory.md)
-4. [Flows, Human Gates, and Protocols](04-flows-human-gates-and-protocols.md)
-5. [Type System and Errors](05-type-system-and-errors.md)
-6. [Effect System and Inference](06-effect-system-and-inference.md)
-7. [Examples](07-examples.md)
-8. [Formal Core, Static Analyses, and PL Context](08-formal-core-static-analyses-and-pl-context.md)
-9. [Syntax Principles](09-syntax-principles.md)
-10. [Implementation Strategy](10-implementation-strategy.md)
-11. [IR Stack, FIR, and AIR](11-agent-intermediate-representation.md)
-12. [Application Boundaries and Framework Coverage](12-application-boundaries-and-framework-coverage.md)
-13. [Case Studies](13-case-studies.md)
-14. [Safety, Analysis, and Static-Dynamic Boundaries](14-safety-analysis-static-dynamic.md)
-15. [Package Management](15-package-management.md)
-16. [Concurrency](16-concurrency.md)
-17. [EDK Official Packages](17-edk-official-packages.md)
-18. [Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md)
-19. [Standard Library](19-standard-library.md), including the API index, contract tables and remaining coverage gaps.
-20. [Lambda And Handler Capture](20-lexical-capture.md)
-
-## Proposal
-
-[Action Signature Generics](18-action-signature-generics.md) is a separate
-extension proposal, not an adopted replacement for the source grammar.
+Normative details live in one chapter and are linked elsewhere. Examples
+illustrate contracts; they do not add implicit APIs or permissions.

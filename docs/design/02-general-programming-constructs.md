@@ -1,22 +1,18 @@
 # General Programming Constructs
 
-Etas is a general-purpose programming language first, with agentic constructs added on top. Deterministic computation should use ordinary language features instead of agents.
-
-This chapter describes both language mechanisms and the standard APIs used with
-them. Primitive types, generics, literals, and indexing rules are language
-semantics; collection types and methods are std contracts and implementations.
-Their compiler-recognized integrations are distinguished from ordinary library
-logic in the [language layers](01-overview.md#53-feature-map-by-layer).
+This chapter defines ordinary source constructs. Type/spec details are in
+[Types](05-type-system-and-errors.md); public collection APIs are in
+[Standard Library](19-standard-library.md).
 
 ## 1. Lexical Style
 
-Etas source uses four spaces per indentation level. It supports `//` line comments and `/* ... */` block comments. Comments are ignored by the parser and cannot express trace specs, runtime policy, effect boundaries, limits, or other semantic constraints.
+Etas source uses four spaces per indentation level. It supports `//` line comments and `/*... */` block comments. Comments are ignored by the parser and cannot express trace specs, runtime policy, effect boundaries, limits, or other semantic constraints.
 
 ```etas
 // Good: semantic constraints are written as source constructs.
 @limits([Iterations(3)])
 while needs_revision(draft) {
-    draft = Rewriter.run(draft);
+    draft = (Rewriter {}).run(draft);
 }
 ```
 
@@ -52,10 +48,6 @@ value, so it is accepted wherever any other value type is expected. It does not
 create an implicit conversion at runtime; it simply means control flow does not
 reach the point that would need the value.
 
-The numeric type names use the Rust style. Etas should support the full integer width family from the language design, even if the first implementation internally lowers some widths through a smaller runtime representation.
-
-The first implementation can start with `bool`, `i32`, `u32`, `f64`, `string`, `bytes`, and `unit`, then add the remaining numeric widths as needed.
-
 ### 2.1 Numeric Conversion And Indexing
 
 Etas has no general implicit numeric conversion between integer types. Assignments, flow calls, method calls, and ordinary comparisons require matching numeric types except for integer literals, which may be typed from context.
@@ -71,7 +63,7 @@ let z: usize = 0;        // allowed: integer literal is contextually typed
 Conversions between concrete integer types must be explicit. Indexing has a checked numeric contract. Etas defines `Index` as a compiler-known prelude spec, not as an ordinary runtime type. `Index` is satisfied by integer literals and by all concrete integer types:
 
 ```text
-Index :=
+Index:=
     integer literal
   | i8 | i16 | i32 | i64 | i128 | isize
   | u8 | u16 | u32 | u64 | u128 | usize
@@ -103,14 +95,20 @@ passed to annotations such as `@tools([repo.read])`.
 ### 2.2 Annotations
 
 Annotations use `@` and do not introduce a new keyword. Item annotations attach
-metadata or compiler-recognized contracts to the following declaration:
+metadata or compiler-recognized contracts to the following declaration.
+`@inject(Action)` additionally attaches to a stored field of a nominal record
+`type` or `agent`; its construction-only contract is defined in
+[Constructor Injection](#72-constructor-injection):
 
 ```etas
 @model("gpt-5.5-thinking")
 @tools([repo.read, latex.check])
 @limits([ContextTokens(32_000), Attempts(2)])
-agent Reviewer(input: Draft) -> Review {
-    return perform infer<Review>(build_review_prompt(input));
+agent Reviewer = {};
+impl Reviewer {
+    public flow run(self, input: Draft) -> Review {
+        return perform infer<Review>(build_review_prompt(input));
+    }
 }
 
 @derive([Schema, PromptEncode])
@@ -131,8 +129,11 @@ effects are rejected:
 
 ```etas
 @model(read_model_from_file())    // rejected: runtime effect
-agent Bad(input: Draft) -> Review {
-    return perform infer<Review>(build_review_prompt(input));
+agent Bad = {};
+impl Bad {
+    public flow run(self, input: Draft) -> Review {
+        return perform infer<Review>(build_review_prompt(input));
+    }
 }
 ```
 
@@ -145,7 +146,7 @@ flow Revise(draft: Draft, token_budget: u64) -> Draft {
     var current = draft;
     @limits([Iterations(3), Tokens(token_budget)])
     while needs_revision(current) {
-        current = Rewriter.run(current);
+        current = (Rewriter {}).run(current);
     }
     return current;
 }
@@ -164,19 +165,20 @@ values. Only `@limits` is admitted on these local constructs; this does not
 enable arbitrary expression annotations or runtime evaluation of other item
 metadata. Use a local annotated block for a parameter-dependent declaration
 budget. Nested bounds only restrict inherited budgets, and checkpoint/resume
-retains remaining counters. See [Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops)
+retains remaining counters. See [Resource Contracts](04-flows-human-gates-and-protocols.md#14-resource-contracts-and-budgeted-loops)
 for composition, exhaustion, and error semantics.
 
-Compiler-known annotations may affect checking or lowering. MVP examples are
-`@model`, `@tools`, `@limits`, `@derive`, `@test`, `@deprecated`, `@trace`, and
-`@optimization`. User-defined annotations are metadata by default and may be
-consumed by package, documentation, test, IDE, or deployment tooling.
+Agent `@model` and `@tools` apply as method defaults. A method annotation
+replaces its model/tool default, not inherited authority; `@tools([])` selects
+no model tools. Member names such as `A.ask_coder` bind the current instance
+outside the model argument schema. Agent/method resource bounds conjoin.
+A declaration bound is per request; an enclosing annotated block supplies a
+shared lifetime budget around construction and use.
 
-Reflection over annotations is static-first. Build tools, package tools, test
-runners, documentation generators, and IDEs may inspect item annotations through
-compiler metadata. Ordinary runtime code should not receive unrestricted
-reflection over value layout, private fields, effect summaries, or policy
-internals in the MVP.
+Standard annotations have only their specified checks and behavior.
+User-defined annotations are metadata by default. Annotation inspection does
+not expose private state or grant authority; code reflection is specified
+[separately](18-reflection-and-checked-code-generation.md).
 
 Annotations do not grant authority. In particular, `@tools([email.send])`
 exposes a model-callable surface, but execution still depends on the tool's
@@ -185,66 +187,17 @@ sandboxing, and runtime checks.
 
 ### 2.3 Specs And Spec Polymorphism
 
-A `spec` is a static constraint, not a value type or parent class. `:`
-annotates a value's type; `~` expresses spec satisfaction or entailment.
-The declaration's form determines its kind; explicit kind annotations are
-optional.
+`~` expresses spec satisfaction, not value subtyping. Spec kind is inferred
+from its declaration; optional kind annotations check that inference.
 
-| Kind | Target | Example | Full Rules |
-|---|---|---|---|
-| Type | Types, type parameters, and effect rows | `impl TlsStream ~ ByteStream;` | [Type specs](05-type-system-and-errors.md#151-type-specs) |
-| Callable | Flows, tools, and generated agent methods | `flow Normalize(...) ~ Pure { ... }` | [Callable specs](05-type-system-and-errors.md#153-callable-specs) |
-| Trace | Computations' requested-action traces | `flow Send(...) ~ SafeEmail { ... }` | [Trace specs](05-type-system-and-errors.md#154-trace-specs) |
+| Kind | Target |
+|---|---|
+| Type | Types/effect types; marker, relation or behavioral requirements. |
+| Callable | Flows, tools or agent methods; input/output and optional effect bounds. |
+| Trace | Computation behavior; allowed/denied actions and ordering constraints. |
 
-#### 2.3.1 Type Specs
-
-Type specs can require markers, relations, or methods:
-
-```etas
-spec ByteStream;
-spec Within<Parent>;
-spec PromptEncode {
-    flow encode(self) -> PromptPart;
-}
-```
-
-Generic bounds use `T ~ PromptEncode + Schema`. Heterogeneous containers use
-an explicit existential element type such as `Array<? ~ ByteStream>`, not
-`Array<ByteStream>`; see [Existential Spec Objects](05-type-system-and-errors.md#152-existential-spec-objects).
-
-#### 2.3.2 Callable Specs
-
-```etas
-spec Pure<I, O> I => O ![];
-
-flow Normalize(text: string) -> string ~ Pure {
-    return std.text.trim(text);
-}
-```
-
-The compiler infers `Pure<string, string>`. Omitting a spec's effect row
-imposes no effect constraint; `![]` requires no escaping effects, not purity,
-determinism, or non-suspension.
-
-#### 2.3.3 Trace Specs
-
-```etas
-spec ReportsOnly = +Fs.read<R ~ Within<ReportsRoot>>;
-spec SafeEmail = Approval.request >> CompanyEmail.send<WorkAccount>;
-```
-
-`>>` includes local permissions for its operands and requires matching
-successful prerequisite evidence. It does not invoke either action or override
-denials and outer restrictions. The [trace-spec operator table](05-type-system-and-errors.md#154-trace-specs)
-defines composition, normalization, and alternative matching.
-
-#### 2.3.4 Spec Entailment And Diamonds
-
-`spec ReadWriteStream ~ ReadableStream + WritableStream;` combines evidence,
-not value inheritance. Diamond paths are deduplicated; cycles and conflicting
-method requirements are rejected. See [Spec Entailment And Diamonds](05-type-system-and-errors.md#156-spec-entailment-and-diamonds).
-Region evidence can be reused in generic bounds and action patterns, but does
-not create implicit conversions between region-indexed values.
+Generic evidence, existential `? ~ S`, method selection `value::Spec.method`,
+diamonds and kind checking are specified in [Spec Polymorphism](05-type-system-and-errors.md#15-spec-polymorphism).
 
 ## 3. Bindings and Mutation
 
@@ -329,7 +282,9 @@ Creating a top-level resource handle is declarative. It does not connect to the
 backend, read data, write data, or perform deployment-time migration by itself.
 The runtime binds and validates the resource when a program is deployed or run.
 
-Top-level initializers must not perform ordinary runtime effects:
+Top-level initializers must not perform ordinary runtime effects, including
+omitted-field injection even when a local handler consumes its escaping row.
+A fully explicit passive record can still be an action-free initializer:
 
 ```etas
 let now = Time.now();             // rejected: runtime observation at module load
@@ -337,7 +292,7 @@ let papers = web.search("LLM");   // rejected: tool call at module load
 var cache = Map<string, Draft>{}; // rejected: mutable global state
 ```
 
-Type names and value names share one module namespace in the MVP, so prefer a
+Type names and value names share one module namespace , so prefer a
 schema type name such as `ProjectMemorySchema` and a resource handle name such
 as `ProjectMemory`.
 
@@ -366,10 +321,14 @@ import company.memory.ProjectMemory;
 import company.memory.ProjectMemory as PM;
 ```
 
-`import ... as ...` is a name-resolution alias only. It does not create a new
+`import... as...` is a name-resolution alias only. It does not create a new
 resource handle or a second persistent store identity. Static analyses should
 resolve both `ProjectMemory.Papers.get(...)` and `PM.Papers.get(...)` to the
 same resource symbol.
+
+Agent references are the explicit exception to passive value copying: copying
+one shares the same isolated instance. Records/containers may contain them but
+must preserve their scope bounds; copies do not clone state or transfer ownership.
 
 ### 3.2 Restricted Updating Receivers
 
@@ -397,9 +356,9 @@ flow Example() {
 
 The restrictions are:
 
-- Only ordinary type methods and their behavioral type-spec signatures may
-  use `var self`. Free flows, tools, agent entrypoints/`impl agent` methods, and
-  other parameters do not gain an updating mode.
+- These rules govern passive type methods and their behavioral spec signatures.
+  Active agent receivers instead follow [exclusive request semantics](03-agents-tools-prompts-memory.md#13-operational-intuition).
+  Free flows, tools and other parameters do not gain an updating mode.
 - The receiver must be a direct local `var` binding, or the current method's
   `var self` binding for a nested update. Reject `let`, ordinary parameters,
   temporaries, fields, indexes, and arbitrary receiver expressions. A receiver
@@ -449,7 +408,7 @@ old value before a potentially failing call completes.
 
 #### 3.2.2 No Suspension While Updating
 
-An updating call may not hold receiver access across a suspension. The compiler
+A passive updating call may not hold receiver access across a suspension. The compiler
 tracks a transitive may-suspend summary separately from escaping effects and
 determinism. Model interaction, task waits/yields, delayed handler resumption,
 and unknown callback/primitive behavior prevent a non-suspension proof. Neither
@@ -488,166 +447,34 @@ defined in [Lambda And Handler Capture](20-lexical-capture.md).
 
 ## 4. Flows As The Ordinary Callable Unit
 
-`flow` is the ordinary user-defined callable unit in Etas. A flow may be pure deterministic computation, ordinary effectful computation, or non-deterministic agent orchestration. The compiler infers which case applies. A `tool` with a body is also written in Etas, but it is a model-callable boundary with extra schema, policy, effect/action, and output-safety rules; ordinary helper logic should remain `flow`.
+A `flow` is an ordinary first-class callable. Use `tool` only for a
+model-callable boundary and an agent method for isolated active requests.
+Function types use `I -> O ![E]`, or `(A, B) -> O ![E]`; arrows associate
+right. Omitting a local effect row requests inference, not purity.
 
 ```etas
-flow normalize_title(title: string) -> string {
-    return trim(lowercase(title));
+flow normalize(text: string) {
+    std.text.trim(text)
 }
 
-flow clamp_score(score: i32) -> i32 {
-    if score < 1 {
-        return 1;
-    }
-
-    if score > 10 {
-        return 10;
-    }
-
-    return score;
-}
+let normalize_again = (text: string) => std.text.trim(text);
 ```
 
-Flows are first-class values. In type positions, Etas uses arrow types. An optional effect row can be written after the output type with `![...]`, but local code can usually omit it and let the compiler infer effects:
+The `flow` keyword declares named callables; anonymous flows use `=>`.
+Values can be passed, stored and returned without executing their bodies.
+Invocation retains latent effects, captures and scope bounds.
 
-```text
-Input -> Output ![Effects]
-Input -> Output
-```
+| Return inference | Rule |
+|---|---|
+| Explicit `-> T` | Every returning path must fit T. |
+| Omitted return type | Unify explicit `return expr` values and the final expression. |
+| `return;` | Contributes `unit`. |
+| `never` expression | Does not constrain a returned value type. |
+| No value-returning expression | Infer `unit`. |
+| Incompatible branches | Reject; use an explicit shared ADT such as `Result`. |
 
-For a single input type, parentheses may be omitted. For multiple inputs, use parentheses or a structured input record:
-
-```text
-(A, B) -> Output ![Effects]
-```
-
-The compiler normalizes flow types to the canonical internal representation used by the type checker and runtime:
-
-```text
-Flow<Input, Output, Effects>
-```
-
-Flow declarations may omit the return type. The compiler infers the return type from explicit `return` statements and from the final expression of the body, if present:
-
-```etas
-flow normalize_title(title: string) {
-    trim(lowercase(title))
-}
-```
-
-This is equivalent to:
-
-```etas
-flow normalize_title(title: string) -> string {
-    return trim(lowercase(title));
-}
-```
-
-This also works with explicit `return`:
-
-```etas
-flow clamp_score(score: i32) {
-    if score < 1 {
-        return 1;
-    }
-
-    if score > 10 {
-        return 10;
-    }
-
-    return score;
-}
-```
-
-The inference rule is:
-
-```text
-If a flow omits `-> ReturnType`:
-1. collect every `return expr`;
-2. collect the final expression if the body has one;
-3. treat `return;` as `unit`;
-4. ignore expressions of type `never` as constraints, because they do not return;
-5. require all remaining return candidates to unify;
-6. infer `unit` if there is no return expression and no final expression.
-```
-
-For multi-branch bodies, every returning branch and the final expression must unify to one return type:
-
-```etas
-flow clamp_score(score: i32) {
-    if score < 1 {
-        1
-    } else if score > 10 {
-        10
-    } else {
-        score
-    }
-}
-```
-
-If return candidates do not unify, the flow is rejected unless the user makes the result type explicit through a common type such as `Result<T, E>`:
-
-```etas
-flow bad(flag: bool) {
-    if flag {
-        return 1;
-    }
-
-    return "no";
-}
-```
-
-The previous example is rejected because `i32` and `string` do not unify. Prefer:
-
-```etas
-flow parse(flag: bool) {
-    if flag {
-        return Ok(1);
-    }
-
-    return Err("no");
-}
-```
-
-Explicit return types remain recommended for exported APIs, public examples, and flows whose contract is more important than local brevity.
-
-Higher-order programming uses arrow types directly:
-
-```etas
-flow choose_drafter(fast: bool) -> string -> Document {
-    if fast {
-        FastDraft
-    } else {
-        CarefulDraft
-    }
-}
-```
-
-Anonymous flows use `=>`:
-
-```etas
-let normalize = (title: string) => trim(lowercase(title));
-
-let branches = [
-    () => StepA(input),
-    () => {
-        let value = StepB(input);
-        return validate(value);
-    },
-];
-```
-
-The `flow` keyword is reserved for named declarations. Anonymous flow expressions use `=>`, and flow types use arrow notation such as `I -> O` or `I -> O ![E]`.
-
-Agent, flow, and tool stages can also be composed with `|`. Composition returns a flow value:
-
-```etas
-let pipeline = Researcher | Writer | publish.write;
-```
-
-If the stage types line up as `I -> M` and `M -> O`, the composed value has type `I -> O`. The composed flow's effects are the union of the stage effects, and its determinism is inferred from the stages.
-
-The implementation may lower deterministic flows to ordinary internal functions. That is an optimization target, not a separate source construct.
+Stage composition/application use `|` and `~>`; see
+[Stage Composition](04-flows-human-gates-and-protocols.md#12-stage-composition).
 
 ### 4.1 Default Parameters
 
@@ -720,10 +547,10 @@ changed by an implementation revision whose public signature is frozen.
 
 Etas statically infers a determinism class for every flow. This is separate from effect inference:
 
-| Class | Meaning | Typical lowering |
-|---|---|---|
-| `Deterministic` | No reachable non-deterministic operation or callee; captured/local-state dependencies are checked separately | Direct internal calls when suspension and lifetime rules permit |
-| `NonDeterministic` | May observe or change external state, perform model inference, read time or randomness, use persistent memory, request human approval, or invoke another computation whose checked summary is non-deterministic | Runtime mediation; durable orchestration when trace/replay/checkpoint behavior is needed |
+| Class | Meaning |
+|---|---|
+| `Deterministic` | No reachable non-deterministic operation or callee; captured/local-state dependencies are checked separately. |
+| `NonDeterministic` | May observe/change external state, infer, read time/randomness, access persistent memory, request approval, or call a non-deterministic computation. |
 
 Examples:
 
@@ -741,57 +568,19 @@ replay decisions must preserve all of them.
 
 ## 6. Program Entry Point
 
-An Etas program starts with a `main` flow. `main` is the program's entry flow and is executed directly by the interpreter or runtime.
-
-The canonical entry shape is:
-
-```text
-flow main(args: Array<string>) -> i32
-```
-
-`main` returns an `i32` process status code. By convention, `0` means success and non-zero values indicate failure.
-Like every other flow, `main` may omit its effect row and let the compiler infer
-it, or write an explicit `![...]` row as an upper-bound contract checked against
-the inferred body effects.
+The executable entry is `main(args: Array<string>) -> i32`. It executes
+directly and returns a process status; it does not return a deferred flow.
+Return/effect inference uses the ordinary rules. Libraries need no `main`.
 
 ```etas
 flow main(args: Array<string>) -> i32 {
-    let draft = Writer.run("Draft the project update");
-
-    if approve("Send this update?", draft, risk = Medium) {
-        email.send("team@example.com", "Project update", draft.body);
-        return 0;
-    }
-
-    return 1;
+    return 0;
 }
 ```
 
-The runtime checks `main`'s inferred effects and actions, trace specs, runtime policy, limits, and handlers, then executes `main`.
-
-`main` may call other flows normally:
-
-```etas
-flow FastResearch() -> i32 {
-    return 0;
-}
-
-flow DeepResearch() -> i32 {
-    return 0;
-}
-
-flow main(args: Array<string>) -> i32 {
-    if contains(args, "--fast") {
-        return FastResearch();
-    }
-
-    return DeepResearch();
-}
-```
-
-Static analysis starts from `main` and conservatively summarizes all reachable effects and actions. For example, if `main` may call either `FastResearch` or `DeepResearch`, then `effects(main)` includes the union of effects from both reachable flows.
-
-Later implementations may allow richer host-provided input and output types, but the MVP should keep `main(args: Array<string>) -> i32` as the portable command-line entry shape.
+Module loading evaluates only permitted read-only initializers, never arbitrary
+top-level calls. Project entry selection is defined in
+[Packages](15-package-management.md#132-entry-points).
 
 ## 7. Composite Types
 
@@ -807,7 +596,9 @@ type Paper = {
 }
 ```
 
-Record expressions support explicit field initialization and shorthand initialization:
+Record construction requires each field exactly once, except omitted fields
+with `@inject` on a named nominal declaration. Unknown or duplicate fields are
+errors. Explicit initialization and shorthand are equivalent:
 
 ```etas
 let input = {
@@ -818,17 +609,21 @@ let input = {
 let same_input = { topic, papers };
 ```
 
-The shorthand `{ topic, papers }` expands to `{ topic = topic, papers = papers }`. It is part of the source language because Etas agents should normally take one structured input value rather than multiple positional arguments:
+`{ topic, papers }` expands to `{ topic = topic, papers = papers }`. Both count
+as explicit initialization, so neither triggers injection:
 
 ```etas
-agent Writer(input: { topic: string, papers: Array<Citation> }) -> Draft {
-    return perform infer<Draft>(WriterPrompt(input));
+agent Writer = {};
+impl Writer {
+    public flow run(self, input: { topic: string, papers: Array<Citation> }) -> Draft {
+        return perform infer<Draft>(WriterPrompt(input));
+    }
 }
 
-let draft = Writer.run({ topic, papers });
+let draft = (Writer {}).run({ topic, papers });
 ```
 
-Field shorthand keeps the call site concise while preserving field names for prompt encoding, schema generation, trace output, cache keys, and debugging.
+Shorthand preserves field names for schemas, tracing and debugging.
 
 Tuples are useful for small positional values:
 
@@ -880,7 +675,7 @@ Common generic container types:
 | Type | Meaning | Literal |
 |---|---|---|
 | `Array<T>` | Default immutable sequence, supports checked indexing and slicing | `[a, b, c]` |
-| `List<T>` | Functional linked list, useful for `head`, `tail`, and `cons` | `[a; b; c]`, `a :: xs`, `[]` |
+| `List<T>` | Functional linked list, useful for `head`, `tail`, and `cons` | `[a; b; c]`, `a:: xs`, `[]` |
 | `Map<K, V>` | Key-value map with stable iteration order | `{k => v, k2 => v2}` |
 | `Set<T>` | Unique-value set with stable iteration order | `#{a, b, c}` |
 | `Range<I>` | Integer range, normally used by loops and slicing | `[i, j)`, `(i, j]` |
@@ -905,7 +700,7 @@ let ys = xs.push(4);     // returns a new Array<i32>
 
 ```etas
 let xs = [1; 2; 3];      // List<i32>
-let ys = 0 :: xs;        // List<i32>
+let ys = 0:: xs;        // List<i32>
 ```
 
 The empty sequence literal `[]` needs type context because it can be either an empty `Array<T>` or an empty `List<T>`:
@@ -946,7 +741,7 @@ let seen: Set<string> = #{};
 Sequence-like containers use the compiler-known `Index` spec for checked
 indexing APIs. The authoritative method tables, equality/hash/order bounds,
 iteration order and complexity contracts are in
-[Collections And Key Contracts](19-standard-library.md#10-collections-and-key-contracts).
+[Collections And Key Contracts](19-standard-library.md#9-collections-and-key-contracts).
 Map keys and set elements require `Hash`, which includes the standard `Eq`
 contract. Their literals do not bypass those bounds. Cached lengths and storage
 metadata are private observations; users cannot assign them to forge an
@@ -991,7 +786,7 @@ let middle = xs(i, j];      // Slice<T>
 
 Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. It is not positional on `Map`, `Set`, `Queue`, `Stack`, or `PriorityQueue`. Generic `string` slicing is intentionally not defined here because Unicode character offsets and byte offsets have different safety and performance properties; string slicing uses explicit APIs such as `std.text.char_slice(...)` or `std.text.byte_slice(...)`, specified in [Strings And Text APIs](19-standard-library.md#16-access-and-slicing).
 
-Negative indexes and negative slice bounds are not part of the MVP:
+Negative indexes and negative slice bounds are not supported:
 
 ```etas
 xs[-1];          // rejected
@@ -1016,7 +811,8 @@ flow Example() {
 }
 ```
 
-This is the observable language rule. It should feel like safe deep-copy semantics to the programmer, but an implementation must not be required to eagerly copy an entire collection or record at every call boundary. Implementations may use immutable structural sharing, reference counting, arenas, or copy-on-write as long as the caller cannot observe accidental shared mutation.
+Copies have independent observable value semantics; physical deep copying is
+not required, and storage sharing cannot expose accidental shared mutation.
 
 Collection update APIs on ordinary value collections return updated values. They
 must not be typed as `unit`, because `unit` would imply hidden in-place mutation:
@@ -1050,14 +846,68 @@ current = current.push("reviewed");
 // current is ["draft", "reviewed"].
 ```
 
-Persistent mutable state is represented by `Store<K, V>` APIs, not by hidden shared mutation inside ordinary collections. Local in-place mutation may be added later as an optimization for non-escaping values, but it must remain observationally equivalent to value semantics or be exposed through explicit mutable APIs that the analyzer can see.
+Persistent mutation uses explicit `Store<K, V>` APIs. Local updating receivers
+follow their separate writeback rules; neither changes collection value semantics.
 
 Bulk construction uses the specified `from_iter`, `from_entries` and iterator
 consumer APIs rather than an unspecified mutable builder protocol. Their
 implementations may reuse private buffers or immutable structure while
 preserving the same value semantics. See
-[Iteration And Effectful Consumption](19-standard-library.md#11-iteration-and-effectful-consumption)
+[Iteration And Effectful Consumption](19-standard-library.md#10-iteration-and-effectful-consumption)
 for pure lazy adapters and callbacks whose effects occur during consumption.
+
+### 7.2 Constructor Injection
+
+`@inject(Action)` supplies an omitted stored field through a zero-argument effect
+action. It adds no keyword, global registry, service-container type or implicit
+handler. The annotation names an action; it does not execute it at declaration
+time.
+
+```etas
+effect BuildContext {
+    action label() -> string;
+}
+
+type Config = {
+    @inject(BuildContext.label)
+    label: string,
+    retries: u32,
+}
+```
+
+`Config { retries = 3 }` elaborates to:
+
+```etas
+Config {
+    retries = 3,
+    label = perform BuildContext.label(),
+}
+```
+
+| Rule | Contract |
+|---|---|
+| Target | One `@inject` per stored field of a named nominal record `type` or `agent`. Not on aliases, anonymous structural records, enum payloads, parameters or methods. Existing visibility/construction restrictions still apply. |
+| Action reference | Resolve at the field declaration site, including imports and static selectors, under the enclosing generic bounds. It must name an action with zero ordinary parameters, not a tag, flow, action invocation or runtime expression. Its result must be assignable to the field type; use the normal generic/spec/existential checks. |
+| Explicit value | `field = expr` and shorthand `field` override injection without requesting the action. Missing unannotated fields, duplicate/unknown fields and invalid annotations are compile errors. |
+| Evaluation order | Validate the construction, then evaluate supplied expressions once in source order; next request each omitted injected field once in field-declaration order. No reordering to canonical field order. |
+| Resolution | Each request uses the nearest matching active handler, otherwise the action's registered default. An unhandled demand propagates normally and must satisfy the enclosing effect/entry contract; no automatic provider is invented. |
+| Result | Publish only a fully initialized value/instance. An error, cancellation or nonlocal handler `finish` can abandon construction; completed external effects are not rolled back. Agent initialization additionally cleans up its newly owned scope. |
+| Stored value | Reads, copies, pattern matching, equality/hash and serialization use the stored value; they never re-run injection. These operations retain their ordinary type/spec requirements. |
+| Scope | Changing a later handler does not replace an existing field. Construction stores the returned value, not the ambient handler stack or grants; injected closures/handlers retain their ordinary capture rules. |
+| References | Lifetimes must fit the destination. An injected existing agent reference keeps its owner; storing it does not adopt it. Fresh instances created in an active initialization scope use that scope's ownership rules. |
+| Schema/decoding | Injection is a source-construction default, not an optional schema field or decoder fallback. Derived decoders must obtain required fields from data and do not run providers. A custom decoder may explicitly construct a value, with those effects checked normally. |
+
+Unlike action-free parameter defaults, injection deliberately contributes the
+omitted actions to the constructor's effects, requested-action and ordered
+trace summaries. Explicit overrides remove only their omitted requests.
+Providers' own behavior, authority checks, cancellation and limits remain
+visible; an empty escaping row after handling does not imply purity.
+
+`@inject` never creates an effectful getter. For request-dependent resolution,
+write `perform Context.dependency()` in the method instead of annotating a stored
+field. Repeated constructions make independent requests, even for the same
+action; provider code chooses whether to reuse a value. No caching or dependency
+cycle resolution is implicit.
 
 ## 8. Encapsulation and Methods
 
@@ -1091,11 +941,14 @@ fields remain inaccessible outside the defining module.
 `impl` is also used by the effect system to attach `action` signatures to an effect tag, but the forms are kind-checked and cannot be mixed:
 
 ```text
-impl TypeName   { flow ... }    // ordinary methods
-impl EffectName { action ...; } // effect actions
+impl TypeName   { flow... }    // ordinary methods
+impl EffectName { action...; } // effect actions
 ```
 
 An ordinary type `impl` cannot contain `action`, and an effect `impl` cannot contain ordinary `flow` methods.
+An active agent target accepts request methods and model-callable member tools;
+its receiver and state rules are defined in the agent chapter. Target kind is
+resolved from the declaration, without an additional keyword.
 
 ```etas
 impl Session {
@@ -1151,9 +1004,9 @@ Etas supports normal control flow:
 
 ```etas
 if condition {
-    ...
+...
 } else {
-    ...
+...
 }
 
 match decision {
@@ -1195,40 +1048,9 @@ import agents.researcher.Researcher;
 
 ### 10.1 Package Manifest Boundary
 
-An Etas package is described by an `etas.toml` manifest at the package root.
-The source language does not have a `package` keyword and does not put registry
-URLs, Git URLs, or local filesystem dependency paths inside `import`
-declarations. Those concerns belong to package management tooling.
-
-The manifest supplies package identity, source root, dependencies, and runnable
-entry points:
-
-```toml
-[package]
-name = "research-assistant"
-version = "0.1.0"
-edition = "2026"
-
-[source]
-root = "src"
-
-[dependencies]
-std = { version = "0.2" }
-company_agents = { package = "company-agents", version = "1.2", import = "company.agents" }
-
-[[bin]]
-name = "research-assistant"
-module = "app.main"
-flow = "main"
-```
-
-The package resolver maps dependency import roots such as `std` or
-`company.agents` to resolved packages. Source imports are resolved through this
-package graph. The compiler records the resolved package, module, item, and
-version in package metadata so public APIs remain reviewable and reproducible.
-
-Detailed manifest, lockfile, registry, workspace, dependency metadata, and tool
-binding rules are specified in [Package Management](15-package-management.md).
+`etas.toml` describes package identity, dependencies, import roots and targets;
+`etas.lock` fixes resolutions. Neither file grants runtime authority.
+See [Package Manifest](15-package-management.md#4-package-manifest).
 
 ### 10.2 Module Path Resolution
 
@@ -1282,24 +1104,9 @@ The resolver must enforce these rules:
   are valid as long as the package resolver maps them to stable logical module
   identities.
 
-The compiler should lower every resolved reference to a stable identity:
-
-```text
-PackageId + ModuleId + ItemId
-```
-
-This gives the type checker, effect checker, public API metadata, LSP, FIR, and
-AIR a stable representation that does not depend on the physical layout chosen
-by a build tool.
-
-Package management is tooling, not source syntax. It is responsible for:
-
-- dependency version resolution;
-- a lockfile for reproducible builds;
-- package-level public API metadata;
-- generated effect/action summaries for exported flows, agents, tools, and
-  re-exports;
-- LSP/completion data for module paths and exported names.
+Resolved item identity includes its package, logical module and item, not merely
+its physical source path. Dependency versions, lockfiles and exported contracts
+are defined in [Packages](15-package-management.md).
 
 ### 10.3 Import Forms
 
@@ -1384,7 +1191,7 @@ impl Session {
     }
 
     private flow transit_to(var self, to: SessionState) -> Result<unit, SessionError> {
-        ...
+...
     }
 }
 ```

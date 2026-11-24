@@ -2,29 +2,9 @@
 
 ## 1. Type System
 
-Etas separates the type system from the effect system.
-
-```text
-Type system   = classifies values
-Effect system = classifies computations
-```
-
-The type checker and effect checker are implemented in the same compiler pipeline and share the typed AST/AIR, symbol table, flow signatures, agent signatures, and tool signatures. Conceptually, however, they answer different questions:
-
-```text
-type(flow input/output) = what values are consumed and produced
-effects(flow body)     = what observable actions may occur during execution
-```
-
-Etas's value-level type system is layered:
-
-```text
-Ordinary types
-+ Structured output schemas
-+ Trust types
-+ Provenance types
-+ Protocol/session types
-```
+Types classify values; effects classify computations. Their constraints are
+checked together at callable and handler boundaries. The value system includes
+ordinary data, structured-output schemas, trust labels and provenance.
 
 ### 1.1 Ordinary Types
 
@@ -101,11 +81,7 @@ compiler does not allocate runtime values for them. `TcpStream` is also
 bodyless, but it represents an opaque runtime handle because values of that type
 are returned and passed at runtime.
 
-The MVP does not need an `opaque` keyword. If future module privacy needs a
-stronger distinction between "nominal but representation-visible inside a
-module" and "representation hidden across module boundaries", `opaque` can be
-added as a visibility modifier later. For now, `type` means identity by default,
-and `alias` is the explicit escape hatch for transparent abbreviations.
+
 
 #### 1.1.2 Algebraic Data Types And Recursion
 
@@ -139,7 +115,9 @@ separate record type. Constructing a variant produces a value of its enclosing
 enum type. Variants cannot mix positional and named-field payloads in a single
 declaration. Variant names within an enum and field names within a variant
 must be unique. Named-field construction requires every declared field exactly
-once, rejects unknown fields, and supports ordinary record shorthand.
+once, rejects unknown fields, and supports ordinary record shorthand. Enum
+payload fields do not support `@inject`; constructor injection is confined to
+named record types and agents.
 
 ```etas
 enum Response {
@@ -216,9 +194,23 @@ When hashing is supported, equal records must have equal hashes under the same
 hashing scheme, independent of construction field order. Equality support alone
 does not imply hashing support; unequal values may have the same hash.
 
-Record field expressions are evaluated in source order. Implementations may
-then place the resulting values in a canonical layout, but must not reorder
-observable evaluation to normalize field order.
+Active agent references do not derive structural Eq/Hash. Whole-record
+comparison therefore requires separate valid evidence for any agent-valued
+field; matching private state does not make two instances equal.
+
+Supplied record field expressions run in source order, followed by omitted
+`@inject` actions in declaration order. Equality/hash compare the completed
+stored fields, never providers or annotations. Canonical layout cannot reorder
+observable initialization; see [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
+
+For a field `f: T` annotated with action `a`, checking requires a zero-argument
+signature `a() -> U` whose result is assignable to `T` by the ordinary rules (no new coercion).
+Declaration-site generic/spec bounds must justify this for every admitted
+instantiation. At each nominal construction, fill only omitted annotated fields
+with checked `perform a()` expressions before effect/trace analysis. This
+changes the construction's behavior, not the resulting nominal type or the
+effect of subsequent stored-field reads. Lifetime, visibility and schema rules
+are unchanged.
 
 Standard collection abstractions use their specified logical equality, not the
 fields of a particular source/runtime representation. Sequence collections
@@ -234,7 +226,7 @@ The standard `Eq` spec witnesses reflexive equality; not every type admitting
 `Eq`/`Hash` evidence. `Hash` includes `Eq`, and equal values must hash equally
 under the same initial hasher. The exact standard evidence, ordered-container
 comparison semantics and API bounds are specified in
-[Collections And Key Contracts](19-standard-library.md#102-equality-hashing-and-order).
+[Collections And Key Contracts](19-standard-library.md#92-equality-hashing-and-order).
 
 ### 1.2 Structured Output Types
 
@@ -251,7 +243,7 @@ type Review = {
 
 ### 1.3 Validators And Schemas
 
-Etas does not include refinement types in the MVP language. Value constraints
+Etas does not include refinement types in the language. Value constraints
 such as ranges, non-empty collections, valid paths, valid email addresses, or
 domain-specific invariants should be expressed with ordinary validation flows,
 schema metadata, and runtime errors:
@@ -277,10 +269,7 @@ flow validate_review(review: Review) -> Result<Review, ValidationError> {
 }
 ```
 
-This keeps the type system small while still allowing agent outputs and tool
-arguments to be checked after structured decoding. Future versions may add
-declarative schema annotations, but the MVP should not expose predicate-refined
-types as a type form.
+Validation does not introduce predicate-refined types.
 
 ### 1.4 Trust Types
 
@@ -296,7 +285,7 @@ Example:
 
 ```etas
 flow build_system_prompt(x: Trusted<string>) -> Prompt {
-    ...
+...
 }
 
 let page: Untrusted<string> = web.read(url);
@@ -322,7 +311,7 @@ impl TcpStream ~ ByteStream;
 flow read_all<S ~ ByteStream>(stream: S) -> bytes;
 ```
 
-Specs have three MVP kinds:
+Specs have three kinds:
 
 | Kind | Constrains | Typical subjects |
 |---|---|---|
@@ -330,9 +319,9 @@ Specs have three MVP kinds:
 | `callable` | Flow/tool/agent-method call shape | `Writer.run ~ Stage<Brief, Draft, E>` |
 | `trace` | Requested-action traces, authority, and temporal constraints | `+Email.send`, `-Secret.read`, `Approval.request >> Email.send` |
 
-`EffectSpec` is not a separate kind in the MVP. Effect rows are static entities,
+`EffectSpec` is not a separate kind. Effect rows are static entities,
 so constraints over them are `type` specs. `ProtocolSpec` is also not part of the
-MVP spec system; protocol declarations remain a separate advanced construct.
+spec system; protocol declarations remain a separate advanced construct.
 
 #### 1.5.1 Type Specs
 
@@ -363,7 +352,7 @@ impl Report ~ PromptEncode {
 ```
 
 Generic implementations declare bounds in the owner pattern:
-`impl List<T ~ PromptEncode> ~ PromptEncode { ... }`. Here `T ~ PromptEncode`
+`impl List<T ~ PromptEncode> ~ PromptEncode {... }`. Here `T ~ PromptEncode`
 binds an implementation parameter (or constrains an explicitly declared one);
 the owner type is `List<T>`. Unbounded parameters are still inferred from the
 owner pattern. Parameters and bounds scope over the entire impl; multiple
@@ -377,15 +366,28 @@ public spec Resettable {
 }
 ```
 
-Receiver mode is part of the required method contract. An implementation must
-match `self` versus `var self` exactly, as well as the ordinary parameter,
-result, and effect contracts. An updating implementation must prove the
-non-suspension rule; generic/spec dispatch and imported evidence preserve that
-fact. There is no implicit receiver-mode coercion. Such a method is not erased
-to an ordinary `Self -> R` or bound `() -> R` flow, and cannot satisfy a callable
-spec by hiding its updating receiver. A normal flow wrapper may update its own
-local copy and return the new value. See
-[Restricted Updating Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
+Receiver mode and dispatch kind are part of the required contract. Implementations
+match `self`/`var self`, arguments, results and effects exactly.
+Passive updating methods require non-suspension and direct-local-var writeback;
+they cannot be extracted as ordinary bound flow values. Active methods instead
+retain instance identity, scope and request-dispatch evidence in bound callables.
+Their exclusive update may suspend without exposing pending state.
+
+`std.agent.Active` is compiler-provided marker evidence for active types.
+An updating role intended for mailbox dispatch entails it:
+
+```etas
+spec Reviewer ~ Active {
+    flow review(var self, patch: string) -> string ![];
+}
+```
+
+Ordinary user impls cannot grant `Active` to passive types. An active updating
+implementation cannot masquerade as passive updating evidence; a role requiring
+active updates must entail `Active`. Read-only role methods may use either
+dispatch kind, preserved by the evidence. See
+[Agent Semantics](03-agents-tools-prompts-memory.md#1-agent) and
+[Passive Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
 
 Defaults on behavioral method signatures belong to the spec's call interface.
 Implementations inherit them rather than providing competing defaults. An
@@ -480,15 +482,15 @@ Existential unpacking is lexical and type-safe. When a value `x: ? ~ ByteStream`
 is used at a call site requiring `S ~ ByteStream`, the compiler introduces a
 fresh hidden type and evidence for that expression. User code cannot name the
 hidden type, compare two hidden types for equality, access concrete fields, or
-downcast to the implementation type in the MVP.
+downcast to the implementation type.
 
-MVP existential bounds are limited to object-safe type specs:
+Existential bounds are limited to object-safe type specs:
 
 - marker specs are object-safe;
 - behavioral specs are object-safe only if their required flows have no generic
   type parameters and their public signatures do not expose the hidden concrete
   type except as the receiver;
-- callable specs are not existential object bounds in the MVP. Flow values already
+- callable specs are not existential object bounds. Flow values already
   have arrow types with effect rows, and heterogeneous stage registries should
   use explicit wrapper records or enums until callable-spec existentials are
   designed.
@@ -498,16 +500,24 @@ runtime. The compiler still knows the allowed spec surface and effect row of eac
 operation; it simply does not know the concrete implementation type after the
 value has been packed.
 
-An object-safe updating method retains its `var self` mode through existential
-dispatch. It requires a direct local `var`; writeback preserves the hidden
-concrete type and its spec evidence. For example, the run-local value
-`policy: ? ~ Scheduler` can invoke the standard `Scheduler.select` contract
-without becoming a shared mutable reference. Its non-suspension and purity
-evidence must survive packing and package boundaries.
+Existential evidence preserves receiver mode, dispatch kind, scopes and method
+summaries. Passive updating objects still require direct local `var` writeback
+and non-suspension, as for `? ~ Scheduler`. Active roles instead dispatch
+requests through scoped references:
+
+```etas
+let reviewers: Array<? ~ Reviewer> = [security, performance, mock];
+let reviews = std.task.map_concurrent(reviewers, r => r.review(patch));
+```
+
+Each element satisfies the same active role; a deterministic mock is also an
+agent. Packing does not grant ownership, erase tool/trace bounds, or permit a
+reference to outlive its instance.
 
 #### 1.5.3 Callable Specs
 
-Callable specs target computations: flows, agents, tools, and composed flows.
+Callable specs target computations: flows, agent entrypoints/bound methods,
+tools, and composed flows. A nominal agent type itself is not a callable spec implementation.
 They are bodiless and declare a callable shape:
 
 ```etas
@@ -560,7 +570,7 @@ Trace-spec operators are kinded:
 | `A >> B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `A` evidence before every `B` |
 | `A << B` | `ActionPattern x ActionPattern -> trace` | Allow the two action patterns within this spec, and require valid matching `B` evidence before every `A`; equivalent to `B >> A` |
 | `S & T` | `Spec<K> x Spec<K> -> Spec<K>` | Both specs must hold |
-| `S \| T` | `TraceSpec x TraceSpec -> TraceSpec` | Either trace spec may accept; MVP reserves this for trace specs only |
+| `S \| T` | `TraceSpec x TraceSpec -> TraceSpec` | Either trace spec may accept; Reserved this for trace specs only |
 
 `A >> B` includes local permissions for both `A` and `B`. It normalizes to the
 following internal components, not another
@@ -614,11 +624,12 @@ Type specs, callable specs, and trace specs are kind-checked and cannot be mixed
 
 | Target | May satisfy |
 |---|---|
-| Nominal type | Type spec |
+| Passive nominal type | Type spec |
+| Active agent type | Type specs/roles; trace conformance constrains methods in the annotated declaration/impl |
 | Generic applied type | Type spec |
 | Effect row / effect parameter | Type spec |
 | Flow declaration/value | Callable spec and trace spec |
-| Agent declaration / generated agent method | Callable spec and trace spec |
+| Explicit agent method / bound method value | Callable spec and trace spec; retain active dispatch and instance scope |
 | Tool declaration | Callable spec and trace spec |
 | Composed flow | Callable spec and trace spec, inferred |
 | Alias | Expanded first, then checked |
@@ -648,7 +659,7 @@ signature conflicts:
 |---|---|
 | Same method name and same signature | Merge into one requirement |
 | Same method name and different signature | Reject the spec declaration |
-| Same signature but different semantic law | MVP does not check laws |
+| Same signature but different semantic law | The language does not check laws |
 
 Effect and trace-spec checking may use the same type-level facts. For example, a
 trace spec can match a region-indexed action through a spec relation:
@@ -666,80 +677,21 @@ still avoiding general subtyping.
 
 ### 1.6 Flow Effect Annotations
 
-Effects are defined in detail in [Effect System and Inference](06-effect-system-and-inference.md). They are not ordinary value types, but flow type annotations can include an effect row. Most local declarations omit effects and let the compiler infer them. When a flow type needs an explicit effect row, it is written after the output type with `![...]`:
+`(I) -> O ![E]` combines a value-level callable type with an escaping-effect
+row. Omission means inference; an explicit row is an upper bound, and `![]`
+bounds escaping effects to empty. Handled requests remain separately visible.
+Agent declarations alone produce no inference request; executing `perform infer`
+does. Determinism depends on actual behavior, not the empty escaping row.
 
-```etas
-Url -> Paper ![Network, ReadPDF]
-```
-
-Here `ReadPDF` is a library-defined effect that extends the core `FileIO` effect.
-
-This example is non-deterministic under the MVP two-class model because it
-performs network/file effects. Agent calls are also non-deterministic when the
-called agent method performs model inference, but `Agentic.infer<C, O>` is
-recorded as requested-action metadata rather than as a source-level escaping
-effect row. Determinism is inferred from the body instead of from a separate
-callable keyword.
-
-```etas
-flow read_paper(url: Url) -> Paper
-{
-    ...
-}
-```
-
-The compiler infers `![Network, ReadPDF]` from the body as a computation
-summary. Agent declarations do not by themselves record an
-`Agentic.infer<C, O>` requested action. A requested action is recorded where an
-agent method executes agent-scoped `perform infer<T>(prompt)`; callers such as
-`A.run(input)` see that action through the callee summary, not as an escaping
-effect they must handle. Public agent metadata may still expose ordinary
-escaping effects, tool surface, runtime support requirements, and schema
-information.
-
-```etas
-@model("gpt-5.5-coder")
-@tools([repo.read, test.run])
-agent Coder(input: Issue) -> Patch {
-    let prompt = Prompt.new()
-        .system(Trusted("Generate a minimal patch and test plan."))
-        .data(input);
-    return perform infer<Patch>(prompt);
-}
-```
+See [Effects And Inference](06-effect-system-and-inference.md) for row
+polymorphism, declaration defaults and requested-action propagation.
 
 ### 1.7 Effect Action Authority
 
-Concrete runtime authority is represented by effect actions, not by a separate
-source-level permission type. A tool may expose a fine-grained effect boundary:
-
-```etas
-tool write_report(path: Path, content: string) -> unit ![ProjectWorkspace.write<"reports/**">]
-{
-    perform ProjectWorkspace.write(path, content);
-}
-```
-
-An agent may list only model-callable tools. The tools themselves carry their
-effect/action boundaries:
-
-```etas
-@model("gpt-5.5-coder")
-@tools([repo.read, patch.write])
-agent Coder(input: Issue) -> Patch {
-    let prompt = Prompt.new()
-        .system(Trusted("Generate a patch within the checked workspace boundary."))
-        .data(input);
-    return perform infer<Patch>(prompt);
-}
-```
-
-Deployment/runtime configuration grants or denies concrete effect/action
-instances such as `ProjectWorkspace.read<"src/**">`,
-`ProjectWorkspace.write<"src/**">`, or `Command.run<DefaultCommandSandbox>`.
-Source code should refer to typed effect actions, trace specs, and runtime
-policy rules, not raw permission strings. `ProjectWorkspace` is a host/project
-package effect, not a core standard-library effect.
+Effects classify behavior; explicit rows constrain escaping effects but do not
+grant authority. Concrete requests remain subject to active trace constraints
+and execution grants even when handled. Tools expose checked model-callable
+boundaries, not permission tokens. See [Safety Contracts](14-safety-analysis-static-dynamic.md).
 
 ### 1.8 Bottom Type
 
@@ -789,7 +741,7 @@ spec EvidenceBacked;
 impl Claim ~ EvidenceBacked;
 
 flow publish_claim<C ~ EvidenceBacked>(claim: C) -> PublishedClaim {
-    ...
+...
 }
 ```
 
@@ -851,7 +803,7 @@ perform Error<AppError>.raise(AppError {
 A flow that may raise `Error<E>` carries that effect in its inferred effect set:
 
 ```text
-LoadReport : Path -> Report
+LoadReport: Path -> Report
 inferred effects: [FileIO, Error<AppError>]
 ```
 
@@ -907,17 +859,17 @@ The postfix `?` operator captures `Error<E>` actions raised by the expression on
 its left and converts the result to `Result<T, E>`:
 
 ```text
-e : T ![Error<E>, ...]
+e: T ![Error<E>,...]
 -----------------------
-e? : Result<T, E> ![...]
+e?: Result<T, E> ![...]
 ```
 
 The captured `Error<E>` effect is removed from the resulting expression. Other
 effects remain:
 
 ```text
-std.io.read_line()  : string ![Error<IOError>]
-std.io.read_line()? : Result<string, IOError>
+std.io.read_line(): string ![Error<IOError>]
+std.io.read_line()?: Result<string, IOError>
 ```
 
 The underlying `Console.stdin_read_line` action remains in requested/default
@@ -940,10 +892,10 @@ flow TryReadName() -> Result<string, IOError> {
 }
 ```
 
-In the MVP, `?` is accepted only when the expression may raise exactly one
+`?` is accepted only when the expression may raise exactly one
 distinct `Error<E>` effect. If an expression may raise multiple error effects,
 the program must use `handle` and map the error cases explicitly before applying
-`?`. The MVP does not infer ad-hoc error unions or implicit error conversions.
+`?`. The language does not infer ad-hoc error unions or implicit error conversions.
 
 For example, this is rejected if `LoadConfig(path)` may raise both
 `Error<IOError>` and `Error<ParseError>`:
@@ -977,7 +929,7 @@ flow TryLoadConfig(path: Path) -> Result<Config, ConfigError> {
 }
 ```
 
-As an expression form, the lowering is equivalent to:
+The expression `e?` is semantically equivalent to:
 
 ```etas
 handle {
@@ -1037,48 +989,16 @@ when a value-level boundary is needed.
 
 ### 2.3 Runtime-Scoped Effect Handlers
 
-Handlers can recover from selected effect actions without introducing unrestricted continuations:
-
-```etas
-flow LoadOrDefault(path: Path) -> Report {
-    handle {
-        LoadReport(path)
-    } with {
-        Error<AppError>.raise(err) => {
-            finish Report {
-                title = "Untitled",
-                body = err.message
-            };
-        }
-    }
-}
-```
-
-If the handler fully handles `Error<AppError>`, that effect does not escape `LoadOrDefault`. Handler arms may perform their own effects, and those effects are included in the surrounding signature.
-
-An action can be resumed only if its return type is not `never`:
-
-```etas
-effect Approval {
-    action request(req: ApprovalRequest) -> ApprovalDecision;
-}
-```
-
-Operations returning `never`, such as `Error.raise`, cannot use a `resume`
-statement in a handler arm. They can use `finish value;` to complete the handled
-expression with a fallback value, or they can terminate with another
-non-returning expression such as `abort(...)`. Because `never` is the bottom
-type, such a non-returning arm is accepted for any handled expression answer
-type. `resume` and `finish` are control-flow keywords, not standard-library
-functions.
-
-An ordinary expression arm such as `Error<E>.raise(err) => Err(err)` is not
-valid handler syntax. Use `finish Err(err);` so the control-flow boundary is
-explicit.
+Handlers eliminate handled escaping actions and add their own effects.
+`resume value` supplies the action's result; `finish value` supplies the
+whole handled expression's result. A `never` action cannot resume.
+Implicit fallback expression arms and direct arm-level `return` are rejected.
+Full typing, completion and dispatch rules are in
+[Handler Scope](06-effect-system-and-inference.md#22-handler-scope).
 
 #### 2.3.1 Scoped Continuation Handles
 
-`Action(args) as k => { ... }` binds a single-shot continuation for a resumable
+`Action(args) as k => {... }` binds a single-shot continuation for a resumable
 action. Its type is inferred from the action result type, the handled answer
 type, residual computation effects, and its owning task scope. These facts are
 compiler-known; runtime signature data cannot forge a continuation. No public
@@ -1107,7 +1027,7 @@ once without repeating the job; this does not make a continuation copyable.
 Task and scheduler handles cannot escape their owning structured scope.
 
 See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
-and [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
+and [handler-based scheduling](16-concurrency.md#111-handler-based-scheduling).
 
 ### 2.4 Declarative Retry Policy
 
@@ -1115,7 +1035,7 @@ and [handler-based scheduling](16-concurrency.md#121-handler-based-scheduling).
 flow ReviewWithRetry(draft: Draft) -> Review {
     @limits([Attempts(2)])
     retry {
-        return Reviewer.run(draft);
+        return (Reviewer {}).run(draft);
     }
 }
 ```

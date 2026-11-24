@@ -145,11 +145,19 @@ Synchronous `run` and its protected `Scope.enter` execution remain in the
 caller's logical task. A scheduler's internal owner job does not introduce a
 new capture boundary; independently started tasks and concurrent branches do.
 
-Crossing to another task by `start`, concurrent branch execution, inherited
+Crossing to another task or active-agent request by `start`, mailbox dispatch,
+concurrent branch execution, inherited
 Handlers or task results requires checking this capture contract. A callable
 that retains a local `var` cannot share that binding with the other task.
 Capture an immutable snapshot for independent task input, or use an explicit
 shared resource with its checked Effect and ownership contract.
+
+Agent references may be captured as immutable values: copies still reach the
+same isolated instance and retain its lifetime. Neither an active `var self`
+nor pending state may be shared with child tasks or cross-request handlers.
+Capture needed field values/references in immutable local bindings first.
+A model-exposed member tool receives a snapshot supplied by checked dispatch,
+not a closure alias to the updating receiver.
 
 The compiler carries captured-binding read/write and task-affinity facts
 through higher-order calls, imports, callable containers and Handler metadata.
@@ -164,24 +172,12 @@ automatic parallel execution for such a callable. Reads of a captured `var`
 can observe previous assignments, and writes change subsequent observations.
 Optimization requires the corresponding capture and state-dependence proof.
 
-## 7. Runtime And Checkpoint Representation
+## 7. Suspension And Restoration
 
-The runtime preserves one storage location for each captured mutable binding
-in an activation, using stable shared slots or binding cells. Invocation-local
-storage remains separate. Source symbol identity is combined with activation
-identity so separate calls to `example` retain independent state.
-
-Assignments through any live alias update that location. Copying a callable,
-capturing it in another callable, suspending it or evaluating a Handler must
-preserve this alias relationship. Ordinary value copies retain their value
-semantics.
-
-Checkpoint encoding records the binding graph, including callable references,
-current values and logical-task ownership. Restoration reconstructs the same
-alias relationships within the restored execution. Separate restorations of
-one checkpoint create independent executions. Recompilation and source
-restoration relocate binding identities using the existing checked-code
-mapping mechanisms.
+Suspension and checkpoint restoration preserve captured-binding identity,
+values and task ownership. Copies within a restored execution share the same
+captured binding; separate restorations are independent executions. Storage
+layout, cell representation and encoding are not language contracts.
 
 ## 8. Conformance Cases
 

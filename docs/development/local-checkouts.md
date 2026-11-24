@@ -91,7 +91,8 @@ changes alter the toolchain build identity. This test SDK is a build artifact,
 not a user-wide installation or source file to commit.
 
 For the source standard-library SDK installation workflow, follow the current
-[README](../../README.md#quickstart) and
+[README](../../README.md#quickstart). Standard-library version and lockfile
+requirements are defined in the
 [package specification](../design/15-package-management.md#71-using-the-installed-standard-library).
 An old CLI installation command without a matching SDK is not an equivalent
 replacement.

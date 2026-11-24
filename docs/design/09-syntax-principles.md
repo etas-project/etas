@@ -1,54 +1,22 @@
-# Syntax Principles
+# Source Grammar
 
-## 1. Etas Source Grammar
+The EBNF describes source forms. Type, effect, scope and API contracts are
+specified in the linked chapters. Metavariables are not additional keywords.
+Source examples use four-space indentation.
 
-This section sketches the current user-facing Etas source syntax. It is intentionally separate from the internal core calculus in [Formal Core, Static Analyses, and PL Context](08-formal-core-static-analyses-and-pl-context.md).
+## 1. Lexical Rules
 
-String and character literals accept Unicode scalar escapes such as `\u{fffd}` and `\u{1f600}`, with one to six hexadecimal digits. Numeric literal suffixes are omitted here.
+- `//` comments end at the newline; `/* ... */` comments end at the first
+  `*/` and do not nest. Comments have no semantic effect.
+- Strings and characters support `\\u{...}` Unicode scalar escapes with one
+  to six hexadecimal digits.
+- Names such as `Result`, `Index`, `infer` and `join` are resolved standard
+  contracts, not keywords. See [Library Boundaries](01-overview.md#4-language-and-library-boundaries).
+- The `^` reflection extension is specified [separately](18-reflection-and-checked-code-generation.md).
 
-This grammar defines source forms, not the std API catalog or compiler metadata
-format. Names such as `Result`, `Index`, `infer`, and `join` are not keywords;
-their specified integrations are [compiler-recognized std contracts](01-overview.md#54-compiler-recognized-standard-contracts).
-Resolved symbol identity, rather than spelling alone, selects those contracts.
-The `^` reflection extension is described separately in
-[Reflection and Checked Code Generation](18-reflection-and-checked-code-generation.md);
-its std descriptor types do not turn metadata fields into source syntax.
+## 2. Grammar
 
-Source examples use **four spaces per indentation level**. Tabs are not used for indentation.
-
-Comments are lexical trivia. They are ignored by parsing, do not enter the typed AST or AIR, and do not affect effects, trace specs, runtime policy, limits, traces, or runtime behavior.
-
-Etas supports line comments and block comments:
-
-```etas
-// Line comments run until the end of the line.
-
-let draft = Writer.run(topic); // Trailing comments are allowed.
-
-/*
-Block comments can span multiple lines.
-They are useful for documentation near declarations.
-*/
-```
-
-Block comments are not nested in the MVP. If a block comment contains `/*`, it is treated as ordinary text until the first following `*/`.
-
-Comments must not be used as semantic annotations. A trace spec, effect/action boundary, approval requirement, or loop budget must be expressed in source constructs:
-
-```etas
-// This comment does not enforce a budget.
-while needs_revision(draft) {
-    draft = Rewriter.run(draft);
-}
-
-// This source construct does.
-@limits([Iterations(3), Tokens(30_000)])
-while needs_revision(draft) {
-    draft = Rewriter.run(draft);
-}
-```
-
-### 1.1 Modules And Items
+### 2.1 Modules And Items
 
 ```ebnf
 Program       ::= ModuleDecl? ImportDecl* Item*
@@ -88,89 +56,9 @@ ExportableItemDecl
                 | FlowDecl
 ```
 
-Import examples:
+Imports, visibility, annotation placement and constant-argument checks follow [General Constructs](02-general-programming-constructs.md#10-modules-packages-and-imports).
 
-```etas
-import std.io;
-import std.io as io;
-import std.io.println;
-import std.io.println as log;
-import std.io.{print, println, eprintln};
-import std.io.{println as log, read_line};
-import std.io.*;
-public import std.prelude.*;
-import company.memory.ProjectMemory;
-import company.memory.ProjectMemory as PM;
-```
-
-Top-level declarations default to `private`. `public import` is a re-export.
-Wildcard imports are allowed, but they only import public names. If multiple
-wildcard imports provide the same unqualified name, the use is ambiguous unless
-the program adds an explicit import or uses a qualified path.
-
-`Path` in a module or import declaration is a logical module path, not a raw
-filesystem path. The package resolver maps logical paths to files by convention
-such as `src/foo/bar.es` or `src/foo/bar/mod.es`, then records stable
-package/module/item identities for later phases.
-
-Item annotations are written before the declaration they describe. Depending
-on their resolved identity they supply static metadata or a checked contract:
-
-```etas
-@model("gpt-5.5-thinking")
-@tools([repo.read, latex.check])
-@limits([ContextTokens(32_000), Attempts(2)])
-agent Reviewer(input: Draft) -> Review {
-    return perform infer<Review>(build_review_prompt(input));
-}
-
-@deprecated("use std.fs.read_bytes")
-flow old_read(path: Path) -> bytes {
-    return std.fs.read_bytes(path);
-}
-
-@derive([Schema, PromptEncode])
-type Review = {
-    summary: string,
-    issues: Array<string>,
-}
-```
-
-Item annotation arguments must be statically evaluable: literals, paths, arrays,
-records, named arguments, and compile-time constants are allowed; expressions
-that perform effects or depend on runtime state are rejected. A small set of
-compiler-known annotations may affect checking or lowering, such as `@model`,
-`@tools`, `@limits`, `@derive`, `@test`, `@deprecated`, `@trace`, and
-`@optimization`. User-defined annotations are metadata by default: they can be
-read by package, documentation, test, and IDE tooling, but they do not change
-type checking, effect inference, trace-spec checks, or runtime authority unless the
-SPEC explicitly promotes them to compiler-known annotations.
-
-The recognized `@limits(bounds)` contract also attaches to `for`, `while`,
-`retry`, and blocks, with `bounds: Array<Limit>`. These local uses may depend on
-runtime parameters or local values, but argument evaluation must be
-deterministic, non-suspending and action-free. Arguments are evaluated once
-before scope entry, under enclosing budgets. Item-level `@limits` remains
-static; a local annotated block provides parameter-dependent budgets. See
-[Annotations](02-general-programming-constructs.md#22-annotations) and
-[Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops).
-
-Only the compiler-recognized `@limits` is supported at those local positions.
-Other local annotations, arbitrary annotated expressions, and `@limits` on
-items other than flows, agents, or tools are rejected. An annotation cannot be silently ignored
-when it represents a resource contract.
-
-Annotation reflection is static-first. Package, build, test, documentation, and
-IDE tools may read annotation metadata from compiler outputs. The MVP should not
-expose unrestricted runtime reflection over value layouts, private fields,
-effect summaries, or trace-spec internals.
-
-Annotations never grant authority. For example, `@tools([email.send])` only
-defines the model-visible tool surface. The tool's effect summary, the active
-effect boundary, active trace specs, handlers, sandbox, limits, and runtime checks still
-decide whether a concrete tool call can execute.
-
-### 1.2 Types
+### 2.2 Types
 
 ```ebnf
 AliasDecl     ::= "alias" Ident TypeParams? "=" TypeExpr ";"
@@ -212,19 +100,16 @@ SpecPrimary  ::= SpecRef
                 | "(" SpecExpr ")"
 ActionPattern::= Path StaticEffectArgs?
 
-ImplDecl      ::= TypeImplDecl
-                | SpecImplDecl
-                | AgentImplDecl
+ImplDecl      ::= TypeImplDecl | SpecImplDecl
 TypeImplDecl  ::= "impl" TypeParams? ImplTarget "{" ImplItem* "}"
-SpecImplDecl ::= "impl" TypeParams? (TypeExpr | ImplTarget) SpecSatisfaction (";" | "{" SpecImplItem* "}")
-AgentImplDecl ::= "impl" "agent" Path SpecSatisfaction? (";" | "{" AgentImplItem* "}")
+SpecImplDecl ::= "impl" TypeParams? (TypeExpr | ImplTarget) DeclarationConformance (";" | "{" SpecImplItem* "}")
 ImplTarget    ::= Path ImplArgs?
 ImplArgs      ::= "<" ImplArg ("," ImplArg)* ","? ">"
 ImplArg       ::= TypeExpr | Ident "~" BoundList
 ImplItem      ::= Annotation* Visibility? FlowDecl
+                | Annotation* Visibility? ToolDecl
                 | EffectActionDecl
-SpecImplItem ::= Annotation* Visibility? FlowDecl
-AgentImplItem ::= Annotation* Visibility? FlowDecl
+SpecImplItem ::= Annotation* Visibility? (FlowDecl | ToolDecl)
 
 TypeExpr      ::= HandlerType
                 | ArrowType
@@ -254,7 +139,9 @@ PrimitiveType ::= "bool" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
                 | "f32" | "f64" | "char" | "string" | "bytes" | "unit" | "never"
 
 RecordType    ::= "{" FieldDecl* "}"
-FieldDecl     ::= Visibility? Ident ":" TypeExpr ","?
+FieldDecl     ::= InjectAnnotation? Visibility? Ident ":" TypeExpr ","?
+InjectAnnotation
+              ::= "@" "inject" "(" EffectRef ")"
 Visibility    ::= "private" | "public"
 
 TupleType     ::= "(" TypeList ")"
@@ -292,130 +179,6 @@ StaticEffectArg
                 | "_"
 ```
 
-Delimiter roles are intentionally separated:
-
-- `<...>` is used for type-level, spec-level, effect-level, and action-level
-  parameterization, including `Result<T, E>`, `Stage<I, O, E>`,
-  `Error<E>`, and `Fs.read<R>`.
-- `![...]` is the only bracketed form for effect rows and handler types.
-- `[...]` remains expression syntax for arrays, indexing, slicing, and value
-  lists passed to annotations such as `@tools([repo.read])`.
-
-Effect/action `<...>` arguments are static selectors, not runtime argument
-captures. They may name types, stable resource paths, literals, compile-time
-constants, or `_`. A local variable such as `path`, `stream`, `topic`, or
-`req.host` is rejected in an effect row or action reference unless it resolves
-as a compile-time constant. Runtime values are carried by the action call
-payload and recorded in trace events.
-
-`alias A = B;` is a transparent abbreviation and does not create a new type
-identity. `type A = B;` creates a nominal type with representation `B`. `type
-A;` creates a bodyless nominal type used either as a zero-runtime marker or as
-an opaque runtime handle:
-
-```etas
-alias JsonText = string;
-
-type UserId = string;
-type ReportsRoot;
-type TcpStream;
-```
-
-Assignment between `type UserId = string` and `string` requires an explicit
-constructor, accessor, or conversion flow. `ReportsRoot` is a marker if it is
-only used in type indices and spec relations; `TcpStream` is an opaque runtime
-handle if values of that type are returned by APIs and passed at runtime.
-
-Spec declaration forms determine their kind; an optional `: type`,
-`: callable`, or `: trace` annotation checks that choice. `callable` and
-`trace` are contextual words only after `spec Name:`, not global keywords.
-
-| Form | Kind / Role |
-|---|---|
-| `spec ByteStream;` | Marker type spec |
-| `spec Within<Parent>;` | Parameterized relation spec |
-| `spec PromptEncode { flow encode(self) -> PromptPart; }` | Behavioral type spec |
-| `spec ReadWriteStream ~ ReadableStream + WritableStream;` | Spec entailment |
-| `spec Stage<I, O, effect E> I => O ![E];` | Callable spec |
-| `spec SafeEmail = Approval.request >> CompanyEmail.send<WorkAccount>;` | Trace spec |
-
-Generic names must be declared in `<...>`; other names resolve to existing
-types, specs, or effect rows. Bounds use `T ~ PromptEncode + Schema`. At a
-conformance site, `~ Pure` may infer arguments such as
-`Pure<string, string>`. Omitting a callable spec's effect row leaves it
-unconstrained; `![]` requires no escaping effects.
-
-`value::Spec.method(args)` selects a behavioral spec implementation without
-repeating the receiver as an argument:
-
-```etas
-let part = report::PromptEncode.encode();
-```
-
-Callable specs constrain callable values; they do not introduce a separate
-`Spec.apply` call form. See [Spec Polymorphism](05-type-system-and-errors.md#15-spec-polymorphism)
-for targets, kind checking, entailment, and trace operators.
-
-`? ~ Spec` is an existential type, distinct from postfix error capture `e?`:
-
-```etas
-let stream: ? ~ ByteStream = tls;
-let streams: Array<? ~ ByteStream> = [tcp, tls, file];
-```
-
-The type-position `?` must be followed by `~` and type-spec bounds; it cannot
-stand alone. The explicit element type supplies existential packing context.
-Without it, `[tcp, tls, file]` does not infer a common supertype. See
-[Existential Spec Objects](05-type-system-and-errors.md#152-existential-spec-objects).
-
-Arrow types are the source-level notation for flow values. The compiler normalizes them to the internal `Flow<I, O, E>` representation. `A -> B -> C` is right-associative and means `A -> (B -> C)`. An explicit effect row is written after the output type with `![...]`:
-
-```etas
-Url -> Page
-Url -> Page ![Network]
-Topic -> Draft ![Http.request<_>]
-(A, B) -> C
-```
-
-An effect row accepts a tag, an action, or a parameterized action instance:
-
-```etas
-![Network]
-![AcademicSearch.search]
-![Http.request<"github.com">]
-![ProjectWorkspace.write<"reports/**">]
-```
-
-`Network` is the broad form and covers actions under the `Network` effect root,
-including imported package-defined actions that extend it. Etas does not
-support `Network.*` in effect rows; use `Network` for the whole tag or an action
-pattern such as `Http.request<_>` for a narrower boundary. Effect rows are positive
-summaries only, so `deny` is not valid inside `![...]`; rejection belongs in
-trace specs.
-
-`![...]` without `=>` in a computation type is an effect row. In a type annotation by itself, `![...]` may also describe a handler effect transformer:
-
-```text
-![H]             == ![H => _]
-![H for R]       == ![H => _ for R]
-![H => E]        == ![H => E]
-![H => E for R]  == ![H => E for R]
-```
-
-`H` is the handled action/effect set. `_` means the handler's produced effects
-are inferred from handler arms. `E` is an explicit upper bound on those produced
-effects. `for R` pins the answer type of the handled expression when a handler
-arm uses `finish` instead of resuming:
-
-```etas
-![Approval]
-![Approval => Console.stdout_write]
-![Error<AppError> for Report]
-![Error<AppError> => [] for Report]
-```
-
-The `flow` keyword is used for named declarations, not for type expressions.
-
 ```ebnf
 EffectDecl    ::= "effect" Ident TypeParams? ("extends" Effect)? (";" | EffectBlock)
 EffectBlock   ::= "{" EffectActionDecl* "}"
@@ -423,7 +186,9 @@ EffectActionDecl
               ::= "action" Ident TypeParams? ParamList ReturnType ";"
 ```
 
-### 1.3 Top-Level Bindings
+Kinds, `~` evidence, handler types and existential packing follow [Types](05-type-system-and-errors.md). `InjectAnnotation` is permitted only on direct nominal record/agent fields and must name a zero-argument action; see [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
+
+### 2.3 Top-Level Bindings
 
 ```ebnf
 TopLevelLetDecl
@@ -431,20 +196,9 @@ TopLevelLetDecl
 TypeAnnot     ::= ":" TypeExpr
 ```
 
-Top-level `let` is restricted. It may define immutable constants and named
-runtime resource handles created by compiler-known standard resource
-constructors such as `std.memory.region<...>`. Top-level `var` is not part of
-the language, and top-level `let` initializers must not perform ordinary runtime
-effects such as tool calls, agent calls, time reads, or memory reads/writes.
-Handler literals are allowed in top-level `let` declarations because they create
-handler values; they do not execute the handled computation.
+Module bindings are immutable; their initialization cannot execute ordinary runtime actions. Declarative resource handles follow [Top-Level Bindings](02-general-programming-constructs.md#31-top-level-bindings).
 
-Top-level `let` declarations are module items. If marked `public`, a resource
-handle can be imported by another module. Import aliases are name-resolution
-aliases only; they do not allocate a new resource handle or create a new memory
-backend identity.
-
-### 1.4 Flows
+### 2.4 Flows
 
 ```ebnf
 
@@ -464,273 +218,21 @@ ReceiverParam ::= "self" | "var" "self"
 FlowClause    ::= DeclarationConformance
 ```
 
-`self` is a contextual receiver name, not a new global keyword. A receiver is
-allowed only first in a method or behavioral type-spec method signature, with
-its type supplied by the enclosing declaration. `var self` is further limited
-to ordinary type methods; it is not an agent/tool entry parameter or a general
-`var name: T` parameter form. Callers must use a direct local `var` binding
-(including an enclosing `var self` for nested updates). Receiver-mode matching,
-exclusive access, normal-return writeback, non-suspension, and the ban on bound
-updating method values follow
-[Restricted Updating Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
+Return/effect inference, default parameters and passive/active receiver modes follow [General Constructs](02-general-programming-constructs.md#4-flows-as-the-ordinary-callable-unit). `requested_actions` and related summaries are not source clauses.
 
-Defaulted parameters form a trailing ordinary-parameter suffix. Named callable
-declarations, effect-action signatures, and behavioral-spec method signatures
-may use them; receivers and anonymous flows may not. Named calls may omit those
-arguments, but arrow types retain full arity. Definition-site resolution,
-evaluation order, pure/non-suspending defaults, and checked model-tool binding
-are specified in [Default Parameters](02-general-programming-constructs.md#41-default-parameters).
-
-`requested_actions`, `default_actions`, and `escaping_effects` are analysis or
-package-interface metadata fields, not additional `FlowClause` forms. Examples
-of these fields must be shown outside Etas source blocks. Source code expresses
-the behavior through its body, optional effect row, handlers, and spec clauses;
-the compiler derives and validates the corresponding metadata.
-
-`flow` is the ordinary user-defined callable declaration in the source language. The compiler infers the return type, effect row, and determinism class: `Deterministic` or `NonDeterministic`. This applies to every flow, including `main`. Local declarations usually omit `![...]`; when a flow writes an explicit effect row, that row is checked as an upper-bound constraint on the inferred body effects. Etas-implemented `tool` declarations also have bodies, but they are model-callable boundaries with extra schema, trace-spec, effect/action, and output-safety rules. Exported APIs may write explicit effects or rely on generated package metadata.
-
-`~` is the declaration conformance operator. On declarations, the right-hand side
-is resolved by spec kind:
-
-```text
-T ~ ByteStream                 => type spec conformance
-flow f(...) ~ StageSpec        => callable spec conformance
-flow f(...) ~ SafetyTraceSpec  => trace spec conformance over requested actions
-flow f(...) ~ (+A & -B)        => inline trace spec conformance
-```
-
-Spec kinds and their inference rules are defined in
-[Types](#12-types). Effect-row constraints use type specs; protocols remain a
-separate advanced construct. Prefix `+`, prefix `-`, `>>`, and `<<` construct
-only trace specs:
-
-```text
-+A      allow action pattern A
--A      deny action pattern A
-A >> B  locally allow A and B; require valid matching A evidence before every B
-A << B  locally allow A and B; require valid matching B evidence before every A
-```
-
-If a path can name more than one conformance kind in scope, the compiler rejects
-the declaration as ambiguous and asks for a qualified path or a clearer name.
-
-An expression-bodied flow is shorthand for a block whose final expression is
-the same expression:
-
-```etas
-flow SearchOnce() -> Answer =
-    handle Search() with ChooseFirst;
-```
-
-This declares a named flow. A bare top-level `handle Search() with ChooseFirst`
-expression is not a module item and is not executed during module loading.
-
-The return type may be omitted. In that case, the compiler infers it from explicit `return` statements and from the final expression, if present:
-
-```etas
-flow normalize_title(title: string) {
-    std.text.trim(std.text.lowercase(title))
-}
-```
-
-This is equivalent to:
-
-```etas
-flow normalize_title(title: string) -> string {
-    return std.text.trim(std.text.lowercase(title));
-}
-```
-
-Return type inference uses this rule:
-
-```text
-ReturnCandidates(flow body) =
-  all `return expr` expressions
-  + the final expression, if present
-  + `unit` for each `return;`
-
-Expressions of type `never` do not constrain the inferred return type.
-All remaining candidates must unify.
-If the candidate set is empty, the inferred return type is `unit`.
-```
-
-For example:
-
-```etas
-flow choose_writer(fast: bool) {
-    if fast {
-        return FastWriter;
-    }
-
-    return CarefulWriter;
-}
-```
-
-is inferred as:
-
-```text
-flow choose_writer(bool) -> Outline -> Draft
-```
-
-An `impl` block can define inherent methods for an ordinary type, action
-signatures for an effect tag, or evidence that a type satisfies a type spec.
-The compiler must kind-check the target before checking the block body:
-
-```text
-impl TypeName { ... }              => only `flow` methods are allowed.
-impl EffectName { ... }            => only `action` signatures are allowed.
-impl TypeName ~ SpecName { ... }  => only required type-spec `flow` methods are allowed.
-```
-
-These forms must not be mixed. A type `impl` cannot contain `action`, an effect
-`impl` cannot contain ordinary `flow` methods, and a type-spec `impl` cannot
-declare extra methods outside the spec contract. When an `impl` targets an
-ordinary type, its methods have bodies. When an `impl` targets an effect tag,
-its `action ...;` entries have no bodies. Marker type-spec implementations may
-use the short form `impl TypeName ~ SpecName;`. Callable specs are not
-implemented with top-level `impl`; flows, agents, and tools satisfy them
-directly in their declarations with `~ SpecName`. Effect actions can also be
-declared directly inside an `effect` block. An effect action can be invoked with
-`perform` and intercepted by `handle`.
-
-### 1.5 Tools, Agents, Persistent Resources
+### 2.5 Tools, Agents, Persistent Resources
 
 ```ebnf
 ToolDecl      ::= "tool" Path ParamList "->" TypeExpr EffectSuffix? ToolClause* ToolBody
 ToolBody      ::= Block | ";"
 ToolClause    ::= DeclarationConformance
 
-AgentDecl     ::= "agent" Ident AgentDeclTail
-AgentDeclTail ::= ";"
-                | ParamList "->" TypeExpr EffectSuffix? AgentClause* Block
-AgentClause   ::= DeclarationConformance
+AgentDecl     ::= "agent" Ident TypeParams? "=" RecordType ";"?
 ```
 
-Persistent agent state is represented with compiler-known standard/runtime support types such as `MemoryRegion<S>` and `Store<K, V>`, usually bound to an immutable top-level resource handle:
+Agent blocks contain private fields only; methods are explicit `impl` members. Bodyless tools require a resolved imported implementation. See [Agents And Tools](03-agents-tools-prompts-memory.md).
 
-```etas
-type ProjectMemorySchema = {
-    Papers: Store<PaperId, PaperRecord>,
-    Decisions: Store<DecisionId, DecisionRecord>,
-};
-
-let ProjectMemory =
-    std.memory.region<ProjectMemorySchema>(
-        stable_id = "project_memory",
-        store = "project-main"
-    );
-```
-
-Store API calls are ordinary calls whose signatures carry parameterized, region-sensitive effects such as `Memory.read<ProjectMemory.Papers>` and `Memory.write<ProjectMemory.Decisions>`. The legal memory places, containment relation, and read/write inference rules are defined in [Effect System and Inference](06-effect-system-and-inference.md#13-parameterized-effects). Backend binding, namespace, retention, and migration policy belong in the manifest/runtime configuration, not in source syntax.
-
-Agent runtime metadata uses annotations before the declaration. For example,
-`@model("gpt-5.5")`, `@tools([latex.check])`, and
-`@limits([ContextTokens(32_000)])` are compiler-known annotations; `model`,
-`tools`, and `limits` are not keywords. The bare form `agent Name;` declares a
-nominal agent component with identity, metadata, tool surface, trace-spec context, trace, and
-runtime configuration, but no default callable entrypoint.
-
-The ergonomic form:
-
-```etas
-agent Name(input: I) -> O ![E] {
-    ...
-}
-```
-
-is sugar for declaring the nominal agent and implementing its default `run`
-method. The body is checked like a flow body, with one extra operation available:
-`perform infer(prompt)`. The explicit `![E]`, when present, is an upper-bound
-contract for ordinary escaping effects of the generated `run` method.
-
-The `@tools(...)` annotation lists model-callable tool declarations. It may reference
-Etas-implemented `tool` declarations and imported symbols whose package or
-compiler metadata marks them as model-callable tools. It must not reference
-ordinary `flow` declarations directly. To expose Etas logic to a model, wrap
-the logic behind a `tool` body and keep helper flows private if they should not
-be model-callable.
-
-The desugared shape is:
-
-```etas
-agent Name;
-
-impl agent Name ~ Stage<I, O, E> {
-    flow run(input: I) -> O ![E] {
-        ...
-    }
-}
-```
-
-`impl agent` may also define inherent methods or implement additional specs for
-the same nominal agent component. The agent component itself is not a flow value;
-its methods are ordinary callable values. A method named `run` is the default
-pipeline target used by `x ~> AgentName`.
-
-Inside an agent body or `impl agent` method, `perform infer<T>(prompt)` asks the
-current agent runtime to perform a model inference and decode the result as `T`.
-The `<T>` may be omitted when the expected type is known from a type annotation,
-assignment target, return type, or surrounding expression. The shorthand is
-agent-scoped: it is rejected in ordinary `flow` and `tool` bodies because it
-needs the current agent identity, method name, model configuration, tool surface,
-schema, limits, trace context, and trace-spec context.
-
-```etas
-@model("gpt-5.5-thinking")
-@tools([latex.check])
-@limits([ContextTokens(32_000)])
-agent Reviewer(input: Draft) -> Review {
-    let prompt = Prompt.new()
-        .system(Trusted("Review the draft for correctness and risk."))
-        .data(input);
-
-    return perform infer<Review>(prompt);
-}
-```
-
-`tool ... { ... }` declares a model-callable boundary implemented in Etas. Its
-body is checked like a flow body, but with additional tool-boundary rules:
-parameters and output must be schema-encodable for model tool calling, inferred
-effects must fit the explicit effect boundary and trace-spec constraints,
-omitted tool boundaries default to no effects, and forbidden output types such as secrets
-must not escape. `flow` remains the ordinary Etas callable and cannot be placed
-directly in an agent `@tools(...)` list.
-
-`tool ...;` is a bodyless tool signature. It is used in package interfaces,
-generated package metadata, compiler-known standard-library metadata, and
-precompiled packages. It is imported and type-checked like an ordinary tool
-symbol, but implementation source should provide a body unless the package
-manifest or compiler/runtime registry supplies the implementation metadata.
-
-Runtime-provided primitive symbols and host-provided package bindings are not
-declared with a source-level keyword. They are imported like ordinary package
-symbols, and their compiler/runtime metadata supplies type, effect row,
-determinism class, schema information, and host binding information. If such a
-symbol declares `![Command.run<_>]`, the command action must carry a sandbox
-profile; standard library wrappers use `DefaultCommandSandbox` unless a stricter
-profile is passed.
-
-```etas
-tool write_report(path: Path, content: string) -> unit ![ProjectWorkspace.write<"reports/**">]
-{
-    perform ProjectWorkspace.write(path, content);
-}
-
-tool create_github_issue(repo: Repo, issue: IssueDraft) -> Issue
-    ![Http.request<"api.github.com">, GitHub.issue_create<_>]
-{
-    return perform GitHub.issue_create(repo, issue);
-}
-```
-
-External service operations should normally be declared as package-defined or
-host-defined effect actions and wrapped by package flows. The minimal standard
-library only owns generic orthogonal actions such as console I/O, approval,
-time, memory, sandboxed command execution, secrets, errors, and internal
-agentic inference support. Host/runtime adapter bindings belong in package
-metadata or compiler/runtime registries, not in source syntax.
-
-### 1.6 Trace Specs And Protocols
+### 2.6 Trace Specs And Protocols
 
 ```ebnf
 EffectPattern ::= Path EffectPatternArgs?
@@ -747,44 +249,9 @@ ProtocolDecl  ::= "protocol" Ident "{" ProtocolMsg* "}"
 ProtocolMsg   ::= Path "->" Path ":" TypeExpr ";"
 ```
 
-`EffectPattern` mirrors the surface shape of `EffectRef`, but its angle-bracket
-arguments may also bind constrained pattern variables such as `R ~
-Within<ReportsRoot>`. It deliberately has no `.*` form. In a trace spec, write
-the tag name to match the whole tag, and write an action or parameterized action
-to match a narrower boundary:
+Action selectors are static, not captures of runtime arguments. Trace operators apply only to trace specs; protocols describe role/message exchange. See [Trace Specs](05-type-system-and-errors.md#154-trace-specs).
 
-```etas
-spec HttpReadOnly: trace =
-    +Network
-    & -Http.request<"POST", _>
-    & -Http.upload<_>;
-```
-
-Parameterized action patterns may constrain an argument variable with a spec
-bound directly in the angle-bracket list. This lets trace-spec matching reuse
-the same relation evidence as generic type checking:
-
-```etas
-spec ReportsOnly: trace =
-    +Fs.read<R ~ Within<ReportsRoot>>;
-```
-
-Trace-spec patterns cannot capture runtime variables in `<...>`. To check a runtime
-path, URL, account, tenant, or request id, the runtime trace monitor matches
-the concrete action payload against the static pattern.
-
-```etas
-spec ReportsOnly: trace =
-    +Fs.read<ReportsRoot>
-    & +ProjectWorkspace.write<"reports/**">;
-```
-
-For example, `perform ProjectWorkspace.write(path, body)` records `path` in the
-runtime action event. The effect row should say `ProjectWorkspace.write<_>` or a
-known static selector such as `ProjectWorkspace.write<"reports/**">`; it should
-not say `ProjectWorkspace.write<path>`.
-
-### 1.7 Statements
+### 2.7 Statements
 
 ```ebnf
 Block         ::= "{" Stmt* FinalExpr? "}"
@@ -833,52 +300,9 @@ ContinueStmt  ::= "continue" ";"
 ExprStmt      ::= Expr ";"
 ```
 
-An expression followed by `;` is a statement whose value is discarded. A trailing expression without `;` is the block's value and participates in return type inference for a `flow` declaration without an explicit `-> Type`, together with explicit `return` statements.
+`resume` and `finish` are control statements; `?` does not replace a statement terminator. Only `@limits` attaches to loops/retry/blocks. See [Handlers](06-effect-system-and-inference.md) and [Resource Contracts](04-flows-human-gates-and-protocols.md#14-resource-contracts-and-budgeted-loops).
 
-`@limits([Iterations(20), Tokens(20_000)])` uses ordinary annotation syntax and
-std `Limit` values; `limits` and `limit` are not reserved words. A standalone
-block, annotated or not, may omit `;`. In a value position an annotated block
-has the result type of its underlying block and participates in return-type
-inference; it does not introduce a new `return` target. A final block without
-`;` is a `FinalExpr`; an intermediate block statement discards its value.
-Postfix `?` and handler
-application work on the complete annotated block, for example
-`(@limits([Tokens(budget)]) { work() })?` captures an eligible boundary error
-outside that budget scope under the normal single-Error rule.
-
-MVP error handling uses the `Error<E>.raise` effect action, runtime-scoped `handle`, the postfix `?` effect-to-`Result` lowering operator, the value type `Result<T, E>`, and the ordinary support flow `abort(...) -> never`. `try`, `catch`, and `throw` are not source keywords.
-
-There is no source-level `parallel` statement in the MVP. Concurrent composition is expressed through library calls such as `join([() => { ... }, () => { ... }])`. Tenant context is also not a keyword; it is an ordinary user-defined struct passed through flows, tools, typed memory APIs, trace specs, and runtime policy.
-
-There is also no source-level `prompt` declaration in the MVP. Prompt construction is expressed through deterministic flows returning the Agent/runtime support type `Prompt`, for example `flow ReviewPrompt(...) -> Prompt { ... }`.
-
-There is no source-level `msg` or `message` declaration in the MVP. Agent communication is expressed with typed Agent/runtime support values such as `Message<T>`, `SessionConfig`, and `Conversation`. `Prompt` is the model-call input package; `Message<T>` is the communication value that can carry sender, receiver, session, role, trust, and provenance metadata through AIR and traces.
-
-There is no special `approve` expression. Human approval is represented by the
-`Approval.request` effect action and stdlib wrapper flows. A call such as
-`std.ui.approve(...)` is an ordinary flow call whose signature carries
-`![Approval.request]`.
-
-The `>>` and `<<` operators are trace-spec temporal operators. They are not
-general expression operators. They are only meaningful in spec expressions of
-kind `trace`, for example:
-
-```etas
-Approval.request >> CompanyEmail.send<WorkAccount>;
-Approval.request >> StripePayment.charge<BillingAccount>;
-Sanitized << AcademicSearch.search;
-HumanReview >> Blog.publish<Site>;
-```
-
-For `A >> B`, normalization emits local `Allow(A)` and `Allow(B)` entries plus
-`Before(guard = A, target = B)`. Repeating `+A` and `+B` is optional and
-idempotent. This is a semantic expansion within the existing trace-spec
-grammar, not a general expression operator or an action invocation. Normalization
-preserves `|` alternatives and independently composed spec/scope boundaries;
-denials and outer authority checks remain effective. See
-[Trace Specs](05-type-system-and-errors.md#154-trace-specs) for the full rules.
-
-### 1.8 Expressions
+### 2.8 Expressions
 
 ```ebnf
 Expr          ::= Literal
@@ -972,197 +396,9 @@ BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
                 | "&&" | "||"
 ```
 
-`TryExpr` is an expression form. It does not consume or require a semicolon.
-Semicolons terminate outer statements such as `let` or `return`; a block's final
-`e?` expression is written without `;`.
+Arrow types associate right; stage operators associate left. `with` applies a handler, not configuration. Handler arms must explicitly resume/finish or take a `never` path. `@inject` affects omitted constructor fields, never field reads. Empty-state type stages require an existing public `run`; stateful types, even fully injected ones, require construction. See [Flows](04-flows-human-gates-and-protocols.md).
 
-Collection literal forms are:
-
-```etas
-[1, 2, 3]                 // Array<i32>
-[1; 2; 3]                 // List<i32>
-1 :: 2 :: []              // List<i32>
-{"alice" => 10}           // Map<string, i32>
-#{alice, bob}             // Set<User>
-[0, n)                    // Range, left-closed right-open
-(0, n]                    // Range, left-open right-closed
-```
-
-The empty sequence literal `[]` needs type context to choose between `Array<T>` and `List<T>`. Empty map, set, and record literals also need type context when the syntax alone is insufficient.
-
-Heterogeneous sequence literals require an explicit existential element type:
-
-```etas
-let streams: Array<? ~ ByteStream> = [tcp, tls, file]; // OK
-let bad = [tcp, tls, file];                            // rejected
-```
-
-The accepted literal is still an `Array<T>` for one `T`; here `T` is the
-existential type `? ~ ByteStream`.
-
-`IndexExpr` uses the compiler-known `Index` spec. For sequence-like values such as `Array<T>`, `Slice<T>`, and `bytes`, the index expression may have any concrete integer type that satisfies `Index`; the operation remains bounds-checked and does not create a general implicit numeric conversion. Conceptually, `xs[i]` lowers to an internal checked-index operation that either returns `T` or raises `Error<IndexError>`. Code that wants a value-level failure can write `xs[i]?` and receive `Result<T, IndexError>`. For maps, indexing or lookup is keyed by `K`, not by `Index`.
-
-`SliceExpr` uses range bounds directly after the sequence:
-
-```etas
-xs[i, j)                  // left-closed, right-open Slice<T>
-xs(i, j]                  // left-open, right-closed Slice<T>
-```
-
-Slicing is supported for `Array<T>`, `Slice<T>`, `bytes`, and `Range<I>`. Negative indexes and negative slice bounds are rejected in the MVP.
-
-Record field shorthand is supported. In a record expression, `{ topic, papers }` is equivalent to `{ topic = topic, papers = papers }`. This is especially useful for single-input agents that take structured records:
-
-```etas
-agent Writer(input: { topic: string, papers: Array<Citation> }) -> Draft {
-    return perform infer<Draft>(WriterPrompt(input));
-}
-
-let draft = Writer.run({ topic, papers });
-```
-
-Anonymous flow expressions use `=>` instead of a `flow` expression keyword:
-
-```etas
-let normalize = (title: string) => trim(lowercase(title));
-
-let branches = [
-    () => StepA(input),
-    () => {
-        let value = StepB(input);
-        return validate(value);
-    },
-];
-```
-
-The compiler infers each anonymous flow's input type, output type, effect row, and determinism class from its body and surrounding expected type.
-
-Anonymous flow body effects are latent effects: creating a flow value does not execute the body, but calling, composing, joining, returning, or storing that value must preserve and expose its effect row. The detailed rules are in [Effect System and Inference](06-effect-system-and-inference.md#7-anonymous-flows-and-latent-effects).
-
-Anonymous flows and Handler values preserve the identities of captured lexical
-bindings. A captured local `var` can be rebound within its owning task, and a
-captured `let` remains immutable. Callable copies, escaping environments and
-task boundaries follow [Lambda And Handler Capture](20-lexical-capture.md).
-
-Agent calls normally use the compiler-generated `run` entrypoint, for example
-`Writer.run(topic)`. The `run` body is ordinary checked code; each
-agent-scoped `perform infer<T>(prompt)` inside that body records a requested
-action such as `Agentic.infer<Writer.run, Draft>` for analysis, trace, replay,
-and runtime support. That requested action does not add an `Agentic` obligation
-to the source-level escaping effect row of ordinary callers. Tool calls are
-ordinary calls to declared tools, for example `http.get(url)`. Memory reads and
-writes are ordinary calls to typed memory APIs on named resource handles, for
-example `ProjectMemory.Drafts.get(topic)` and
-`ProjectMemory.Drafts.put(topic, draft)`.
-
-Stage operators are left-associative:
-
-| Expression | Meaning |
-|---|---|
-| `A \| B` | Compose stages into a flow value |
-| `x ~> A` | Apply a value to a stage |
-| `x ~> (A \| B)` | Apply a value to a composed flow |
-
-A stage is a flow, tool, or generated agent method; an agent name selects
-`Agent.run`. Composition preserves each stage's checked behavior and action
-boundaries. Type compatibility, effect union, and determinism rules are in
-[Stage Composition](04-flows-human-gates-and-protocols.md#13-stage-composition).
-
-There is no pipeline resource suffix. Bound execution with an annotated block:
-
-```etas
-let plan = @limits([Tokens(12_000)]) {
-    { design, prd } ~> Engineer
-};
-```
-
-This bounds the block's execution, not later invocations of flow values created
-inside it. Pass extra context as typed input. `with` applies handlers, not
-pipeline configuration; resource-scope rules are in
-[Resource Contracts](04-flows-human-gates-and-protocols.md#18-resource-contracts-and-budgeted-loops).
-
-`perform` invokes a typed effect action, not an ordinary flow:
-
-```etas
-effect Approval {
-    action request(req: ApprovalRequest) -> ApprovalDecision;
-}
-
-impl Approval {
-    action audit(req: ApprovalRequest, decision: ApprovalDecision) -> unit;
-}
-
-let decision = perform Approval.request(req);
-```
-
-Action ownership, implementations, and default handlers are defined in
-[Effect Actions](06-effect-system-and-inference.md#2-effect-actions-and-runtime-scoped-handlers).
-
-`handler` introduces a first-class value; `with` applies it:
-
-```etas
-let HumanApproval = handler {
-    Approval.request(req) => {
-        resume Accepted;
-    }
-};
-```
-
-| Source Form | Meaning |
-|---|---|
-| `handler { ... }` | Construct a handler value; it may be passed, returned, or stored |
-| `expr with h` | Equivalent to `handle expr with h` |
-| `expr with { Action(...) => ... }` | Apply an inline handler without repeating `handler` |
-| `flow f(...) { ... } with h` | Handle the entire flow body |
-
-A bare `{ Action(...) => ... }` outside `with` is not a handler expression.
-The introducer distinguishes handler values from records, maps, and blocks.
-
-```etas
-flow main(args: Array<string>) -> i32 {
-    std.io.println("hello");
-    return 0;
-} with {
-    Error<IOError>.raise(err) => {
-        finish 1;
-    }
-}
-```
-
-Handler arms have explicit control-flow completion:
-
-| Arm Form | Rule |
-|---|---|
-| `resume value;` | Supply the action's result and continue the handled expression; single-shot, unavailable for `never` actions |
-| `finish value;` | Complete the handled expression with its answer type |
-| `{ ... abort(...) }` | A `never`-typed completion is valid; it does not resume |
-| `return value;` | Rejected directly in an arm; allowed only within a nested flow's ordinary return scope |
-| `Action(...) => expr` | Rejected; use explicit `resume` / `finish`, or a block ending in `never` |
-| `{ ... expr }` | Rejected if the final expression returns normally without explicit completion |
-
-An optional `as k` binds the action's scope-bound single-shot continuation:
-
-```etas
-Async.yield() as k => {
-    scheduler.requeue(k, ());
-}
-
-Async.await(task) as k => {
-    scheduler.park(task, k);
-}
-```
-
-The action must not return `never`. Immediate `resume` and explicit transfer
-consume the same continuation. Scheduler transfer operations return `never`
-to the arm by handing control to the scheduler, not by aborting the program;
-a queue insertion returning `unit` is not arm completion. Continuations cannot
-be copied, serialized, or escape their task scope. See [Handler Scope](06-effect-system-and-inference.md#22-handler-scope)
-and [Handler-Based Scheduling](16-concurrency.md#121-handler-based-scheduling).
-
-`as` reuses an existing keyword. `Async.await` and `Async.yield` are std
-actions; `async`, `await`, `yield`, and `suspend` are not keywords.
-
-### 1.9 Names And Patterns
+### 2.9 Names And Patterns
 
 ```ebnf
 Path          ::= Ident ("." Ident)*
@@ -1200,58 +436,4 @@ PatternFieldEntry
 PatternList   ::= Pattern ("," Pattern)* ","?
 ```
 
-List patterns destructure `List<T>`: `[]` matches the empty list and
-`head :: tail` matches a nonempty list, binding a `T` and a `List<T>`.
-Cons patterns associate to the right, so `a :: b :: rest` peels two cells.
-Both sides may use nested patterns. These patterns preserve value semantics;
-sharing an immutable tail does not grant access to mutate another binding.
-Empty/nonempty alternatives participate in ordinary exhaustiveness checking.
-This does not add array-pattern syntax or invoke a standard-library method.
-
-Literal patterns match by value and do not bind names. For example, `(true, x)` is a tuple pattern whose first element is the boolean literal `true` and whose second element binds `x`. Boolean literals in pattern position are never variable bindings. MVP literal patterns include booleans, integers, strings, and chars; floating-point literal patterns are intentionally omitted because equality around `NaN` and precision should not be hidden inside pattern syntax.
-
-Enum declarations use comma-separated variants with an optional trailing comma.
-Parenthesized payloads are positional; optional labels such as
-`Rejected(reason: string)` document positions and do not turn them into record
-payloads. Brace payloads are named fields:
-
-```etas
-enum Response {
-    Success(string),
-    Failure { code: i32, message: string },
-}
-
-let response: Response = Response.Failure { code = 503, message = "unavailable" };
-let description = match response {
-    Response.Success(text) => text,
-    Response.Failure { code: _, message } => message,
-};
-```
-
-Variant construction reuses `CallExpr` for positional payloads and `RecordExpr`
-for named fields. Name resolution distinguishes record types from enum
-constructors. Qualified constructor paths are always available; unqualified
-constructors require unambiguous resolution from scope and the expected enum
-type. In a pattern, a bare name resolving to a nullary constructor matches that
-constructor rather than binding a variable. Named-field patterns list every
-field exactly once, in any order; use `field: _` to ignore a field. Duplicate,
-unknown, or missing fields and a mismatch of payload form are rejected.
-
-Direct and mutually recursive nominal ADTs use ordinary `type`/`enum`
-declarations and type references. Their value semantics, alias-cycle rules,
-schema boundary, and exhaustive matching requirements are defined in
-[Algebraic Data Types And Recursion](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion).
-
-## 2. Semantic References
-
-Grammar determines source forms; the following chapters define their behavior.
-
-| Topic | Authoritative Rules |
-|---|---|
-| Agent identity, methods, inference, and tool boundaries | [Agents And Tools](03-agents-tools-prompts-memory.md#1-agent) |
-| Typed messages, prompts, and input/output encoding | [Messages And Conversations](03-agents-tools-prompts-memory.md#3-messages-and-conversations), [Prompt Values](03-agents-tools-prompts-memory.md#4-prompt-values) |
-| Value semantics, local rebinding, and updating receivers | [Bindings And Mutation](02-general-programming-constructs.md#3-bindings-and-mutation) |
-| Persistent resources and explicit storage effects | [Persistent Memory APIs](03-agents-tools-prompts-memory.md#5-persistent-memory-apis) |
-| Flow composition, loop budgets, and optional protocols | [Flows, Human Gates, And Protocols](04-flows-human-gates-and-protocols.md) |
-| Handler control flow, effect inference, and runtime authority | [Effect System And Inference](06-effect-system-and-inference.md) |
-| Static guarantees, residual runtime checks, and trace analysis | [Safety Analysis](14-safety-analysis-static-dynamic.md) |
+Literal patterns match constants; named-field patterns list each field once. Injection never supplies pattern fields. Match coverage, constructors and scope rules follow [Types](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion).

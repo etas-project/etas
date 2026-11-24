@@ -2,89 +2,14 @@
 
 ## 1. Flow
 
-### 1.1 Flow as Callable Control Flow
+### 1.1 Calls And Values
 
-A flow is Etas's user-defined callable unit. It may be deterministic local computation, non-deterministic computation, or non-deterministic orchestration. It can contain agent calls, compose other flows, call tools, use typed memory APIs, pass human gates, use bounded loops, and satisfy optional protocol constraints.
+Flows are first-class callables with inferred return/effect types. Construction
+of a flow value does not execute it; calls preserve its latent behavior and
+capture constraints. Declaration and inference rules are in
+[General Constructs](02-general-programming-constructs.md#4-flows-as-the-ordinary-callable-unit).
 
-```etas
-flow PaperWriting(topic: string) -> PaperDraft
-{
-    let plan = Planner.run(topic);
-
-    let (related, formal, eval) = join((
-        () => Researcher.run(plan),
-        () => Theorist.run(plan),
-        () => Evaluator.run(plan),
-    ));
-
-    var draft = Writer.run({ plan, related, formal, eval });
-
-    let review = Reviewer.run(draft);
-
-    if review.score < 7 {
-        draft = Writer.run({ draft, review });
-    }
-
-    return draft;
-}
-```
-
-### 1.2 Flow as a First-Class Value
-
-A declared flow is both a callable definition and a first-class value. It can be passed as an argument, returned from another flow, stored in records, and composed with other flows.
-
-A simplified surface flow type annotation can be written as:
-
-```text
-Input -> Output ![Effects]
-Input -> Output
-```
-
-The compiler normally infers flow types, then normalizes them to the canonical internal type `Flow<Input, Output, Effects>`.
-
-For example:
-
-```etas
-flow SummarizePaper(paper: Paper) -> Summary
-{
-    return Summarizer.run(paper);
-}
-
-flow SummarizeAll(
-    step: Paper -> Summary,
-    papers: Array<Paper>
-) -> Array<Summary>
-{
-    var summaries: Array<Summary> = [];
-
-    @limits([Iterations(20), Tokens(20_000)])
-    for paper in papers {
-        summaries = summaries.push(step(paper));
-    }
-
-    return summaries;
-}
-```
-
-Calling a flow value is effect-checked like calling a named flow. If a flow receives another flow as an argument, the caller must account for the callee's inferred or declared effects.
-
-Flows can also be returned to build small reusable strategies:
-
-```etas
-flow choose_writer(fast: bool) -> Outline -> Draft {
-    if fast {
-        FastWriterFlow
-    } else {
-        CarefulWriterFlow
-    }
-}
-```
-
-Returning a flow value does not execute it. Flow execution happens when another flow calls it or when the runtime selects it as the program entry.
-
-This keeps composition in the language without introducing a separate orchestration DSL.
-
-### 1.3 Stage Composition
+### 1.2 Stage Composition
 
 Etas also supports a stage composition operator:
 
@@ -95,11 +20,16 @@ let pipeline = Researcher | Writer | Publisher;
 The operands of `|` are stages, and the operator is left-associative. A stage may be an `agent`, a `flow`, or a `tool`, as long as the output type of the left stage matches the input type of the right stage:
 
 ```text
-A ~ Stage<I, M, E1>
-B ~ Stage<M, O, E2>
+stage(A) ~ Stage<I, M, E1>
+stage(B) ~ Stage<M, O, E2>
 ----------------
-A | B : I -> O ![E1 + E2]
+A | B: I -> O ![E1 + E2]
 ```
+
+For an empty-state agent type with an explicitly defined public `run`, stage
+conversion constructs an instance per invocation; a bound instance stage reuses
+its reference and scope. Stateful agents require explicit construction. Neither form hides creation, mailbox,
+receiver-mode or state-dependence metadata.
 
 The result is a flow value, not a new nominal `agent`. Composition preserves
 the selected stage methods and their behavior summaries; prompts and model
@@ -109,13 +39,13 @@ Examples:
 
 ```etas
 let draft_pipeline = Researcher | Writer;
-// draft_pipeline : Topic -> Draft
+// draft_pipeline: Topic -> Draft
 
 let checked_pipeline = Researcher | sanitize_notes | Writer;
-// checked_pipeline : Topic -> Draft
+// checked_pipeline: Topic -> Draft
 
 let publish_pipeline = Researcher | Writer | publish.write;
-// publish_pipeline : Topic -> PublishedPost
+// publish_pipeline: Topic -> PublishedPost
 ```
 
 The effect set of a composed flow is the union of the stage effects. Its determinism class is the maximum of the stage classes:
@@ -137,9 +67,9 @@ let post = topic ~> pipeline;
 let same_post = topic ~> (Researcher | Writer | Publisher);
 ```
 
-### 1.4 Concurrent Composition
+### 1.3 Concurrent Composition
 
-Etas does not need a dedicated `parallel` statement in the MVP. Concurrent flow or tool composition can be expressed by a standard library combinator:
+Etas does not need a dedicated `parallel` statement. Concurrent flow or tool composition can be expressed by a standard library combinator:
 
 ```etas
 let (a, b, c) = join((
@@ -149,67 +79,13 @@ let (a, b, c) = join((
 ));
 ```
 
-`join` is a library flow with runtime support. The compiler may still lower independent branches into AIR regions that can be scheduled concurrently.
+`join` is a structured standard-library combinator, not a keyword.
 
 The full concurrency model, including effect/resource conflicts, trace-spec/runtime-policy
 ordering, limits, cancellation, and trace semantics, is specified in
 [Concurrency](16-concurrency.md).
 
-### 1.5 Graph View
-
-The compiler can extract a graph:
-
-```text
-Planner
-  ├── Researcher
-  ├── Theorist
-  └── Evaluator
-        ↓
-      Writer
-        ↓
-      Reviewer
-        ↓
-   conditional revise
-```
-
-This graph becomes the basis for static analysis, scheduling, optimization, and runtime execution.
-
-### 1.6 Flow Effects
-
-A flow infers the union of effects it may perform. Local flows normally omit `![...]`:
-
-```etas
-flow W(...) -> T {
-    ...
-}
-```
-
-At public API, package, or deployment boundaries, a flow may still expose an explicit or generated effect signature. If an explicit `![...]` contract is present and the body performs an effect outside that set, compilation fails.
-
-### 1.7 Control Structures
-
-Etas supports ordinary deterministic control flow inside flows:
-
-```etas
-if condition {
-    ...
-} else {
-    ...
-}
-
-for paper in papers {
-    index.add(paper);
-}
-
-@limits([Iterations(10)])
-while not done {
-    done = Checker.run(state);
-}
-```
-
-The important distinction is that loops may contain agent calls and compose other flows. They may also contain tool calls, typed memory access, and human gates. Non-deterministic loops are part of the analyzable flow graph rather than opaque runtime callbacks.
-
-### 1.8 Resource Contracts and Budgeted Loops
+### 1.4 Resource Contracts and Budgeted Loops
 
 Unbounded non-deterministic loops may never converge and can consume unbounded
 resources. Etas requires a loop whose termination cannot be statically proven
@@ -219,8 +95,8 @@ loop body alone does not bound the whole loop.
 ```etas
 @limits([Iterations(3), Tokens(40_000), Cost(usd(2.00))])
 while review.score < 8 {
-    draft = Writer.run({ draft, review });
-    review = Reviewer.run(draft);
+    draft = (Writer {}).run({ draft, review });
+    review = (Reviewer {}).run(draft);
 }
 ```
 
@@ -229,7 +105,7 @@ while review.score < 8 {
 ```etas
 @limits([Iterations(20), Tokens(20_000)])
 for paper in papers {
-    summaries = summaries.push(Summarizer.run(paper));
+    summaries = summaries.push((Summarizer {}).run(paper));
 }
 ```
 
@@ -240,13 +116,13 @@ Retry and validation patterns should use `while` with an explicit resource annot
 ```etas
 @limits([Iterations(3), ContextTokens(128_000)])
 while true {
-    let review = Reviewer.run(draft);
+    let review = (Reviewer {}).run(draft);
 
     if review.accepted {
         break;
     }
 
-    draft = Writer.run({ draft, review });
+    draft = (Writer {}).run({ draft, review });
 }
 ```
 
@@ -274,8 +150,8 @@ runtime-valued item annotation:
 ```etas
 flow BuildReport(topic: string, token_budget: u64) -> Report {
     return @limits([Tokens(token_budget)]) {
-        let notes = Researcher.run(topic);
-        Writer.run(notes)
+        let notes = (Researcher {}).run(topic);
+        (Writer {}).run(notes)
     };
 }
 ```
@@ -295,27 +171,7 @@ native code; they are not advisory metadata that optimization may discard.
 | `Attempts(n)` | Maximum retry attempts under the retry/agent execution contract |
 | `Concurrency(n)` | Maximum active concurrent work under the structured-concurrency admission contract |
 
-Multiple limits are conjunctive. A loop may continue only while all declared limits still allow the next iteration or effect. If the same limit dimension appears more than once, the effective bound is the stricter one.
-
-```etas
-@limits([Iterations(20), Tokens(20_000)])
-for paper in papers {
-    summaries = summaries.push(Summarizer.run(paper));
-}
-```
-
-In this example, `Iterations(20)` caps the number of papers processed. The token budget is an additional constraint, not an alternative.
-
-Conceptually:
-
-```text
-continue =
-  condition_or_next_item_exists
-  && Iterations_remaining
-  && Tokens_remaining
-  && Cost_remaining
-  && WallTime_remaining
-```
+Multiple limits are conjunctive; duplicate dimensions use the stricter bound.
 
 | Limit Outcome | Control / Error Contract |
 |---|---|
@@ -323,7 +179,7 @@ continue =
 | `while` exhausts iterations while its condition remains true | End the bounded loop and report `Error<BudgetExceeded>` outside that loop's limit boundary. |
 | Tokens, context, cost, wall time or attempts exhausted | Stop admission in the scope owning the exhausted bound, cancel its unfinished work and finish bounded cleanup. Then report `Error<BudgetExceeded>.raise(...)` to the surviving enclosing computation. |
 | Handler placement | Handlers inside the exhausted scope cannot suppress its shutdown. An enclosing handler or `?` around the bounded computation may capture the delivered error; the ordinary single-Error rule still applies. |
-| Declaration limits | A flow/agent/tool declaration's limits enclose its body and trailing handler. Handle a failure of those limits at the call site; a trailing handler cannot revive its own declaration. |
+| Declaration limits | Flow/tool/method bounds enclose each invocation and trailing handler. Agent annotations are method defaults, not automatically one aggregate lifetime budget. Put an enclosing bound around construction and use for that purpose; children retain applicable parent accounts. Handle exhaustion outside the failed scope. |
 | Recovery | `Error.raise` returns `never`; recovery uses `finish` or Result matching, not resumption of exhausted work. Handling the error neither refunds usage nor widens an inherited limit. |
 | Error data versus budget state | An application may raise BudgetExceeded as ordinary error data; doing so does not change counters or cancel a scope. Only runtime enforcement establishes actual exhaustion before reporting the boundary error. |
 | Parent versus child | A child's own bound may fail while its parent remains live. Exhausting a shared parent bound ends the whole parent group, not merely one child. |
@@ -332,25 +188,9 @@ continue =
 | Hard termination | Forced shutdown, process death and unrecoverable host faults need not deliver a source Error or complete cleanup. They are not ordinary `Err` results. |
 | External actions | Completed or uncertain writes remain real. Budget failure is not rollback. |
 
-The compiler uses limits for static cost analysis and flow graph construction. The runtime enforces limits dynamically.
-
-Limits are primarily a reliability construct. They make non-deterministic agent execution bounded, resumable, and predictable. They also support safety by constraining high-impact operations, and they support optimization by giving the compiler and runtime explicit budgets for context slicing, retrieval planning, parallel scheduling, cheaper model selection, and early cancellation.
-
-Typical frameworks expose similar knobs as runtime configuration, for example max iterations, request timeout, max tokens, or retry counts on an agent executor, model client, graph node, or tool wrapper. Those knobs are useful, but they are usually scattered across host-language objects and callbacks. Etas treats limits as typed execution contracts in the flow graph:
-
-- the compiler can reject non-deterministic loops that have no statically visible bound;
-- effect analysis can check that model calls, tool calls, approvals, and memory API operations are covered by active limits;
-- exported flows and deployment manifests can report token, cost, wall-time, attempt, and iteration budgets before execution;
-- checkpoint/resume stores remaining budget, not just local variables, so retries do not silently reset the resource contract;
-- `join([...])` and other combinators can use budgets to cancel losing branches, cap fan-out, or choose sequential fallback when a parallel plan would exceed trace specs or runtime policy;
-- traces can explain why execution stopped: success, ordinary control flow, runtime-policy denial, or `BudgetExceeded`.
-
-In short, `@limits(...)` is a checked execution contract, not just a loop guard.
-Ordinary APIs such as `join(..., limits = [...])` and memory-selection
-`.limit(...)` remain library calls with their documented contracts; their names
-do not create new syntax or implicit authority.
-
----
+Library parameters such as `join(..., limits = [...])` and memory-selection
+`.limit(...)` retain their documented scope; their names are not syntax.
+Suspension/checkpoint restoration preserves remaining budgets.
 
 ## 2. Human-in-the-Loop
 
@@ -402,85 +242,21 @@ Each clause normalizes to local permissions for its operands and a typed
 `Before` constraint, following the [Trace Specs](05-type-system-and-errors.md#154-trace-specs)
 rules. Permissions do not remove the review or sanitization prerequisite.
 
-### 2.3 Human as a Typed Actor
-
-Humans can participate in protocols:
-
-```etas
-protocol ApprovalProtocol {
-    Agent -> Human: ProposedAction;
-    Human -> Agent: Approval | Rejection;
-}
-```
-
----
-
 ## 3. Protocol
 
-### 3.1 Motivation
-
-Multi-agent systems are not just collections of agents. They are communicating systems. Their communication should be typed.
-
-Etas distinguishes runtime conversation semantics from optional protocol checking:
-
-```text
-Message<T> / SessionConfig / Conversation = runtime support types for message flow, history, handoff, and context policy
-protocol                                = optional static contract for allowed communication order
-```
-
-Most MVP programs should use typed `Message<T>` values and session support types without declaring a protocol. A `protocol` declaration is for advanced decentralized or long-lived interactions where the order of messages itself needs static checking.
-
-Instead of arbitrary messages:
-
-```text
-string from A to B
-```
-
-Etas uses typed messages:
-
-```text
-Message<Payload>
-```
-
-Sender, receiver, session id, role, trust, and provenance are metadata on the runtime support value, not extra source-level keywords.
-
-### 3.2 Protocol Declaration
+`protocol` declares role/message exchanges. `Message<T>`, conversation history
+and session APIs remain ordinary support values and do not require a protocol.
 
 ```etas
 protocol ReviewLoop {
     Writer -> Reviewer: Draft;
     Reviewer -> Writer: Review;
-
-    choice {
-        accept:
-            Writer -> Chair: FinalDraft;
-
-        revise:
-            Writer -> Reviewer: RevisedDraft;
-    }
+    Writer -> Chair: FinalDraft;
 }
 ```
 
-### 3.3 Protocol Checking
-
-A flow can declare protocol conformance with `~`:
-
-```etas
-flow ReviseUntilAccept(draft: Draft) -> FinalDraft
-    ~ ReviewLoop
-{
-    ...
-}
-```
-
-The compiler checks:
-
-1. all required messages are sent;
-2. messages have the correct payload type;
-3. no agent receives a message that may never be sent;
-4. no illegal handoff occurs;
-5. branches respect the declared choices;
-6. the flow has no protocol-level deadlock;
-7. terminal states are reachable.
-
----
+A conforming computation uses `~ ReviewLoop`; its declared exchanges must
+respect payload types, participant roles and order. Protocol conformance does
+not grant authority, transfer session ownership or replace trace constraints.
+The source grammar here defines ordered exchanges, not an additional
+`choice` keyword or unrestricted session-type language.

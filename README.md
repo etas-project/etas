@@ -147,7 +147,7 @@ are optional here: the compiler infers them from calls such as `println`.
 - [Local checkout integration and verification](docs/development/local-checkouts.md)
 - [Examples](examples/)
 - [Language specification](docs/design/README.md)
-- [Building a standard library SDK and upgrading an existing lockfile](docs/design/15-package-management.md#71-using-the-installed-standard-library)
+- [Standard-library version and lockfile contract](docs/design/15-package-management.md#71-using-the-installed-standard-library)
 - [VS Code extension](https://github.com/etas-project/etas-ide)
 - [Etas Development Kit](https://github.com/etas-project/etas-edk)
 

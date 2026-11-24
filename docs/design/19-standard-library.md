@@ -1,7 +1,7 @@
 # Standard Library
 
 This chapter specifies public standard-library APIs. It follows the
-[five-layer model](01-overview.md#53-feature-map-by-layer): ordinary data
+[five-layer model](01-overview.md#4-language-and-library-boundaries): ordinary data
 algorithms are Etas flows, selected standard contracts have explicit compiler
 integration, and platform operations use the declared runtime substrate.
 An API specified here is a design target, not a claim that every backend or
@@ -24,34 +24,35 @@ assigns its contract to each name unless the behavior column distinguishes them.
 | Text and Unicode | `std.text`, `std.text.unicode`, `std.char`, `std.codec.text` | [Section 1](#1-strings-and-text-apis) |
 | Tasks and scheduling | `std.task`, `std.task.scheduler` | [Section 2](#2-task-and-scheduling-apis) |
 | JSON | `std.json` | [Section 3](#3-json-values) |
+| Active agents and lifecycle | `std.agent` | [Section 4.5](#45-active-agent-contracts) |
 | Model steps and native tool dispatch | `std.agent`, `std.agent.conversation`, `std.tool` | [Section 4](#4-single-step-agent-interaction) |
 | Numeric helpers | `std.math` | [Section 5](#5-numeric-helpers) |
 | Agent groups | `std.agent.group` | [Section 6](#6-round-robin-groups) |
 | Logical trace stages | `std.runtime.trace` | [Section 7](#7-virtual-trace-stages) |
 | Sanitization and release | `std.security.declassify` | [Section 8](#8-sanitization-and-declassification) |
-| Containers, equality, hashing and ordering | `std.collections` | [Section 10](#10-collections-and-key-contracts) |
-| Iteration and callback consumers | `std.collections` | [Section 11](#11-iteration-and-effectful-consumption) |
-| Sequence algorithms | `std.collections` | [Section 12](#12-generic-sequence-algorithms) |
-| Optional values and results | `std.option`, `std.result` | [Section 13](#13-option-and-result-apis) |
+| Containers, equality, hashing and ordering | `std.collections` | [Section 9](#9-collections-and-key-contracts) |
+| Iteration and callback consumers | `std.collections` | [Section 10](#10-iteration-and-effectful-consumption) |
+| Sequence algorithms | `std.collections` | [Section 11](#11-generic-sequence-algorithms) |
+| Optional values and results | `std.option`, `std.result` | [Section 12](#12-option-and-result-apis) |
 | Console I/O | `std.io` | [Console API table](03-agents-tools-prompts-memory.md#24-standard-io) |
 | TCP, TLS and byte streams | `std.net.tcp`, `std.tls`, `std.stream` | [Substrate API tables](06-effect-system-and-inference.md#11-minimal-standard-actions) |
 | Files, wire HTTP, codecs, secrets and browser transport | `std.fs`, `std.http.codec`, `std.codec.text`, `std.secret`, `std.crypto`, `std.browser.protocol` | [Substrate API tables](06-effect-system-and-inference.md#11-minimal-standard-actions) |
 | Prompt construction and encoding | `std.agent.prompt`, `std.agent.schema` | [Prompt values](03-agents-tools-prompts-memory.md#4-prompt-values) |
-| Session history and context publication | `std.agent.session` | [Section 16.4](#164-session-history-and-context-publication) |
-| Persistent stores | `std.memory` | [Section 16](#16-persistent-stores-and-session-publication) |
-| Concurrent combinators | `std.task` | [Full signatures and boundary cases](16-concurrency.md#4-standard-combinators) |
+| Session history and context publication | `std.agent.session` | [Section 15.4](#154-session-history-and-context-publication) |
+| Persistent stores | `std.memory` | [Section 15](#15-persistent-stores-and-session-publication) |
+| Concurrent combinators | `std.task` | [Full signatures and boundary cases](16-concurrency.md#3-standard-combinators) |
 | Checked code generation | `std.compiler` | [Compiler API table](18-reflection-and-checked-code-generation.md#61-standard-library-surface) |
-| Commands and sandbox profiles | `std.command`, `std.host.command`, `std.host.sandbox` | [Command sandboxing](06-effect-system-and-inference.md#3-command-sandboxing); lifecycle gaps in section 17 |
-| Time and randomness | `std.runtime.time`, `std.random` | [Section 14](#14-time-and-randomness) |
-| Resource ownership and cleanup | `std.resource`, stream/transport/filesystem APIs | [Section 15](#15-managed-resource-lifecycles) |
+| Commands and sandbox profiles | `std.command`, `std.host.command`, `std.host.sandbox` | [Command sandboxing](06-effect-system-and-inference.md#3-command-sandboxing) |
+| Time and randomness | `std.runtime.time`, `std.random` | [Section 13](#13-time-and-randomness) |
+| Resource ownership and cleanup | `std.resource`, stream/transport/filesystem APIs | [Section 14](#14-managed-resource-lifecycles) |
 | Incremental builders | `std.text.TextBuilder`, `std.bytes.BytesBuilder` | [Section 1.13](#113-incremental-text-and-byte-builders) |
-| Bit sets and bounded deques | `std.collections` | [Section 10.9](#109-bit-sets), [section 10.10](#1010-bounded-deques) |
-| Grouping, counting and Top-K | `std.collections` | [Section 12.2](#122-grouping-counting-and-selection) |
-| Effectful pull sources | `std.stream` | [Section 15.4](#154-effectful-pull-sources) |
-| Storage/query encoding | `std.memory` | [Section 16.5](#165-storage-encoding-and-query-contracts) |
+| Bit sets and bounded deques | `std.collections` | [Section 9.9](#99-bit-sets), [section 9.10](#910-bounded-deques) |
+| Grouping, counting and Top-K | `std.collections` | [Section 11.2](#112-grouping-counting-and-selection) |
+| Effectful pull sources | `std.stream` | [Section 14.4](#144-effectful-pull-sources) |
+| Storage/query encoding | `std.memory` | [Section 15.5](#155-storage-encoding-and-query-contracts) |
 
-An index entry is not evidence of API completeness. [Section 17](#17-api-coverage-and-open-contracts)
-separates specified interfaces from contracts that still need design decisions.
+An index entry is not evidence of API completeness. [Section 16](#16-scope-boundaries)
+lists capabilities not implied by these APIs.
 
 ## 1. Strings And Text APIs
 
@@ -390,7 +391,7 @@ let text = output.build();
 
 These APIs specify structured task execution and handler-based scheduling.
 Their scope, cancellation, and continuation semantics are defined in
-[Concurrency](16-concurrency.md#121-handler-based-scheduling).
+[Concurrency](16-concurrency.md#111-handler-based-scheduling).
 
 ### 2.1 Standard Types And Actions
 
@@ -455,7 +456,7 @@ Default handlers cover ordinary task use; business code need not handle
 | Custom handler | May change scheduling policy, not lifetime, authority, budgets, tracing or cleanup obligations. |
 | Waiting substrate | Non-blocking completion or managed blocking offload. `start` alone cannot turn a blocking host call into asynchronous I/O or authorize forged completion. |
 
-See the [complete scheduling example](16-concurrency.md#126-complete-example)
+See the [complete scheduling example](16-concurrency.md#116-complete-example)
 for `as k`, `start`, `await`, and handler transfer used together.
 
 ### 2.4 Scheduler Spec And Default Value
@@ -553,12 +554,7 @@ may still customize `Async` handling through the same checked transfer APIs.
 It cannot detach work, forge results, or bypass the selected scope's ownership.
 The handler value captures the handle's lifetime and cannot escape that owner.
 
-| Layer | Responsibility |
-|---|---|
-| `Scheduler` implementation | Select a ready entry and maintain private value-semantic policy state. It may not suspend, request external authority, or operate on raw continuations. |
-| `std.task` / `std.task.scheduler` | Own the default value and common handlers; establish the selected policy's run, install handlers, coordinate structured completion/failure, and invoke checked execution primitives. |
-| Runtime primitives | Own live frames/continuations and protected queue/wait registrations; validate owner, readiness, result types, one-shot transfer, wakeup/cancellation races, and cleanup. Supply non-blocking I/O completion or managed offload. |
-| Application | Choose an implementation when needed; write ordinary jobs and optional scoped handlers. It does not import active global queue state. |
+
 
 | Dispatch Event | Required Behavior |
 |---|---|
@@ -628,7 +624,9 @@ using step, checked tool invocation, and conversation assembly.
 
 The public wrapper is `std.agent.step`. `std.agent` exports the transparent
 protocol types below; `std.tool.reference` and `std.tool.invoke` operate on those
-same types. These are std types and APIs, not new language keywords. They do not
+same types. Bound member-tool references retain their protected receiver
+instance; transparent `ToolRef` fields cannot select or forge that receiver.
+These are std types and APIs, not new language keywords. They do not
 require opaque checked-call wrappers, execution receipts, or a second JSON type.
 The existing `Conversation`, `Prompt`, and compiler-derived `Schema<O>` contracts
 are reused rather than replaced by a new session or schema abstraction.
@@ -793,77 +791,42 @@ contract or report an uncertain outcome. This is not a promise of exactly-once
 external effects. Multiple calls in one model turn are not automatically safe
 to run in parallel; normal dependency, policy-order, and resource checks apply.
 
-### 4.5 Complete Controller Example
+### 4.5 Active Agent Contracts
 
-This example replaces the full-loop handler with an explicit, bounded controller.
-Its only exposed tool is a pure Etas tool, so the example introduces no external
-authority actions or application-specific error types.
+`std.agent` exports these specs; the prelude re-exports `Active` and
+`Autonomous`. Their runtime contracts are compiler-recognized, not privileges
+obtained by declaring similarly named specs.
 
 ```etas
-import std.agent.{StepDecision, ToolResult};
-import std.agent.conversation;
-import std.runtime.effects.Agentic;
-import std.tool;
-
-tool uppercase(text: string) -> string ![] {
-    return std.text.uppercase(text);
-}
-
-@model("configured-model")
-@tools([uppercase])
-agent Writer(input: string) -> string {
-    let prompt = Prompt.new()
-        .system(Trusted("Use uppercase when needed, then return the final text."))
-        .data(input);
-    return perform infer<string>(prompt);
-}
-
-flow RunControlled(input: string) -> string {
-    handle Writer.run(input) with {
-        Agentic.infer<Writer.run, string>(prompt, schema) => {
-            var history = conversation.from_prompt(prompt);
-
-            for _ in [0, 8) {
-                let step = std.agent.step(history, schema);
-                history = match conversation.append_step(history, step) {
-                    Ok(next) => next,
-                    Err(error) => abort(error.message),
-                };
-
-                match step.decision {
-                    Final(answer) => {
-                        resume answer;
-                    },
-                    CallTools(calls) => {
-                        var results: Array<ToolResult<Writer.run>> = [];
-                        for call in calls {
-                            results = results.push(tool.invoke(call));
-                        }
-                        history = match conversation.append_results(history, results) {
-                            Ok(next) => next,
-                            Err(error) => abort(error.message),
-                        };
-                    },
-                    Stopped(_) => {
-                        abort("Model step stopped without a final answer");
-                    },
-                };
-            }
-
-            abort("Model step limit reached");
-        }
-    }
+public spec Active;
+public spec Autonomous ~ Active {
+    flow main(var self) -> unit;
 }
 ```
 
-`Final`, `CallTools`, and `Stopped` are the variants of the imported
-`StepDecision`. The handler resumes its original inference request at most once;
-the loop performs separate step requests, not multi-shot resumption. The bound
-of eight turns is controller logic, not a reset of inherited token, cost, or
-wall-time limits. This deliberately fail-fast example aborts on a stopped turn;
-an application may instead explicitly repair context, delegate, or return a
-typed failure. Such choices remain ordinary Etas code, not hidden behavior of
-`step`.
+| Contract | Behavior |
+|---|---|
+| `Active` | Evidence generated for nominal agent types only; preserved through role entailment and existential erasure. |
+| `Autonomous` | Start one automatic `main` request after initialization; its effects are inferred/retained in creation summaries. Owner cancellation stops and joins it. No automatic restart. |
+| `A { fields }` | Managed construction; default scheduling handles `Agentic.create<A>`, not user dependency actions. Complete supplied/injected fields before publishing/Autonomous startup; fresh field children belong here, existing references do not. |
+| `a.method(args)` | Typed mailbox request, default-handled `Agentic.call<A.method>` event; preserves method effects and caller context. |
+| `std.task.start/await` | Existing API for asynchronous requests and typed replies; no new send/receive keyword. |
+| Member tool dispatch | Bind the executing instance and a read-only request snapshot before presenting the argument schema. No update receiver; no self-mailbox deadlock. |
+| Scoped references | May appear in records, arrays, roles and closures; cannot outlive owner. No automatic persistence, source reflection of live state, or serialization to a model. |
+| Supervision | Ordinary flows select retry, reconstruction and durable recovery; default runtime behavior is failure propagation and cleanup, not hidden restart. |
+
+Field [`@inject`](02-general-programming-constructs.md#72-constructor-injection)
+is compiler-recognized constructor sugar, not a std service-container API.
+Packages define ordinary dependency actions/handlers; there is no implicit
+registration, getter resolution or permission grant.
+
+A long-running updating `main` holds the instance's update turn; other updating
+requests wait. Snapshot queries can proceed. Event-driven services needing
+short update turns should have a supervising task issue separate requests,
+rather than hiding a permanent update inside `main`.
+Full state, cancellation and handler rules are in
+[Agent Semantics](03-agents-tools-prompts-memory.md#1-agent) and
+[Concurrency](16-concurrency.md#117-active-agent-requests).
 
 ## 5. Numeric Helpers
 
@@ -891,7 +854,7 @@ public spec Number;
 | Generic operations | Same-type comparisons and supported binary arithmetic. Narrower operations need their own primitive evidence; `Number` does not make unsigned unary negation valid. |
 | Operands/results | Same concrete type and width; normal literal inference, explicit numeric conversions. |
 | Nominal wrappers | Use declared conversion or their own helper; strings, bools, collections and unconstrained generics do not satisfy `Number`. |
-| Arity | `min`/`max` are binary. Iterator reductions in section 11 define empty-input behavior separately. |
+| Arity | `min`/`max` are binary. Iterator reductions in section 10 define empty-input behavior separately. |
 
 ### 5.2 Results And Edge Cases
 
@@ -974,7 +937,7 @@ convert through a different public width or read the host's ambient rounding mod
 | `pow<F ~ Float>(base: F, exponent: F)` | `F` | Real power: negative finite base with noninteger finite exponent is NaN; integer exponent parity controls its sign. |
 | `hypot<F ~ Float>(x: F, y: F)` | `F` | Nonnegative Euclidean magnitude; avoid intermediate square overflow when the result is representable. Infinity dominates NaN. |
 | `copysign<F ~ Float>(magnitude: F, sign: F)` | `F` | Copy only the sign bit, preserving magnitude/payload bits. |
-| `total_cmp<F ~ Float>(a: F, b: F)` | `i32` | The bit-total `Order` rule in section 10.2, not numeric `min`/`max` selection. |
+| `total_cmp<F ~ Float>(a: F, b: F)` | `i32` | The bit-total `Order` rule in section 9.2, not numeric `min`/`max` selection. |
 | `pi<F ~ Float>()`, `tau<F ~ Float>()`, `e<F ~ Float>()`, `epsilon<F ~ Float>()` | `F` | Width-specific constants; epsilon is the gap from one to the next larger representable value. |
 
 | Floating Boundary | Rule |
@@ -1136,34 +1099,9 @@ protected release check before any secret access or result-wrapper creation.
 | Protected operations | Raw access and release-provenance construction require protected bindings; casts/wrapper constructors cannot discard nested secrecy or forge release. |
 | Limits | Inherit budgets/cancellation. Identity release still requires an explicit strategy and ordinary authorization. |
 
-## 9. Implementation Conformance
+## 9. Collections And Key Contracts
 
-| Ownership | Rule |
-|---|---|
-| API contract | All supported execution paths implement the same specified behavior. Unsupported paths report a diagnostic rather than silently selecting another implementation. |
-| Etas source | Ordinary flows, enums, records and policy bodies belong in `etas_std/library/std`. |
-| Primitive bindings | Own primitive arithmetic, opaque storage, secret authority and protected provenance operations. |
-
-### 9.1 Acceptance Evidence
-
-API availability belongs in the implementation's test matrix. Representation
-changes must preserve the specified equality, error, ownership and cost
-contracts; they do not justify changing public behavior.
-
-| Area | Required Acceptance Evidence |
-|---|---|
-| Container invariants | Reject external metadata writes and forged views; `len`, emptiness, lookup and iteration agree after every update. |
-| Equality/hash/order | Primitive and nominal keys, collisions, equal records with different construction order, differing map/set insertion orders, signed zeros/NaNs, lawful custom comparators and stable duplicate behavior. |
-| Snapshot preservation | Retain old values, slices and iterators while updating/removing/clearing current values; verify old observations and nested payload sharing remain correct. |
-| Cost and storage | Measure comparisons, node/header copies, allocations and retained slots separately at growing sizes, for both reusable backing and shared snapshots. Include array draining, map construction, ordered deletion and long-lived queue churn. |
-| Iterator consumption | Empty/exhausted iterators, repeated use, adapter composition, zero-sized chunks, short circuiting and bounded lazy allocation. |
-| Effects and capture | Pure lazy adapters reject state-dependent/effectful callbacks; consumers propagate callback effects/actions/capture dependencies across source imports and package metadata. |
-| Failure behavior | Invalid indexes use the specified error effect; callback failure stops later work without rolling back completed external actions; `unwrap` terminates rather than silently supplying a value. |
-| Installed delivery | Build and run against the installed source SDK, including separately compiled imports. Testing a different backend alone does not certify source SDK behavior or performance. |
-
-## 10. Collections And Key Contracts
-
-### 10.1 Shared Rules And Cost Model
+### 9.1 Shared Rules And Cost Model
 
 These are standard-library types and flows, not additional language keywords.
 The [literal, indexing and value-semantics rules](02-general-programming-constructs.md#7-composite-types)
@@ -1196,7 +1134,7 @@ Amortized queue/deque bounds apply to a linear update history; repeatedly
 branching from the same old version must be measured separately. Read-only
 queries must not copy a complete container.
 
-### 10.2 Equality, Hashing And Order
+### 9.2 Equality, Hashing And Order
 
 | `std.collections` Contract / API | Result | Required Behavior |
 |---|---|---|
@@ -1221,7 +1159,7 @@ queries must not copy a complete container.
 | Reproducibility | Equal hashes are required within the same algorithm/version and initial state, not across releases. |
 | Container hashing | Seeds cannot change iteration or logical equality; map/set hashing is independent of insertion order and private hasher. |
 
-### 10.3 Arrays, Lists And Slices
+### 9.3 Arrays, Lists And Slices
 
 Unless a row shows an effect, its escaping row is `![]`. `from_iter` consumes
 the pure iterator in order without first making a second complete input copy.
@@ -1271,14 +1209,14 @@ binding afterwards cannot change the view. Neither `.length` assignment nor a
 public constructor may forge a view beyond its source bounds. Costs of releasing
 an unshared value, including `clear`, may be linear in the released storage.
 
-### 10.4 Maps And Sets
+### 9.4 Maps And Sets
 
 `Map<K, V>` keys and `Set<T>` elements require the standard `Hash` contract,
 which includes `Eq`. Literal inference retains these requirements; unconstrained
 generic keys do not bypass them. Values need not be hashable merely to be stored.
 `new()` uses `Hasher.new()`; `with_hasher` stores an independent base state and
 starts each key hash from that state. Tables give expected hash-container costs,
-subject to section 10.1's collision and retained-snapshot qualifications.
+subject to section 9.1's collision and retained-snapshot qualifications.
 
 | Owner / API | Return Type | Behavior And Cost |
 |---|---|---|
@@ -1313,7 +1251,7 @@ not reorder surviving entries. Replacing an equal key preserves the stored key
 representative. A failed update/merge callback returns no updated container;
 external actions already completed by the callback are not rolled back.
 
-### 10.5 Stacks, Queues And Deques
+### 9.5 Stacks, Queues And Deques
 
 | Owner / API | Return Type | Behavior And Cost |
 |---|---|---|
@@ -1335,7 +1273,7 @@ the same entire queue/deque on every read. These APIs do not create synchronized
 shared queues; task-safe shared resources require their explicit ownership and
 synchronization contract.
 
-### 10.6 Ordered Maps And Sets
+### 9.6 Ordered Maps And Sets
 
 Default construction requires `K ~ Order` / `T ~ Order`. The existing
 `new(compare: (K, K) -> i32 ![])` or element-equivalent overload selects a
@@ -1378,7 +1316,7 @@ the language's `Range<I>` requires `Index`, whereas ordered keys may be strings
 or other ordered data. Shape balancing and deletion must retain height/index
 invariants in both current and previously shared versions.
 
-### 10.7 Priority Queues
+### 9.7 Priority Queues
 
 Default construction requires `P ~ Order`; a comparator overload accepts
 `(P, P) -> i32 ![]`. Greater priority is popped first. Equal priorities are
@@ -1408,7 +1346,7 @@ Retained old snapshots account for their own reachable storage, not a leak in
 the current queue. Native heap comparison counts alone do not establish these
 storage, copying or allocation contracts for the source SDK.
 
-### 10.8 Bytes
+### 9.8 Bytes
 
 `bytes` is the existing immutable byte-sequence type, not a new collection
 keyword. These free flows belong to `std.bytes`; existing receiver `len`,
@@ -1433,7 +1371,7 @@ silently decode text or normalize request bodies.
 | `find(value: bytes, pattern: bytes)`, `rfind(value: bytes, pattern: bytes)` | `Option<usize>` | First/last starting byte offset; absent is `None`. Empty pattern matches at `0` / `len(value)` respectively. |
 | `contains(value: bytes, pattern: bytes)` | `bool` | Equivalent to `find(...).is_some()`; no text decoding. |
 
-### 10.9 Bit Sets
+### 9.9 Bit Sets
 
 `std.collections.BitSet` represents a fixed universe [0, size), with immutable
 value semantics. Let w be its number of storage words and k its set-bit count.
@@ -1453,7 +1391,7 @@ value semantics. Let w be its number of storage words and k its set-bit count.
 Eq/Hash include both universe length and membership, never padding or storage
 capacity. This type is not implicitly interchangeable with Set<usize>.
 
-### 10.10 Bounded Deques
+### 9.10 Bounded Deques
 
 `std.collections.BoundedDeque<T>` is a value container, not a channel.
 `OverflowPolicy` is the enum `Reject, DropFront, DropBack`.
@@ -1471,9 +1409,9 @@ Deque amortized/COW costs apply. Eq/Hash require corresponding T evidence and
 include capacity, overflow policy and logical sequence. Overflow never blocks
 a task or silently changes policy; backpressure belongs to stream/synchronization.
 
-## 11. Iteration And Effectful Consumption
+## 10. Iteration And Effectful Consumption
 
-### 11.1 Pure Lazy Iterator Contract
+### 10.1 Pure Lazy Iterator Contract
 
 `Iterable<T>.iter(self) -> Iter<T> ![]` produces a pure lazy snapshot.
 `Iter<T>`'s step has type `() -> Option<(T, Iter<T>)> ![]`: `None` is exhausted;
@@ -1484,7 +1422,7 @@ requirement beyond an empty escaping effect row.
 
 The table preserves `Iter<T>`'s single type parameter. Pure adapters delay
 their callbacks until consumption; they do not allocate a complete result on
-construction. Effectful callbacks instead use the consumers in section 11.2,
+construction. Effectful callbacks instead use the consumers in section 10.2,
 so no callback effect is silently erased or attributed to adapter construction.
 Standard producers preserve finiteness when their inputs are finite; inherited
 limits still apply during iteration and callback execution.
@@ -1528,14 +1466,14 @@ public enum CollectionError {
 
 | Lazy Adapter Rule | Requirement |
 |---|---|
-| Callbacks | Deterministic; no mutable captured-state observation or observable actions, including default-handled actions. Stateful/effectful callbacks use section 11.2 consumers. |
+| Callbacks | Deterministic; no mutable captured-state observation or observable actions, including default-handled actions. Stateful/effectful callbacks use section 10.2 consumers. |
 | Storage | Constant cursor state plus retained input; `flat_map` also keeps its active inner iterator. `chunks`/`windows` may buffer up to `size` items, not all consumed prefixes. |
 | Output snapshots | Previously emitted arrays remain unchanged. Copying a window can cost `O(size)`; overlapping output does not promise linear total copying. |
 | Failures | Validate zero sizes/steps at construction. Callback/iteration execution still obeys inherited limits. |
 
 An input's documented snapshot/view may still retain its source allocation.
 
-### 11.2 Consumers And Callback Effects
+### 10.2 Consumers And Callback Effects
 
 `effect E` uses existing effect-row polymorphism, not a new annotation or
 generic-default syntax. Consumers execute callbacks sequentially in iterator
@@ -1589,9 +1527,9 @@ The returned value is an array. Its construction executes the callbacks; the
 flow infers the callback's residual `Error<IOError>` and retains the requested
 `Console.stdout_write` actions even though the standard console handler is used.
 
-## 12. Generic Sequence Algorithms
+## 11. Generic Sequence Algorithms
 
-### 12.1 Sorting, Search And Basic Transforms
+### 11.1 Sorting, Search And Basic Transforms
 
 The following free flows belong to `std.collections`. They operate on arrays;
 other containers use `iter().collect()` or a slice's `to_array()` explicitly.
@@ -1617,14 +1555,14 @@ mutable-reference APIs.
 
 | Algorithm Boundary | Rule |
 |---|---|
-| Comparators | Section 10.2 applies; call order/count is algorithm-dependent. No logging, approvals, model calls or mutable-counter updates. |
+| Comparators | Section 9.2 applies; call order/count is algorithm-dependent. No logging, approvals, model calls or mutable-counter updates. |
 | Effectful predicate | `partition` explicitly supports callback effects and preserves input order within each output. |
 | Storage | Sorting may use `O(n)` auxiliary storage; original values remain unchanged. |
 | Search / merge precondition | Inputs use the same comparator order; no implicit sorting. Search uses comparator equivalence, not separate `==`. |
 | Invalid precondition/law | No meaningful search-order guarantee, but no unsafe access or authority bypass. |
 | Binary-search `Err` | Insertion position is ordinary result data, not `Error<usize>`; no postfix `?` is needed. |
 
-### 12.2 Grouping, Counting And Selection
+### 11.2 Grouping, Counting And Selection
 
 These flows also belong to `std.collections`. They return existing containers;
 no Counter/MultiMap language construct or implicit shared mutation is needed.
@@ -1656,7 +1594,7 @@ no Counter/MultiMap language construct or implicit shared mutation is needed.
 | Infinite input | Top-K/global grouping need exhaustion; lazy grouping may never finish an infinite equal-key run. Apply take or a bounded source consumer explicitly. |
 | Value semantics | No in-place mutation visible through another value; reuse/COW is an implementation choice. Existing snapshot/copy costs still apply. |
 
-## 13. Option And Result APIs
+## 12. Option And Result APIs
 
 These are ordinary value combinators in `std.option` / `std.result`. They do
 not redefine `?`, whose sole error-capture rule remains `Error<E>` to
@@ -1697,9 +1635,9 @@ callback is non-suspending. Lazy fallback APIs must not evaluate the unselected
 branch, and must retain its checked may-effect upper bound in the callable's
 contract without pretending that it executed.
 
-## 14. Time And Randomness
+## 13. Time And Randomness
 
-### 14.1 Time Values And Arithmetic
+### 13.1 Time Values And Arithmetic
 
 `std.runtime.time` is the canonical module; clocks/deadlines are not calendar
 or timezone APIs. Pure conversions return Result data; observed time and waits
@@ -1734,7 +1672,7 @@ use Clock actions. Existing `WallTime(Duration)` limits use the same Duration.
 | Replay | Record clock observations and wake decisions; replay uses them, not current wall time. A saved wall timestamp cannot recreate a live Instant. |
 | Precision | Millisecond API precision does not promise millisecond scheduler latency. Calendar parsing, timezone and business-day arithmetic belong in separate packages. |
 
-### 14.2 Seeded And Secure Randomness
+### 13.2 Seeded And Secure Randomness
 
 `std.random` separates deterministic value computation from external entropy.
 `Rng` is a value-semantic, non-cryptographic generator; copying it copies its
@@ -1765,9 +1703,9 @@ sequence position, not a shared mutable source.
 | Trace / replay | Entropy is a nondeterministic requested action. Sensitive payload capture follows protected trace storage; replay needs retained authorized bytes or reports unavailable replay, never silently draws new bytes. |
 | Bounds | All draws/allocations obey inherited limits; rejection sampling is not exempt from cancellation/budget checks. |
 
-## 15. Managed Resource Lifecycles
+## 14. Managed Resource Lifecycles
 
-### 15.1 Scope And Cleanup
+### 14.1 Scope And Cleanup
 
 `std.resource.scope` exposes the cleanup contract already required by managed
 task frames. It is a compiler-recognized std flow, not a `using`/`finally`
@@ -1794,7 +1732,7 @@ keyword or a general shared-reference feature.
 | Limits | Cleanup has a bounded runtime cleanup allowance, not a fresh application budget. Forced process termination cannot guarantee remote cleanup or durable completion. |
 | Extension | Standard bindings register resource release primitives. This API does not allow an arbitrary library to forge ownership/evidence by naming a method `close`. |
 
-### 15.2 Stream And Transport Values
+### 14.2 Stream And Transport Values
 
 | Type / Configuration | Public Contract |
 |---|---|
@@ -1836,7 +1774,7 @@ unchecked readable/writable cast is introduced.
 | Cancellation | Release admission slots on every unwind path. A local typed error cannot clear cancellation of the enclosing scope. |
 | Analysis / ordering | Known conflicting calls must not be parallelized automatically. Explicit overlapping calls retain the dynamic guard; the winning admission/order is trace-visible. Different resources are not serialized globally. |
 
-### 15.3 Filesystem Lifecycle And Bounded Operations
+### 14.3 Filesystem Lifecycle And Bounded Operations
 
 `std.io.IOError` is the shared nominal error enum, re-exported by `std.fs`
 and `std.runtime.error`. Independent same-named error types are not equivalent.
@@ -1845,7 +1783,7 @@ and `std.runtime.error`. Independent same-named error types are not equivalent.
 |---|---|
 | `IOError` | Existing Eof/Interrupted/PermissionDenied/InvalidUtf8/Host plus `NotFound`, `AlreadyExists`, `InvalidInput`, `NotDirectory`, `IsDirectory`, `DirectoryNotEmpty`, `Closed`, `TimedOut`, `LimitExceeded`, `Unsupported`. |
 | `FileMode` | Enum: `Read`, `WriteTruncate`, `Append`, `ReadWrite`, `CreateNew`. |
-| `FileStream<R>` | Opaque region-indexed handle satisfying `ByteStream`; registration/aliases follow section 15.1. |
+| `FileStream<R>` | Opaque region-indexed handle satisfying `ByteStream`; registration/aliases follow section 14.1. |
 | `FsStat` | Record `{ is_file: bool, is_dir: bool, len: u64 }`; flags describe the resolved target and len is file bytes. Directory length is zero, not a portable entry count. |
 
 All following signatures use `R ~ std.fs.Region`, inherit path-escape guards,
@@ -1873,7 +1811,7 @@ and leave `Error<IOError>` after standard handling.
 | Region provenance | Stream reads/writes over FileStream remain covered by the originating FileIO region; erasing its concrete type cannot broaden authority. |
 
 
-### 15.4 Effectful Pull Sources
+### 14.4 Effectful Pull Sources
 
 `std.stream.Source<T, E>` is a managed, single-cursor resource, not the
 repeatable pure `Iter<T>`. E is its latent effect row, including release work.
@@ -1929,9 +1867,9 @@ This transfers and closes the stream, returns a bounded prefix, and infers
 StreamError/SourceError plus requested read/close metadata. It does not turn
 transport failure into EOF or use `?` to unwrap a Result.
 
-## 16. Persistent Stores And Session Publication
+## 15. Persistent Stores And Session Publication
 
-### 16.1 Shared Storage Types
+### 15.1 Shared Storage Types
 
 `std.memory` owns the types below. Public records are data; constructing a
 version, cursor, operation reference or receipt never creates backend evidence.
@@ -1965,12 +1903,12 @@ The backend validates binding, generation, schema and retained operation state.
 | `unavailable`, `timed_out`, `host` | Backend failure; use an uncertain outcome instead if commitment cannot be ruled out. |
 | `limit_exceeded`, `measure_unavailable` | Explicit API data bound exceeded or required selection measurement unavailable. Exhausting an enclosing execution budget instead ends that scope and delivers BudgetExceeded outside its boundary; it is not a StorageError. |
 
-### 16.2 Store APIs
+### 15.2 Store APIs
 
 In this table `R` denotes the receiver's checked persistent place, not a new
 type argument. Standard handlers leave the shown error rows while requested
 Memory actions retain that place. K must satisfy `StorageKey`, V must satisfy
-`StorageData`, and both need the codecs in section 16.5. Encoding failure is not
+`StorageData`, and both need the codecs in section 15.5. Encoding failure is not
 silently converted into missing data.
 
 | API | Result | Requested Action / Contract |
@@ -2010,7 +1948,7 @@ silently converted into missing data.
 | Query ordering | Backend-selected but stable for a valid scan snapshot; not Map insertion order. Unsupported snapshot retention returns a clear error, not fabricated consistency. |
 | Multi-store transactions | No portable API is approved here. A `MemoryTransaction` implementation type alone does not establish atomicity, callback restrictions or retry semantics. |
 
-### 16.3 Deferred Selections
+### 15.3 Deferred Selections
 
 `MemorySelection<V>` is a compiler-known deferred query value, not a pure
 `Iter<V>`. It retains store identity, query encoding, limits and latent
@@ -2026,7 +1964,7 @@ requested/error summaries through captures, imports and prompt encoding.
 | `collect()` | `Array<V> ![Error<StorageError>]` | Execute bounded retrieval, recording `Memory.read<R>`. Each call is a new observation unless explicitly replayed; no hidden cross-call cache. |
 | Prompt encoding of a selection | Inferred read/error summary | Materialize under the prompt's resolved measurement context. Missing tokenizer/measurement gives measure_unavailable; no implicit inference or summary generation. |
 
-### 16.4 Session History And Context Publication
+### 15.4 Session History And Context Publication
 
 `std.agent.session` reuses the storage outcome/error types above.
 
@@ -2040,9 +1978,12 @@ requested/error summaries through captures, imports and prompt encoding.
 | `SessionHistoryPage` | Record `{ fence: SessionHistoryFence, messages: Array<Message<JsonValue>>, published_context: Option<SessionPublishedContext>, summary: Option<SessionSummary>, cursor: Option<SessionCursor> }`. |
 | `SessionContextReceipt` | Record `{ operation: StorageOperationRef, session: SessionId, generation: string, context_version: u64, durability: StorageDurability }`. |
 | `SessionContextRejection` | Enum `StaleHistory`, `Rejected(StorageError)`. |
+| `SessionLease` | Scoped, non-copyable exclusive session-routing token. Checked moves and backend generation validation prevent simultaneous owners; not an authority grant or ordinary SessionConfig record. |
 
 | API | Result | Requested Action / Contract |
 |---|---|---|
+| `with_lease<R, effect E>(config: SessionConfig, body: SessionLease -> R ![E])` | `R ![E, Error<StorageError>]` | `Session.acquire/release`; acquire one exclusive routing lease, run body, release on completion/unwind. Lease cannot escape; existing grants still required. |
+| `handoff<R, effect E>(lease: SessionLease, next: SessionLease -> R ![E])` | `R ![E, Error<StorageError>]` | `Session.handoff`; consume the old generation, invoke next with its sole successor. May route that successor to an agent; no old-owner reuse. |
 | `history_page(config: SessionConfig, cursor: Option<SessionCursor>, page_size: u32)` | `SessionHistoryPage ![Error<StorageError>]` | `Session.read`; positive bounded page, no implicit session creation or model call. |
 | `Conversation.load(config: SessionConfig)` | `Conversation ![Error<StorageError>]` | Load selected history/published context; preserve fence and cursor. Do not catch storage failure and silently abort or create an empty conversation. |
 | `SessionConfig.prepare_context(fence: SessionHistoryFence, content: SessionContextContent)` | `StorageOperationRef ![Error<StorageError>]` | Bind exact config/fence/content to an operation; no publication or generated summary. |
@@ -2051,6 +1992,8 @@ requested/error summaries through captures, imports and prompt encoding.
 
 | Session Boundary | Rule |
 |---|---|
+| Lease failure | Confirmed transfer precedes successor invocation. Unwind releases or revokes the lease; uncertain backend outcomes fence use until reconciled or safely expired. Never assume release succeeded or repeat a handoff blindly. Failed transfer raises a non-resumable storage error. |
+| Lease scope | Standard move/escape checking follows lease values through methods and containers. Ordinary session/message arguments remain copyable; passing them alone is not exclusive handoff. Lease ownership does not alter agent-instance ownership or authorize session reads/writes. |
 | Effect coverage | `Session extends Memory`; read/reconcile require history-read authority, publication requires context-write authority. Concrete session ids are runtime payloads, not arbitrary static type selectors. |
 | Cursor / fence | A changed generation or incompatible history invalidates it; stale publication never overwrites newer context. |
 | Retry | Reuse the exact operation and request. Changed content/fence requires a new prepared operation; unresolved/expired evidence is not a reason to blindly resend. |
@@ -2058,7 +2001,7 @@ requested/error summaries through captures, imports and prompt encoding.
 | Trust / limits | Provenance, nested secrecy, admission limits and cancellation remain checked; a public receipt record cannot manufacture backend confirmation. |
 
 
-### 16.5 Storage Encoding And Query Contracts
+### 15.5 Storage Encoding And Query Contracts
 
 These are standard data/spec APIs, not a universal serialization keyword.
 Custom codecs are Etas values; they cannot grant resource access or export
@@ -2093,66 +2036,19 @@ protected values. A store view keeps its original resource identity.
 | Query safety | Validate payloads and parameterize database access. A language string or payload never grants raw SQL, network access, secret access or cross-region authority. Retrieval remains Memory.read on the original place. |
 | Backend variation | Query languages/index features are explicitly adapter-specific; CRUD and canonical storage contracts remain portable. No implicit embedding/model request on an unsupported similarity query. |
 
-## 17. API Coverage And Open Contracts
+## 16. Scope Boundaries
 
-This is a SPEC coverage audit, not an implementation checklist. A module is not
-complete merely because it has exported names or a runtime binding. The API
-index identifies the owning contract; do not duplicate it in multiple chapters.
+Only the API contracts specified here are standard. A module name does not
+implicitly include further operations.
 
-| API Review Item | Required Before Calling A Contract Complete |
+| Area | Not Specified By This Chapter |
 |---|---|
-| Surface | Canonical module, exact parameter/result types, defaults, generic/spec bounds and visibility. |
-| Behavior | Empty/invalid input, ordering, equality, units, encoding and allocation/complexity rules. |
-| Effects | Separate residual effects from requested/default actions; preserve callback summaries. |
-| Failure | Distinguish `None`, `Result`, `Error<E>`, execution faults and cancellation. No accidental redefinition of `?`. |
-| Resources | Creation, use, close/cleanup, alias behavior, timeouts and partial/uncertain outcomes. |
-| Verification | Examples and cross-provider tests for the stated contract, not only happy-path execution. |
+| Specialized data | Graphs, tensors, caches, big integers, decimals and complex numbers. |
+| Text and encoding | Additional charsets, hex/base64, endian codecs, JSON schema conversion/exact numbers and JSON size/depth controls. |
+| I/O | Bounded console input/explicit flushing, server sockets, stream seek/shared duplex adapters, file watching/link metadata, and a complete HTTP upgrade/framing-state API. |
+| External lifecycle | Streaming child processes, secret rotation and complete browser event deadlines/cancellation. |
+| Synchronization | Locks, channels, semaphores and atomics. |
+| Persistence | Multi-store transactions, session creation/append/retention administration, and public checkpoint/query/export durability APIs. |
+| Domain libraries | HTTP clients, databases, vector search, email and browser automation belong to packages over public std primitives. |
 
-| Area | Specified Surface | Remaining API Design Work |
-|---|---|---|
-| Text, collections, iterators, Option/Result | Tables in sections 1, 10-13, including builders, BitSet, bounded deques, generation/scan, grouping, Top-K and boundary/error/cost rules | Cross-provider implementation conformance remains separate from SPEC coverage. Specialized graph, tensor, cache and index libraries are package-level, not implicit standard types. |
-| Numeric operations | Checked/wrapping/saturating integer operations, float helpers and profile rules in section 5 | Big integers, decimals and complex numbers are separate library designs. |
-| Console | Six string APIs, UTF-8, EOF and residual I/O error behavior | Bounded/streaming input and explicit flushing are not yet specified. No generic `Display` requirement is implied. |
-| TCP / TLS | Connect/handshake, canonical host/port/config values and upgrade ownership in section 15 | Server/listen/accept and client-certificate APIs are not specified. |
-| Streams | Read/write/flush/close, checked concurrent admission, exact/bounded reads and effectful Source with bounded line/chunk adapters in section 15 | Seek, shared duplex adapters, multicast and statically refined access modes remain separate extensions. A Source is not a channel or broadcast stream. |
-| Filesystem | Shared errors, modes, bounded read/list, create/rename/remove and sync in section 15 | Seek, link metadata/watch APIs and durable atomic-replace recipes need separate contracts. |
-| HTTP codec | Wire types, fallible encoding, complete/incremental decoding | Request-aware HEAD/CONNECT and upgrade framing; bounded header/body/trailer options; a reusable incremental-state API and its cumulative cost. An EOF reader is not a general HTTP client. |
-| Bytes / text codecs | Byte conversion/search/assembly and strict/lossy UTF-8 | Explicit additional charsets, hex/base64 and endian numeric codecs need separate contracts; no ambient-charset fallback. |
-| JSON | Shared recursive value type and pure parse/stringify | Depth/size bounds, typed schema conversion and exact-number alternatives are not specified by the current `Number(f64)` representation. |
-| Clock / randomness | Monotonic versus wall time, duration arithmetic, timers, seeded RNG and protected entropy in section 14 | Calendar/timezone APIs remain package-level; implementation profiles must supply accuracy/RNG conformance vectors. |
-| Commands / environment | Sandboxed command execution and support types | Canonical wrapper ownership, streaming process lifecycle, exit versus launch errors, output bounds, environment/argument APIs and cancellation/cleanup. |
-| Tasks / synchronization | Full combinator signatures, limits, empty/race/error rules in the concurrency chapter | Locks, channels, semaphores and atomics still require their own ownership/coordination design. |
-| Persistent memory / sessions | CRUD, conditional commit/reconciliation, paging, explicit storage/query codecs, deferred selection and context publication in section 16 | Portable multi-store transactions and explicit session creation/append/retention administration remain open. Storage-format profiles and backend query registrations require conformance tests. |
-| Secrets / crypto / browser | Protected secret read/use; hashing/comparison; browser protocol operations | Secret rotation/lifecycle, complete digest/encoding contracts, browser event bounds/deadlines and cancellation. No secret byte-export or high-level browser automation is implied. |
-| Agent / compiler / security | Step/tool-dispatch, checked-code-generation and sanitization API tables | Keep frozen-contract, tool-context and trusted-strategy restrictions when adding overloads; an arbitrary callback is not a substitute for checked evidence. |
-| Trace / checkpoint | Trace labels and runtime recovery principles | Public query/export and checkpoint result/error/durability APIs are not fully specified by `VirtualStages` or a `checkpoint(...)` example. |
-
-HTTP clients, databases, vector search, email, browser automation and integration
-retries remain EDK/package responsibilities over public std substrate. This table
-does not approve new keywords, mutable-reference APIs or private host shortcuts.
-
-### 17.1 Acceptance Cases For These Extensions
-
-| Contract | Required Test Cases |
-|---|---|
-| Budget boundary | Handle a child-local BudgetExceeded in a live parent; reject attempts to continue an exhausted shared scope; no budget reset through ?/collect/retry. |
-| Stream admission | Two reads, two writes, duplex TCP, shared file cursor, alias use after TLS/Source transfer, close racing a read, and slot release on failure. |
-| Codec / query | Exact wide integers; float bits; canonical equal record/map keys; incompatible schema/version; unsupported query language; protected-label round trips; forged receipt/query does not grant access. |
-| Builders | Retained snapshots, non-ASCII text, empty parts, update unwind, checked lengths and linear append-history allocation/copy measurements. |
-| BitSet / bounded deque | Zero universe, word-boundary padding, mismatched universes, invalid indices, full/empty deque, every overflow policy and returned eviction value. |
-| Algorithms | Empty/k=0/k>n, stable ties, lawful custom comparisons, large equal-key groups, callback-once/order, early failures, and partial selection without full sorting. |
-| Source | No pull on construction, alias/adapter invalidation, early close, EOF versus error, release once, invalid UTF-8, line overflow, pull/close races and preserved latent effects. |
-
-### 17.2 Library Design References And Scope
-
-These are design precedents, not claims that Etas implements those libraries
-or shares their mutation/error semantics.
-
-| Official Reference | Adopted Direction / Boundary |
-|---|---|
-| [Rust Iterator](https://doc.rust-lang.org/std/iter/trait.Iterator.html), [slice algorithms](https://doc.rust-lang.org/std/primitive.slice.html) | Generation, scan/unzip and selection/search APIs; Etas preserves value snapshots and checked callback behavior. |
-| [Java BitSet](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/BitSet.html), [Collectors](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/stream/Collectors.html) | Compact bit membership and global grouping; Etas BitSet has an explicit finite universe and grouping returns existing Map/Array values. |
-| [Python collections](https://docs.python.org/3/library/collections.html), [itertools](https://docs.python.org/3/library/itertools.html), [heapq](https://docs.python.org/3/library/heapq.html) | Bounded deques, counts, adjacent grouping and Top-K; no new Counter type or implicit shared cursor in pure Iter. |
-| [OCaml Buffer](https://ocaml.org/manual/5.4/api/Buffer.html), [Seq](https://ocaml.org/manual/5.4/api/Seq.html) | Incremental assembly and explicit-state unfold; Etas separates updating value receivers from suspendable live sources. |
-| [Rust BufRead](https://doc.rust-lang.org/std/io/trait.BufRead.html) | Bounded line/chunk consumption belongs with resource lifetime, errors and cancellation, not the pure Iterable contract. |
-| [Python graphlib](https://docs.python.org/3/library/graphlib.html) | Topological ordering is useful for Agent DAGs; place graph representations, cycle diagnostics and ready-set algorithms in an EDK/package contract, not a new std/compiler graph construct. |
+These boundaries do not authorize private host shortcuts or implicit authority.
