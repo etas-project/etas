@@ -1229,10 +1229,9 @@ read = true
             (
                 "src/app/main.es",
                 r#"module app.main;
-import std.fs.{Region, WorkspacePath, IOError, FsStat, FsEntry, ReadLimitError, ListLimitError,
+import std.fs.{Region, WorkspacePath, IOError, FsStat, ReadLimitError,
     root, relative_name, path, read_bytes, read_bytes_limited, write_bytes, list, list_limited, stat, atomic_replace};
 import std.codec.text.utf8_encode;
-import std.runtime.limits.Attempts;
 type Project; impl Project ~ Region;
 flow selected<R ~ Region>() -> WorkspacePath<R> ![] { return root<R>(); }
 flow denied(args: Array<string>) -> i32 {
@@ -1258,17 +1257,15 @@ flow main(args: Array<string>) -> i32 {
     var limited_names = "";
     for entry in list_limited(directory, 2, 11) { limited_names = limited_names + relative_name(entry) + ";"; }
     if limited_names != names { return 6; }
-    let ReadLimit: ![Error<ReadLimitError> => [] for usize] = handler {
-        Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(limit)) => { finish limit; }
-        Error<ReadLimitError>.raise(ReadLimitError.SdkOnly) => { finish 99; }
+    let exceeded: ![Error<IOError> => [] for bool] = handler {
+        Error<IOError>.raise(IOError.LimitExceeded) => { finish true; }
     };
-    let read_limit = handle { read_bytes_limited(item, 8); 0 } with ReadLimit;
-    if read_limit != 8 { return 7; }
-    let ListLimit: ![Error<ListLimitError> => [] for usize] = handler {
-        Error<ListLimitError>.raise(ListLimitError.LimitExceeded(count, bytes)) => { finish count + bytes; }
-    };
-    let list_limit = handle { list_limited(directory, 1, 11); 0 } with ListLimit;
-    if list_limit != 12 { return 8; }
+    let read_limit = handle { read_bytes_limited(item, 8); false } with exceeded;
+    if !read_limit { return 7; }
+    let list_limit = handle { list_limited(directory, 1, 11); false } with exceeded;
+    if !list_limit { return 8; }
+    let custom = match ReadLimitError.SdkOnly { ReadLimitError.SdkOnly => true, _ => false };
+    if !custom { return 11; }
     let destination = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 9; } };
     write_bytes(destination, utf8_encode("before"));
     atomic_replace(destination, utf8_encode("after"));
@@ -1401,20 +1398,17 @@ flow main(args: Array<string>) -> i32 {
             String::from_utf8_lossy(&output.stderr)
         );
         let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        // Both entry points must preserve the original region grant denial.
+        // Retrying with the same read-only authority cannot admit the write.
         assert_eq!(
-            report["diagnostics"][0]["code"], "Analysis(InvalidArguments)",
-            "{report}"
-        );
-        assert_eq!(
-            report["diagnostics"][0]["message"],
-            "retry exhausted after 2 attempt(s): filesystem host boundary failed: filesystem request is missing its region-scoped action grant (action=Fs.write, region=app.main.Project)",
+            report["diagnostics"], denied_report["diagnostics"],
             "{report}"
         );
         let events = report["events"].as_array().unwrap();
         let count = |kind| events.iter().filter(|event| event["kind"] == kind).count();
-        assert_eq!(count("host_request_started"), 2, "{report}");
-        assert_eq!(count("retry_attempt_failed"), 2, "{report}");
-        assert_eq!(count("retry_exhausted"), 1, "{report}");
+        assert_eq!(count("retry_attempt_started"), 1, "{report}");
+        assert_eq!(count("host_request_started"), 1, "{report}");
+        assert_eq!(count("retry_exhausted"), 0, "{report}");
         let signature = (
             report["diagnostics"].clone(),
             events
