@@ -1036,7 +1036,10 @@ fn verify_source_compiler_report_sdk(binary: &Path, root: &Path) {
 import std.compiler.{RevisionInfo, parse_body, format};
 import std.extra.{revision_key, copy_revision, preserve_type, preserve_callable, syntax_text, callable_revision, agent_revision};
 flow original(value: string) -> string ![] { return value; }
-agent Worker() -> string { return "worker"; }
+agent Worker = {};
+impl Worker {
+    public flow run(self) -> string { return "worker"; }
+}
 flow main(args: Array<string>) -> i32 {
     let definition = ^original;
     let revision: RevisionInfo = definition.revision;
