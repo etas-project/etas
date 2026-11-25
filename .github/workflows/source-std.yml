@@ -29,10 +29,10 @@ jobs:
           python3 scripts/ci/validate_std_sdk.py \
             --binary "$RUNNER_TEMP/etas-sdk-relocated/bin/etas" \
             --receipt-dir "$RUNNER_TEMP/std-sdk-receipts"
-      - name: Verify source additions and body changes
+      - name: Verify generic additions, body changes and relocation
         run: |
           cargo +stable test --locked --release -p etas_cli --features forbid-legacy-std --test cli \
-            std_source_sdk:: -- --nocapture --test-threads=1
+            std_source_sdk::source_sdk_join_and_added_generic_api_run_after_install_and_relocation -- --exact --nocapture
       - name: Compare installed APIs with the locked legacy registry
         run: |
           cargo +stable run --locked --release -p etas_driver --example std_sdk_inventory -- \
@@ -42,3 +42,15 @@ jobs:
         with:
           name: std-sdk-api-diff
           path: ${{ runner.temp }}/std-sdk-api-diff.json
+
+  source-extensions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Verify extended source SDK in external processes
+        run: |
+          cargo +stable test --locked --release -p etas_cli --features forbid-legacy-std --test cli \
+            std_source_sdk:: -- --nocapture --skip std_source_sdk::source_sdk_join_and_added_generic_api_run_after_install_and_relocation
