@@ -79,7 +79,7 @@ flow verify_try_join(args: Array<string>) -> i32 {
         () => { perform Async.yield(); perform Error<string>.raise("lower"); },
         () => perform Error<string>.raise("higher"),
         () => {
-            while true limit Iterations(1024) { perform Async.yield(); }
+            while true { perform Async.yield(); }
             std.runtime.checkpoint("loser-finished");
             return 99;
         },
@@ -116,7 +116,7 @@ flow verify_lexical(args: Array<string>) -> i32 {
         };
         var iteration = 0;
         var total = 0;
-        while iteration < 3 limit Iterations(3) {
+        while iteration < 3 {
             iteration = iteration + 1;
             handle {
                 if iteration == 1 { continue; }
