@@ -3,9 +3,9 @@ manifest_fingerprint = "etas-lock-input:v1|package=agent-system-smoke|version=0.
 
 [[package]]
 name = "std"
-version = "0.6.0"
+version = "0.6.1"
 source = "builtin"
-checksum = "builtin:std:artifact:0.6.0:blake3:c2620b315312e5c96f43d67f9160dd81048b8a030de13347e29442d9e30231e3"
+checksum = "builtin:std:artifact:0.6.1:blake3:c2620b315312e5c96f43d67f9160dd81048b8a030de13347e29442d9e30231e3"
 dependencies = []
 import_root = "std"
-metadata_fingerprint = "builtin:std:artifact:0.6.0:blake3:c2620b315312e5c96f43d67f9160dd81048b8a030de13347e29442d9e30231e3"
+metadata_fingerprint = "builtin:std:artifact:0.6.1:blake3:c2620b315312e5c96f43d67f9160dd81048b8a030de13347e29442d9e30231e3"
