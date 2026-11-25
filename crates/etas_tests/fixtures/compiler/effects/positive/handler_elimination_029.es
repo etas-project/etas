@@ -30,7 +30,7 @@ flow handler_elimination_dynamo_dynamo_prepare(seed: i32) -> i32 ![]
 {
     var haven_prepare_total = seed + 13;
     var haven_prepare_cursor = 0;
-    while haven_prepare_cursor < 12 limit Iterations(12) {
+    while haven_prepare_cursor < 12 {
         haven_prepare_total = haven_prepare_total + haven_prepare_cursor + 1;
         haven_prepare_cursor = haven_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_dynamo_dynamo_route(seed: i32) -> i32 ![]
 {
     var haven_route_total = seed * 13;
     var haven_route_cursor = 0;
-    while haven_route_cursor < 12 limit Iterations(12) {
+    while haven_route_cursor < 12 {
         haven_route_total = haven_route_total + haven_route_cursor + 1;
         haven_route_cursor = haven_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_dynamo_dynamo_score(seed: i32) -> i32 ![]
 {
     var haven_score_total = seed + 13;
     var haven_score_cursor = 0;
-    while haven_score_cursor < 7 limit Iterations(7) {
+    while haven_score_cursor < 7 {
         haven_score_total = haven_score_total + haven_score_cursor + 1;
         haven_score_cursor = haven_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_dynamo_dynamo_finish(seed: i32) -> i32 ![]
 {
     var haven_finish_total = seed - 13;
     var haven_finish_cursor = 0;
-    while haven_finish_cursor < 10 limit Iterations(10) {
+    while haven_finish_cursor < 10 {
         haven_finish_total = haven_finish_total + haven_finish_cursor + 1;
         haven_finish_cursor = haven_finish_cursor + 1;
     }

@@ -24,7 +24,7 @@ flow memory_errors_temple_rocket_prepare(seed: i32) -> i32 ![]
 {
     var boreal_prepare_total = seed + 11;
     var boreal_prepare_cursor = 0;
-    while boreal_prepare_cursor < 12 limit Iterations(12) {
+    while boreal_prepare_cursor < 12 {
         boreal_prepare_total = boreal_prepare_total + boreal_prepare_cursor + 2;
         boreal_prepare_cursor = boreal_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_temple_rocket_route(seed: i32) -> i32 ![]
 {
     var boreal_route_total = seed * 11;
     var boreal_route_cursor = 0;
-    while boreal_route_cursor < 9 limit Iterations(9) {
+    while boreal_route_cursor < 9 {
         boreal_route_total = boreal_route_total + boreal_route_cursor + 2;
         boreal_route_cursor = boreal_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_temple_rocket_score(seed: i32) -> i32 ![]
 {
     var boreal_score_total = seed + 11;
     var boreal_score_cursor = 0;
-    while boreal_score_cursor < 8 limit Iterations(8) {
+    while boreal_score_cursor < 8 {
         boreal_score_total = boreal_score_total + boreal_score_cursor + 2;
         boreal_score_cursor = boreal_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_temple_rocket_finish(seed: i32) -> i32 ![]
 {
     var boreal_finish_total = seed - 11;
     var boreal_finish_cursor = 0;
-    while boreal_finish_cursor < 5 limit Iterations(5) {
+    while boreal_finish_cursor < 5 {
         boreal_finish_total = boreal_finish_total + boreal_finish_cursor + 2;
         boreal_finish_cursor = boreal_finish_cursor + 1;
     }

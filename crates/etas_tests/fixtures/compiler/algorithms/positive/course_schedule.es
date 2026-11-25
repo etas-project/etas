@@ -12,13 +12,13 @@ type Edge = {
 
 flow can_finish(courses: i32, edges: Array<Edge>) -> bool {
     var indegree = repeat_i32(0, courses);
-    for edge in edges limit Iterations(1024) {
+    for edge in edges {
         indegree[edge.to] = indegree[edge.to] + 1;
     }
 
     var queue: Array<i32> = [];
     var course = 0;
-    while course < courses limit Iterations(1024) {
+    while course < courses {
         if indegree[course] == 0 {
             queue = queue.push(course);
         }
@@ -27,12 +27,12 @@ flow can_finish(courses: i32, edges: Array<Edge>) -> bool {
 
     var visited = 0;
     var head: usize = 0;
-    while head < len(queue) limit Iterations(4096) {
+    while head < len(queue) {
         let current = queue[head];
         head = head + 1;
         visited = visited + 1;
 
-        for edge in edges limit Iterations(1024) {
+        for edge in edges {
             if edge.from == current {
                 indegree[edge.to] = indegree[edge.to] - 1;
                 if indegree[edge.to] == 0 {

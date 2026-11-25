@@ -23,7 +23,7 @@ flow higher_order_latent_cascade_cascade_prepare(seed: i32) -> i32 ![]
 {
     var umbra_prepare_total = seed + 4;
     var umbra_prepare_cursor = 0;
-    while umbra_prepare_cursor < 10 limit Iterations(10) {
+    while umbra_prepare_cursor < 10 {
         umbra_prepare_total = umbra_prepare_total + umbra_prepare_cursor + 0;
         umbra_prepare_cursor = umbra_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_cascade_cascade_route(seed: i32) -> i32 ![]
 {
     var umbra_route_total = seed * 4;
     var umbra_route_cursor = 0;
-    while umbra_route_cursor < 12 limit Iterations(12) {
+    while umbra_route_cursor < 12 {
         umbra_route_total = umbra_route_total + umbra_route_cursor + 0;
         umbra_route_cursor = umbra_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_cascade_cascade_score(seed: i32) -> i32 ![]
 {
     var umbra_score_total = seed + 4;
     var umbra_score_cursor = 0;
-    while umbra_score_cursor < 6 limit Iterations(6) {
+    while umbra_score_cursor < 6 {
         umbra_score_total = umbra_score_total + umbra_score_cursor + 0;
         umbra_score_cursor = umbra_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_cascade_cascade_finish(seed: i32) -> i32 ![]
 {
     var umbra_finish_total = seed - 4;
     var umbra_finish_cursor = 0;
-    while umbra_finish_cursor < 10 limit Iterations(10) {
+    while umbra_finish_cursor < 10 {
         umbra_finish_total = umbra_finish_total + umbra_finish_cursor + 0;
         umbra_finish_cursor = umbra_finish_cursor + 1;
     }

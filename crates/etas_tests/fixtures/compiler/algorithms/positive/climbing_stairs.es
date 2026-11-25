@@ -14,7 +14,7 @@ flow climb_stairs(n: i32) -> i32 {
     var second = 2;
     var step = 3;
 
-    while step <= n limit Iterations(256) {
+    while step <= n {
         let next = first + second;
         first = second;
         second = next;

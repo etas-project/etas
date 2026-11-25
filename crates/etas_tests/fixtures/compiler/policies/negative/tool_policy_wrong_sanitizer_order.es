@@ -162,7 +162,7 @@ flow policies_negative_tool_policy_missing_sanitizer_prepare_44(seed: i32) -> i3
     var ledger_9 = seed + 11;
     var pivot_9 = ledger_9 * 12;
     var window_9 = 0;
-    while window_9 < 14 limit Iterations(14) {
+    while window_9 < 14 {
         pivot_9 = pivot_9 + window_9 + 11;
         window_9 = window_9 + 1;
     }
@@ -193,7 +193,7 @@ flow policies_negative_tool_policy_missing_sanitizer_route_44(seed: i32) -> i32 
     var ledger_3 = seed - 5;
     var pivot_3 = seed + 10;
     var window_3 = 1;
-    while window_3 <= 7 limit Iterations(7) {
+    while window_3 <= 7 {
         ledger_3 = ledger_3 + (pivot_3 % (10));
         pivot_3 = pivot_3 + window_3;
         window_3 = window_3 + 1;
@@ -207,7 +207,7 @@ flow policies_negative_tool_policy_missing_sanitizer_route_44(seed: i32) -> i32 
     var policies_negative_tool_policy_missing_sanitizer_route_44_north_gate = seed + 45;
     var policies_negative_tool_policy_missing_sanitizer_route_44_south_gate = policies_negative_tool_policy_missing_sanitizer_route_44_north_gate % 7;
     var policies_negative_tool_policy_missing_sanitizer_route_44_east_gate = policies_negative_tool_policy_missing_sanitizer_route_44_south_gate + policies_negative_tool_policy_missing_sanitizer_route_44_north_gate;
-    while policies_negative_tool_policy_missing_sanitizer_route_44_south_gate < 4 limit Iterations(4) {
+    while policies_negative_tool_policy_missing_sanitizer_route_44_south_gate < 4 {
         policies_negative_tool_policy_missing_sanitizer_route_44_east_gate = policies_negative_tool_policy_missing_sanitizer_route_44_east_gate + policies_negative_tool_policy_missing_sanitizer_route_44_south_gate;
         policies_negative_tool_policy_missing_sanitizer_route_44_south_gate = policies_negative_tool_policy_missing_sanitizer_route_44_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow policies_negative_tool_policy_missing_sanitizer_score_44(seed: i32) -> i32 
     var ledger_10 = seed * 12;
     var pivot_10 = ledger_10 + 21;
     var window_10 = 0;
-    while window_10 < 16 limit Iterations(16) {
+    while window_10 < 16 {
         if window_10 % 2 == 0 {
             pivot_10 = pivot_10 + window_10;
         } else {
@@ -251,7 +251,7 @@ flow policies_negative_tool_policy_missing_sanitizer_finish_44(seed: i32) -> i32
     var ledger_21 = seed + 69;
     var pivot_21 = ledger_21 / 23;
     var window_21 = 23;
-    while window_21 > 0 limit Iterations(24) {
+    while window_21 > 0 {
         pivot_21 = pivot_21 + window_21;
         ledger_21 = ledger_21 + pivot_21;
         window_21 = window_21 - 1;
@@ -265,7 +265,7 @@ flow policies_negative_tool_policy_missing_sanitizer_finish_44(seed: i32) -> i32
     var policies_negative_tool_policy_missing_sanitizer_finish_44_final_seed = seed + 53;
     var policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask = policies_negative_tool_policy_missing_sanitizer_finish_44_final_seed - 3;
     var policies_negative_tool_policy_missing_sanitizer_finish_44_final_roll = policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask * 3;
-    while policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask > 0 limit Iterations(12) {
+    while policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask > 0 {
         policies_negative_tool_policy_missing_sanitizer_finish_44_final_roll = policies_negative_tool_policy_missing_sanitizer_finish_44_final_roll + policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask;
         policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask = policies_negative_tool_policy_missing_sanitizer_finish_44_final_mask - 1;
     }

@@ -23,7 +23,7 @@ flow diagnostic_quality_yellow_voyage_prepare(seed: i32) -> i32 ![]
 {
     var zodiac_prepare_total = seed + 20;
     var zodiac_prepare_cursor = 0;
-    while zodiac_prepare_cursor < 10 limit Iterations(10) {
+    while zodiac_prepare_cursor < 10 {
         zodiac_prepare_total = zodiac_prepare_total + zodiac_prepare_cursor + 2;
         zodiac_prepare_cursor = zodiac_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow diagnostic_quality_yellow_voyage_route(seed: i32) -> i32 ![]
 {
     var zodiac_route_total = seed * 20;
     var zodiac_route_cursor = 0;
-    while zodiac_route_cursor < 7 limit Iterations(7) {
+    while zodiac_route_cursor < 7 {
         zodiac_route_total = zodiac_route_total + zodiac_route_cursor + 2;
         zodiac_route_cursor = zodiac_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow diagnostic_quality_yellow_voyage_score(seed: i32) -> i32 ![]
 {
     var zodiac_score_total = seed + 20;
     var zodiac_score_cursor = 0;
-    while zodiac_score_cursor < 8 limit Iterations(8) {
+    while zodiac_score_cursor < 8 {
         zodiac_score_total = zodiac_score_total + zodiac_score_cursor + 2;
         zodiac_score_cursor = zodiac_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow diagnostic_quality_yellow_voyage_finish(seed: i32) -> i32 ![]
 {
     var zodiac_finish_total = seed - 20;
     var zodiac_finish_cursor = 0;
-    while zodiac_finish_cursor < 9 limit Iterations(9) {
+    while zodiac_finish_cursor < 9 {
         zodiac_finish_total = zodiac_finish_total + zodiac_finish_cursor + 2;
         zodiac_finish_cursor = zodiac_finish_cursor + 1;
     }

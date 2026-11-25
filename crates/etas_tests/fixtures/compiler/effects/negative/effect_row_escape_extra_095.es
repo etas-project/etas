@@ -25,7 +25,7 @@ flow effect_row_escape_extra_bravo_zone_prepare(seed: i32) -> i32 ![]
 {
     var voyage_prepare_total = seed + 4;
     var voyage_prepare_cursor = 0;
-    while voyage_prepare_cursor < 8 limit Iterations(8) {
+    while voyage_prepare_cursor < 8 {
         voyage_prepare_total = voyage_prepare_total + voyage_prepare_cursor + 5;
         voyage_prepare_cursor = voyage_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow effect_row_escape_extra_bravo_zone_route(seed: i32) -> i32 ![]
 {
     var voyage_route_total = seed * 4;
     var voyage_route_cursor = 0;
-    while voyage_route_cursor < 10 limit Iterations(10) {
+    while voyage_route_cursor < 10 {
         voyage_route_total = voyage_route_total + voyage_route_cursor + 5;
         voyage_route_cursor = voyage_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow effect_row_escape_extra_bravo_zone_score(seed: i32) -> i32 ![]
 {
     var voyage_score_total = seed + 4;
     var voyage_score_cursor = 0;
-    while voyage_score_cursor < 11 limit Iterations(11) {
+    while voyage_score_cursor < 11 {
         voyage_score_total = voyage_score_total + voyage_score_cursor + 5;
         voyage_score_cursor = voyage_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow effect_row_escape_extra_bravo_zone_finish(seed: i32) -> i32 ![]
 {
     var voyage_finish_total = seed - 4;
     var voyage_finish_cursor = 0;
-    while voyage_finish_cursor < 12 limit Iterations(12) {
+    while voyage_finish_cursor < 12 {
         voyage_finish_total = voyage_finish_total + voyage_finish_cursor + 5;
         voyage_finish_cursor = voyage_finish_cursor + 1;
     }

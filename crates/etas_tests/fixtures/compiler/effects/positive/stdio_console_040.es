@@ -23,7 +23,7 @@ flow stdio_console_onyx_onyx_prepare(seed: i32) -> i32 ![]
 {
     var juno_prepare_total = seed + 5;
     var juno_prepare_cursor = 0;
-    while juno_prepare_cursor < 8 limit Iterations(8) {
+    while juno_prepare_cursor < 8 {
         juno_prepare_total = juno_prepare_total + juno_prepare_cursor + 5;
         juno_prepare_cursor = juno_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_onyx_onyx_route(seed: i32) -> i32 ![]
 {
     var juno_route_total = seed * 5;
     var juno_route_cursor = 0;
-    while juno_route_cursor < 11 limit Iterations(11) {
+    while juno_route_cursor < 11 {
         juno_route_total = juno_route_total + juno_route_cursor + 5;
         juno_route_cursor = juno_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_onyx_onyx_score(seed: i32) -> i32 ![]
 {
     var juno_score_total = seed + 5;
     var juno_score_cursor = 0;
-    while juno_score_cursor < 11 limit Iterations(11) {
+    while juno_score_cursor < 11 {
         juno_score_total = juno_score_total + juno_score_cursor + 5;
         juno_score_cursor = juno_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_onyx_onyx_finish(seed: i32) -> i32 ![]
 {
     var juno_finish_total = seed - 5;
     var juno_finish_cursor = 0;
-    while juno_finish_cursor < 5 limit Iterations(5) {
+    while juno_finish_cursor < 5 {
         juno_finish_total = juno_finish_total + juno_finish_cursor + 5;
         juno_finish_cursor = juno_finish_cursor + 1;
     }

@@ -204,6 +204,7 @@ case erases authority checks or makes I/O pure.
 | `std.fs.path<R ~ Region>(relative: string)` | `Result<WorkspacePath<R>, IOError> ![]` | None | Validate a relative path's lexical form; no filesystem lookup or authority grant. |
 | `std.fs.root<R ~ Region>()` | `WorkspacePath<R> ![]` | None | Describe the runtime-bound region root; construction does not grant access. |
 | `std.fs.relative_name<R ~ Region>(path: WorkspacePath<R>)` | `string ![]` | None | Return the region-relative name, not a host absolute-path escape. |
+| `std.fs.open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)` | `FileStream<R> ![Error<IOError>]` | `Fs.open<R>` | Dispatch one typed request. The mode determines the required region read/write grants under the [file open admission rules](19-standard-library.md#file-open-action-handler-matching-and-admission). |
 | `std.fs.read_bytes<R ~ Region>(path: WorkspacePath<R>)` | `bytes ![Error<IOError>]` | `Fs.read<R>` | Read file bytes; no implicit text decoding. |
 | `std.fs.write_bytes<R ~ Region>(path: WorkspacePath<R>, body: bytes)` | `unit ![Error<IOError>]` | `Fs.write<R>` | Replace contents; failure can leave partial output. No atomicity/durability promise. |
 | `std.fs.list<R ~ Region>(path: WorkspacePath<R>)` | `List<WorkspacePath<R>> ![Error<IOError>]` | `Fs.list<R>` | Direct children, not recursive traversal; enumeration order is unspecified. |

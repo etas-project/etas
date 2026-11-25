@@ -25,7 +25,7 @@ flow effect_row_escape_extra_zone_western_prepare(seed: i32) -> i32 ![]
 {
     var galaxy_prepare_total = seed + 21;
     var galaxy_prepare_cursor = 0;
-    while galaxy_prepare_cursor < 11 limit Iterations(11) {
+    while galaxy_prepare_cursor < 11 {
         galaxy_prepare_total = galaxy_prepare_total + galaxy_prepare_cursor + 3;
         galaxy_prepare_cursor = galaxy_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow effect_row_escape_extra_zone_western_route(seed: i32) -> i32 ![]
 {
     var galaxy_route_total = seed * 21;
     var galaxy_route_cursor = 0;
-    while galaxy_route_cursor < 8 limit Iterations(8) {
+    while galaxy_route_cursor < 8 {
         galaxy_route_total = galaxy_route_total + galaxy_route_cursor + 3;
         galaxy_route_cursor = galaxy_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow effect_row_escape_extra_zone_western_score(seed: i32) -> i32 ![]
 {
     var galaxy_score_total = seed + 21;
     var galaxy_score_cursor = 0;
-    while galaxy_score_cursor < 9 limit Iterations(9) {
+    while galaxy_score_cursor < 9 {
         galaxy_score_total = galaxy_score_total + galaxy_score_cursor + 3;
         galaxy_score_cursor = galaxy_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow effect_row_escape_extra_zone_western_finish(seed: i32) -> i32 ![]
 {
     var galaxy_finish_total = seed - 21;
     var galaxy_finish_cursor = 0;
-    while galaxy_finish_cursor < 10 limit Iterations(10) {
+    while galaxy_finish_cursor < 10 {
         galaxy_finish_total = galaxy_finish_total + galaxy_finish_cursor + 3;
         galaxy_finish_cursor = galaxy_finish_cursor + 1;
     }

@@ -268,7 +268,7 @@ flow main() -> string ![Error<CompileError>] {
     let report = check(draft);
     if report.status != "accepted" {
         var reason = report.status;
-        for diagnostic in report.diagnostics limit Iterations(16) {
+        for diagnostic in report.diagnostics {
             reason = reason + "|" + diagnostic.code + ": " + diagnostic.message;
         }
         return reason;

@@ -23,7 +23,7 @@ flow higher_order_latent_jigsaw_jigsaw_prepare(seed: i32) -> i32 ![]
 {
     var uplink_prepare_total = seed + 11;
     var uplink_prepare_cursor = 0;
-    while uplink_prepare_cursor < 12 limit Iterations(12) {
+    while uplink_prepare_cursor < 12 {
         uplink_prepare_total = uplink_prepare_total + uplink_prepare_cursor + 0;
         uplink_prepare_cursor = uplink_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_jigsaw_jigsaw_route(seed: i32) -> i32 ![]
 {
     var uplink_route_total = seed * 11;
     var uplink_route_cursor = 0;
-    while uplink_route_cursor < 7 limit Iterations(7) {
+    while uplink_route_cursor < 7 {
         uplink_route_total = uplink_route_total + uplink_route_cursor + 0;
         uplink_route_cursor = uplink_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_jigsaw_jigsaw_score(seed: i32) -> i32 ![]
 {
     var uplink_score_total = seed + 11;
     var uplink_score_cursor = 0;
-    while uplink_score_cursor < 6 limit Iterations(6) {
+    while uplink_score_cursor < 6 {
         uplink_score_total = uplink_score_total + uplink_score_cursor + 0;
         uplink_score_cursor = uplink_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_jigsaw_jigsaw_finish(seed: i32) -> i32 ![]
 {
     var uplink_finish_total = seed - 11;
     var uplink_finish_cursor = 0;
-    while uplink_finish_cursor < 9 limit Iterations(9) {
+    while uplink_finish_cursor < 9 {
         uplink_finish_total = uplink_finish_total + uplink_finish_cursor + 0;
         uplink_finish_cursor = uplink_finish_cursor + 1;
     }

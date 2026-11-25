@@ -23,7 +23,7 @@ flow stdio_console_fable_fable_prepare(seed: i32) -> i32 ![]
 {
     var valley_prepare_total = seed + 15;
     var valley_prepare_cursor = 0;
-    while valley_prepare_cursor < 9 limit Iterations(9) {
+    while valley_prepare_cursor < 9 {
         valley_prepare_total = valley_prepare_total + valley_prepare_cursor + 3;
         valley_prepare_cursor = valley_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_fable_fable_route(seed: i32) -> i32 ![]
 {
     var valley_route_total = seed * 15;
     var valley_route_cursor = 0;
-    while valley_route_cursor < 8 limit Iterations(8) {
+    while valley_route_cursor < 8 {
         valley_route_total = valley_route_total + valley_route_cursor + 3;
         valley_route_cursor = valley_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_fable_fable_score(seed: i32) -> i32 ![]
 {
     var valley_score_total = seed + 15;
     var valley_score_cursor = 0;
-    while valley_score_cursor < 9 limit Iterations(9) {
+    while valley_score_cursor < 9 {
         valley_score_total = valley_score_total + valley_score_cursor + 3;
         valley_score_cursor = valley_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_fable_fable_finish(seed: i32) -> i32 ![]
 {
     var valley_finish_total = seed - 15;
     var valley_finish_cursor = 0;
-    while valley_finish_cursor < 12 limit Iterations(12) {
+    while valley_finish_cursor < 12 {
         valley_finish_total = valley_finish_total + valley_finish_cursor + 3;
         valley_finish_cursor = valley_finish_cursor + 1;
     }

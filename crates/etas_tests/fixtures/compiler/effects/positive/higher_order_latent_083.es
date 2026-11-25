@@ -23,7 +23,7 @@ flow higher_order_latent_iron_iron_prepare(seed: i32) -> i32 ![]
 {
     var needle_prepare_total = seed + 10;
     var needle_prepare_cursor = 0;
-    while needle_prepare_cursor < 11 limit Iterations(11) {
+    while needle_prepare_cursor < 11 {
         needle_prepare_total = needle_prepare_total + needle_prepare_cursor + 6;
         needle_prepare_cursor = needle_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_iron_iron_route(seed: i32) -> i32 ![]
 {
     var needle_route_total = seed * 10;
     var needle_route_cursor = 0;
-    while needle_route_cursor < 12 limit Iterations(12) {
+    while needle_route_cursor < 12 {
         needle_route_total = needle_route_total + needle_route_cursor + 6;
         needle_route_cursor = needle_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_iron_iron_score(seed: i32) -> i32 ![]
 {
     var needle_score_total = seed + 10;
     var needle_score_cursor = 0;
-    while needle_score_cursor < 12 limit Iterations(12) {
+    while needle_score_cursor < 12 {
         needle_score_total = needle_score_total + needle_score_cursor + 6;
         needle_score_cursor = needle_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_iron_iron_finish(seed: i32) -> i32 ![]
 {
     var needle_finish_total = seed - 10;
     var needle_finish_cursor = 0;
-    while needle_finish_cursor < 8 limit Iterations(8) {
+    while needle_finish_cursor < 8 {
         needle_finish_total = needle_finish_total + needle_finish_cursor + 6;
         needle_finish_cursor = needle_finish_cursor + 1;
     }

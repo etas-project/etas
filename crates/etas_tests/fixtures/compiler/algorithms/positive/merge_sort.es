@@ -10,7 +10,7 @@ flow merge(left: Array<i32>, right: Array<i32>) -> Array<i32> {
     var i: usize = 0;
     var j: usize = 0;
 
-    while i < len(left) && j < len(right) limit Iterations(2048) {
+    while i < len(left) && j < len(right) {
         if left[i] <= right[j] {
             out = out.push(left[i]);
             i = i + 1;
@@ -20,12 +20,12 @@ flow merge(left: Array<i32>, right: Array<i32>) -> Array<i32> {
         }
     }
 
-    while i < len(left) limit Iterations(2048) {
+    while i < len(left) {
         out = out.push(left[i]);
         i = i + 1;
     }
 
-    while j < len(right) limit Iterations(2048) {
+    while j < len(right) {
         out = out.push(right[j]);
         j = j + 1;
     }

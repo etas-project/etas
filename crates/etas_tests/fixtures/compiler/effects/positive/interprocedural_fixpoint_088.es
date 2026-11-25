@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_needle_needle_entry(seed: i32) -> i32 ![]
     var needle_total = interprocedural_fixpoint_needle_needle_prepare(seed);
     needle_total = needle_total + interprocedural_fixpoint_needle_needle_route(seed + 8);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let needle_adjust: i32 -> i32 = (value: i32) => value + 11;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_needle_needle_prepare(seed: i32) -> i32 ![]
 {
     var zone_prepare_total = seed + 15;
     var zone_prepare_cursor = 0;
-    while zone_prepare_cursor < 11 limit Iterations(11) {
+    while zone_prepare_cursor < 11 {
         zone_prepare_total = zone_prepare_total + zone_prepare_cursor + 4;
         zone_prepare_cursor = zone_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_needle_needle_route(seed: i32) -> i32 ![]
 {
     var zone_route_total = seed * 15;
     var zone_route_cursor = 0;
-    while zone_route_cursor < 11 limit Iterations(11) {
+    while zone_route_cursor < 11 {
         zone_route_total = zone_route_total + zone_route_cursor + 4;
         zone_route_cursor = zone_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_needle_needle_score(seed: i32) -> i32 ![]
 {
     var zone_score_total = seed + 15;
     var zone_score_cursor = 0;
-    while zone_score_cursor < 10 limit Iterations(10) {
+    while zone_score_cursor < 10 {
         zone_score_total = zone_score_total + zone_score_cursor + 4;
         zone_score_cursor = zone_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_needle_needle_finish(seed: i32) -> i32 ![]
 {
     var zone_finish_total = seed - 15;
     var zone_finish_cursor = 0;
-    while zone_finish_cursor < 5 limit Iterations(5) {
+    while zone_finish_cursor < 5 {
         zone_finish_total = zone_finish_total + zone_finish_cursor + 4;
         zone_finish_cursor = zone_finish_cursor + 1;
     }

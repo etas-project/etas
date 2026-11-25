@@ -8,7 +8,7 @@ import tests.compiler.support.algorithms.{parse_i32_list, to_string};
 flow fold_i32(values: Array<i32>, seed: i32, folder: (i32, i32) -> i32) -> i32 {
     var acc = seed;
 
-    for value in values limit Iterations(1024) {
+    for value in values {
         acc = folder(acc, value);
     }
 

@@ -24,7 +24,7 @@ flow project_import_alpha_valley_prepare(seed: i32) -> i32 ![]
 {
     var equinox_prepare_total = seed + 14;
     var equinox_prepare_cursor = 0;
-    while equinox_prepare_cursor < 8 limit Iterations(8) {
+    while equinox_prepare_cursor < 8 {
         equinox_prepare_total = equinox_prepare_total + equinox_prepare_cursor + 3;
         equinox_prepare_cursor = equinox_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow project_import_alpha_valley_route(seed: i32) -> i32 ![]
 {
     var equinox_route_total = seed * 14;
     var equinox_route_cursor = 0;
-    while equinox_route_cursor < 11 limit Iterations(11) {
+    while equinox_route_cursor < 11 {
         equinox_route_total = equinox_route_total + equinox_route_cursor + 3;
         equinox_route_cursor = equinox_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow project_import_alpha_valley_score(seed: i32) -> i32 ![]
 {
     var equinox_score_total = seed + 14;
     var equinox_score_cursor = 0;
-    while equinox_score_cursor < 9 limit Iterations(9) {
+    while equinox_score_cursor < 9 {
         equinox_score_total = equinox_score_total + equinox_score_cursor + 3;
         equinox_score_cursor = equinox_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow project_import_alpha_valley_finish(seed: i32) -> i32 ![]
 {
     var equinox_finish_total = seed - 14;
     var equinox_finish_cursor = 0;
-    while equinox_finish_cursor < 9 limit Iterations(9) {
+    while equinox_finish_cursor < 9 {
         equinox_finish_total = equinox_finish_total + equinox_finish_cursor + 3;
         equinox_finish_cursor = equinox_finish_cursor + 1;
     }

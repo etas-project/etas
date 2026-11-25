@@ -24,7 +24,7 @@ flow model_inference_errors_bridge_zodiac_prepare(seed: i32) -> i32 ![]
 {
     var beacon_prepare_total = seed + 18;
     var beacon_prepare_cursor = 0;
-    while beacon_prepare_cursor < 9 limit Iterations(9) {
+    while beacon_prepare_cursor < 9 {
         beacon_prepare_total = beacon_prepare_total + beacon_prepare_cursor + 2;
         beacon_prepare_cursor = beacon_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_bridge_zodiac_route(seed: i32) -> i32 ![]
 {
     var beacon_route_total = seed * 18;
     var beacon_route_cursor = 0;
-    while beacon_route_cursor < 10 limit Iterations(10) {
+    while beacon_route_cursor < 10 {
         beacon_route_total = beacon_route_total + beacon_route_cursor + 2;
         beacon_route_cursor = beacon_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_bridge_zodiac_score(seed: i32) -> i32 ![]
 {
     var beacon_score_total = seed + 18;
     var beacon_score_cursor = 0;
-    while beacon_score_cursor < 8 limit Iterations(8) {
+    while beacon_score_cursor < 8 {
         beacon_score_total = beacon_score_total + beacon_score_cursor + 2;
         beacon_score_cursor = beacon_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_bridge_zodiac_finish(seed: i32) -> i32 ![]
 {
     var beacon_finish_total = seed - 18;
     var beacon_finish_cursor = 0;
-    while beacon_finish_cursor < 12 limit Iterations(12) {
+    while beacon_finish_cursor < 12 {
         beacon_finish_total = beacon_finish_total + beacon_finish_cursor + 2;
         beacon_finish_cursor = beacon_finish_cursor + 1;
     }

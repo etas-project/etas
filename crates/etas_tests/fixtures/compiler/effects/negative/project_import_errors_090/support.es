@@ -25,7 +25,7 @@ flow project_negative_support_delta_horizon_prepare(seed: i32) -> i32 ![]
 {
     var india_prepare_total = seed + 17;
     var india_prepare_cursor = 0;
-    while india_prepare_cursor < 11 limit Iterations(11) {
+    while india_prepare_cursor < 11 {
         india_prepare_total = india_prepare_total + india_prepare_cursor + 1;
         india_prepare_cursor = india_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_negative_support_delta_horizon_route(seed: i32) -> i32 ![]
 {
     var india_route_total = seed * 17;
     var india_route_cursor = 0;
-    while india_route_cursor < 10 limit Iterations(10) {
+    while india_route_cursor < 10 {
         india_route_total = india_route_total + india_route_cursor + 1;
         india_route_cursor = india_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_negative_support_delta_horizon_score(seed: i32) -> i32 ![]
 {
     var india_score_total = seed + 17;
     var india_score_cursor = 0;
-    while india_score_cursor < 7 limit Iterations(7) {
+    while india_score_cursor < 7 {
         india_score_total = india_score_total + india_score_cursor + 1;
         india_score_cursor = india_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_negative_support_delta_horizon_finish(seed: i32) -> i32 ![]
 {
     var india_finish_total = seed - 17;
     var india_finish_cursor = 0;
-    while india_finish_cursor < 8 limit Iterations(8) {
+    while india_finish_cursor < 8 {
         india_finish_total = india_finish_total + india_finish_cursor + 1;
         india_finish_cursor = india_finish_cursor + 1;
     }

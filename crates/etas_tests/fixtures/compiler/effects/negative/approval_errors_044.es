@@ -24,7 +24,7 @@ flow approval_errors_zircon_wander_prepare(seed: i32) -> i32 ![]
 {
     var lima_prepare_total = seed + 10;
     var lima_prepare_cursor = 0;
-    while lima_prepare_cursor < 12 limit Iterations(12) {
+    while lima_prepare_cursor < 12 {
         lima_prepare_total = lima_prepare_total + lima_prepare_cursor + 3;
         lima_prepare_cursor = lima_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow approval_errors_zircon_wander_route(seed: i32) -> i32 ![]
 {
     var lima_route_total = seed * 10;
     var lima_route_cursor = 0;
-    while lima_route_cursor < 7 limit Iterations(7) {
+    while lima_route_cursor < 7 {
         lima_route_total = lima_route_total + lima_route_cursor + 3;
         lima_route_cursor = lima_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow approval_errors_zircon_wander_score(seed: i32) -> i32 ![]
 {
     var lima_score_total = seed + 10;
     var lima_score_cursor = 0;
-    while lima_score_cursor < 9 limit Iterations(9) {
+    while lima_score_cursor < 9 {
         lima_score_total = lima_score_total + lima_score_cursor + 3;
         lima_score_cursor = lima_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow approval_errors_zircon_wander_finish(seed: i32) -> i32 ![]
 {
     var lima_finish_total = seed - 10;
     var lima_finish_cursor = 0;
-    while lima_finish_cursor < 9 limit Iterations(9) {
+    while lima_finish_cursor < 9 {
         lima_finish_total = lima_finish_total + lima_finish_cursor + 3;
         lima_finish_cursor = lima_finish_cursor + 1;
     }

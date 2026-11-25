@@ -23,7 +23,7 @@ flow stdio_console_juno_juno_prepare(seed: i32) -> i32 ![]
 {
     var alpha_prepare_total = seed + 19;
     var alpha_prepare_cursor = 0;
-    while alpha_prepare_cursor < 8 limit Iterations(8) {
+    while alpha_prepare_cursor < 8 {
         alpha_prepare_total = alpha_prepare_total + alpha_prepare_cursor + 0;
         alpha_prepare_cursor = alpha_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_juno_juno_route(seed: i32) -> i32 ![]
 {
     var alpha_route_total = seed * 19;
     var alpha_route_cursor = 0;
-    while alpha_route_cursor < 12 limit Iterations(12) {
+    while alpha_route_cursor < 12 {
         alpha_route_total = alpha_route_total + alpha_route_cursor + 0;
         alpha_route_cursor = alpha_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_juno_juno_score(seed: i32) -> i32 ![]
 {
     var alpha_score_total = seed + 19;
     var alpha_score_cursor = 0;
-    while alpha_score_cursor < 6 limit Iterations(6) {
+    while alpha_score_cursor < 6 {
         alpha_score_total = alpha_score_total + alpha_score_cursor + 0;
         alpha_score_cursor = alpha_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_juno_juno_finish(seed: i32) -> i32 ![]
 {
     var alpha_finish_total = seed - 19;
     var alpha_finish_cursor = 0;
-    while alpha_finish_cursor < 8 limit Iterations(8) {
+    while alpha_finish_cursor < 8 {
         alpha_finish_total = alpha_finish_total + alpha_finish_cursor + 0;
         alpha_finish_cursor = alpha_finish_cursor + 1;
     }

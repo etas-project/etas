@@ -15,7 +15,7 @@ flow main(args: Array<string>) -> i32 {
     let report = check((^original).with_body(body));
     if report.status != "rejected" { return 2; }
     var changed_trace = false;
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::ActionTraceNotContained" || diagnostic.code == "code::OutcomeTraceNotContained" {
             changed_trace = true;
         }

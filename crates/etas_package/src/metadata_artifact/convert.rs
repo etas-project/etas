@@ -63,6 +63,7 @@ fn public_metadata_from_metadata(
     path: &Path,
 ) -> Result<PackagePublicMetadata, PackageError> {
     Ok(PackagePublicMetadata {
+        constructor_contracts: metadata.constructor_contracts,
         scoped_callbacks: metadata.scoped_callbacks,
         definition_origins: metadata.definition_origins,
         definition_descriptors: metadata.definition_descriptors,
@@ -1120,6 +1121,7 @@ fn effect_summary_from_metadata(
                 })
             })
             .transpose()?,
+        callable_body: summary.callable_body,
         returned_callables: summary.returned_callables,
         item: summary.item,
         public_effects: effect_row_from_metadata(summary.public_effects)?,
@@ -1138,6 +1140,14 @@ fn action_trace_from_metadata(
     trace: etas_package_metadata::ActionTrace,
 ) -> Result<PackageActionTraceMetadata, PackageError> {
     Ok(match trace {
+        etas_package_metadata::ActionTrace::Recursive { id, body } => {
+            PackageActionTraceMetadata::Recursive {
+                id,
+                child: body
+                    .map(|body| action_trace_from_metadata(*body).map(Box::new))
+                    .transpose()?,
+            }
+        }
         etas_package_metadata::ActionTrace::Empty => PackageActionTraceMetadata::Empty,
         etas_package_metadata::ActionTrace::Event(event) => PackageActionTraceMetadata::Event {
             action: effect_ref_from_metadata(event.action)?,

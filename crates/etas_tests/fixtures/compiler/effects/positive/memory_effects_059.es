@@ -24,7 +24,7 @@ flow memory_effects_islet_islet_prepare(seed: i32) -> i32 ![]
 {
     var summit_prepare_total = seed + 5;
     var summit_prepare_cursor = 0;
-    while summit_prepare_cursor < 12 limit Iterations(12) {
+    while summit_prepare_cursor < 12 {
         summit_prepare_total = summit_prepare_total + summit_prepare_cursor + 3;
         summit_prepare_cursor = summit_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_islet_islet_route(seed: i32) -> i32 ![]
 {
     var summit_route_total = seed * 5;
     var summit_route_cursor = 0;
-    while summit_route_cursor < 12 limit Iterations(12) {
+    while summit_route_cursor < 12 {
         summit_route_total = summit_route_total + summit_route_cursor + 3;
         summit_route_cursor = summit_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_islet_islet_score(seed: i32) -> i32 ![]
 {
     var summit_score_total = seed + 5;
     var summit_score_cursor = 0;
-    while summit_score_cursor < 9 limit Iterations(9) {
+    while summit_score_cursor < 9 {
         summit_score_total = summit_score_total + summit_score_cursor + 3;
         summit_score_cursor = summit_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_islet_islet_finish(seed: i32) -> i32 ![]
 {
     var summit_finish_total = seed - 5;
     var summit_finish_cursor = 0;
-    while summit_finish_cursor < 8 limit Iterations(8) {
+    while summit_finish_cursor < 8 {
         summit_finish_total = summit_finish_total + summit_finish_cursor + 3;
         summit_finish_cursor = summit_finish_cursor + 1;
     }

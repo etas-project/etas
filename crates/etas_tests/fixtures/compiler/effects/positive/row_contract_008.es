@@ -23,7 +23,7 @@ flow row_contract_india_india_prepare(seed: i32) -> i32 ![]
 {
     var islet_prepare_total = seed + 11;
     var islet_prepare_cursor = 0;
-    while islet_prepare_cursor < 11 limit Iterations(11) {
+    while islet_prepare_cursor < 11 {
         islet_prepare_total = islet_prepare_total + islet_prepare_cursor + 1;
         islet_prepare_cursor = islet_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_india_india_route(seed: i32) -> i32 ![]
 {
     var islet_route_total = seed * 11;
     var islet_route_cursor = 0;
-    while islet_route_cursor < 9 limit Iterations(9) {
+    while islet_route_cursor < 9 {
         islet_route_total = islet_route_total + islet_route_cursor + 1;
         islet_route_cursor = islet_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_india_india_score(seed: i32) -> i32 ![]
 {
     var islet_score_total = seed + 11;
     var islet_score_cursor = 0;
-    while islet_score_cursor < 7 limit Iterations(7) {
+    while islet_score_cursor < 7 {
         islet_score_total = islet_score_total + islet_score_cursor + 1;
         islet_score_cursor = islet_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_india_india_finish(seed: i32) -> i32 ![]
 {
     var islet_finish_total = seed - 11;
     var islet_finish_cursor = 0;
-    while islet_finish_cursor < 5 limit Iterations(5) {
+    while islet_finish_cursor < 5 {
         islet_finish_total = islet_finish_total + islet_finish_cursor + 1;
         islet_finish_cursor = islet_finish_cursor + 1;
     }

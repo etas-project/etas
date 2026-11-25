@@ -161,7 +161,7 @@ flow policies_negative_deny_overrides_allow_specific_prepare_35(seed: i32) -> i3
     var ledger_9 = seed + 33;
     var pivot_9 = ledger_9 / 11;
     var window_9 = 11;
-    while window_9 > 0 limit Iterations(12) {
+    while window_9 > 0 {
         pivot_9 = pivot_9 + window_9;
         ledger_9 = ledger_9 + pivot_9;
         window_9 = window_9 - 1;
@@ -191,7 +191,7 @@ flow policies_negative_deny_overrides_allow_specific_route_35(seed: i32) -> i32 
     var ledger_5 = seed + 7;
     var pivot_5 = ledger_5 * 8;
     var window_5 = 0;
-    while window_5 < 10 limit Iterations(10) {
+    while window_5 < 10 {
         pivot_5 = pivot_5 + window_5 + 7;
         window_5 = window_5 + 1;
     }
@@ -206,7 +206,7 @@ flow policies_negative_deny_overrides_allow_specific_route_35(seed: i32) -> i32 
     var policies_negative_deny_overrides_allow_specific_route_35_north_gate = seed + 36;
     var policies_negative_deny_overrides_allow_specific_route_35_south_gate = policies_negative_deny_overrides_allow_specific_route_35_north_gate % 5;
     var policies_negative_deny_overrides_allow_specific_route_35_east_gate = policies_negative_deny_overrides_allow_specific_route_35_south_gate + policies_negative_deny_overrides_allow_specific_route_35_north_gate;
-    while policies_negative_deny_overrides_allow_specific_route_35_south_gate < 4 limit Iterations(4) {
+    while policies_negative_deny_overrides_allow_specific_route_35_south_gate < 4 {
         policies_negative_deny_overrides_allow_specific_route_35_east_gate = policies_negative_deny_overrides_allow_specific_route_35_east_gate + policies_negative_deny_overrides_allow_specific_route_35_south_gate;
         policies_negative_deny_overrides_allow_specific_route_35_south_gate = policies_negative_deny_overrides_allow_specific_route_35_south_gate + 1;
     }
@@ -221,7 +221,7 @@ flow policies_negative_deny_overrides_allow_specific_score_35(seed: i32) -> i32 
     var ledger_14 = seed - 16;
     var pivot_14 = seed + 32;
     var window_14 = 1;
-    while window_14 <= 18 limit Iterations(18) {
+    while window_14 <= 18 {
         ledger_14 = ledger_14 + (pivot_14 % (21));
         pivot_14 = pivot_14 + window_14;
         window_14 = window_14 + 1;
@@ -250,7 +250,7 @@ flow policies_negative_deny_overrides_allow_specific_finish_35(seed: i32) -> i32
     var ledger_12 = seed * 14;
     var pivot_12 = ledger_12 + 23;
     var window_12 = 0;
-    while window_12 < 18 limit Iterations(18) {
+    while window_12 < 18 {
         if window_12 % 2 == 0 {
             pivot_12 = pivot_12 + window_12;
         } else {
@@ -264,7 +264,7 @@ flow policies_negative_deny_overrides_allow_specific_finish_35(seed: i32) -> i32
     var policies_negative_deny_overrides_allow_specific_finish_35_final_seed = seed + 44;
     var policies_negative_deny_overrides_allow_specific_finish_35_final_mask = policies_negative_deny_overrides_allow_specific_finish_35_final_seed - 6;
     var policies_negative_deny_overrides_allow_specific_finish_35_final_roll = policies_negative_deny_overrides_allow_specific_finish_35_final_mask * 6;
-    while policies_negative_deny_overrides_allow_specific_finish_35_final_mask > 0 limit Iterations(12) {
+    while policies_negative_deny_overrides_allow_specific_finish_35_final_mask > 0 {
         policies_negative_deny_overrides_allow_specific_finish_35_final_roll = policies_negative_deny_overrides_allow_specific_finish_35_final_roll + policies_negative_deny_overrides_allow_specific_finish_35_final_mask;
         policies_negative_deny_overrides_allow_specific_finish_35_final_mask = policies_negative_deny_overrides_allow_specific_finish_35_final_mask - 1;
     }

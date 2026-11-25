@@ -159,7 +159,7 @@ flow effects_positive_impl_declares_effect_actions_prepare_25(seed: i32) -> i32 
     var ledger_8 = seed - 10;
     var pivot_8 = seed + 20;
     var window_8 = 1;
-    while window_8 <= 12 limit Iterations(12) {
+    while window_8 <= 12 {
         ledger_8 = ledger_8 + (pivot_8 % (15));
         pivot_8 = pivot_8 + window_8;
         window_8 = window_8 + 1;
@@ -189,7 +189,7 @@ flow effects_positive_impl_declares_effect_actions_route_25(seed: i32) -> i32 {
     var ledger_6 = seed * 8;
     var pivot_6 = ledger_6 + 17;
     var window_6 = 0;
-    while window_6 < 12 limit Iterations(12) {
+    while window_6 < 12 {
         if window_6 % 2 == 0 {
             pivot_6 = pivot_6 + window_6;
         } else {
@@ -203,7 +203,7 @@ flow effects_positive_impl_declares_effect_actions_route_25(seed: i32) -> i32 {
     var effects_positive_impl_declares_effect_actions_route_25_north_gate = seed + 26;
     var effects_positive_impl_declares_effect_actions_route_25_south_gate = effects_positive_impl_declares_effect_actions_route_25_north_gate % 9;
     var effects_positive_impl_declares_effect_actions_route_25_east_gate = effects_positive_impl_declares_effect_actions_route_25_south_gate + effects_positive_impl_declares_effect_actions_route_25_north_gate;
-    while effects_positive_impl_declares_effect_actions_route_25_south_gate < 4 limit Iterations(4) {
+    while effects_positive_impl_declares_effect_actions_route_25_south_gate < 4 {
         effects_positive_impl_declares_effect_actions_route_25_east_gate = effects_positive_impl_declares_effect_actions_route_25_east_gate + effects_positive_impl_declares_effect_actions_route_25_south_gate;
         effects_positive_impl_declares_effect_actions_route_25_south_gate = effects_positive_impl_declares_effect_actions_route_25_south_gate + 1;
     }
@@ -218,7 +218,7 @@ flow effects_positive_impl_declares_effect_actions_score_25(seed: i32) -> i32 {
     var ledger_17 = seed + 57;
     var pivot_17 = ledger_17 / 19;
     var window_17 = 19;
-    while window_17 > 0 limit Iterations(20) {
+    while window_17 > 0 {
         pivot_17 = pivot_17 + window_17;
         ledger_17 = ledger_17 + pivot_17;
         window_17 = window_17 - 1;
@@ -247,7 +247,7 @@ flow effects_positive_impl_declares_effect_actions_finish_25(seed: i32) -> i32 {
     var ledger_17 = seed + 19;
     var pivot_17 = ledger_17 * 20;
     var window_17 = 0;
-    while window_17 < 22 limit Iterations(22) {
+    while window_17 < 22 {
         pivot_17 = pivot_17 + window_17 + 19;
         window_17 = window_17 + 1;
     }
@@ -262,7 +262,7 @@ flow effects_positive_impl_declares_effect_actions_finish_25(seed: i32) -> i32 {
     var effects_positive_impl_declares_effect_actions_finish_25_final_seed = seed + 34;
     var effects_positive_impl_declares_effect_actions_finish_25_final_mask = effects_positive_impl_declares_effect_actions_finish_25_final_seed - 2;
     var effects_positive_impl_declares_effect_actions_finish_25_final_roll = effects_positive_impl_declares_effect_actions_finish_25_final_mask * 4;
-    while effects_positive_impl_declares_effect_actions_finish_25_final_mask > 0 limit Iterations(12) {
+    while effects_positive_impl_declares_effect_actions_finish_25_final_mask > 0 {
         effects_positive_impl_declares_effect_actions_finish_25_final_roll = effects_positive_impl_declares_effect_actions_finish_25_final_roll + effects_positive_impl_declares_effect_actions_finish_25_final_mask;
         effects_positive_impl_declares_effect_actions_finish_25_final_mask = effects_positive_impl_declares_effect_actions_finish_25_final_mask - 1;
     }

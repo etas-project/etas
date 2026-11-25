@@ -21,7 +21,7 @@ flow main() -> i32 {{
 
 #[test]
 fn a_checkpoint_in_a_compiled_limited_agent_restores_the_policy_and_then_leaves_its_scope() {
-    let program = program("19 ~> selected limit Tokens(23)");
+    let program = program("19 ~> selected");
     let (saved, artifact) = save_checkpoint_at(&program, &[None], 19, 2, 0);
     assert_eq!(
         artifact["checkpoint"]["model_policy"]["options"]["max_output_tokens"],
@@ -58,7 +58,7 @@ fn find_kind<'a>(
 
 #[test]
 fn remaining_native_pipeline_stages_keep_their_checked_invocation_cursor_and_limits() {
-    let program = program("19 ~> selected limit Tokens(23) ~> selected limit Tokens(11)");
+    let program = program("19 ~> selected ~> selected");
     let (saved, artifact) = save_checkpoint_at(&program, &[None], 19, 3, 0);
     let (checked, definitions, revisions) = restore_captured(&program, &saved);
     let result = resume_captured(&checked, definitions, revisions.clone(), &artifact);

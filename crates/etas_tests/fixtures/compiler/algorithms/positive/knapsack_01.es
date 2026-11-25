@@ -13,9 +13,9 @@ type Item = {
 flow knapsack(items: Array<Item>, capacity: i32) -> i32 {
     var dp = repeat_i32(0, capacity + 1);
 
-    for item in items limit Iterations(256) {
+    for item in items {
         var w = capacity;
-        while w >= item.weight limit Iterations(4096) {
+        while w >= item.weight {
             let candidate = dp[w - item.weight] + item.value;
             if candidate > dp[w] {
                 dp[w] = candidate;

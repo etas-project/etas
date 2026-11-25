@@ -25,7 +25,7 @@ flow project_negative_support_alpha_estate_prepare(seed: i32) -> i32 ![]
 {
     var legend_prepare_total = seed + 14;
     var legend_prepare_cursor = 0;
-    while legend_prepare_cursor < 8 limit Iterations(8) {
+    while legend_prepare_cursor < 8 {
         legend_prepare_total = legend_prepare_total + legend_prepare_cursor + 5;
         legend_prepare_cursor = legend_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_negative_support_alpha_estate_route(seed: i32) -> i32 ![]
 {
     var legend_route_total = seed * 14;
     var legend_route_cursor = 0;
-    while legend_route_cursor < 7 limit Iterations(7) {
+    while legend_route_cursor < 7 {
         legend_route_total = legend_route_total + legend_route_cursor + 5;
         legend_route_cursor = legend_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_negative_support_alpha_estate_score(seed: i32) -> i32 ![]
 {
     var legend_score_total = seed + 14;
     var legend_score_cursor = 0;
-    while legend_score_cursor < 11 limit Iterations(11) {
+    while legend_score_cursor < 11 {
         legend_score_total = legend_score_total + legend_score_cursor + 5;
         legend_score_cursor = legend_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_negative_support_alpha_estate_finish(seed: i32) -> i32 ![]
 {
     var legend_finish_total = seed - 14;
     var legend_finish_cursor = 0;
-    while legend_finish_cursor < 5 limit Iterations(5) {
+    while legend_finish_cursor < 5 {
         legend_finish_total = legend_finish_total + legend_finish_cursor + 5;
         legend_finish_cursor = legend_finish_cursor + 1;
     }

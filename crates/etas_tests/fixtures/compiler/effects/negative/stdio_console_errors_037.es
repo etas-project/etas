@@ -25,7 +25,7 @@ flow stdio_console_errors_ridge_orbit_prepare(seed: i32) -> i32 ![]
 {
     var lantern_prepare_total = seed + 3;
     var lantern_prepare_cursor = 0;
-    while lantern_prepare_cursor < 10 limit Iterations(10) {
+    while lantern_prepare_cursor < 10 {
         lantern_prepare_total = lantern_prepare_total + lantern_prepare_cursor + 3;
         lantern_prepare_cursor = lantern_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_ridge_orbit_route(seed: i32) -> i32 ![]
 {
     var lantern_route_total = seed * 3;
     var lantern_route_cursor = 0;
-    while lantern_route_cursor < 12 limit Iterations(12) {
+    while lantern_route_cursor < 12 {
         lantern_route_total = lantern_route_total + lantern_route_cursor + 3;
         lantern_route_cursor = lantern_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_ridge_orbit_score(seed: i32) -> i32 ![]
 {
     var lantern_score_total = seed + 3;
     var lantern_score_cursor = 0;
-    while lantern_score_cursor < 9 limit Iterations(9) {
+    while lantern_score_cursor < 9 {
         lantern_score_total = lantern_score_total + lantern_score_cursor + 3;
         lantern_score_cursor = lantern_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_ridge_orbit_finish(seed: i32) -> i32 ![]
 {
     var lantern_finish_total = seed - 3;
     var lantern_finish_cursor = 0;
-    while lantern_finish_cursor < 10 limit Iterations(10) {
+    while lantern_finish_cursor < 10 {
         lantern_finish_total = lantern_finish_total + lantern_finish_cursor + 3;
         lantern_finish_cursor = lantern_finish_cursor + 1;
     }

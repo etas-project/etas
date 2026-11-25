@@ -17,7 +17,7 @@ flow rob(values: Array<i32>) -> i32 {
     var skip = 0;
     var take = 0;
 
-    for value in values limit Iterations(1024) {
+    for value in values {
         let next_take = skip + value;
         skip = max_i32(skip, take);
         take = next_take;

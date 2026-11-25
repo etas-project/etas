@@ -24,7 +24,7 @@ flow command_sandbox_errors_parity_needle_prepare(seed: i32) -> i32 ![]
 {
     var zone_prepare_total = seed + 7;
     var zone_prepare_cursor = 0;
-    while zone_prepare_cursor < 8 limit Iterations(8) {
+    while zone_prepare_cursor < 8 {
         zone_prepare_total = zone_prepare_total + zone_prepare_cursor + 5;
         zone_prepare_cursor = zone_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow command_sandbox_errors_parity_needle_route(seed: i32) -> i32 ![]
 {
     var zone_route_total = seed * 7;
     var zone_route_cursor = 0;
-    while zone_route_cursor < 11 limit Iterations(11) {
+    while zone_route_cursor < 11 {
         zone_route_total = zone_route_total + zone_route_cursor + 5;
         zone_route_cursor = zone_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow command_sandbox_errors_parity_needle_score(seed: i32) -> i32 ![]
 {
     var zone_score_total = seed + 7;
     var zone_score_cursor = 0;
-    while zone_score_cursor < 11 limit Iterations(11) {
+    while zone_score_cursor < 11 {
         zone_score_total = zone_score_total + zone_score_cursor + 5;
         zone_score_cursor = zone_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow command_sandbox_errors_parity_needle_finish(seed: i32) -> i32 ![]
 {
     var zone_finish_total = seed - 7;
     var zone_finish_cursor = 0;
-    while zone_finish_cursor < 9 limit Iterations(9) {
+    while zone_finish_cursor < 9 {
         zone_finish_total = zone_finish_total + zone_finish_cursor + 5;
         zone_finish_cursor = zone_finish_cursor + 1;
     }

@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_kingdom_kingdom_entry(seed: i32) -> i32 ![]
     var kingdom_total = interprocedural_fixpoint_kingdom_kingdom_prepare(seed);
     kingdom_total = kingdom_total + interprocedural_fixpoint_kingdom_kingdom_route(seed + 5);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let kingdom_adjust: i32 -> i32 = (value: i32) => value + 8;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_kingdom_kingdom_prepare(seed: i32) -> i32 ![]
 {
     var crystal_prepare_total = seed + 12;
     var crystal_prepare_cursor = 0;
-    while crystal_prepare_cursor < 8 limit Iterations(8) {
+    while crystal_prepare_cursor < 8 {
         crystal_prepare_total = crystal_prepare_total + crystal_prepare_cursor + 1;
         crystal_prepare_cursor = crystal_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_kingdom_kingdom_route(seed: i32) -> i32 ![]
 {
     var crystal_route_total = seed * 12;
     var crystal_route_cursor = 0;
-    while crystal_route_cursor < 8 limit Iterations(8) {
+    while crystal_route_cursor < 8 {
         crystal_route_total = crystal_route_total + crystal_route_cursor + 1;
         crystal_route_cursor = crystal_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_kingdom_kingdom_score(seed: i32) -> i32 ![]
 {
     var crystal_score_total = seed + 12;
     var crystal_score_cursor = 0;
-    while crystal_score_cursor < 7 limit Iterations(7) {
+    while crystal_score_cursor < 7 {
         crystal_score_total = crystal_score_total + crystal_score_cursor + 1;
         crystal_score_cursor = crystal_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_kingdom_kingdom_finish(seed: i32) -> i32 ![]
 {
     var crystal_finish_total = seed - 12;
     var crystal_finish_cursor = 0;
-    while crystal_finish_cursor < 10 limit Iterations(10) {
+    while crystal_finish_cursor < 10 {
         crystal_finish_total = crystal_finish_total + crystal_finish_cursor + 1;
         crystal_finish_cursor = crystal_finish_cursor + 1;
     }

@@ -22,7 +22,7 @@ flow merge(intervals: Array<Interval>) -> Array<Interval> {
     var out: Array<Interval> = [intervals[0]];
     var i: usize = 1;
 
-    while i < len(intervals) limit Iterations(1024) {
+    while i < len(intervals) {
         let last_index = len(out) - 1;
         if intervals[i].start <= out[last_index].end {
             out[last_index].end = max_i32(out[last_index].end, intervals[i].end);
@@ -37,7 +37,7 @@ flow merge(intervals: Array<Interval>) -> Array<Interval> {
 
 flow flatten(intervals: Array<Interval>) -> Array<i32> {
     var out: Array<i32> = [];
-    for interval in intervals limit Iterations(1024) {
+    for interval in intervals {
         out = out.push(interval.start);
         out = out.push(interval.end);
     }

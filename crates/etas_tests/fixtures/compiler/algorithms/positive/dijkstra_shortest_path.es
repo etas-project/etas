@@ -14,7 +14,7 @@ type Edge = {
 flow relax(edges: Array<Edge>, dist: Array<i32>, visited: Array<bool>, current: i32) -> Array<i32> {
     var next_dist = dist;
 
-    for edge in edges limit Iterations(1024) {
+    for edge in edges {
         if edge.from == current && !visited[edge.to] {
             let candidate = next_dist[current] + edge.cost;
             if candidate < next_dist[edge.to] {
@@ -30,7 +30,7 @@ flow next_unvisited(dist: Array<i32>, visited: Array<bool>) -> i32 {
     var best = -1;
     var i = 0;
 
-    while i < len_i32_list(dist) limit Iterations(1024) {
+    while i < len_i32_list(dist) {
         if !visited[i] && (best == -1 || dist[i] < dist[best]) {
             best = i;
         }
@@ -46,7 +46,7 @@ flow dijkstra(edges: Array<Edge>, nodes: i32, start: i32, goal: i32) -> i32 {
     dist[start] = 0;
 
     var step = 0;
-    while step < nodes limit Iterations(1024) {
+    while step < nodes {
         let current = next_unvisited(dist, visited);
         if current == -1 {
             break;

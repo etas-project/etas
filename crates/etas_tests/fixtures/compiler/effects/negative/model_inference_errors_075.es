@@ -24,7 +24,7 @@ flow model_inference_errors_forest_domain_prepare(seed: i32) -> i32 ![]
 {
     var estate_prepare_total = seed + 3;
     var estate_prepare_cursor = 0;
-    while estate_prepare_cursor < 8 limit Iterations(8) {
+    while estate_prepare_cursor < 8 {
         estate_prepare_total = estate_prepare_total + estate_prepare_cursor + 6;
         estate_prepare_cursor = estate_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_forest_domain_route(seed: i32) -> i32 ![]
 {
     var estate_route_total = seed * 3;
     var estate_route_cursor = 0;
-    while estate_route_cursor < 8 limit Iterations(8) {
+    while estate_route_cursor < 8 {
         estate_route_total = estate_route_total + estate_route_cursor + 6;
         estate_route_cursor = estate_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_forest_domain_score(seed: i32) -> i32 ![]
 {
     var estate_score_total = seed + 3;
     var estate_score_cursor = 0;
-    while estate_score_cursor < 12 limit Iterations(12) {
+    while estate_score_cursor < 12 {
         estate_score_total = estate_score_total + estate_score_cursor + 6;
         estate_score_cursor = estate_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_forest_domain_finish(seed: i32) -> i32 ![]
 {
     var estate_finish_total = seed - 3;
     var estate_finish_cursor = 0;
-    while estate_finish_cursor < 8 limit Iterations(8) {
+    while estate_finish_cursor < 8 {
         estate_finish_total = estate_finish_total + estate_finish_cursor + 6;
         estate_finish_cursor = estate_finish_cursor + 1;
     }

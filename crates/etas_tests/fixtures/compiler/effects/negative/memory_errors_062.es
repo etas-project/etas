@@ -24,7 +24,7 @@ flow memory_errors_rocket_parity_prepare(seed: i32) -> i32 ![]
 {
     var nectar_prepare_total = seed + 9;
     var nectar_prepare_cursor = 0;
-    while nectar_prepare_cursor < 10 limit Iterations(10) {
+    while nectar_prepare_cursor < 10 {
         nectar_prepare_total = nectar_prepare_total + nectar_prepare_cursor + 0;
         nectar_prepare_cursor = nectar_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_rocket_parity_route(seed: i32) -> i32 ![]
 {
     var nectar_route_total = seed * 9;
     var nectar_route_cursor = 0;
-    while nectar_route_cursor < 7 limit Iterations(7) {
+    while nectar_route_cursor < 7 {
         nectar_route_total = nectar_route_total + nectar_route_cursor + 0;
         nectar_route_cursor = nectar_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_rocket_parity_score(seed: i32) -> i32 ![]
 {
     var nectar_score_total = seed + 9;
     var nectar_score_cursor = 0;
-    while nectar_score_cursor < 6 limit Iterations(6) {
+    while nectar_score_cursor < 6 {
         nectar_score_total = nectar_score_total + nectar_score_cursor + 0;
         nectar_score_cursor = nectar_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_rocket_parity_finish(seed: i32) -> i32 ![]
 {
     var nectar_finish_total = seed - 9;
     var nectar_finish_cursor = 0;
-    while nectar_finish_cursor < 11 limit Iterations(11) {
+    while nectar_finish_cursor < 11 {
         nectar_finish_total = nectar_finish_total + nectar_finish_cursor + 0;
         nectar_finish_cursor = nectar_finish_cursor + 1;
     }

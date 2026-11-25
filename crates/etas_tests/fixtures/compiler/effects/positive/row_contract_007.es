@@ -23,7 +23,7 @@ flow row_contract_hotel_hotel_prepare(seed: i32) -> i32 ![]
 {
     var binary_prepare_total = seed + 10;
     var binary_prepare_cursor = 0;
-    while binary_prepare_cursor < 10 limit Iterations(10) {
+    while binary_prepare_cursor < 10 {
         binary_prepare_total = binary_prepare_total + binary_prepare_cursor + 0;
         binary_prepare_cursor = binary_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_hotel_hotel_route(seed: i32) -> i32 ![]
 {
     var binary_route_total = seed * 10;
     var binary_route_cursor = 0;
-    while binary_route_cursor < 8 limit Iterations(8) {
+    while binary_route_cursor < 8 {
         binary_route_total = binary_route_total + binary_route_cursor + 0;
         binary_route_cursor = binary_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_hotel_hotel_score(seed: i32) -> i32 ![]
 {
     var binary_score_total = seed + 10;
     var binary_score_cursor = 0;
-    while binary_score_cursor < 6 limit Iterations(6) {
+    while binary_score_cursor < 6 {
         binary_score_total = binary_score_total + binary_score_cursor + 0;
         binary_score_cursor = binary_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_hotel_hotel_finish(seed: i32) -> i32 ![]
 {
     var binary_finish_total = seed - 10;
     var binary_finish_cursor = 0;
-    while binary_finish_cursor < 12 limit Iterations(12) {
+    while binary_finish_cursor < 12 {
         binary_finish_total = binary_finish_total + binary_finish_cursor + 0;
         binary_finish_cursor = binary_finish_cursor + 1;
     }

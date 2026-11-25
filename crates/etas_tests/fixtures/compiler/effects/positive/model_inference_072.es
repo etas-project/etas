@@ -23,7 +23,7 @@ flow model_inference_wander_wander_prepare(seed: i32) -> i32 ![]
 {
     var lima_prepare_total = seed + 18;
     var lima_prepare_cursor = 0;
-    while lima_prepare_cursor < 10 limit Iterations(10) {
+    while lima_prepare_cursor < 10 {
         lima_prepare_total = lima_prepare_total + lima_prepare_cursor + 2;
         lima_prepare_cursor = lima_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_wander_wander_route(seed: i32) -> i32 ![]
 {
     var lima_route_total = seed * 18;
     var lima_route_cursor = 0;
-    while lima_route_cursor < 7 limit Iterations(7) {
+    while lima_route_cursor < 7 {
         lima_route_total = lima_route_total + lima_route_cursor + 2;
         lima_route_cursor = lima_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_wander_wander_score(seed: i32) -> i32 ![]
 {
     var lima_score_total = seed + 18;
     var lima_score_cursor = 0;
-    while lima_score_cursor < 8 limit Iterations(8) {
+    while lima_score_cursor < 8 {
         lima_score_total = lima_score_total + lima_score_cursor + 2;
         lima_score_cursor = lima_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_wander_wander_finish(seed: i32) -> i32 ![]
 {
     var lima_finish_total = seed - 18;
     var lima_finish_cursor = 0;
-    while lima_finish_cursor < 5 limit Iterations(5) {
+    while lima_finish_cursor < 5 {
         lima_finish_total = lima_finish_total + lima_finish_cursor + 2;
         lima_finish_cursor = lima_finish_cursor + 1;
     }

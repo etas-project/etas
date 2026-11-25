@@ -10,9 +10,9 @@ flow lcs(a: string, b: string) -> i32 {
     var dp = matrix_i32(rows, cols, 0);
     var i = 1;
 
-    while i <= string_len(a) limit Iterations(1024) {
+    while i <= string_len(a) {
         var j = 1;
-        while j <= string_len(b) limit Iterations(1024) {
+        while j <= string_len(b) {
             if char_at(a, i - 1) == char_at(b, j - 1) {
                 dp[i][j] = dp[i - 1][j - 1] + 1;
             } else if dp[i - 1][j] > dp[i][j - 1] {

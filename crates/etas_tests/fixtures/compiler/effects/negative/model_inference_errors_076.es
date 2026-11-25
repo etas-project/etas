@@ -24,7 +24,7 @@ flow model_inference_errors_galaxy_estate_prepare(seed: i32) -> i32 ![]
 {
     var legend_prepare_total = seed + 4;
     var legend_prepare_cursor = 0;
-    while legend_prepare_cursor < 9 limit Iterations(9) {
+    while legend_prepare_cursor < 9 {
         legend_prepare_total = legend_prepare_total + legend_prepare_cursor + 0;
         legend_prepare_cursor = legend_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_galaxy_estate_route(seed: i32) -> i32 ![]
 {
     var legend_route_total = seed * 4;
     var legend_route_cursor = 0;
-    while legend_route_cursor < 9 limit Iterations(9) {
+    while legend_route_cursor < 9 {
         legend_route_total = legend_route_total + legend_route_cursor + 0;
         legend_route_cursor = legend_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_galaxy_estate_score(seed: i32) -> i32 ![]
 {
     var legend_score_total = seed + 4;
     var legend_score_cursor = 0;
-    while legend_score_cursor < 6 limit Iterations(6) {
+    while legend_score_cursor < 6 {
         legend_score_total = legend_score_total + legend_score_cursor + 0;
         legend_score_cursor = legend_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_galaxy_estate_finish(seed: i32) -> i32 ![]
 {
     var legend_finish_total = seed - 4;
     var legend_finish_cursor = 0;
-    while legend_finish_cursor < 9 limit Iterations(9) {
+    while legend_finish_cursor < 9 {
         legend_finish_total = legend_finish_total + legend_finish_cursor + 0;
         legend_finish_cursor = legend_finish_cursor + 1;
     }

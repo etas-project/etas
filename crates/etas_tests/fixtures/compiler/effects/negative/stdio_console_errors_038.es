@@ -25,7 +25,7 @@ flow stdio_console_errors_signal_pulse_prepare(seed: i32) -> i32 ![]
 {
     var saffron_prepare_total = seed + 4;
     var saffron_prepare_cursor = 0;
-    while saffron_prepare_cursor < 11 limit Iterations(11) {
+    while saffron_prepare_cursor < 11 {
         saffron_prepare_total = saffron_prepare_total + saffron_prepare_cursor + 4;
         saffron_prepare_cursor = saffron_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_signal_pulse_route(seed: i32) -> i32 ![]
 {
     var saffron_route_total = seed * 4;
     var saffron_route_cursor = 0;
-    while saffron_route_cursor < 7 limit Iterations(7) {
+    while saffron_route_cursor < 7 {
         saffron_route_total = saffron_route_total + saffron_route_cursor + 4;
         saffron_route_cursor = saffron_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_signal_pulse_score(seed: i32) -> i32 ![]
 {
     var saffron_score_total = seed + 4;
     var saffron_score_cursor = 0;
-    while saffron_score_cursor < 10 limit Iterations(10) {
+    while saffron_score_cursor < 10 {
         saffron_score_total = saffron_score_total + saffron_score_cursor + 4;
         saffron_score_cursor = saffron_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_signal_pulse_finish(seed: i32) -> i32 ![]
 {
     var saffron_finish_total = seed - 4;
     var saffron_finish_cursor = 0;
-    while saffron_finish_cursor < 11 limit Iterations(11) {
+    while saffron_finish_cursor < 11 {
         saffron_finish_total = saffron_finish_total + saffron_finish_cursor + 4;
         saffron_finish_cursor = saffron_finish_cursor + 1;
     }

@@ -10,7 +10,7 @@ type Counter<T> = { fallback: T, valid: bool };
 impl Counter<T> {
     flow keep(self, value: T) -> T {
         var step = 0;
-        while step < 100000 limit Iterations(100000) { step = step + 1; }
+        while step < 100000 { step = step + 1; }
         if self.valid { return value; }
         return self.fallback;
     }

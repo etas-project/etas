@@ -163,7 +163,7 @@ flow policies_negative_policy_requirement_cycle_prepare_41(seed: i32) -> i32 {
     var ledger_6 = seed - 8;
     var pivot_6 = seed + 16;
     var window_6 = 1;
-    while window_6 <= 10 limit Iterations(10) {
+    while window_6 <= 10 {
         ledger_6 = ledger_6 + (pivot_6 % (13));
         pivot_6 = pivot_6 + window_6;
         window_6 = window_6 + 1;
@@ -193,7 +193,7 @@ flow policies_negative_policy_requirement_cycle_route_41(seed: i32) -> i32 {
     var ledger_11 = seed * 13;
     var pivot_11 = ledger_11 + 22;
     var window_11 = 0;
-    while window_11 < 17 limit Iterations(17) {
+    while window_11 < 17 {
         if window_11 % 2 == 0 {
             pivot_11 = pivot_11 + window_11;
         } else {
@@ -207,7 +207,7 @@ flow policies_negative_policy_requirement_cycle_route_41(seed: i32) -> i32 {
     var policies_negative_policy_requirement_cycle_route_41_north_gate = seed + 42;
     var policies_negative_policy_requirement_cycle_route_41_south_gate = policies_negative_policy_requirement_cycle_route_41_north_gate % 11;
     var policies_negative_policy_requirement_cycle_route_41_east_gate = policies_negative_policy_requirement_cycle_route_41_south_gate + policies_negative_policy_requirement_cycle_route_41_north_gate;
-    while policies_negative_policy_requirement_cycle_route_41_south_gate < 4 limit Iterations(4) {
+    while policies_negative_policy_requirement_cycle_route_41_south_gate < 4 {
         policies_negative_policy_requirement_cycle_route_41_east_gate = policies_negative_policy_requirement_cycle_route_41_east_gate + policies_negative_policy_requirement_cycle_route_41_south_gate;
         policies_negative_policy_requirement_cycle_route_41_south_gate = policies_negative_policy_requirement_cycle_route_41_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow policies_negative_policy_requirement_cycle_score_41(seed: i32) -> i32 {
     var ledger_7 = seed + 27;
     var pivot_7 = ledger_7 / 9;
     var window_7 = 9;
-    while window_7 > 0 limit Iterations(10) {
+    while window_7 > 0 {
         pivot_7 = pivot_7 + window_7;
         ledger_7 = ledger_7 + pivot_7;
         window_7 = window_7 - 1;
@@ -251,7 +251,7 @@ flow policies_negative_policy_requirement_cycle_finish_41(seed: i32) -> i32 {
     var ledger_18 = seed + 20;
     var pivot_18 = ledger_18 * 21;
     var window_18 = 0;
-    while window_18 < 23 limit Iterations(23) {
+    while window_18 < 23 {
         pivot_18 = pivot_18 + window_18 + 20;
         window_18 = window_18 + 1;
     }
@@ -266,7 +266,7 @@ flow policies_negative_policy_requirement_cycle_finish_41(seed: i32) -> i32 {
     var policies_negative_policy_requirement_cycle_finish_41_final_seed = seed + 50;
     var policies_negative_policy_requirement_cycle_finish_41_final_mask = policies_negative_policy_requirement_cycle_finish_41_final_seed - 6;
     var policies_negative_policy_requirement_cycle_finish_41_final_roll = policies_negative_policy_requirement_cycle_finish_41_final_mask * 4;
-    while policies_negative_policy_requirement_cycle_finish_41_final_mask > 0 limit Iterations(12) {
+    while policies_negative_policy_requirement_cycle_finish_41_final_mask > 0 {
         policies_negative_policy_requirement_cycle_finish_41_final_roll = policies_negative_policy_requirement_cycle_finish_41_final_roll + policies_negative_policy_requirement_cycle_finish_41_final_mask;
         policies_negative_policy_requirement_cycle_finish_41_final_mask = policies_negative_policy_requirement_cycle_finish_41_final_mask - 1;
     }

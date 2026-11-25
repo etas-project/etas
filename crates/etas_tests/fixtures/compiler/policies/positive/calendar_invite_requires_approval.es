@@ -133,7 +133,7 @@ flow effects_positive_loop_limit_network_fetch_exercise_26(seed: i32) -> i32 ![W
     let effects_positive_loop_limit_network_fetch_adjust_26: i32 -> i32 = (value: i32) => value + 26;
     total = effects_positive_loop_limit_network_fetch_adjust_26(total);
     var cursor = 0;
-    while cursor < 3 limit Iterations(3) {
+    while cursor < 3 {
         total = total + perform Web.fetch("docs.example.com", "/page");
         cursor = cursor + 1;
     }
@@ -162,7 +162,7 @@ flow effects_positive_loop_limit_network_fetch_prepare_26(seed: i32) -> i32 {
     var ledger_9 = seed * 11;
     var pivot_9 = ledger_9 + 20;
     var window_9 = 0;
-    while window_9 < 15 limit Iterations(15) {
+    while window_9 < 15 {
         if window_9 % 2 == 0 {
             pivot_9 = pivot_9 + window_9;
         } else {
@@ -192,7 +192,7 @@ flow effects_positive_loop_limit_network_fetch_route_26(seed: i32) -> i32 {
     var ledger_7 = seed + 27;
     var pivot_7 = ledger_7 / 9;
     var window_7 = 9;
-    while window_7 > 0 limit Iterations(10) {
+    while window_7 > 0 {
         pivot_7 = pivot_7 + window_7;
         ledger_7 = ledger_7 + pivot_7;
         window_7 = window_7 - 1;
@@ -206,7 +206,7 @@ flow effects_positive_loop_limit_network_fetch_route_26(seed: i32) -> i32 {
     var effects_positive_loop_limit_network_fetch_route_26_north_gate = seed + 27;
     var effects_positive_loop_limit_network_fetch_route_26_south_gate = effects_positive_loop_limit_network_fetch_route_26_north_gate % 10;
     var effects_positive_loop_limit_network_fetch_route_26_east_gate = effects_positive_loop_limit_network_fetch_route_26_south_gate + effects_positive_loop_limit_network_fetch_route_26_north_gate;
-    while effects_positive_loop_limit_network_fetch_route_26_south_gate < 4 limit Iterations(4) {
+    while effects_positive_loop_limit_network_fetch_route_26_south_gate < 4 {
         effects_positive_loop_limit_network_fetch_route_26_east_gate = effects_positive_loop_limit_network_fetch_route_26_east_gate + effects_positive_loop_limit_network_fetch_route_26_south_gate;
         effects_positive_loop_limit_network_fetch_route_26_south_gate = effects_positive_loop_limit_network_fetch_route_26_south_gate + 1;
     }
@@ -221,7 +221,7 @@ flow effects_positive_loop_limit_network_fetch_score_26(seed: i32) -> i32 {
     var ledger_5 = seed + 7;
     var pivot_5 = ledger_5 * 8;
     var window_5 = 0;
-    while window_5 < 10 limit Iterations(10) {
+    while window_5 < 10 {
         pivot_5 = pivot_5 + window_5 + 7;
         window_5 = window_5 + 1;
     }
@@ -251,7 +251,7 @@ flow effects_positive_loop_limit_network_fetch_finish_26(seed: i32) -> i32 {
     var ledger_18 = seed - 20;
     var pivot_18 = seed + 40;
     var window_18 = 1;
-    while window_18 <= 22 limit Iterations(22) {
+    while window_18 <= 22 {
         ledger_18 = ledger_18 + (pivot_18 % (25));
         pivot_18 = pivot_18 + window_18;
         window_18 = window_18 + 1;
@@ -265,7 +265,7 @@ flow effects_positive_loop_limit_network_fetch_finish_26(seed: i32) -> i32 {
     var effects_positive_loop_limit_network_fetch_finish_26_final_seed = seed + 35;
     var effects_positive_loop_limit_network_fetch_finish_26_final_mask = effects_positive_loop_limit_network_fetch_finish_26_final_seed - 3;
     var effects_positive_loop_limit_network_fetch_finish_26_final_roll = effects_positive_loop_limit_network_fetch_finish_26_final_mask * 5;
-    while effects_positive_loop_limit_network_fetch_finish_26_final_mask > 0 limit Iterations(12) {
+    while effects_positive_loop_limit_network_fetch_finish_26_final_mask > 0 {
         effects_positive_loop_limit_network_fetch_finish_26_final_roll = effects_positive_loop_limit_network_fetch_finish_26_final_roll + effects_positive_loop_limit_network_fetch_finish_26_final_mask;
         effects_positive_loop_limit_network_fetch_finish_26_final_mask = effects_positive_loop_limit_network_fetch_finish_26_final_mask - 1;
     }

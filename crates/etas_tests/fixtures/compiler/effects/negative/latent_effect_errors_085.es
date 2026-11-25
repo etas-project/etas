@@ -25,7 +25,7 @@ flow latent_effect_errors_packet_nimbus_prepare(seed: i32) -> i32 ![]
 {
     var zenith_prepare_total = seed + 13;
     var zenith_prepare_cursor = 0;
-    while zenith_prepare_cursor < 8 limit Iterations(8) {
+    while zenith_prepare_cursor < 8 {
         zenith_prepare_total = zenith_prepare_total + zenith_prepare_cursor + 2;
         zenith_prepare_cursor = zenith_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_packet_nimbus_route(seed: i32) -> i32 ![]
 {
     var zenith_route_total = seed * 13;
     var zenith_route_cursor = 0;
-    while zenith_route_cursor < 12 limit Iterations(12) {
+    while zenith_route_cursor < 12 {
         zenith_route_total = zenith_route_total + zenith_route_cursor + 2;
         zenith_route_cursor = zenith_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_packet_nimbus_score(seed: i32) -> i32 ![]
 {
     var zenith_score_total = seed + 13;
     var zenith_score_cursor = 0;
-    while zenith_score_cursor < 8 limit Iterations(8) {
+    while zenith_score_cursor < 8 {
         zenith_score_total = zenith_score_total + zenith_score_cursor + 2;
         zenith_score_cursor = zenith_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_packet_nimbus_finish(seed: i32) -> i32 ![]
 {
     var zenith_finish_total = seed - 13;
     var zenith_finish_cursor = 0;
-    while zenith_finish_cursor < 10 limit Iterations(10) {
+    while zenith_finish_cursor < 10 {
         zenith_finish_total = zenith_finish_total + zenith_finish_cursor + 2;
         zenith_finish_cursor = zenith_finish_cursor + 1;
     }

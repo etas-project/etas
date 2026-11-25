@@ -29,7 +29,7 @@ flow handler_errors_drift_binary_prepare(seed: i32) -> i32 ![]
 {
     var union_prepare_total = seed + 9;
     var union_prepare_cursor = 0;
-    while union_prepare_cursor < 12 limit Iterations(12) {
+    while union_prepare_cursor < 12 {
         union_prepare_total = union_prepare_total + union_prepare_cursor + 4;
         union_prepare_cursor = union_prepare_cursor + 1;
     }
@@ -51,7 +51,7 @@ flow handler_errors_drift_binary_route(seed: i32) -> i32 ![]
 {
     var union_route_total = seed * 9;
     var union_route_cursor = 0;
-    while union_route_cursor < 11 limit Iterations(11) {
+    while union_route_cursor < 11 {
         union_route_total = union_route_total + union_route_cursor + 4;
         union_route_cursor = union_route_cursor + 1;
     }
@@ -73,7 +73,7 @@ flow handler_errors_drift_binary_score(seed: i32) -> i32 ![]
 {
     var union_score_total = seed + 9;
     var union_score_cursor = 0;
-    while union_score_cursor < 10 limit Iterations(10) {
+    while union_score_cursor < 10 {
         union_score_total = union_score_total + union_score_cursor + 4;
         union_score_cursor = union_score_cursor + 1;
     }
@@ -95,7 +95,7 @@ flow handler_errors_drift_binary_finish(seed: i32) -> i32 ![]
 {
     var union_finish_total = seed - 9;
     var union_finish_cursor = 0;
-    while union_finish_cursor < 5 limit Iterations(5) {
+    while union_finish_cursor < 5 {
         union_finish_total = union_finish_total + union_finish_cursor + 4;
         union_finish_cursor = union_finish_cursor + 1;
     }

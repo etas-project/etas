@@ -22,7 +22,7 @@ flow approval_winter_winter_prepare(seed: i32) -> i32 ![]
 {
     var quantum_prepare_total = seed + 13;
     var quantum_prepare_cursor = 0;
-    while quantum_prepare_cursor < 11 limit Iterations(11) {
+    while quantum_prepare_cursor < 11 {
         quantum_prepare_total = quantum_prepare_total + quantum_prepare_cursor + 6;
         quantum_prepare_cursor = quantum_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_winter_winter_route(seed: i32) -> i32 ![]
 {
     var quantum_route_total = seed * 13;
     var quantum_route_cursor = 0;
-    while quantum_route_cursor < 7 limit Iterations(7) {
+    while quantum_route_cursor < 7 {
         quantum_route_total = quantum_route_total + quantum_route_cursor + 6;
         quantum_route_cursor = quantum_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_winter_winter_score(seed: i32) -> i32 ![]
 {
     var quantum_score_total = seed + 13;
     var quantum_score_cursor = 0;
-    while quantum_score_cursor < 12 limit Iterations(12) {
+    while quantum_score_cursor < 12 {
         quantum_score_total = quantum_score_total + quantum_score_cursor + 6;
         quantum_score_cursor = quantum_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_winter_winter_finish(seed: i32) -> i32 ![]
 {
     var quantum_finish_total = seed - 13;
     var quantum_finish_cursor = 0;
-    while quantum_finish_cursor < 5 limit Iterations(5) {
+    while quantum_finish_cursor < 5 {
         quantum_finish_total = quantum_finish_total + quantum_finish_cursor + 6;
         quantum_finish_cursor = quantum_finish_cursor + 1;
     }

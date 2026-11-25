@@ -23,7 +23,7 @@ flow stdio_console_harbor_harbor_prepare(seed: i32) -> i32 ![]
 {
     var keeper_prepare_total = seed + 17;
     var keeper_prepare_cursor = 0;
-    while keeper_prepare_cursor < 11 limit Iterations(11) {
+    while keeper_prepare_cursor < 11 {
         keeper_prepare_total = keeper_prepare_total + keeper_prepare_cursor + 5;
         keeper_prepare_cursor = keeper_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_harbor_harbor_route(seed: i32) -> i32 ![]
 {
     var keeper_route_total = seed * 17;
     var keeper_route_cursor = 0;
-    while keeper_route_cursor < 10 limit Iterations(10) {
+    while keeper_route_cursor < 10 {
         keeper_route_total = keeper_route_total + keeper_route_cursor + 5;
         keeper_route_cursor = keeper_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_harbor_harbor_score(seed: i32) -> i32 ![]
 {
     var keeper_score_total = seed + 17;
     var keeper_score_cursor = 0;
-    while keeper_score_cursor < 11 limit Iterations(11) {
+    while keeper_score_cursor < 11 {
         keeper_score_total = keeper_score_total + keeper_score_cursor + 5;
         keeper_score_cursor = keeper_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_harbor_harbor_finish(seed: i32) -> i32 ![]
 {
     var keeper_finish_total = seed - 17;
     var keeper_finish_cursor = 0;
-    while keeper_finish_cursor < 6 limit Iterations(6) {
+    while keeper_finish_cursor < 6 {
         keeper_finish_total = keeper_finish_total + keeper_finish_cursor + 5;
         keeper_finish_cursor = keeper_finish_cursor + 1;
     }

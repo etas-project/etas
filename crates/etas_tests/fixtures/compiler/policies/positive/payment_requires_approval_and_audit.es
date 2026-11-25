@@ -162,7 +162,7 @@ flow effects_positive_error_handler_recovers_prepare_20(seed: i32) -> i32 {
     var ledger_3 = seed + 5;
     var pivot_3 = ledger_3 * 6;
     var window_3 = 0;
-    while window_3 < 8 limit Iterations(8) {
+    while window_3 < 8 {
         pivot_3 = pivot_3 + window_3 + 5;
         window_3 = window_3 + 1;
     }
@@ -193,7 +193,7 @@ flow effects_positive_error_handler_recovers_route_20(seed: i32) -> i32 {
     var ledger_12 = seed - 14;
     var pivot_12 = seed + 28;
     var window_12 = 1;
-    while window_12 <= 16 limit Iterations(16) {
+    while window_12 <= 16 {
         ledger_12 = ledger_12 + (pivot_12 % (19));
         pivot_12 = pivot_12 + window_12;
         window_12 = window_12 + 1;
@@ -207,7 +207,7 @@ flow effects_positive_error_handler_recovers_route_20(seed: i32) -> i32 {
     var effects_positive_error_handler_recovers_route_20_north_gate = seed + 21;
     var effects_positive_error_handler_recovers_route_20_south_gate = effects_positive_error_handler_recovers_route_20_north_gate % 11;
     var effects_positive_error_handler_recovers_route_20_east_gate = effects_positive_error_handler_recovers_route_20_south_gate + effects_positive_error_handler_recovers_route_20_north_gate;
-    while effects_positive_error_handler_recovers_route_20_south_gate < 4 limit Iterations(4) {
+    while effects_positive_error_handler_recovers_route_20_south_gate < 4 {
         effects_positive_error_handler_recovers_route_20_east_gate = effects_positive_error_handler_recovers_route_20_east_gate + effects_positive_error_handler_recovers_route_20_south_gate;
         effects_positive_error_handler_recovers_route_20_south_gate = effects_positive_error_handler_recovers_route_20_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow effects_positive_error_handler_recovers_score_20(seed: i32) -> i32 {
     var ledger_12 = seed * 14;
     var pivot_12 = ledger_12 + 23;
     var window_12 = 0;
-    while window_12 < 18 limit Iterations(18) {
+    while window_12 < 18 {
         if window_12 % 2 == 0 {
             pivot_12 = pivot_12 + window_12;
         } else {
@@ -251,7 +251,7 @@ flow effects_positive_error_handler_recovers_finish_20(seed: i32) -> i32 {
     var ledger_12 = seed + 42;
     var pivot_12 = ledger_12 / 14;
     var window_12 = 14;
-    while window_12 > 0 limit Iterations(15) {
+    while window_12 > 0 {
         pivot_12 = pivot_12 + window_12;
         ledger_12 = ledger_12 + pivot_12;
         window_12 = window_12 - 1;
@@ -265,7 +265,7 @@ flow effects_positive_error_handler_recovers_finish_20(seed: i32) -> i32 {
     var effects_positive_error_handler_recovers_finish_20_final_seed = seed + 29;
     var effects_positive_error_handler_recovers_finish_20_final_mask = effects_positive_error_handler_recovers_finish_20_final_seed - 3;
     var effects_positive_error_handler_recovers_finish_20_final_roll = effects_positive_error_handler_recovers_finish_20_final_mask * 3;
-    while effects_positive_error_handler_recovers_finish_20_final_mask > 0 limit Iterations(12) {
+    while effects_positive_error_handler_recovers_finish_20_final_mask > 0 {
         effects_positive_error_handler_recovers_finish_20_final_roll = effects_positive_error_handler_recovers_finish_20_final_roll + effects_positive_error_handler_recovers_finish_20_final_mask;
         effects_positive_error_handler_recovers_finish_20_final_mask = effects_positive_error_handler_recovers_finish_20_final_mask - 1;
     }

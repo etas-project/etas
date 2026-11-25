@@ -58,7 +58,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>, Console.stdout_writ
     let intercepted = check((^original).with_body(intercepting));
     if intercepted.status != "rejected" { return 2; }
     var blocked = false;
-    for diagnostic in intercepted.diagnostics limit Iterations(64) {
+    for diagnostic in intercepted.diagnostics {
         if diagnostic.code == "code::MissingOutcomeSensitiveSummary" || diagnostic.code == "code::ActionTraceNotContained" || diagnostic.code == "code::OutcomeTraceNotContained" {
             blocked = true;
         }

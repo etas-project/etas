@@ -10,7 +10,7 @@ repository = "https://example.invalid/etas-fixtures/effect-agent-digest"
 root = "src"
 
 [dependencies]
-std = { version = "0.2" }
+std = { version = "0.6" }
 
 [[bin]]
 name = "effect-agent-digest"

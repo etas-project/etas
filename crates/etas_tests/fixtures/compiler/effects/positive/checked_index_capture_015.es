@@ -24,7 +24,7 @@ flow checked_index_capture_pearl_pearl_prepare(seed: i32) -> i32 ![]
 {
     var isotope_prepare_total = seed + 18;
     var isotope_prepare_cursor = 0;
-    while isotope_prepare_cursor < 8 limit Iterations(8) {
+    while isotope_prepare_cursor < 8 {
         isotope_prepare_total = isotope_prepare_total + isotope_prepare_cursor + 1;
         isotope_prepare_cursor = isotope_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_pearl_pearl_route(seed: i32) -> i32 ![]
 {
     var isotope_route_total = seed * 18;
     var isotope_route_cursor = 0;
-    while isotope_route_cursor < 10 limit Iterations(10) {
+    while isotope_route_cursor < 10 {
         isotope_route_total = isotope_route_total + isotope_route_cursor + 1;
         isotope_route_cursor = isotope_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_pearl_pearl_score(seed: i32) -> i32 ![]
 {
     var isotope_score_total = seed + 18;
     var isotope_score_cursor = 0;
-    while isotope_score_cursor < 7 limit Iterations(7) {
+    while isotope_score_cursor < 7 {
         isotope_score_total = isotope_score_total + isotope_score_cursor + 1;
         isotope_score_cursor = isotope_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_pearl_pearl_finish(seed: i32) -> i32 ![]
 {
     var isotope_finish_total = seed - 18;
     var isotope_finish_cursor = 0;
-    while isotope_finish_cursor < 12 limit Iterations(12) {
+    while isotope_finish_cursor < 12 {
         isotope_finish_total = isotope_finish_total + isotope_finish_cursor + 1;
         isotope_finish_cursor = isotope_finish_cursor + 1;
     }

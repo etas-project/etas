@@ -10,7 +10,7 @@ flow reverse(values: Array<i32>, start: i32, end: i32) -> Array<i32> {
     var left = start;
     var right = end;
 
-    while left < right limit Iterations(1024) {
+    while left < right {
         let temp = out[left];
         out[left] = out[right];
         out[right] = temp;

@@ -8,7 +8,7 @@ fn hostless_run_preserves_cpu_worker_configuration() {
 import std.task.{map_concurrent, run, Scheduler};
 flow square(value: i32) -> i32 {
     var index = 0;
-    while index < 2000 limit Iterations(2000) { index = index + 1; }
+    while index < 2000 { index = index + 1; }
     return value * value;
 }
 

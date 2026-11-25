@@ -290,7 +290,7 @@ flow runtime_limit_checks() -> bool ![] {
     let money = match cost { Limit.Cost(value) => value, _ => { return false; } };
     let again = Cost(money);
     var total = 0;
-    for value in [1, 2, 3] limit Iterations(3) { total = total + value; }
+    for value in [1, 2, 3] { total = total + value; }
     let custom = match Limit.SdkOnly { Limit.SdkOnly => true, _ => false };
     return total == 6 && custom && match again { Limit.Cost(_) => true, _ => false };
 }
@@ -860,7 +860,7 @@ type Sandbox;
 impl Sandbox ~ Region;
 flow job(scheduler: Scheduler) -> bytes ![Error<IOError>] {
     var total = 0;
-    for value in [1, 2, 3] limit Iterations(4) { total = total + value; }
+    for value in [1, 2, 3] { total = total + value; }
     let target = match path<Sandbox>("data.txt") {
         Ok(value) => value,
         Err(error) => { return perform Error<IOError>.raise(error); }
@@ -1045,7 +1045,7 @@ flow main(args: Array<string>) -> i32 {
     if revision_key(copied) != revision.key || copied.content != revision.content || copied.parent != revision.parent { return 1; }
     if copied.key == "" || copied.content == "" { return 2; }
     var parameters: usize = 0;
-    for parameter in definition.signature.parameters limit Iterations(8) {
+    for parameter in definition.signature.parameters {
         if parameter.name != Some("value") { return 3; }
         parameters = parameters + 1;
     }
@@ -1243,7 +1243,7 @@ flow denied(args: Array<string>) -> i32 {
 }
 flow denied_retry(args: Array<string>) -> i32 {
     let target = match path<Project>("created.txt") { Ok(value) => value, Err(_) => { return 1; } };
-    retry limit Attempts(2) { write_bytes(target, utf8_encode("forbidden")); }
+    retry { write_bytes(target, utf8_encode("forbidden")); }
     return 0;
 }
 flow main(args: Array<string>) -> i32 {
@@ -1254,10 +1254,10 @@ flow main(args: Array<string>) -> i32 {
     if !metadata.is_file || metadata.is_dir || metadata.len != 9 { return 3; }
     if read_bytes_limited(item, 9) != utf8_encode("source fs") { return 4; }
     var names = "";
-    for entry in list(directory) limit Iterations(4) { names = names + relative_name(entry) + ";"; }
+    for entry in list(directory) { names = names + relative_name(entry) + ";"; }
     if names != "item.txt;sub;" { return 5; }
     var limited_names = "";
-    for entry in list_limited(directory, 2, 11) limit Iterations(4) { limited_names = limited_names + relative_name(entry) + ";"; }
+    for entry in list_limited(directory, 2, 11) { limited_names = limited_names + relative_name(entry) + ";"; }
     if limited_names != names { return 6; }
     let ReadLimit: ![Error<ReadLimitError> => [] for usize] = handler {
         Error<ReadLimitError>.raise(ReadLimitError.LimitExceeded(limit)) => { finish limit; }

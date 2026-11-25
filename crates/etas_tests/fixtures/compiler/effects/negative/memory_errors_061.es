@@ -24,7 +24,7 @@ flow memory_errors_quantum_oasis_prepare(seed: i32) -> i32 ![]
 {
     var golf_prepare_total = seed + 8;
     var golf_prepare_cursor = 0;
-    while golf_prepare_cursor < 9 limit Iterations(9) {
+    while golf_prepare_cursor < 9 {
         golf_prepare_total = golf_prepare_total + golf_prepare_cursor + 6;
         golf_prepare_cursor = golf_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_quantum_oasis_route(seed: i32) -> i32 ![]
 {
     var golf_route_total = seed * 8;
     var golf_route_cursor = 0;
-    while golf_route_cursor < 12 limit Iterations(12) {
+    while golf_route_cursor < 12 {
         golf_route_total = golf_route_total + golf_route_cursor + 6;
         golf_route_cursor = golf_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_quantum_oasis_score(seed: i32) -> i32 ![]
 {
     var golf_score_total = seed + 8;
     var golf_score_cursor = 0;
-    while golf_score_cursor < 12 limit Iterations(12) {
+    while golf_score_cursor < 12 {
         golf_score_total = golf_score_total + golf_score_cursor + 6;
         golf_score_cursor = golf_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_quantum_oasis_finish(seed: i32) -> i32 ![]
 {
     var golf_finish_total = seed - 8;
     var golf_finish_cursor = 0;
-    while golf_finish_cursor < 10 limit Iterations(10) {
+    while golf_finish_cursor < 10 {
         golf_finish_total = golf_finish_total + golf_finish_cursor + 6;
         golf_finish_cursor = golf_finish_cursor + 1;
     }

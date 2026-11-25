@@ -15,7 +15,7 @@ import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {{
     var text = "";
     var i = 0;
-    while i < 64 limit Iterations(128) {{
+    while i < 64 {{
         text = text + {piece};
         i = i + 1;
     }}
@@ -92,7 +92,7 @@ import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {{
     var source = "";
     var index = 0;
-    while index < 32 limit Iterations(64) {{
+    while index < 32 {{
         source = source + {piece};
         index = index + 1;
     }}
@@ -159,7 +159,7 @@ import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {{
     var growing = "";
     var index = 0;
-    while index < 32 limit Iterations(64) {{
+    while index < 32 {{
         growing = growing + {piece};
         index = index + 1;
     }}
@@ -236,7 +236,7 @@ import std.runtime.checkpoint;
 flow main(args: Array<string>) -> i32 {
     var text = "start";
     var index = 0;
-    while index < 256 limit Iterations(512) {
+    while index < 256 {
         text = text + "中😀";
         index = index + 1;
     }
@@ -246,7 +246,7 @@ flow main(args: Array<string>) -> i32 {
     let number = parse_i32("000" + "42");
     let line_prefix = "  A\r";
     var line_parts: Array<string> = [];
-    for line in lines(trim(line_prefix + "\n中😀\n\ré  ")) limit Iterations(8) {
+    for line in lines(trim(line_prefix + "\n中😀\n\ré  ")) {
         line_parts = line_parts.push(line);
     }
     let split_prefix = "中😀:";
@@ -302,7 +302,7 @@ effect Append { action suffix() -> string; }
 flow main(args: Array<string>) -> i32 {
     var text = "";
     var index = 0;
-    while index < 256 limit Iterations(512) {
+    while index < 256 {
         text = text + "中😀";
         index = index + 1;
     }
@@ -374,7 +374,7 @@ flow main(args: Array<string>) -> i32 {
     checkpoint("segmented-text-membership");
     let other = "中" + "😀é";
     var count = 0;
-    for item in set limit Iterations(4) {
+    for item in set {
         if item != other { return 1; }
         count = count + 1;
     }

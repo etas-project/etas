@@ -13,7 +13,7 @@ flow is_palindrome_number(value: i32) -> bool {
     var remaining = value;
     var reversed = 0;
 
-    while remaining > 0 limit Iterations(64) {
+    while remaining > 0 {
         reversed = reversed * 10 + (remaining % 10);
         remaining = remaining / 10;
     }

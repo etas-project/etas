@@ -23,7 +23,7 @@ flow try_misuse_umbra_summit_prepare(seed: i32) -> i32 ![]
 {
     var matrix_prepare_total = seed + 20;
     var matrix_prepare_cursor = 0;
-    while matrix_prepare_cursor < 9 limit Iterations(9) {
+    while matrix_prepare_cursor < 9 {
         matrix_prepare_total = matrix_prepare_total + matrix_prepare_cursor + 3;
         matrix_prepare_cursor = matrix_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_umbra_summit_route(seed: i32) -> i32 ![]
 {
     var matrix_route_total = seed * 20;
     var matrix_route_cursor = 0;
-    while matrix_route_cursor < 9 limit Iterations(9) {
+    while matrix_route_cursor < 9 {
         matrix_route_total = matrix_route_total + matrix_route_cursor + 3;
         matrix_route_cursor = matrix_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_umbra_summit_score(seed: i32) -> i32 ![]
 {
     var matrix_score_total = seed + 20;
     var matrix_score_cursor = 0;
-    while matrix_score_cursor < 9 limit Iterations(9) {
+    while matrix_score_cursor < 9 {
         matrix_score_total = matrix_score_total + matrix_score_cursor + 3;
         matrix_score_cursor = matrix_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_umbra_summit_finish(seed: i32) -> i32 ![]
 {
     var matrix_finish_total = seed - 20;
     var matrix_finish_cursor = 0;
-    while matrix_finish_cursor < 5 limit Iterations(5) {
+    while matrix_finish_cursor < 5 {
         matrix_finish_total = matrix_finish_total + matrix_finish_cursor + 3;
         matrix_finish_cursor = matrix_finish_cursor + 1;
     }

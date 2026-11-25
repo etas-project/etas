@@ -30,7 +30,7 @@ flow handler_elimination_violet_violet_prepare(seed: i32) -> i32 ![]
 {
     var aurora_prepare_total = seed + 5;
     var aurora_prepare_cursor = 0;
-    while aurora_prepare_cursor < 9 limit Iterations(9) {
+    while aurora_prepare_cursor < 9 {
         aurora_prepare_total = aurora_prepare_total + aurora_prepare_cursor + 0;
         aurora_prepare_cursor = aurora_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_violet_violet_route(seed: i32) -> i32 ![]
 {
     var aurora_route_total = seed * 5;
     var aurora_route_cursor = 0;
-    while aurora_route_cursor < 10 limit Iterations(10) {
+    while aurora_route_cursor < 10 {
         aurora_route_total = aurora_route_total + aurora_route_cursor + 0;
         aurora_route_cursor = aurora_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_violet_violet_score(seed: i32) -> i32 ![]
 {
     var aurora_score_total = seed + 5;
     var aurora_score_cursor = 0;
-    while aurora_score_cursor < 6 limit Iterations(6) {
+    while aurora_score_cursor < 6 {
         aurora_score_total = aurora_score_total + aurora_score_cursor + 0;
         aurora_score_cursor = aurora_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_violet_violet_finish(seed: i32) -> i32 ![]
 {
     var aurora_finish_total = seed - 5;
     var aurora_finish_cursor = 0;
-    while aurora_finish_cursor < 10 limit Iterations(10) {
+    while aurora_finish_cursor < 10 {
         aurora_finish_total = aurora_finish_total + aurora_finish_cursor + 0;
         aurora_finish_cursor = aurora_finish_cursor + 1;
     }

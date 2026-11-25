@@ -23,7 +23,7 @@ flow row_too_narrow_ion_glacier_prepare(seed: i32) -> i32 ![]
 {
     var domain_prepare_total = seed + 8;
     var domain_prepare_cursor = 0;
-    while domain_prepare_cursor < 12 limit Iterations(12) {
+    while domain_prepare_cursor < 12 {
         domain_prepare_total = domain_prepare_total + domain_prepare_cursor + 5;
         domain_prepare_cursor = domain_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_ion_glacier_route(seed: i32) -> i32 ![]
 {
     var domain_route_total = seed * 8;
     var domain_route_cursor = 0;
-    while domain_route_cursor < 9 limit Iterations(9) {
+    while domain_route_cursor < 9 {
         domain_route_total = domain_route_total + domain_route_cursor + 5;
         domain_route_cursor = domain_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_ion_glacier_score(seed: i32) -> i32 ![]
 {
     var domain_score_total = seed + 8;
     var domain_score_cursor = 0;
-    while domain_score_cursor < 11 limit Iterations(11) {
+    while domain_score_cursor < 11 {
         domain_score_total = domain_score_total + domain_score_cursor + 5;
         domain_score_cursor = domain_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_ion_glacier_finish(seed: i32) -> i32 ![]
 {
     var domain_finish_total = seed - 8;
     var domain_finish_cursor = 0;
-    while domain_finish_cursor < 9 limit Iterations(9) {
+    while domain_finish_cursor < 9 {
         domain_finish_total = domain_finish_total + domain_finish_cursor + 5;
         domain_finish_cursor = domain_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow model_inference_ridge_ridge_prepare(seed: i32) -> i32 ![]
 {
     var apex_prepare_total = seed + 13;
     var apex_prepare_cursor = 0;
-    while apex_prepare_cursor < 10 limit Iterations(10) {
+    while apex_prepare_cursor < 10 {
         apex_prepare_total = apex_prepare_total + apex_prepare_cursor + 4;
         apex_prepare_cursor = apex_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_ridge_ridge_route(seed: i32) -> i32 ![]
 {
     var apex_route_total = seed * 13;
     var apex_route_cursor = 0;
-    while apex_route_cursor < 8 limit Iterations(8) {
+    while apex_route_cursor < 8 {
         apex_route_total = apex_route_total + apex_route_cursor + 4;
         apex_route_cursor = apex_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_ridge_ridge_score(seed: i32) -> i32 ![]
 {
     var apex_score_total = seed + 13;
     var apex_score_cursor = 0;
-    while apex_score_cursor < 10 limit Iterations(10) {
+    while apex_score_cursor < 10 {
         apex_score_total = apex_score_total + apex_score_cursor + 4;
         apex_score_cursor = apex_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_ridge_ridge_finish(seed: i32) -> i32 ![]
 {
     var apex_finish_total = seed - 13;
     var apex_finish_cursor = 0;
-    while apex_finish_cursor < 8 limit Iterations(8) {
+    while apex_finish_cursor < 8 {
         apex_finish_total = apex_finish_total + apex_finish_cursor + 4;
         apex_finish_cursor = apex_finish_cursor + 1;
     }

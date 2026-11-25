@@ -23,7 +23,7 @@ flow row_contract_golf_golf_prepare(seed: i32) -> i32 ![]
 {
     var tidal_prepare_total = seed + 9;
     var tidal_prepare_cursor = 0;
-    while tidal_prepare_cursor < 9 limit Iterations(9) {
+    while tidal_prepare_cursor < 9 {
         tidal_prepare_total = tidal_prepare_total + tidal_prepare_cursor + 6;
         tidal_prepare_cursor = tidal_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_golf_golf_route(seed: i32) -> i32 ![]
 {
     var tidal_route_total = seed * 9;
     var tidal_route_cursor = 0;
-    while tidal_route_cursor < 7 limit Iterations(7) {
+    while tidal_route_cursor < 7 {
         tidal_route_total = tidal_route_total + tidal_route_cursor + 6;
         tidal_route_cursor = tidal_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_golf_golf_score(seed: i32) -> i32 ![]
 {
     var tidal_score_total = seed + 9;
     var tidal_score_cursor = 0;
-    while tidal_score_cursor < 12 limit Iterations(12) {
+    while tidal_score_cursor < 12 {
         tidal_score_total = tidal_score_total + tidal_score_cursor + 6;
         tidal_score_cursor = tidal_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_golf_golf_finish(seed: i32) -> i32 ![]
 {
     var tidal_finish_total = seed - 9;
     var tidal_finish_cursor = 0;
-    while tidal_finish_cursor < 11 limit Iterations(11) {
+    while tidal_finish_cursor < 11 {
         tidal_finish_total = tidal_finish_total + tidal_finish_cursor + 6;
         tidal_finish_cursor = tidal_finish_cursor + 1;
     }

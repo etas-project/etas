@@ -23,7 +23,7 @@ flow stdio_console_nebula_nebula_prepare(seed: i32) -> i32 ![]
 {
     var cobalt_prepare_total = seed + 4;
     var cobalt_prepare_cursor = 0;
-    while cobalt_prepare_cursor < 12 limit Iterations(12) {
+    while cobalt_prepare_cursor < 12 {
         cobalt_prepare_total = cobalt_prepare_total + cobalt_prepare_cursor + 4;
         cobalt_prepare_cursor = cobalt_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_nebula_nebula_route(seed: i32) -> i32 ![]
 {
     var cobalt_route_total = seed * 4;
     var cobalt_route_cursor = 0;
-    while cobalt_route_cursor < 10 limit Iterations(10) {
+    while cobalt_route_cursor < 10 {
         cobalt_route_total = cobalt_route_total + cobalt_route_cursor + 4;
         cobalt_route_cursor = cobalt_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_nebula_nebula_score(seed: i32) -> i32 ![]
 {
     var cobalt_score_total = seed + 4;
     var cobalt_score_cursor = 0;
-    while cobalt_score_cursor < 10 limit Iterations(10) {
+    while cobalt_score_cursor < 10 {
         cobalt_score_total = cobalt_score_total + cobalt_score_cursor + 4;
         cobalt_score_cursor = cobalt_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_nebula_nebula_finish(seed: i32) -> i32 ![]
 {
     var cobalt_finish_total = seed - 4;
     var cobalt_finish_cursor = 0;
-    while cobalt_finish_cursor < 12 limit Iterations(12) {
+    while cobalt_finish_cursor < 12 {
         cobalt_finish_total = cobalt_finish_total + cobalt_finish_cursor + 4;
         cobalt_finish_cursor = cobalt_finish_cursor + 1;
     }

@@ -31,7 +31,7 @@ flow roman_to_integer(text: string) -> i32 {
     var total = 0;
     var i = 0;
 
-    while i < string_len(text) limit Iterations(128) {
+    while i < string_len(text) {
         let current = roman_value(char_at(text, i));
         if i + 1 < string_len(text) && current < roman_value(char_at(text, i + 1)) {
             total = total - current;

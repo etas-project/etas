@@ -163,7 +163,7 @@ flow policies_negative_required_after_action_denied_prepare_42(seed: i32) -> i32
     var ledger_7 = seed * 9;
     var pivot_7 = ledger_7 + 18;
     var window_7 = 0;
-    while window_7 < 13 limit Iterations(13) {
+    while window_7 < 13 {
         if window_7 % 2 == 0 {
             pivot_7 = pivot_7 + window_7;
         } else {
@@ -193,7 +193,7 @@ flow policies_negative_required_after_action_denied_route_42(seed: i32) -> i32 {
     var ledger_12 = seed + 42;
     var pivot_12 = ledger_12 / 14;
     var window_12 = 14;
-    while window_12 > 0 limit Iterations(15) {
+    while window_12 > 0 {
         pivot_12 = pivot_12 + window_12;
         ledger_12 = ledger_12 + pivot_12;
         window_12 = window_12 - 1;
@@ -207,7 +207,7 @@ flow policies_negative_required_after_action_denied_route_42(seed: i32) -> i32 {
     var policies_negative_required_after_action_denied_route_42_north_gate = seed + 43;
     var policies_negative_required_after_action_denied_route_42_south_gate = policies_negative_required_after_action_denied_route_42_north_gate % 5;
     var policies_negative_required_after_action_denied_route_42_east_gate = policies_negative_required_after_action_denied_route_42_south_gate + policies_negative_required_after_action_denied_route_42_north_gate;
-    while policies_negative_required_after_action_denied_route_42_south_gate < 4 limit Iterations(4) {
+    while policies_negative_required_after_action_denied_route_42_south_gate < 4 {
         policies_negative_required_after_action_denied_route_42_east_gate = policies_negative_required_after_action_denied_route_42_east_gate + policies_negative_required_after_action_denied_route_42_south_gate;
         policies_negative_required_after_action_denied_route_42_south_gate = policies_negative_required_after_action_denied_route_42_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow policies_negative_required_after_action_denied_score_42(seed: i32) -> i32 {
     var ledger_8 = seed + 10;
     var pivot_8 = ledger_8 * 11;
     var window_8 = 0;
-    while window_8 < 13 limit Iterations(13) {
+    while window_8 < 13 {
         pivot_8 = pivot_8 + window_8 + 10;
         window_8 = window_8 + 1;
     }
@@ -252,7 +252,7 @@ flow policies_negative_required_after_action_denied_finish_42(seed: i32) -> i32 
     var ledger_19 = seed - 21;
     var pivot_19 = seed + 42;
     var window_19 = 1;
-    while window_19 <= 23 limit Iterations(23) {
+    while window_19 <= 23 {
         ledger_19 = ledger_19 + (pivot_19 % (26));
         pivot_19 = pivot_19 + window_19;
         window_19 = window_19 + 1;
@@ -266,7 +266,7 @@ flow policies_negative_required_after_action_denied_finish_42(seed: i32) -> i32 
     var policies_negative_required_after_action_denied_finish_42_final_seed = seed + 51;
     var policies_negative_required_after_action_denied_finish_42_final_mask = policies_negative_required_after_action_denied_finish_42_final_seed - 1;
     var policies_negative_required_after_action_denied_finish_42_final_roll = policies_negative_required_after_action_denied_finish_42_final_mask * 5;
-    while policies_negative_required_after_action_denied_finish_42_final_mask > 0 limit Iterations(12) {
+    while policies_negative_required_after_action_denied_finish_42_final_mask > 0 {
         policies_negative_required_after_action_denied_finish_42_final_roll = policies_negative_required_after_action_denied_finish_42_final_roll + policies_negative_required_after_action_denied_finish_42_final_mask;
         policies_negative_required_after_action_denied_finish_42_final_mask = policies_negative_required_after_action_denied_finish_42_final_mask - 1;
     }

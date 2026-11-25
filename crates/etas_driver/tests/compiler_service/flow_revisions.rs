@@ -54,7 +54,7 @@ flow main() -> string ![Error<CompileError>] {
     };
     let report = check((^normalize).with_body(bad));
     if report.status != "rejected" { return "bad accepted"; }
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "effect::TraceSpecDenied" { return "ok"; }
     }
     return "missing trace denial";
@@ -206,7 +206,7 @@ import std.io.println;
 public effect Choice { action decide() -> unit; }
 public effect Other { action decide() -> unit; }
 public flow each(f: () -> unit ![Choice.decide], values: Array<bool>) -> unit ![] {
-    handle { for value in values limit Iterations(8) { f(); } } with { Choice.decide() => { println("handled")?; resume; } }; return;
+    handle { for value in values { f(); } } with { Choice.decide() => { println("handled")?; resume; } }; return;
 }
 public flow extra(f: () -> unit ![Choice.decide], values: Array<bool>) -> unit ![] {
     handle { perform Other.decide(); } with { Other.decide() => { resume; } }; return;
@@ -255,7 +255,7 @@ flow main() -> string ![Error<CompileError>] {
     if check((^normalize).with_body(formatted)).status != "rejected" { return "formatted loop accepted without proof"; }
     let changed = match parse_body("extra(f, values); return;") { Ok(body) => body, Err(_) => { return "parse extra"; }, };
     if check((^normalize).with_body(changed)).status != "rejected" { return "extra action accepted"; }
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     return report.status;
 }
 "#.into();
@@ -393,7 +393,7 @@ flow normalize(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide], e
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("choose(f, g, enabled); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     let changed = match parse_body("both(f, g, enabled); return;") { Ok(body) => body, Err(_) => { return "parse both"; }, };
     if check((^normalize).with_body(changed)).status != "rejected" { return "sequential calls accepted"; }
     return report.status;
@@ -495,7 +495,7 @@ flow normalize(f: () -> unit ![Choice.decide<Region<i32>>]) -> unit ![] { wrappe
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     return report.status;
 }
 "#.into();
@@ -596,7 +596,7 @@ flow normalize(f: () -> unit ![Choice.decide<Region>]) -> unit ![] { wrapped(f);
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     return report.status;
 }
 "#.into();
@@ -675,7 +675,7 @@ flow normalize(f: () -> unit ![Choice.decide<Array<i32>>]) -> unit ![] { wrapped
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     return report.status;
 }
 "#.into();
@@ -725,7 +725,7 @@ flow normalize(f: () -> unit ![Choice.decide<i32>]) -> unit ![] { wrapped(f); re
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     return report.status;
 }
 "#.into();
@@ -810,7 +810,7 @@ flow normalize(f: () -> unit ![Choice.decide], g: () -> unit ![Choice.decide]) -
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("pair(f, g); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     let changed = match parse_body("reversed(f, g); return;") { Ok(body) => body, Err(_) => { return "parse reversed"; }, };
     if check((^normalize).with_body(changed)).status != "rejected" { return "reordering accepted"; }
     return report.status;
@@ -866,7 +866,7 @@ flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] { twice(f); return; }
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("twice(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     let reduced = match parse_body("once(f); return;") { Ok(body) => body, Err(_) => { return "parse reduced"; }, };
     if check((^normalize).with_body(reduced)).status != "rejected" { return "missing callback accepted"; }
     return report.status;
@@ -970,7 +970,7 @@ flow normalize(f: (bool) -> unit ![Choice.decide], enabled: bool) -> unit ![] { 
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f, enabled); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     let changed = match parse_body("wrapped(f, true); return;") { Ok(body) => body, Err(_) => { return "parse changed"; }, };
     if check((^normalize).with_body(changed)).status != "rejected" { return "changed argument accepted"; }
     return report.status;
@@ -1029,7 +1029,7 @@ flow normalize(f: ({ty}) -> unit ![Choice.decide]) -> unit ![] {{ wrapped(f); re
 flow main() -> string ![Error<CompileError>] {{
     let body = match parse_body("wrapped(f); return;") {{ Ok(body) => body, Err(_) => {{ return "parse"; }}, }};
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) {{ if diagnostic.severity == "error" {{ return diagnostic.code; }} }}
+    for diagnostic in report.diagnostics {{ if diagnostic.severity == "error" {{ return diagnostic.code; }} }}
     let altered = match parse_body("wrapped_other(f); return;") {{ Ok(body) => body, Err(_) => {{ return "parse changed"; }}, }};
     if check((^normalize).with_body(altered)).status != "rejected" {{ return "changed argument accepted"; }}
     return report.status;
@@ -1270,7 +1270,7 @@ flow normalize(f: () -> unit ![Choice.decide]) -> unit ![] { wrapped(f); return;
 flow main() -> string ![Error<CompileError>] {
     let body = match parse_body("wrapped(f); return;") { Ok(body) => body, Err(_) => { return "parse"; }, };
     let report = check((^normalize).with_body(body));
-    for diagnostic in report.diagnostics limit Iterations(64) { if diagnostic.severity == "error" { return diagnostic.code; } }
+    for diagnostic in report.diagnostics { if diagnostic.severity == "error" { return diagnostic.code; } }
     let unsafe_body = match parse_body("f(); return;") { Ok(body) => body, Err(_) => { return "parse unsafe"; }, };
     let unsafe_report = check((^normalize).with_body(unsafe_body));
     if unsafe_report.status != "rejected" { return "unsafe accepted"; }
@@ -3169,11 +3169,11 @@ fn reflected_pure_finite_for_loop_can_be_recompiled() {
 module app;
 import std.compiler.{check, compile, parse_body, CompileError};
 flow target(values: Array<bool>) -> bool ![] {
-    for value in values limit Iterations(8) { let copy = value; }
+    for value in values { let copy = value; }
     return true;
 }
 flow main() -> bool ![Error<CompileError>] {
-    let body = match parse_body("for value in values limit Iterations(8) { let local = value; } return true;") {
+    let body = match parse_body("for value in values { let local = value; } return true;") {
         Ok(body) => body, Err(_) => { return false; },
     };
     let draft = (^target).with_body(body);
@@ -3196,14 +3196,14 @@ fn reflected_bounded_loop_rejects_unproven_early_return_paths() {
 module app;
 import std.compiler.{check, parse_body};
 flow target(values: Array<bool>) -> bool {
-    for value in values limit Iterations(2) { if value { return true; } }
+    for value in values { if value { return true; } }
     return false;
 }
 flow main() -> string {
-    let same = match parse_body("for value in values limit Iterations(2) { if value { return true; } } return false;") {
+    let same = match parse_body("for value in values { if value { return true; } } return false;") {
         Ok(body) => body, Err(_) => { return "parse-same"; },
     };
-    let changed = match parse_body("for value in values limit Iterations(2) { if value { return false; } } return true;") {
+    let changed = match parse_body("for value in values { if value { return false; } } return true;") {
         Ok(body) => body, Err(_) => { return "parse-changed"; },
     };
     if check((^target).with_body(same)).status != "rejected" { return "same-accepted"; }
@@ -3225,17 +3225,17 @@ fn reflected_bounded_loop_rejects_unproven_action_outcomes() {
 module app;
 import std.compiler.{check, parse_body};
 flow target(values: Array<bool>) -> unit ![Console.stdout_write, Console.stderr_write] {
-    for value in values limit Iterations(2) {
+    for value in values {
         perform Console.stdout_write("a");
         perform Console.stderr_write("b");
     }
     return;
 }
 flow main() -> string {
-    let same = match parse_body("for value in values limit Iterations(2) { perform Console.stdout_write(\"a\"); perform Console.stderr_write(\"b\"); } return;") {
+    let same = match parse_body("for value in values { perform Console.stdout_write(\"a\"); perform Console.stderr_write(\"b\"); } return;") {
         Ok(body) => body, Err(_) => { return "parse-same"; },
     };
-    let changed = match parse_body("for value in values limit Iterations(2) { perform Console.stderr_write(\"b\"); perform Console.stdout_write(\"a\"); } return;") {
+    let changed = match parse_body("for value in values { perform Console.stderr_write(\"b\"); perform Console.stdout_write(\"a\"); } return;") {
         Ok(body) => body, Err(_) => { return "parse-changed"; },
     };
     if check((^target).with_body(same)).status != "rejected" { return "same-accepted"; }

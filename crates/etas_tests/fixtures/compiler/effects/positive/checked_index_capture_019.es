@@ -24,7 +24,7 @@ flow checked_index_capture_topaz_topaz_prepare(seed: i32) -> i32 ![]
 {
     var mango_prepare_total = seed + 3;
     var mango_prepare_cursor = 0;
-    while mango_prepare_cursor < 12 limit Iterations(12) {
+    while mango_prepare_cursor < 12 {
         mango_prepare_total = mango_prepare_total + mango_prepare_cursor + 5;
         mango_prepare_cursor = mango_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_topaz_topaz_route(seed: i32) -> i32 ![]
 {
     var mango_route_total = seed * 3;
     var mango_route_cursor = 0;
-    while mango_route_cursor < 8 limit Iterations(8) {
+    while mango_route_cursor < 8 {
         mango_route_total = mango_route_total + mango_route_cursor + 5;
         mango_route_cursor = mango_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_topaz_topaz_score(seed: i32) -> i32 ![]
 {
     var mango_score_total = seed + 3;
     var mango_score_cursor = 0;
-    while mango_score_cursor < 11 limit Iterations(11) {
+    while mango_score_cursor < 11 {
         mango_score_total = mango_score_total + mango_score_cursor + 5;
         mango_score_cursor = mango_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_topaz_topaz_finish(seed: i32) -> i32 ![]
 {
     var mango_finish_total = seed - 3;
     var mango_finish_cursor = 0;
-    while mango_finish_cursor < 8 limit Iterations(8) {
+    while mango_finish_cursor < 8 {
         mango_finish_total = mango_finish_total + mango_finish_cursor + 5;
         mango_finish_cursor = mango_finish_cursor + 1;
     }

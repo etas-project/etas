@@ -23,7 +23,7 @@ flow command_sandbox_cipher_cipher_prepare(seed: i32) -> i32 ![]
 {
     var charlie_prepare_total = seed + 18;
     var charlie_prepare_cursor = 0;
-    while charlie_prepare_cursor < 11 limit Iterations(11) {
+    while charlie_prepare_cursor < 11 {
         charlie_prepare_total = charlie_prepare_total + charlie_prepare_cursor + 4;
         charlie_prepare_cursor = charlie_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_cipher_cipher_route(seed: i32) -> i32 ![]
 {
     var charlie_route_total = seed * 18;
     var charlie_route_cursor = 0;
-    while charlie_route_cursor < 12 limit Iterations(12) {
+    while charlie_route_cursor < 12 {
         charlie_route_total = charlie_route_total + charlie_route_cursor + 4;
         charlie_route_cursor = charlie_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_cipher_cipher_score(seed: i32) -> i32 ![]
 {
     var charlie_score_total = seed + 18;
     var charlie_score_cursor = 0;
-    while charlie_score_cursor < 10 limit Iterations(10) {
+    while charlie_score_cursor < 10 {
         charlie_score_total = charlie_score_total + charlie_score_cursor + 4;
         charlie_score_cursor = charlie_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_cipher_cipher_finish(seed: i32) -> i32 ![]
 {
     var charlie_finish_total = seed - 18;
     var charlie_finish_cursor = 0;
-    while charlie_finish_cursor < 10 limit Iterations(10) {
+    while charlie_finish_cursor < 10 {
         charlie_finish_total = charlie_finish_total + charlie_finish_cursor + 4;
         charlie_finish_cursor = charlie_finish_cursor + 1;
     }

@@ -25,7 +25,7 @@ flow project_negative_support_charlie_galaxy_prepare(seed: i32) -> i32 ![]
 {
     var bravo_prepare_total = seed + 16;
     var bravo_prepare_cursor = 0;
-    while bravo_prepare_cursor < 10 limit Iterations(10) {
+    while bravo_prepare_cursor < 10 {
         bravo_prepare_total = bravo_prepare_total + bravo_prepare_cursor + 0;
         bravo_prepare_cursor = bravo_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_negative_support_charlie_galaxy_route(seed: i32) -> i32 ![]
 {
     var bravo_route_total = seed * 16;
     var bravo_route_cursor = 0;
-    while bravo_route_cursor < 9 limit Iterations(9) {
+    while bravo_route_cursor < 9 {
         bravo_route_total = bravo_route_total + bravo_route_cursor + 0;
         bravo_route_cursor = bravo_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_negative_support_charlie_galaxy_score(seed: i32) -> i32 ![]
 {
     var bravo_score_total = seed + 16;
     var bravo_score_cursor = 0;
-    while bravo_score_cursor < 6 limit Iterations(6) {
+    while bravo_score_cursor < 6 {
         bravo_score_total = bravo_score_total + bravo_score_cursor + 0;
         bravo_score_cursor = bravo_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_negative_support_charlie_galaxy_finish(seed: i32) -> i32 ![]
 {
     var bravo_finish_total = seed - 16;
     var bravo_finish_cursor = 0;
-    while bravo_finish_cursor < 7 limit Iterations(7) {
+    while bravo_finish_cursor < 7 {
         bravo_finish_total = bravo_finish_total + bravo_finish_cursor + 0;
         bravo_finish_cursor = bravo_finish_cursor + 1;
     }

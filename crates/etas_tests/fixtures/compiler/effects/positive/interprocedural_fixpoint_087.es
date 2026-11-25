@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_meadow_meadow_entry(seed: i32) -> i32 ![]
     var meadow_total = interprocedural_fixpoint_meadow_meadow_prepare(seed);
     meadow_total = meadow_total + interprocedural_fixpoint_meadow_meadow_route(seed + 7);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let meadow_adjust: i32 -> i32 = (value: i32) => value + 10;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_meadow_meadow_prepare(seed: i32) -> i32 ![]
 {
     var radius_prepare_total = seed + 14;
     var radius_prepare_cursor = 0;
-    while radius_prepare_cursor < 10 limit Iterations(10) {
+    while radius_prepare_cursor < 10 {
         radius_prepare_total = radius_prepare_total + radius_prepare_cursor + 3;
         radius_prepare_cursor = radius_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_meadow_meadow_route(seed: i32) -> i32 ![]
 {
     var radius_route_total = seed * 14;
     var radius_route_cursor = 0;
-    while radius_route_cursor < 10 limit Iterations(10) {
+    while radius_route_cursor < 10 {
         radius_route_total = radius_route_total + radius_route_cursor + 3;
         radius_route_cursor = radius_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_meadow_meadow_score(seed: i32) -> i32 ![]
 {
     var radius_score_total = seed + 14;
     var radius_score_cursor = 0;
-    while radius_score_cursor < 9 limit Iterations(9) {
+    while radius_score_cursor < 9 {
         radius_score_total = radius_score_total + radius_score_cursor + 3;
         radius_score_cursor = radius_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_meadow_meadow_finish(seed: i32) -> i32 ![]
 {
     var radius_finish_total = seed - 14;
     var radius_finish_cursor = 0;
-    while radius_finish_cursor < 12 limit Iterations(12) {
+    while radius_finish_cursor < 12 {
         radius_finish_total = radius_finish_total + radius_finish_cursor + 3;
         radius_finish_cursor = radius_finish_cursor + 1;
     }

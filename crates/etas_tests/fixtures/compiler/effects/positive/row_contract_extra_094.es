@@ -23,7 +23,7 @@ flow row_contract_extra_temple_temple_prepare(seed: i32) -> i32 ![]
 {
     var prairie_prepare_total = seed + 21;
     var prairie_prepare_cursor = 0;
-    while prairie_prepare_cursor < 12 limit Iterations(12) {
+    while prairie_prepare_cursor < 12 {
         prairie_prepare_total = prairie_prepare_total + prairie_prepare_cursor + 3;
         prairie_prepare_cursor = prairie_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_extra_temple_temple_route(seed: i32) -> i32 ![]
 {
     var prairie_route_total = seed * 21;
     var prairie_route_cursor = 0;
-    while prairie_route_cursor < 11 limit Iterations(11) {
+    while prairie_route_cursor < 11 {
         prairie_route_total = prairie_route_total + prairie_route_cursor + 3;
         prairie_route_cursor = prairie_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_extra_temple_temple_score(seed: i32) -> i32 ![]
 {
     var prairie_score_total = seed + 21;
     var prairie_score_cursor = 0;
-    while prairie_score_cursor < 9 limit Iterations(9) {
+    while prairie_score_cursor < 9 {
         prairie_score_total = prairie_score_total + prairie_score_cursor + 3;
         prairie_score_cursor = prairie_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_extra_temple_temple_finish(seed: i32) -> i32 ![]
 {
     var prairie_finish_total = seed - 21;
     var prairie_finish_cursor = 0;
-    while prairie_finish_cursor < 11 limit Iterations(11) {
+    while prairie_finish_cursor < 11 {
         prairie_finish_total = prairie_finish_total + prairie_finish_cursor + 3;
         prairie_finish_cursor = prairie_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow row_contract_extra_saffron_saffron_prepare(seed: i32) -> i32 ![]
 {
     var ion_prepare_total = seed + 20;
     var ion_prepare_cursor = 0;
-    while ion_prepare_cursor < 11 limit Iterations(11) {
+    while ion_prepare_cursor < 11 {
         ion_prepare_total = ion_prepare_total + ion_prepare_cursor + 2;
         ion_prepare_cursor = ion_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_extra_saffron_saffron_route(seed: i32) -> i32 ![]
 {
     var ion_route_total = seed * 20;
     var ion_route_cursor = 0;
-    while ion_route_cursor < 10 limit Iterations(10) {
+    while ion_route_cursor < 10 {
         ion_route_total = ion_route_total + ion_route_cursor + 2;
         ion_route_cursor = ion_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_extra_saffron_saffron_score(seed: i32) -> i32 ![]
 {
     var ion_score_total = seed + 20;
     var ion_score_cursor = 0;
-    while ion_score_cursor < 8 limit Iterations(8) {
+    while ion_score_cursor < 8 {
         ion_score_total = ion_score_total + ion_score_cursor + 2;
         ion_score_cursor = ion_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_extra_saffron_saffron_finish(seed: i32) -> i32 ![]
 {
     var ion_finish_total = seed - 20;
     var ion_finish_cursor = 0;
-    while ion_finish_cursor < 10 limit Iterations(10) {
+    while ion_finish_cursor < 10 {
         ion_finish_total = ion_finish_total + ion_finish_cursor + 2;
         ion_finish_cursor = ion_finish_cursor + 1;
     }

@@ -70,14 +70,14 @@ flow main(args: Array<string>) -> i32 {
     let pq = api.priority(PriorityQueue.new<string, i32>().push("low", 1), "high", 2);
     let om = api.ordered(OrderedMap.new<i32, string>().insert(2, "two"), 1, "one");
     let os = api.unique(OrderedSet.new<i32>().insert(2), 1);
-    var r = 0; for i in api.range(1, 3) limit Iterations(4) { r = r * 10 + i; }
-    var dc = 0; for i in d limit Iterations(3) { dc = dc * 10 + i; }
-    var qc = 0; for i in q limit Iterations(3) { qc = qc * 10 + i; }
-    var sc = 0; for i in st limit Iterations(3) { sc = sc * 10 + i; }
-    var pc = ""; for (_, value) in pq limit Iterations(3) { pc = pc + value; }
-    var mc = 0; for (key, _) in om limit Iterations(3) { mc = mc * 10 + key; }
-    var oc = 0; for key in os limit Iterations(3) { oc = oc * 10 + key; }
-    var uc = 0; for i in api.set(#{1, 2, 1}) limit Iterations(3) { uc = uc * 10 + i; }
+    var r = 0; for i in api.range(1, 3) { r = r * 10 + i; }
+    var dc = 0; for i in d { dc = dc * 10 + i; }
+    var qc = 0; for i in q { qc = qc * 10 + i; }
+    var sc = 0; for i in st { sc = sc * 10 + i; }
+    var pc = ""; for (_, value) in pq { pc = pc + value; }
+    var mc = 0; for (key, _) in om { mc = mc * 10 + key; }
+    var oc = 0; for key in os { oc = oc * 10 + key; }
+    var uc = 0; for i in api.set(#{1, 2, 1}) { uc = uc * 10 + i; }
     if checked_array != Some(5) { return 11; }
     if checked_list != Some(5) { return 12; }
     if checked_slice != Some(5) { return 13; }
@@ -94,8 +94,8 @@ flow main(args: Array<string>) -> i32 {
     if top != Some("high") { return 23; }
     let cm = api.ordered_new<Rank, string>(reverse).insert(Rank { value = 1 }, "one").insert(Rank { value = 2 }, "two");
     let cs = api.unique_new<Rank>(reverse).insert(Rank { value = 1 }).insert(Rank { value = 2 }).insert(Rank { value = 1 });
-    var cmc = 0; for (key, _) in cm limit Iterations(3) { cmc = cmc * 10 + key.value; }
-    var csc = 0; for key in cs limit Iterations(3) { csc = csc * 10 + key.value; }
+    var cmc = 0; for (key, _) in cm { cmc = cmc * 10 + key.value; }
+    var csc = 0; for key in cs { csc = csc * 10 + key.value; }
     if cmc != 21 || csc != 21 { return 24; }
     return 0;
 }
@@ -266,16 +266,16 @@ module repro.consumer;
 import repro.library.{ordered, priorities, unique};
 flow main(args: Array<string>) -> i32 {
     let map = ordered(OrderedMap.new<string, i32>().insert("entry", 7));
-    for (key, value) in map limit Iterations(2) {
+    for (key, value) in map {
         let checked_key: string = key;
         let checked_value: i32 = value;
     }
     let queue = priorities(PriorityQueue.new<string, i32>().push("work", 2));
-    for (priority, value) in queue limit Iterations(2) {
+    for (priority, value) in queue {
         let checked_priority: i32 = priority;
         let checked_value: string = value;
     }
-    for value in unique(OrderedSet.new<string>().insert("entry")) limit Iterations(2) {
+    for value in unique(OrderedSet.new<string>().insert("entry")) {
         let checked_value: string = value;
     }
     return 0;

@@ -11,10 +11,10 @@ flow is_anagram(left: string, right: string) -> bool {
 
     var used = repeat_bool(false, string_len(right));
     var i = 0;
-    while i < string_len(left) limit Iterations(1024) {
+    while i < string_len(left) {
         var matched = false;
         var j = 0;
-        while j < string_len(right) limit Iterations(1024) {
+        while j < string_len(right) {
             if !used[j] && char_at(left, i) == char_at(right, j) {
                 used[j] = true;
                 matched = true;

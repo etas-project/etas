@@ -254,7 +254,7 @@ flow main() -> i32 ![Error<CompileError>] {
     let body = match parse_body("println(\"new action\")?; return lookup();") { Ok(body) => body, Err(_) => { return -1; }, };
     let report = check((^Worker).with_body(body));
     if report.status != "rejected" { return -2; }
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::AdditionalRequestedActions" { return 19; }
     }
     return -3;

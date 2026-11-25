@@ -22,7 +22,7 @@ flow approval_yonder_yonder_prepare(seed: i32) -> i32 ![]
 {
     var yard_prepare_total = seed + 14;
     var yard_prepare_cursor = 0;
-    while yard_prepare_cursor < 12 limit Iterations(12) {
+    while yard_prepare_cursor < 12 {
         yard_prepare_total = yard_prepare_total + yard_prepare_cursor + 0;
         yard_prepare_cursor = yard_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_yonder_yonder_route(seed: i32) -> i32 ![]
 {
     var yard_route_total = seed * 14;
     var yard_route_cursor = 0;
-    while yard_route_cursor < 8 limit Iterations(8) {
+    while yard_route_cursor < 8 {
         yard_route_total = yard_route_total + yard_route_cursor + 0;
         yard_route_cursor = yard_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_yonder_yonder_score(seed: i32) -> i32 ![]
 {
     var yard_score_total = seed + 14;
     var yard_score_cursor = 0;
-    while yard_score_cursor < 6 limit Iterations(6) {
+    while yard_score_cursor < 6 {
         yard_score_total = yard_score_total + yard_score_cursor + 0;
         yard_score_cursor = yard_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_yonder_yonder_finish(seed: i32) -> i32 ![]
 {
     var yard_finish_total = seed - 14;
     var yard_finish_cursor = 0;
-    while yard_finish_cursor < 6 limit Iterations(6) {
+    while yard_finish_cursor < 6 {
         yard_finish_total = yard_finish_total + yard_finish_cursor + 0;
         yard_finish_cursor = yard_finish_cursor + 1;
     }

@@ -409,6 +409,25 @@ fn external_public_metadata_with_graph(
     metadata: &etas_package::PackagePublicMetadata,
 ) -> ProjectExternalPublicMetadataInput {
     ProjectExternalPublicMetadataInput {
+        constructor_contracts: metadata
+            .constructor_contracts
+            .iter()
+            .map(|contract| {
+                let mut contract = contract.clone();
+                contract.remap_paths(|kind, path| match kind {
+                    etas_package_metadata::CallableValuePathKind::Type => {
+                        dependency_type_path(package, packages, path)
+                    }
+                    etas_package_metadata::CallableValuePathKind::Effect
+                        if is_standard_effect_path(path) =>
+                    {
+                        path.to_vec()
+                    }
+                    _ => dependency_path_with_graph(package, packages, path),
+                });
+                contract
+            })
+            .collect(),
         scoped_callbacks: metadata
             .scoped_callbacks
             .iter()
@@ -424,6 +443,7 @@ fn external_public_metadata_with_graph(
                     }
                 },
                 parameters: contract.parameters.clone(),
+                resource_boundaries: contract.resource_boundaries.clone(),
             })
             .collect(),
         package: package.id,
@@ -447,7 +467,11 @@ fn external_public_metadata_with_graph(
             .iter()
             .map(|signature| ProjectExternalFlowSignatureInput {
                 definition: signature.definition.clone(),
-                parameter_defaults: signature.parameter_defaults.clone(),
+                parameter_defaults: dependency_parameter_defaults(
+                    package,
+                    packages,
+                    &signature.parameter_defaults,
+                ),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -472,7 +496,11 @@ fn external_public_metadata_with_graph(
             .agents
             .iter()
             .map(|signature| ProjectExternalAgentSignatureInput {
-                parameter_defaults: signature.parameter_defaults.clone(),
+                parameter_defaults: dependency_parameter_defaults(
+                    package,
+                    packages,
+                    &signature.parameter_defaults,
+                ),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -500,7 +528,11 @@ fn external_public_metadata_with_graph(
             .tools
             .iter()
             .map(|signature| ProjectExternalToolSignatureInput {
-                parameter_defaults: signature.parameter_defaults.clone(),
+                parameter_defaults: dependency_parameter_defaults(
+                    package,
+                    packages,
+                    &signature.parameter_defaults,
+                ),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -646,7 +678,11 @@ fn external_public_metadata_with_graph(
                     .as_ref()
                     .map(|row| dependency_effect_row_input(package, packages, row)),
                 param_names: signature.param_names.clone(),
-                parameter_defaults: signature.parameter_defaults.clone(),
+                parameter_defaults: dependency_parameter_defaults(
+                    package,
+                    packages,
+                    &signature.parameter_defaults,
+                ),
                 path: dependency_path_with_graph(package, packages, &signature.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -681,6 +717,10 @@ fn external_public_metadata_with_graph(
             .effect_summaries
             .iter()
             .map(|summary| ProjectExternalEffectSummaryInput {
+                callable_body: summary
+                    .callable_body
+                    .as_ref()
+                    .map(|graph| dependency_callable_values(package, packages, graph)),
                 definition: summary.definition.clone(),
                 residual_checks: summary.residual_checks.clone(),
                 behavior: summary.behavior.clone(),
@@ -922,7 +962,11 @@ fn spec_signature_input(
             .as_ref()
             .map(|callable| ProjectExternalFlowSignatureInput {
                 definition: callable.definition.clone(),
-                parameter_defaults: callable.parameter_defaults.clone(),
+                parameter_defaults: dependency_parameter_defaults(
+                    package,
+                    packages,
+                    &callable.parameter_defaults,
+                ),
                 path: dependency_path_with_graph(package, packages, &callable.path),
                 generic_params: callable_generic_params_input(
                     package,
@@ -953,7 +997,11 @@ fn spec_signature_input(
                 signature: method.signature.as_ref().map(|callable| {
                     ProjectExternalFlowSignatureInput {
                         definition: callable.definition.clone(),
-                        parameter_defaults: callable.parameter_defaults.clone(),
+                        parameter_defaults: dependency_parameter_defaults(
+                            package,
+                            packages,
+                            &callable.parameter_defaults,
+                        ),
                         path: dependency_path_with_graph(package, packages, &callable.path),
                         generic_params: callable_generic_params_input(
                             package,
@@ -1121,6 +1169,24 @@ fn dependency_callable_values(
     graph
 }
 
+fn dependency_parameter_defaults(
+    package: &ProjectExternalPackageInput,
+    packages: &PackageGraph<'_>,
+    defaults: &[etas_package_metadata::ParameterDefault],
+) -> Vec<etas_package_metadata::ParameterDefault> {
+    defaults
+        .iter()
+        .map(|default| etas_package_metadata::ParameterDefault {
+            slot: default.slot,
+            reference: default.reference.clone(),
+            callable_value: default
+                .callable_value
+                .as_ref()
+                .map(|graph| dependency_callable_values(package, packages, graph)),
+        })
+        .collect()
+}
+
 fn dependency_callable_request_target(
     package: &ProjectExternalPackageInput,
     packages: &PackageGraph<'_>,
@@ -1211,6 +1277,14 @@ fn dependency_action_trace_input(
                     .map(|guard| dependency_effect_ref_input(package, packages, guard))
                     .collect(),
                 body: Box::new(dependency_action_trace_input(package, packages, child)),
+            }
+        }
+        etas_package::PackageActionTraceMetadata::Recursive { id, child } => {
+            ProjectExternalActionTraceInput::Recursive {
+                id: *id,
+                body: child
+                    .as_ref()
+                    .map(|body| Box::new(dependency_action_trace_input(package, packages, body))),
             }
         }
         etas_package::PackageActionTraceMetadata::Repeat { child } => {
@@ -2285,6 +2359,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        callable_body: None,
                         definition: None,
                         residual_checks: vec![],
                         behavior: None,
@@ -2439,6 +2514,7 @@ mod tests {
                         visibility: "public".to_owned(),
                     }],
                     effect_summaries: vec![etas_package::PackageEffectSummaryMetadata {
+                        callable_body: None,
                         definition: None,
                         residual_checks: vec![],
                         behavior: None,

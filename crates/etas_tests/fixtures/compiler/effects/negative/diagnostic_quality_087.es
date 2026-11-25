@@ -23,7 +23,7 @@ flow diagnostic_quality_schema_packet_prepare(seed: i32) -> i32 ![]
 {
     var north_prepare_total = seed + 15;
     var north_prepare_cursor = 0;
-    while north_prepare_cursor < 10 limit Iterations(10) {
+    while north_prepare_cursor < 10 {
         north_prepare_total = north_prepare_total + north_prepare_cursor + 4;
         north_prepare_cursor = north_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow diagnostic_quality_schema_packet_route(seed: i32) -> i32 ![]
 {
     var north_route_total = seed * 15;
     var north_route_cursor = 0;
-    while north_route_cursor < 8 limit Iterations(8) {
+    while north_route_cursor < 8 {
         north_route_total = north_route_total + north_route_cursor + 4;
         north_route_cursor = north_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow diagnostic_quality_schema_packet_score(seed: i32) -> i32 ![]
 {
     var north_score_total = seed + 15;
     var north_score_cursor = 0;
-    while north_score_cursor < 10 limit Iterations(10) {
+    while north_score_cursor < 10 {
         north_score_total = north_score_total + north_score_cursor + 4;
         north_score_cursor = north_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow diagnostic_quality_schema_packet_finish(seed: i32) -> i32 ![]
 {
     var north_finish_total = seed - 15;
     var north_finish_cursor = 0;
-    while north_finish_cursor < 12 limit Iterations(12) {
+    while north_finish_cursor < 12 {
         north_finish_total = north_finish_total + north_finish_cursor + 4;
         north_finish_cursor = north_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow model_inference_zircon_zircon_prepare(seed: i32) -> i32 ![]
 {
     var zephyr_prepare_total = seed + 20;
     var zephyr_prepare_cursor = 0;
-    while zephyr_prepare_cursor < 12 limit Iterations(12) {
+    while zephyr_prepare_cursor < 12 {
         zephyr_prepare_total = zephyr_prepare_total + zephyr_prepare_cursor + 4;
         zephyr_prepare_cursor = zephyr_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_zircon_zircon_route(seed: i32) -> i32 ![]
 {
     var zephyr_route_total = seed * 20;
     var zephyr_route_cursor = 0;
-    while zephyr_route_cursor < 9 limit Iterations(9) {
+    while zephyr_route_cursor < 9 {
         zephyr_route_total = zephyr_route_total + zephyr_route_cursor + 4;
         zephyr_route_cursor = zephyr_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_zircon_zircon_score(seed: i32) -> i32 ![]
 {
     var zephyr_score_total = seed + 20;
     var zephyr_score_cursor = 0;
-    while zephyr_score_cursor < 10 limit Iterations(10) {
+    while zephyr_score_cursor < 10 {
         zephyr_score_total = zephyr_score_total + zephyr_score_cursor + 4;
         zephyr_score_cursor = zephyr_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_zircon_zircon_finish(seed: i32) -> i32 ![]
 {
     var zephyr_finish_total = seed - 20;
     var zephyr_finish_cursor = 0;
-    while zephyr_finish_cursor < 7 limit Iterations(7) {
+    while zephyr_finish_cursor < 7 {
         zephyr_finish_total = zephyr_finish_total + zephyr_finish_cursor + 4;
         zephyr_finish_cursor = zephyr_finish_cursor + 1;
     }

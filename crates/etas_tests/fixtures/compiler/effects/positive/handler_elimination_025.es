@@ -30,7 +30,7 @@ flow handler_elimination_zephyr_zephyr_prepare(seed: i32) -> i32 ![]
 {
     var drift_prepare_total = seed + 9;
     var drift_prepare_cursor = 0;
-    while drift_prepare_cursor < 8 limit Iterations(8) {
+    while drift_prepare_cursor < 8 {
         drift_prepare_total = drift_prepare_total + drift_prepare_cursor + 4;
         drift_prepare_cursor = drift_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_zephyr_zephyr_route(seed: i32) -> i32 ![]
 {
     var drift_route_total = seed * 9;
     var drift_route_cursor = 0;
-    while drift_route_cursor < 8 limit Iterations(8) {
+    while drift_route_cursor < 8 {
         drift_route_total = drift_route_total + drift_route_cursor + 4;
         drift_route_cursor = drift_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_zephyr_zephyr_score(seed: i32) -> i32 ![]
 {
     var drift_score_total = seed + 9;
     var drift_score_cursor = 0;
-    while drift_score_cursor < 10 limit Iterations(10) {
+    while drift_score_cursor < 10 {
         drift_score_total = drift_score_total + drift_score_cursor + 4;
         drift_score_cursor = drift_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_zephyr_zephyr_finish(seed: i32) -> i32 ![]
 {
     var drift_finish_total = seed - 9;
     var drift_finish_cursor = 0;
-    while drift_finish_cursor < 6 limit Iterations(6) {
+    while drift_finish_cursor < 6 {
         drift_finish_total = drift_finish_total + drift_finish_cursor + 4;
         drift_finish_cursor = drift_finish_cursor + 1;
     }

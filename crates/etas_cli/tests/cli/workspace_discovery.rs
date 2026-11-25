@@ -35,12 +35,12 @@ flow selected<R ~ Region>() -> WorkspacePath<R> { return root<R>(); }
 public flow main(args: Array<string>) -> i32 {
     let directory: WorkspacePath<Root> = selected();
     let entries = list_limited(directory, 3, 13);
-    for entry in entries limit Iterations(4) { println(relative_name(entry)); }
+    for entry in entries { println(relative_name(entry)); }
     return 0;
 }
 public flow sub(args: Array<string>) -> i32 {
     let directory = std.result.unwrap(path<Root>("sub"));
-    for entry in list_limited(directory, 1, 9) limit Iterations(2) {
+    for entry in list_limited(directory, 1, 9) {
         println(relative_name(entry));
         let body = read_bytes_limited(entry, 3);
         if body != utf8_encode("ccc") { return 7; }

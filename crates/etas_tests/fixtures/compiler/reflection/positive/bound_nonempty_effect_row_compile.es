@@ -12,7 +12,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
     let report = check((^original).with_body(changed_effects));
     if report.status != "rejected" { return 3; }
     var contract_rejected = false;
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::AdditionalRequestedActions" || diagnostic.code == "code::ActionTraceNotContained" {
             contract_rejected = true;
         }
@@ -25,7 +25,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
     let type_report = check((^original).with_body(wrong_type));
     if type_report.status != "rejected" { return 5; }
     var type_rejected = false;
-    for diagnostic in type_report.diagnostics limit Iterations(64) {
+    for diagnostic in type_report.diagnostics {
         if diagnostic.code == "type::TypeMismatch" { type_rejected = true; }
     }
     if !type_rejected { return 6; }

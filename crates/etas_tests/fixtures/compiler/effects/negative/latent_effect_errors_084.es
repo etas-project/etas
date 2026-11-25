@@ -25,7 +25,7 @@ flow latent_effect_errors_origin_monsoon_prepare(seed: i32) -> i32 ![]
 {
     var ripple_prepare_total = seed + 12;
     var ripple_prepare_cursor = 0;
-    while ripple_prepare_cursor < 12 limit Iterations(12) {
+    while ripple_prepare_cursor < 12 {
         ripple_prepare_total = ripple_prepare_total + ripple_prepare_cursor + 1;
         ripple_prepare_cursor = ripple_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_origin_monsoon_route(seed: i32) -> i32 ![]
 {
     var ripple_route_total = seed * 12;
     var ripple_route_cursor = 0;
-    while ripple_route_cursor < 11 limit Iterations(11) {
+    while ripple_route_cursor < 11 {
         ripple_route_total = ripple_route_total + ripple_route_cursor + 1;
         ripple_route_cursor = ripple_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_origin_monsoon_score(seed: i32) -> i32 ![]
 {
     var ripple_score_total = seed + 12;
     var ripple_score_cursor = 0;
-    while ripple_score_cursor < 7 limit Iterations(7) {
+    while ripple_score_cursor < 7 {
         ripple_score_total = ripple_score_total + ripple_score_cursor + 1;
         ripple_score_cursor = ripple_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_origin_monsoon_finish(seed: i32) -> i32 ![]
 {
     var ripple_finish_total = seed - 12;
     var ripple_finish_cursor = 0;
-    while ripple_finish_cursor < 9 limit Iterations(9) {
+    while ripple_finish_cursor < 9 {
         ripple_finish_total = ripple_finish_total + ripple_finish_cursor + 1;
         ripple_finish_cursor = ripple_finish_cursor + 1;
     }

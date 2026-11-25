@@ -124,7 +124,7 @@ fn cancelled_process(body: &str, signal: &str, expected: i32) {
 
 #[test]
 fn sigint_stops_cpu_only_loop_on_single_thread_executor() {
-    cancelled_process("while true limit Iterations(1000000000) {}", "-INT", 130);
+    cancelled_process("while true {}", "-INT", 130);
 }
 
 #[test]

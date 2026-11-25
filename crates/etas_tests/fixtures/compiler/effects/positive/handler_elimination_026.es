@@ -30,7 +30,7 @@ flow handler_elimination_aurora_aurora_prepare(seed: i32) -> i32 ![]
 {
     var kernel_prepare_total = seed + 10;
     var kernel_prepare_cursor = 0;
-    while kernel_prepare_cursor < 9 limit Iterations(9) {
+    while kernel_prepare_cursor < 9 {
         kernel_prepare_total = kernel_prepare_total + kernel_prepare_cursor + 5;
         kernel_prepare_cursor = kernel_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_aurora_aurora_route(seed: i32) -> i32 ![]
 {
     var kernel_route_total = seed * 10;
     var kernel_route_cursor = 0;
-    while kernel_route_cursor < 9 limit Iterations(9) {
+    while kernel_route_cursor < 9 {
         kernel_route_total = kernel_route_total + kernel_route_cursor + 5;
         kernel_route_cursor = kernel_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_aurora_aurora_score(seed: i32) -> i32 ![]
 {
     var kernel_score_total = seed + 10;
     var kernel_score_cursor = 0;
-    while kernel_score_cursor < 11 limit Iterations(11) {
+    while kernel_score_cursor < 11 {
         kernel_score_total = kernel_score_total + kernel_score_cursor + 5;
         kernel_score_cursor = kernel_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_aurora_aurora_finish(seed: i32) -> i32 ![]
 {
     var kernel_finish_total = seed - 10;
     var kernel_finish_cursor = 0;
-    while kernel_finish_cursor < 7 limit Iterations(7) {
+    while kernel_finish_cursor < 7 {
         kernel_finish_total = kernel_finish_total + kernel_finish_cursor + 5;
         kernel_finish_cursor = kernel_finish_cursor + 1;
     }

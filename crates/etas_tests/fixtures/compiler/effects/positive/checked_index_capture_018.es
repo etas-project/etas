@@ -24,7 +24,7 @@ flow checked_index_capture_silver_silver_prepare(seed: i32) -> i32 ![]
 {
     var foxtrot_prepare_total = seed + 21;
     var foxtrot_prepare_cursor = 0;
-    while foxtrot_prepare_cursor < 11 limit Iterations(11) {
+    while foxtrot_prepare_cursor < 11 {
         foxtrot_prepare_total = foxtrot_prepare_total + foxtrot_prepare_cursor + 4;
         foxtrot_prepare_cursor = foxtrot_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_silver_silver_route(seed: i32) -> i32 ![]
 {
     var foxtrot_route_total = seed * 21;
     var foxtrot_route_cursor = 0;
-    while foxtrot_route_cursor < 7 limit Iterations(7) {
+    while foxtrot_route_cursor < 7 {
         foxtrot_route_total = foxtrot_route_total + foxtrot_route_cursor + 4;
         foxtrot_route_cursor = foxtrot_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_silver_silver_score(seed: i32) -> i32 ![]
 {
     var foxtrot_score_total = seed + 21;
     var foxtrot_score_cursor = 0;
-    while foxtrot_score_cursor < 10 limit Iterations(10) {
+    while foxtrot_score_cursor < 10 {
         foxtrot_score_total = foxtrot_score_total + foxtrot_score_cursor + 4;
         foxtrot_score_cursor = foxtrot_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_silver_silver_finish(seed: i32) -> i32 ![]
 {
     var foxtrot_finish_total = seed - 21;
     var foxtrot_finish_cursor = 0;
-    while foxtrot_finish_cursor < 7 limit Iterations(7) {
+    while foxtrot_finish_cursor < 7 {
         foxtrot_finish_total = foxtrot_finish_total + foxtrot_finish_cursor + 4;
         foxtrot_finish_cursor = foxtrot_finish_cursor + 1;
     }

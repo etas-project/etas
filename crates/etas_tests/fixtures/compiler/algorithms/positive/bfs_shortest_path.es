@@ -12,7 +12,7 @@ type Edge = {
 
 flow neighbors(edges: Array<Edge>, node: i32) -> Array<i32> {
     var out: Array<i32> = [];
-    for edge in edges limit Iterations(1024) {
+    for edge in edges {
         if edge.from == node {
             out = out.push(edge.to);
         }
@@ -26,7 +26,7 @@ flow bfs_shortest_path(edges: Array<Edge>, start: i32, goal: i32) -> i32 {
     distance[start] = 0;
     var head: usize = 0;
 
-    while head < len(queue) limit Iterations(4096) {
+    while head < len(queue) {
         let current = queue[head];
         head = head + 1;
 
@@ -34,7 +34,7 @@ flow bfs_shortest_path(edges: Array<Edge>, start: i32, goal: i32) -> i32 {
             return distance[current];
         }
 
-        for next in neighbors(edges, current) limit Iterations(1024) {
+        for next in neighbors(edges, current) {
             if distance[next] == -1 {
                 distance[next] = distance[current] + 1;
                 queue = queue.push(next);

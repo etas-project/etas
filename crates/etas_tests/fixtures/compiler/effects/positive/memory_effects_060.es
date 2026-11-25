@@ -24,7 +24,7 @@ flow memory_effects_jade_jade_prepare(seed: i32) -> i32 ![]
 {
     var atlas_prepare_total = seed + 6;
     var atlas_prepare_cursor = 0;
-    while atlas_prepare_cursor < 8 limit Iterations(8) {
+    while atlas_prepare_cursor < 8 {
         atlas_prepare_total = atlas_prepare_total + atlas_prepare_cursor + 4;
         atlas_prepare_cursor = atlas_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_jade_jade_route(seed: i32) -> i32 ![]
 {
     var atlas_route_total = seed * 6;
     var atlas_route_cursor = 0;
-    while atlas_route_cursor < 7 limit Iterations(7) {
+    while atlas_route_cursor < 7 {
         atlas_route_total = atlas_route_total + atlas_route_cursor + 4;
         atlas_route_cursor = atlas_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_jade_jade_score(seed: i32) -> i32 ![]
 {
     var atlas_score_total = seed + 6;
     var atlas_score_cursor = 0;
-    while atlas_score_cursor < 10 limit Iterations(10) {
+    while atlas_score_cursor < 10 {
         atlas_score_total = atlas_score_total + atlas_score_cursor + 4;
         atlas_score_cursor = atlas_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_jade_jade_finish(seed: i32) -> i32 ![]
 {
     var atlas_finish_total = seed - 6;
     var atlas_finish_cursor = 0;
-    while atlas_finish_cursor < 9 limit Iterations(9) {
+    while atlas_finish_cursor < 9 {
         atlas_finish_total = atlas_finish_total + atlas_finish_cursor + 4;
         atlas_finish_cursor = atlas_finish_cursor + 1;
     }

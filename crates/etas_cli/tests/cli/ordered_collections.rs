@@ -54,11 +54,11 @@ flow main(args: Array<string>) -> i32 {
     let keys = set<Key>(compare).insert(two).insert(one).insert(two);
     var map_order = 0;
     var set_order = 0;
-    for (key, value) in changed limit Iterations(8) {
+    for (key, value) in changed {
         let (number, _) = key.parts;
         map_order = map_order * 10 + number;
     }
-    for key in keys limit Iterations(8) {
+    for key in keys {
         let (number, _) = key.parts;
         set_order = set_order * 10 + number;
     }

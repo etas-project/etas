@@ -23,7 +23,7 @@ flow command_sandbox_atlas_atlas_prepare(seed: i32) -> i32 ![]
 {
     var monsoon_prepare_total = seed + 16;
     var monsoon_prepare_cursor = 0;
-    while monsoon_prepare_cursor < 9 limit Iterations(9) {
+    while monsoon_prepare_cursor < 9 {
         monsoon_prepare_total = monsoon_prepare_total + monsoon_prepare_cursor + 2;
         monsoon_prepare_cursor = monsoon_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_atlas_atlas_route(seed: i32) -> i32 ![]
 {
     var monsoon_route_total = seed * 16;
     var monsoon_route_cursor = 0;
-    while monsoon_route_cursor < 10 limit Iterations(10) {
+    while monsoon_route_cursor < 10 {
         monsoon_route_total = monsoon_route_total + monsoon_route_cursor + 2;
         monsoon_route_cursor = monsoon_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_atlas_atlas_score(seed: i32) -> i32 ![]
 {
     var monsoon_score_total = seed + 16;
     var monsoon_score_cursor = 0;
-    while monsoon_score_cursor < 8 limit Iterations(8) {
+    while monsoon_score_cursor < 8 {
         monsoon_score_total = monsoon_score_total + monsoon_score_cursor + 2;
         monsoon_score_cursor = monsoon_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_atlas_atlas_finish(seed: i32) -> i32 ![]
 {
     var monsoon_finish_total = seed - 16;
     var monsoon_finish_cursor = 0;
-    while monsoon_finish_cursor < 8 limit Iterations(8) {
+    while monsoon_finish_cursor < 8 {
         monsoon_finish_total = monsoon_finish_total + monsoon_finish_cursor + 2;
         monsoon_finish_cursor = monsoon_finish_cursor + 1;
     }

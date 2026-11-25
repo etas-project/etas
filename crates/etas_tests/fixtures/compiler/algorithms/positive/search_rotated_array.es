@@ -9,7 +9,7 @@ flow search(values: Array<i32>, target: i32) -> i32 {
     var low = 0;
     var high = len_i32_list(values) - 1;
 
-    while low <= high limit Iterations(1024) {
+    while low <= high {
         let mid = low + ((high - low) / 2);
         if values[mid] == target {
             return mid;

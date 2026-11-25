@@ -30,7 +30,7 @@ flow handler_elimination_willow_willow_prepare(seed: i32) -> i32 ![]
 {
     var harbor_prepare_total = seed + 6;
     var harbor_prepare_cursor = 0;
-    while harbor_prepare_cursor < 10 limit Iterations(10) {
+    while harbor_prepare_cursor < 10 {
         harbor_prepare_total = harbor_prepare_total + harbor_prepare_cursor + 1;
         harbor_prepare_cursor = harbor_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_willow_willow_route(seed: i32) -> i32 ![]
 {
     var harbor_route_total = seed * 6;
     var harbor_route_cursor = 0;
-    while harbor_route_cursor < 11 limit Iterations(11) {
+    while harbor_route_cursor < 11 {
         harbor_route_total = harbor_route_total + harbor_route_cursor + 1;
         harbor_route_cursor = harbor_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_willow_willow_score(seed: i32) -> i32 ![]
 {
     var harbor_score_total = seed + 6;
     var harbor_score_cursor = 0;
-    while harbor_score_cursor < 7 limit Iterations(7) {
+    while harbor_score_cursor < 7 {
         harbor_score_total = harbor_score_total + harbor_score_cursor + 1;
         harbor_score_cursor = harbor_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_willow_willow_finish(seed: i32) -> i32 ![]
 {
     var harbor_finish_total = seed - 6;
     var harbor_finish_cursor = 0;
-    while harbor_finish_cursor < 11 limit Iterations(11) {
+    while harbor_finish_cursor < 11 {
         harbor_finish_total = harbor_finish_total + harbor_finish_cursor + 1;
         harbor_finish_cursor = harbor_finish_cursor + 1;
     }

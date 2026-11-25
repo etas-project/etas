@@ -207,6 +207,7 @@ edition = "2026"
                     residual_checks: vec![reference.clone()],
                     behavior: None,
                     handler_requests: None,
+                    callable_body: None,
                     returned_callables: None,
                     default_handler_effects: None,
                     item: vec!["artifact".to_owned(), "apply".to_owned()],

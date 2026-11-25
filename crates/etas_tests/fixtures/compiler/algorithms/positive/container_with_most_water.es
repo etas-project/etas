@@ -26,7 +26,7 @@ flow max_area(heights: Array<i32>) -> i32 {
     var right = len_i32_list(heights) - 1;
     var best = 0;
 
-    while left < right limit Iterations(1024) {
+    while left < right {
         let area = (right - left) * min_i32(heights[left], heights[right]);
         best = max_i32(best, area);
         if heights[left] < heights[right] {

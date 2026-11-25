@@ -22,7 +22,7 @@ flow project_support_alpha_beacon_prepare(seed: i32) -> i32 ![]
 {
     var nebula_prepare_total = seed + 13;
     var nebula_prepare_cursor = 0;
-    while nebula_prepare_cursor < 8 limit Iterations(8) {
+    while nebula_prepare_cursor < 8 {
         nebula_prepare_total = nebula_prepare_total + nebula_prepare_cursor + 4;
         nebula_prepare_cursor = nebula_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow project_support_alpha_beacon_route(seed: i32) -> i32 ![]
 {
     var nebula_route_total = seed * 13;
     var nebula_route_cursor = 0;
-    while nebula_route_cursor < 9 limit Iterations(9) {
+    while nebula_route_cursor < 9 {
         nebula_route_total = nebula_route_total + nebula_route_cursor + 4;
         nebula_route_cursor = nebula_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow project_support_alpha_beacon_score(seed: i32) -> i32 ![]
 {
     var nebula_score_total = seed + 13;
     var nebula_score_cursor = 0;
-    while nebula_score_cursor < 10 limit Iterations(10) {
+    while nebula_score_cursor < 10 {
         nebula_score_total = nebula_score_total + nebula_score_cursor + 4;
         nebula_score_cursor = nebula_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow project_support_alpha_beacon_finish(seed: i32) -> i32 ![]
 {
     var nebula_finish_total = seed - 13;
     var nebula_finish_cursor = 0;
-    while nebula_finish_cursor < 5 limit Iterations(5) {
+    while nebula_finish_cursor < 5 {
         nebula_finish_total = nebula_finish_total + nebula_finish_cursor + 4;
         nebula_finish_cursor = nebula_finish_cursor + 1;
     }

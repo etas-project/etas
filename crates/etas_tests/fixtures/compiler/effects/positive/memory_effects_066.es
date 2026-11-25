@@ -24,7 +24,7 @@ flow memory_effects_pulse_pulse_prepare(seed: i32) -> i32 ![]
 {
     var saffron_prepare_total = seed + 12;
     var saffron_prepare_cursor = 0;
-    while saffron_prepare_cursor < 9 limit Iterations(9) {
+    while saffron_prepare_cursor < 9 {
         saffron_prepare_total = saffron_prepare_total + saffron_prepare_cursor + 3;
         saffron_prepare_cursor = saffron_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_pulse_pulse_route(seed: i32) -> i32 ![]
 {
     var saffron_route_total = seed * 12;
     var saffron_route_cursor = 0;
-    while saffron_route_cursor < 7 limit Iterations(7) {
+    while saffron_route_cursor < 7 {
         saffron_route_total = saffron_route_total + saffron_route_cursor + 3;
         saffron_route_cursor = saffron_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_pulse_pulse_score(seed: i32) -> i32 ![]
 {
     var saffron_score_total = seed + 12;
     var saffron_score_cursor = 0;
-    while saffron_score_cursor < 9 limit Iterations(9) {
+    while saffron_score_cursor < 9 {
         saffron_score_total = saffron_score_total + saffron_score_cursor + 3;
         saffron_score_cursor = saffron_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_pulse_pulse_finish(seed: i32) -> i32 ![]
 {
     var saffron_finish_total = seed - 12;
     var saffron_finish_cursor = 0;
-    while saffron_finish_cursor < 7 limit Iterations(7) {
+    while saffron_finish_cursor < 7 {
         saffron_finish_total = saffron_finish_total + saffron_finish_cursor + 3;
         saffron_finish_cursor = saffron_finish_cursor + 1;
     }

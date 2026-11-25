@@ -24,7 +24,7 @@ flow model_inference_errors_domain_bridge_prepare(seed: i32) -> i32 ![]
 {
     var parity_prepare_total = seed + 20;
     var parity_prepare_cursor = 0;
-    while parity_prepare_cursor < 11 limit Iterations(11) {
+    while parity_prepare_cursor < 11 {
         parity_prepare_total = parity_prepare_total + parity_prepare_cursor + 4;
         parity_prepare_cursor = parity_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_domain_bridge_route(seed: i32) -> i32 ![]
 {
     var parity_route_total = seed * 20;
     var parity_route_cursor = 0;
-    while parity_route_cursor < 12 limit Iterations(12) {
+    while parity_route_cursor < 12 {
         parity_route_total = parity_route_total + parity_route_cursor + 4;
         parity_route_cursor = parity_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_domain_bridge_score(seed: i32) -> i32 ![]
 {
     var parity_score_total = seed + 20;
     var parity_score_cursor = 0;
-    while parity_score_cursor < 10 limit Iterations(10) {
+    while parity_score_cursor < 10 {
         parity_score_total = parity_score_total + parity_score_cursor + 4;
         parity_score_cursor = parity_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_domain_bridge_finish(seed: i32) -> i32 ![]
 {
     var parity_finish_total = seed - 20;
     var parity_finish_cursor = 0;
-    while parity_finish_cursor < 6 limit Iterations(6) {
+    while parity_finish_cursor < 6 {
         parity_finish_total = parity_finish_total + parity_finish_cursor + 4;
         parity_finish_cursor = parity_finish_cursor + 1;
     }

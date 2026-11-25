@@ -9,7 +9,7 @@ flow gcd(a: i32, b: i32) -> i32 {
     var x = abs(a);
     var y = abs(b);
 
-    while y != 0 limit Iterations(128) {
+    while y != 0 {
         let next = x % y;
         x = y;
         y = next;

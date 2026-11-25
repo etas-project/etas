@@ -24,7 +24,7 @@ flow checked_index_capture_umber_umber_prepare(seed: i32) -> i32 ![]
 {
     var topaz_prepare_total = seed + 4;
     var topaz_prepare_cursor = 0;
-    while topaz_prepare_cursor < 8 limit Iterations(8) {
+    while topaz_prepare_cursor < 8 {
         topaz_prepare_total = topaz_prepare_total + topaz_prepare_cursor + 6;
         topaz_prepare_cursor = topaz_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_umber_umber_route(seed: i32) -> i32 ![]
 {
     var topaz_route_total = seed * 4;
     var topaz_route_cursor = 0;
-    while topaz_route_cursor < 9 limit Iterations(9) {
+    while topaz_route_cursor < 9 {
         topaz_route_total = topaz_route_total + topaz_route_cursor + 6;
         topaz_route_cursor = topaz_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_umber_umber_score(seed: i32) -> i32 ![]
 {
     var topaz_score_total = seed + 4;
     var topaz_score_cursor = 0;
-    while topaz_score_cursor < 12 limit Iterations(12) {
+    while topaz_score_cursor < 12 {
         topaz_score_total = topaz_score_total + topaz_score_cursor + 6;
         topaz_score_cursor = topaz_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_umber_umber_finish(seed: i32) -> i32 ![]
 {
     var topaz_finish_total = seed - 4;
     var topaz_finish_cursor = 0;
-    while topaz_finish_cursor < 9 limit Iterations(9) {
+    while topaz_finish_cursor < 9 {
         topaz_finish_total = topaz_finish_total + topaz_finish_cursor + 6;
         topaz_finish_cursor = topaz_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow row_contract_extra_yard_yard_prepare(seed: i32) -> i32 ![]
 {
     var thunder_prepare_total = seed + 6;
     var thunder_prepare_cursor = 0;
-    while thunder_prepare_cursor < 11 limit Iterations(11) {
+    while thunder_prepare_cursor < 11 {
         thunder_prepare_total = thunder_prepare_total + thunder_prepare_cursor + 0;
         thunder_prepare_cursor = thunder_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_extra_yard_yard_route(seed: i32) -> i32 ![]
 {
     var thunder_route_total = seed * 6;
     var thunder_route_cursor = 0;
-    while thunder_route_cursor < 9 limit Iterations(9) {
+    while thunder_route_cursor < 9 {
         thunder_route_total = thunder_route_total + thunder_route_cursor + 0;
         thunder_route_cursor = thunder_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_extra_yard_yard_score(seed: i32) -> i32 ![]
 {
     var thunder_score_total = seed + 6;
     var thunder_score_cursor = 0;
-    while thunder_score_cursor < 6 limit Iterations(6) {
+    while thunder_score_cursor < 6 {
         thunder_score_total = thunder_score_total + thunder_score_cursor + 0;
         thunder_score_cursor = thunder_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_extra_yard_yard_finish(seed: i32) -> i32 ![]
 {
     var thunder_finish_total = seed - 6;
     var thunder_finish_cursor = 0;
-    while thunder_finish_cursor < 7 limit Iterations(7) {
+    while thunder_finish_cursor < 7 {
         thunder_finish_total = thunder_finish_total + thunder_finish_cursor + 0;
         thunder_finish_cursor = thunder_finish_cursor + 1;
     }

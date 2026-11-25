@@ -23,7 +23,7 @@ flow try_misuse_zenith_winter_prepare(seed: i32) -> i32 ![]
 {
     var quantum_prepare_total = seed + 5;
     var quantum_prepare_cursor = 0;
-    while quantum_prepare_cursor < 8 limit Iterations(8) {
+    while quantum_prepare_cursor < 8 {
         quantum_prepare_total = quantum_prepare_total + quantum_prepare_cursor + 0;
         quantum_prepare_cursor = quantum_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_zenith_winter_route(seed: i32) -> i32 ![]
 {
     var quantum_route_total = seed * 5;
     var quantum_route_cursor = 0;
-    while quantum_route_cursor < 7 limit Iterations(7) {
+    while quantum_route_cursor < 7 {
         quantum_route_total = quantum_route_total + quantum_route_cursor + 0;
         quantum_route_cursor = quantum_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_zenith_winter_score(seed: i32) -> i32 ![]
 {
     var quantum_score_total = seed + 5;
     var quantum_score_cursor = 0;
-    while quantum_score_cursor < 6 limit Iterations(6) {
+    while quantum_score_cursor < 6 {
         quantum_score_total = quantum_score_total + quantum_score_cursor + 0;
         quantum_score_cursor = quantum_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_zenith_winter_finish(seed: i32) -> i32 ![]
 {
     var quantum_finish_total = seed - 5;
     var quantum_finish_cursor = 0;
-    while quantum_finish_cursor < 9 limit Iterations(9) {
+    while quantum_finish_cursor < 9 {
         quantum_finish_total = quantum_finish_total + quantum_finish_cursor + 0;
         quantum_finish_cursor = quantum_finish_cursor + 1;
     }

@@ -24,7 +24,7 @@ flow project_import_echo_apex_prepare(seed: i32) -> i32 ![]
 {
     var iron_prepare_total = seed + 18;
     var iron_prepare_cursor = 0;
-    while iron_prepare_cursor < 12 limit Iterations(12) {
+    while iron_prepare_cursor < 12 {
         iron_prepare_total = iron_prepare_total + iron_prepare_cursor + 0;
         iron_prepare_cursor = iron_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow project_import_echo_apex_route(seed: i32) -> i32 ![]
 {
     var iron_route_total = seed * 18;
     var iron_route_cursor = 0;
-    while iron_route_cursor < 9 limit Iterations(9) {
+    while iron_route_cursor < 9 {
         iron_route_total = iron_route_total + iron_route_cursor + 0;
         iron_route_cursor = iron_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow project_import_echo_apex_score(seed: i32) -> i32 ![]
 {
     var iron_score_total = seed + 18;
     var iron_score_cursor = 0;
-    while iron_score_cursor < 6 limit Iterations(6) {
+    while iron_score_cursor < 6 {
         iron_score_total = iron_score_total + iron_score_cursor + 0;
         iron_score_cursor = iron_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow project_import_echo_apex_finish(seed: i32) -> i32 ![]
 {
     var iron_finish_total = seed - 18;
     var iron_finish_cursor = 0;
-    while iron_finish_cursor < 5 limit Iterations(5) {
+    while iron_finish_cursor < 5 {
         iron_finish_total = iron_finish_total + iron_finish_cursor + 0;
         iron_finish_cursor = iron_finish_cursor + 1;
     }

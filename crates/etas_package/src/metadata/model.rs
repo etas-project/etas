@@ -167,6 +167,8 @@ pub struct PackageIndex {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackagePublicMetadata {
     #[serde(default)]
+    pub constructor_contracts: Vec<etas_package_metadata::ConstructorContract>,
+    #[serde(default)]
     pub scoped_callbacks: Vec<etas_package_metadata::ScopedCallbackContract>,
     #[serde(default)]
     pub definition_descriptors: Option<etas_code::descriptor::DefinitionDescriptorSet>,
@@ -224,7 +226,8 @@ pub struct PackagePublicMetadata {
 
 impl PackagePublicMetadata {
     pub fn is_empty(&self) -> bool {
-        self.scoped_callbacks.is_empty()
+        self.constructor_contracts.is_empty()
+            && self.scoped_callbacks.is_empty()
             && self.definition_descriptors.is_none()
             && self.definition_origins.is_none()
             && self.modules.is_empty()
@@ -587,6 +590,8 @@ pub struct PackageEffectSummaryMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handler_requests: Option<PackageRequestInstantiationMetadata>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub callable_body: Option<etas_package_metadata::CallableValueGraph>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub returned_callables: Option<etas_package_metadata::CallableValueGraph>,
     #[serde(default)]
     pub default_handler_effects: Option<PackageDefaultHandlerEffectsMetadata>,
@@ -644,6 +649,10 @@ pub struct PackageDefaultHandlerContributionMetadata {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PackageActionTraceMetadata {
+    Recursive {
+        id: etas_code::CodeFingerprint,
+        child: Option<Box<PackageActionTraceMetadata>>,
+    },
     #[default]
     Empty,
     DefaultHandler {

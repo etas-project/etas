@@ -22,7 +22,7 @@ flow project_support_hotel_iron_prepare(seed: i32) -> i32 ![]
 {
     var needle_prepare_total = seed + 20;
     var needle_prepare_cursor = 0;
-    while needle_prepare_cursor < 10 limit Iterations(10) {
+    while needle_prepare_cursor < 10 {
         needle_prepare_total = needle_prepare_total + needle_prepare_cursor + 4;
         needle_prepare_cursor = needle_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow project_support_hotel_iron_route(seed: i32) -> i32 ![]
 {
     var needle_route_total = seed * 20;
     var needle_route_cursor = 0;
-    while needle_route_cursor < 10 limit Iterations(10) {
+    while needle_route_cursor < 10 {
         needle_route_total = needle_route_total + needle_route_cursor + 4;
         needle_route_cursor = needle_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow project_support_hotel_iron_score(seed: i32) -> i32 ![]
 {
     var needle_score_total = seed + 20;
     var needle_score_cursor = 0;
-    while needle_score_cursor < 10 limit Iterations(10) {
+    while needle_score_cursor < 10 {
         needle_score_total = needle_score_total + needle_score_cursor + 4;
         needle_score_cursor = needle_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow project_support_hotel_iron_finish(seed: i32) -> i32 ![]
 {
     var needle_finish_total = seed - 20;
     var needle_finish_cursor = 0;
-    while needle_finish_cursor < 12 limit Iterations(12) {
+    while needle_finish_cursor < 12 {
         needle_finish_total = needle_finish_total + needle_finish_cursor + 4;
         needle_finish_cursor = needle_finish_cursor + 1;
     }

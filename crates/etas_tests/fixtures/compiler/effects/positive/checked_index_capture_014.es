@@ -24,7 +24,7 @@ flow checked_index_capture_opal_opal_prepare(seed: i32) -> i32 ![]
 {
     var bridge_prepare_total = seed + 17;
     var bridge_prepare_cursor = 0;
-    while bridge_prepare_cursor < 12 limit Iterations(12) {
+    while bridge_prepare_cursor < 12 {
         bridge_prepare_total = bridge_prepare_total + bridge_prepare_cursor + 0;
         bridge_prepare_cursor = bridge_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_opal_opal_route(seed: i32) -> i32 ![]
 {
     var bridge_route_total = seed * 17;
     var bridge_route_cursor = 0;
-    while bridge_route_cursor < 9 limit Iterations(9) {
+    while bridge_route_cursor < 9 {
         bridge_route_total = bridge_route_total + bridge_route_cursor + 0;
         bridge_route_cursor = bridge_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_opal_opal_score(seed: i32) -> i32 ![]
 {
     var bridge_score_total = seed + 17;
     var bridge_score_cursor = 0;
-    while bridge_score_cursor < 6 limit Iterations(6) {
+    while bridge_score_cursor < 6 {
         bridge_score_total = bridge_score_total + bridge_score_cursor + 0;
         bridge_score_cursor = bridge_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_opal_opal_finish(seed: i32) -> i32 ![]
 {
     var bridge_finish_total = seed - 17;
     var bridge_finish_cursor = 0;
-    while bridge_finish_cursor < 11 limit Iterations(11) {
+    while bridge_finish_cursor < 11 {
         bridge_finish_total = bridge_finish_total + bridge_finish_cursor + 0;
         bridge_finish_cursor = bridge_finish_cursor + 1;
     }

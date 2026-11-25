@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_quantum_quantum_entry(seed: i32) -> i32 ![]
     var quantum_total = interprocedural_fixpoint_quantum_quantum_prepare(seed);
     quantum_total = quantum_total + interprocedural_fixpoint_quantum_quantum_route(seed + 2);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let quantum_adjust: i32 -> i32 = (value: i32) => value + 1;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_quantum_quantum_prepare(seed: i32) -> i32 ![]
 {
     var umber_prepare_total = seed + 18;
     var umber_prepare_cursor = 0;
-    while umber_prepare_cursor < 9 limit Iterations(9) {
+    while umber_prepare_cursor < 9 {
         umber_prepare_total = umber_prepare_total + umber_prepare_cursor + 0;
         umber_prepare_cursor = umber_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_quantum_quantum_route(seed: i32) -> i32 ![]
 {
     var umber_route_total = seed * 18;
     var umber_route_cursor = 0;
-    while umber_route_cursor < 8 limit Iterations(8) {
+    while umber_route_cursor < 8 {
         umber_route_total = umber_route_total + umber_route_cursor + 0;
         umber_route_cursor = umber_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_quantum_quantum_score(seed: i32) -> i32 ![]
 {
     var umber_score_total = seed + 18;
     var umber_score_cursor = 0;
-    while umber_score_cursor < 6 limit Iterations(6) {
+    while umber_score_cursor < 6 {
         umber_score_total = umber_score_total + umber_score_cursor + 0;
         umber_score_cursor = umber_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_quantum_quantum_finish(seed: i32) -> i32 ![]
 {
     var umber_finish_total = seed - 18;
     var umber_finish_cursor = 0;
-    while umber_finish_cursor < 8 limit Iterations(8) {
+    while umber_finish_cursor < 8 {
         umber_finish_total = umber_finish_total + umber_finish_cursor + 0;
         umber_finish_cursor = umber_finish_cursor + 1;
     }

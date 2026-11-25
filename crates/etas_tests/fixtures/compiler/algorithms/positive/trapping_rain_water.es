@@ -12,7 +12,7 @@ flow trap(heights: Array<i32>) -> i32 {
     var right_max = 0;
     var water = 0;
 
-    while left < right limit Iterations(1024) {
+    while left < right {
         if heights[left] < heights[right] {
             if heights[left] >= left_max {
                 left_max = heights[left];

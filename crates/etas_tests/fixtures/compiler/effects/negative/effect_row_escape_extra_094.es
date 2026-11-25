@@ -25,7 +25,7 @@ flow effect_row_escape_extra_alpha_yellow_prepare(seed: i32) -> i32 ![]
 {
     var nimbus_prepare_total = seed + 3;
     var nimbus_prepare_cursor = 0;
-    while nimbus_prepare_cursor < 12 limit Iterations(12) {
+    while nimbus_prepare_cursor < 12 {
         nimbus_prepare_total = nimbus_prepare_total + nimbus_prepare_cursor + 4;
         nimbus_prepare_cursor = nimbus_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow effect_row_escape_extra_alpha_yellow_route(seed: i32) -> i32 ![]
 {
     var nimbus_route_total = seed * 3;
     var nimbus_route_cursor = 0;
-    while nimbus_route_cursor < 9 limit Iterations(9) {
+    while nimbus_route_cursor < 9 {
         nimbus_route_total = nimbus_route_total + nimbus_route_cursor + 4;
         nimbus_route_cursor = nimbus_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow effect_row_escape_extra_alpha_yellow_score(seed: i32) -> i32 ![]
 {
     var nimbus_score_total = seed + 3;
     var nimbus_score_cursor = 0;
-    while nimbus_score_cursor < 10 limit Iterations(10) {
+    while nimbus_score_cursor < 10 {
         nimbus_score_total = nimbus_score_total + nimbus_score_cursor + 4;
         nimbus_score_cursor = nimbus_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow effect_row_escape_extra_alpha_yellow_finish(seed: i32) -> i32 ![]
 {
     var nimbus_finish_total = seed - 3;
     var nimbus_finish_cursor = 0;
-    while nimbus_finish_cursor < 11 limit Iterations(11) {
+    while nimbus_finish_cursor < 11 {
         nimbus_finish_total = nimbus_finish_total + nimbus_finish_cursor + 4;
         nimbus_finish_cursor = nimbus_finish_cursor + 1;
     }

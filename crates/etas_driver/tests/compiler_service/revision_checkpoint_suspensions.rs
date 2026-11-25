@@ -364,7 +364,7 @@ fn detached_retry_attempts_survive_checkpoint_and_reject_inconsistent_ordinals()
         )
         .replace(
             "return perform Query.choose(value);",
-            "retry limit Attempts(2) { return perform Query.choose(value); } return value;",
+            "retry { return perform Query.choose(value); } return value;",
         );
     let (saved, artifact) = save_captured(&source, &[None], 20);
     assert_eq!(

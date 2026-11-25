@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_rocket_rocket_entry(seed: i32) -> i32 ![]
     var rocket_total = interprocedural_fixpoint_rocket_rocket_prepare(seed);
     rocket_total = rocket_total + interprocedural_fixpoint_rocket_rocket_route(seed + 3);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let rocket_adjust: i32 -> i32 = (value: i32) => value + 2;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_rocket_rocket_prepare(seed: i32) -> i32 ![]
 {
     var boreal_prepare_total = seed + 19;
     var boreal_prepare_cursor = 0;
-    while boreal_prepare_cursor < 10 limit Iterations(10) {
+    while boreal_prepare_cursor < 10 {
         boreal_prepare_total = boreal_prepare_total + boreal_prepare_cursor + 1;
         boreal_prepare_cursor = boreal_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_rocket_rocket_route(seed: i32) -> i32 ![]
 {
     var boreal_route_total = seed * 19;
     var boreal_route_cursor = 0;
-    while boreal_route_cursor < 9 limit Iterations(9) {
+    while boreal_route_cursor < 9 {
         boreal_route_total = boreal_route_total + boreal_route_cursor + 1;
         boreal_route_cursor = boreal_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_rocket_rocket_score(seed: i32) -> i32 ![]
 {
     var boreal_score_total = seed + 19;
     var boreal_score_cursor = 0;
-    while boreal_score_cursor < 7 limit Iterations(7) {
+    while boreal_score_cursor < 7 {
         boreal_score_total = boreal_score_total + boreal_score_cursor + 1;
         boreal_score_cursor = boreal_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_rocket_rocket_finish(seed: i32) -> i32 ![]
 {
     var boreal_finish_total = seed - 19;
     var boreal_finish_cursor = 0;
-    while boreal_finish_cursor < 9 limit Iterations(9) {
+    while boreal_finish_cursor < 9 {
         boreal_finish_total = boreal_finish_total + boreal_finish_cursor + 1;
         boreal_finish_cursor = boreal_finish_cursor + 1;
     }

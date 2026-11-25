@@ -23,7 +23,7 @@ flow diagnostic_quality_terra_radius_prepare(seed: i32) -> i32 ![]
 {
     var vector_prepare_total = seed + 16;
     var vector_prepare_cursor = 0;
-    while vector_prepare_cursor < 11 limit Iterations(11) {
+    while vector_prepare_cursor < 11 {
         vector_prepare_total = vector_prepare_total + vector_prepare_cursor + 5;
         vector_prepare_cursor = vector_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow diagnostic_quality_terra_radius_route(seed: i32) -> i32 ![]
 {
     var vector_route_total = seed * 16;
     var vector_route_cursor = 0;
-    while vector_route_cursor < 9 limit Iterations(9) {
+    while vector_route_cursor < 9 {
         vector_route_total = vector_route_total + vector_route_cursor + 5;
         vector_route_cursor = vector_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow diagnostic_quality_terra_radius_score(seed: i32) -> i32 ![]
 {
     var vector_score_total = seed + 16;
     var vector_score_cursor = 0;
-    while vector_score_cursor < 11 limit Iterations(11) {
+    while vector_score_cursor < 11 {
         vector_score_total = vector_score_total + vector_score_cursor + 5;
         vector_score_cursor = vector_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow diagnostic_quality_terra_radius_finish(seed: i32) -> i32 ![]
 {
     var vector_finish_total = seed - 16;
     var vector_finish_cursor = 0;
-    while vector_finish_cursor < 5 limit Iterations(5) {
+    while vector_finish_cursor < 5 {
         vector_finish_total = vector_finish_total + vector_finish_cursor + 5;
         vector_finish_cursor = vector_finish_cursor + 1;
     }

@@ -24,7 +24,7 @@ flow memory_effects_kernel_kernel_prepare(seed: i32) -> i32 ![]
 {
     var helios_prepare_total = seed + 7;
     var helios_prepare_cursor = 0;
-    while helios_prepare_cursor < 9 limit Iterations(9) {
+    while helios_prepare_cursor < 9 {
         helios_prepare_total = helios_prepare_total + helios_prepare_cursor + 5;
         helios_prepare_cursor = helios_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_kernel_kernel_route(seed: i32) -> i32 ![]
 {
     var helios_route_total = seed * 7;
     var helios_route_cursor = 0;
-    while helios_route_cursor < 8 limit Iterations(8) {
+    while helios_route_cursor < 8 {
         helios_route_total = helios_route_total + helios_route_cursor + 5;
         helios_route_cursor = helios_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_kernel_kernel_score(seed: i32) -> i32 ![]
 {
     var helios_score_total = seed + 7;
     var helios_score_cursor = 0;
-    while helios_score_cursor < 11 limit Iterations(11) {
+    while helios_score_cursor < 11 {
         helios_score_total = helios_score_total + helios_score_cursor + 5;
         helios_score_cursor = helios_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_kernel_kernel_finish(seed: i32) -> i32 ![]
 {
     var helios_finish_total = seed - 7;
     var helios_finish_cursor = 0;
-    while helios_finish_cursor < 10 limit Iterations(10) {
+    while helios_finish_cursor < 10 {
         helios_finish_total = helios_finish_total + helios_finish_cursor + 5;
         helios_finish_cursor = helios_finish_cursor + 1;
     }

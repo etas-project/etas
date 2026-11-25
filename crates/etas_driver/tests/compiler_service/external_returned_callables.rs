@@ -5,6 +5,7 @@ use etas_package_metadata::{
 
 fn parameter_sources(positions: &[u32]) -> CallableValueGraph {
     CallableValueGraph {
+        call_inputs: Vec::new(),
         source_projections: Vec::new(),
         parameter_projections: Vec::new(),
         objects: Vec::new(),
@@ -397,7 +398,7 @@ flow main() -> bool ![Error<CompileError>] {
     };
     let report = check((^Worker).with_body(body));
     if report.status != "rejected" { return false; }
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::AdditionalRequestedActions" { return true; }
     }
     return false;

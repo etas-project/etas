@@ -23,7 +23,7 @@ flow row_too_narrow_lagoon_juno_prepare(seed: i32) -> i32 ![]
 {
     var alpha_prepare_total = seed + 11;
     var alpha_prepare_cursor = 0;
-    while alpha_prepare_cursor < 10 limit Iterations(10) {
+    while alpha_prepare_cursor < 10 {
         alpha_prepare_total = alpha_prepare_total + alpha_prepare_cursor + 1;
         alpha_prepare_cursor = alpha_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_lagoon_juno_route(seed: i32) -> i32 ![]
 {
     var alpha_route_total = seed * 11;
     var alpha_route_cursor = 0;
-    while alpha_route_cursor < 12 limit Iterations(12) {
+    while alpha_route_cursor < 12 {
         alpha_route_total = alpha_route_total + alpha_route_cursor + 1;
         alpha_route_cursor = alpha_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_lagoon_juno_score(seed: i32) -> i32 ![]
 {
     var alpha_score_total = seed + 11;
     var alpha_score_cursor = 0;
-    while alpha_score_cursor < 7 limit Iterations(7) {
+    while alpha_score_cursor < 7 {
         alpha_score_total = alpha_score_total + alpha_score_cursor + 1;
         alpha_score_cursor = alpha_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_lagoon_juno_finish(seed: i32) -> i32 ![]
 {
     var alpha_finish_total = seed - 11;
     var alpha_finish_cursor = 0;
-    while alpha_finish_cursor < 12 limit Iterations(12) {
+    while alpha_finish_cursor < 12 {
         alpha_finish_total = alpha_finish_total + alpha_finish_cursor + 1;
         alpha_finish_cursor = alpha_finish_cursor + 1;
     }

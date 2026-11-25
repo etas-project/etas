@@ -1791,7 +1791,7 @@ and leave `Error<IOError>` after standard handling.
 
 | `std.fs` API | Result | Requested Action / Contract |
 |---|---|---|
-| `open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)` | `FileStream<R> ![Error<IOError>]` | `Fs.read<R>` and/or `Fs.write<R>` according to mode; a dynamic mode conservatively requires both. Stream identity retains the mode and concrete region. |
+| `open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)` | `FileStream<R> ![Error<IOError>]` | Perform one `Fs.open<R>`. Its required filesystem authority depends on the mode as specified below. |
 | `read_bytes_limited<R ~ Region>(path: WorkspacePath<R>, max_bytes: usize)` | `bytes ![Error<IOError>]` | `Fs.read<R>`; inclusive size cap, `LimitExceeded` rather than truncation. Reading/stat races cannot bypass the bound. |
 | `list_limited<R ~ Region>(path: WorkspacePath<R>, max_entries: usize, max_bytes: usize)` | `List<WorkspacePath<R>> ![Error<IOError>]` | `Fs.list<R>`; cap entry count and UTF-8 bytes of relative names; no successful partial listing. |
 | `create_dir<R ~ Region>(path: WorkspacePath<R>, recursive: bool = false)` | `unit ![Error<IOError>]` | `Fs.create_dir<R>`; existing directory succeeds; other existing targets fail. Nonrecursive creation requires existing parents. |
@@ -1810,6 +1810,67 @@ and leave `Error<IOError>` after standard handling.
 | Failure | Observe partial/uncertain effects honestly; no automatic retry of writes, append, rename or deletion. |
 | Region provenance | Stream reads/writes over FileStream remain covered by the originating FileIO region; erasing its concrete type cannot broaden authority. |
 
+#### File open action, handler matching and admission
+
+The action belongs to `std.effects.Fs`. The public flow in `std.fs` performs it directly.
+
+```etas
+@default_handler
+action open<R ~ std.fs.Region>(path: std.fs.WorkspacePath<R>, mode: std.fs.FileMode)
+    -> std.fs.FileStream<R> ![Error<std.io.IOError>];
+
+// In module std.fs
+public flow open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)
+    -> FileStream<R> ![Error<IOError>] {
+    return perform std.effects.Fs.open<R>(path, mode);
+}
+```
+
+`R` is the static region selector. `mode` is an ordinary payload argument.
+Dispatch the checked `Fs.open` action to the nearest matching scoped arm under
+the usual selector rules. For example, `Fs.open<Reports>(path, mode)` handles
+every open mode in `Reports`. An arm may branch on the mode. An arm for
+`Fs.read`, `Fs.write`, or another concrete region cannot intercept this
+request. A matching arm may resume with a valid `FileStream<R>` for the
+requested mode, finish with the enclosing answer type, or propagate a failure.
+Only an unmatched request falls through automatically to the runtime default.
+Explicit forwarding uses the same admission checks as direct default execution.
+
+| Actual mode | Authority required for this region |
+|---|---|
+| `Read` | `Fs.read<R>` |
+| `WriteTruncate`, `Append`, `CreateNew` | `Fs.write<R>` |
+| `ReadWrite` | Both `Fs.read<R>` and `Fs.write<R>` |
+
+For a host open, these are the positive filesystem grants to check. An
+existing region-scoped read grant suffices for a read open, subject to the
+ordinary enclosing restrictions. A grant for `Fs.open<R>` alone supplies
+neither access right. An explicit denial of the open or of any required right
+blocks the host operation, including when a broader grant covers `FileIO`.
+Use the same concrete region, resolved target and active policy for all
+required rights. Complete admission before opening, creating, truncating or
+publishing a handle. A missing right on a `ReadWrite` request leaves the
+file untouched and yields no partial or downgraded handle. Boundary and
+policy denials retain their existing diagnostics. Host filesystem failures
+use `Error<std.io.IOError>`.
+
+The checked summary records the one requested action plus its required
+authority. A known mode uses the table. An unknown mode conservatively
+requires both rights for static coverage. Runtime admission uses the actual
+mode even for a direct `perform`. The trace records one open attempt with
+its region, mode, required rights and handling outcome. The rights are
+admission facts on that event and do not emit byte-read or byte-write events
+or satisfy trace requirements for actual byte transfers.
+
+Interpreting a request grants no host access. The default verifies path
+containment at acquisition and registers the new handle under section 15.1
+before exposing it. A handle supplied by a handler retains its checked
+region, access mode, resource identity and ownership. The runtime must
+require the exact requested mode on resumption even when the static return
+type agrees, since `FileStream<R>` does not encode the mode. For example, an
+arm handling `Read` cannot resume with a writable `ReadWrite` handle. Later stream
+operations enforce the handle's mode and provenance under the current
+boundary.
 
 ### 14.4 Effectful Pull Sources
 

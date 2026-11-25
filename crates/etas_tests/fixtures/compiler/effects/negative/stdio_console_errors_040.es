@@ -25,7 +25,7 @@ flow stdio_console_errors_unity_signal_prepare(seed: i32) -> i32 ![]
 {
     var horizon_prepare_total = seed + 6;
     var horizon_prepare_cursor = 0;
-    while horizon_prepare_cursor < 8 limit Iterations(8) {
+    while horizon_prepare_cursor < 8 {
         horizon_prepare_total = horizon_prepare_total + horizon_prepare_cursor + 6;
         horizon_prepare_cursor = horizon_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_unity_signal_route(seed: i32) -> i32 ![]
 {
     var horizon_route_total = seed * 6;
     var horizon_route_cursor = 0;
-    while horizon_route_cursor < 9 limit Iterations(9) {
+    while horizon_route_cursor < 9 {
         horizon_route_total = horizon_route_total + horizon_route_cursor + 6;
         horizon_route_cursor = horizon_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_unity_signal_score(seed: i32) -> i32 ![]
 {
     var horizon_score_total = seed + 6;
     var horizon_score_cursor = 0;
-    while horizon_score_cursor < 12 limit Iterations(12) {
+    while horizon_score_cursor < 12 {
         horizon_score_total = horizon_score_total + horizon_score_cursor + 6;
         horizon_score_cursor = horizon_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_unity_signal_finish(seed: i32) -> i32 ![]
 {
     var horizon_finish_total = seed - 6;
     var horizon_finish_cursor = 0;
-    while horizon_finish_cursor < 5 limit Iterations(5) {
+    while horizon_finish_cursor < 5 {
         horizon_finish_total = horizon_finish_total + horizon_finish_cursor + 6;
         horizon_finish_cursor = horizon_finish_cursor + 1;
     }

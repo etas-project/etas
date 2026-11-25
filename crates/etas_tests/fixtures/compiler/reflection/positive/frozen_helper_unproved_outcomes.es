@@ -20,7 +20,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
     let report = check((^Runner).with_body(body));
     if report.status != "rejected" { return 2; }
     var has_outcome_diagnostic = false;
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::MissingOutcomeSensitiveSummary" { has_outcome_diagnostic = true; }
         if diagnostic.code == "type::IncompleteTypeFacts" || diagnostic.code == "effect::IncompleteEffectFacts" { return 3; }
     }

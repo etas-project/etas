@@ -24,7 +24,7 @@ flow checked_index_capture_nectar_nectar_prepare(seed: i32) -> i32 ![]
 {
     var temple_prepare_total = seed + 16;
     var temple_prepare_cursor = 0;
-    while temple_prepare_cursor < 11 limit Iterations(11) {
+    while temple_prepare_cursor < 11 {
         temple_prepare_total = temple_prepare_total + temple_prepare_cursor + 6;
         temple_prepare_cursor = temple_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_nectar_nectar_route(seed: i32) -> i32 ![]
 {
     var temple_route_total = seed * 16;
     var temple_route_cursor = 0;
-    while temple_route_cursor < 8 limit Iterations(8) {
+    while temple_route_cursor < 8 {
         temple_route_total = temple_route_total + temple_route_cursor + 6;
         temple_route_cursor = temple_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_nectar_nectar_score(seed: i32) -> i32 ![]
 {
     var temple_score_total = seed + 16;
     var temple_score_cursor = 0;
-    while temple_score_cursor < 12 limit Iterations(12) {
+    while temple_score_cursor < 12 {
         temple_score_total = temple_score_total + temple_score_cursor + 6;
         temple_score_cursor = temple_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_nectar_nectar_finish(seed: i32) -> i32 ![]
 {
     var temple_finish_total = seed - 16;
     var temple_finish_cursor = 0;
-    while temple_finish_cursor < 10 limit Iterations(10) {
+    while temple_finish_cursor < 10 {
         temple_finish_total = temple_finish_total + temple_finish_cursor + 6;
         temple_finish_cursor = temple_finish_cursor + 1;
     }

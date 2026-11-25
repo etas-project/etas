@@ -25,7 +25,7 @@ flow project_import_errors_charlie_charlie_prepare(seed: i32) -> i32 ![]
 {
     var raven_prepare_total = seed + 17;
     var raven_prepare_cursor = 0;
-    while raven_prepare_cursor < 10 limit Iterations(10) {
+    while raven_prepare_cursor < 10 {
         raven_prepare_total = raven_prepare_total + raven_prepare_cursor + 6;
         raven_prepare_cursor = raven_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_import_errors_charlie_charlie_route(seed: i32) -> i32 ![]
 {
     var raven_route_total = seed * 17;
     var raven_route_cursor = 0;
-    while raven_route_cursor < 11 limit Iterations(11) {
+    while raven_route_cursor < 11 {
         raven_route_total = raven_route_total + raven_route_cursor + 6;
         raven_route_cursor = raven_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_import_errors_charlie_charlie_score(seed: i32) -> i32 ![]
 {
     var raven_score_total = seed + 17;
     var raven_score_cursor = 0;
-    while raven_score_cursor < 12 limit Iterations(12) {
+    while raven_score_cursor < 12 {
         raven_score_total = raven_score_total + raven_score_cursor + 6;
         raven_score_cursor = raven_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_import_errors_charlie_charlie_finish(seed: i32) -> i32 ![]
 {
     var raven_finish_total = seed - 17;
     var raven_finish_cursor = 0;
-    while raven_finish_cursor < 11 limit Iterations(11) {
+    while raven_finish_cursor < 11 {
         raven_finish_total = raven_finish_total + raven_finish_cursor + 6;
         raven_finish_cursor = raven_finish_cursor + 1;
     }

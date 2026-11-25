@@ -23,7 +23,7 @@ flow stdio_console_lagoon_lagoon_prepare(seed: i32) -> i32 ![]
 {
     var opal_prepare_total = seed + 21;
     var opal_prepare_cursor = 0;
-    while opal_prepare_cursor < 10 limit Iterations(10) {
+    while opal_prepare_cursor < 10 {
         opal_prepare_total = opal_prepare_total + opal_prepare_cursor + 2;
         opal_prepare_cursor = opal_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_lagoon_lagoon_route(seed: i32) -> i32 ![]
 {
     var opal_route_total = seed * 21;
     var opal_route_cursor = 0;
-    while opal_route_cursor < 8 limit Iterations(8) {
+    while opal_route_cursor < 8 {
         opal_route_total = opal_route_total + opal_route_cursor + 2;
         opal_route_cursor = opal_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_lagoon_lagoon_score(seed: i32) -> i32 ![]
 {
     var opal_score_total = seed + 21;
     var opal_score_cursor = 0;
-    while opal_score_cursor < 8 limit Iterations(8) {
+    while opal_score_cursor < 8 {
         opal_score_total = opal_score_total + opal_score_cursor + 2;
         opal_score_cursor = opal_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_lagoon_lagoon_finish(seed: i32) -> i32 ![]
 {
     var opal_finish_total = seed - 21;
     var opal_finish_cursor = 0;
-    while opal_finish_cursor < 10 limit Iterations(10) {
+    while opal_finish_cursor < 10 {
         opal_finish_total = opal_finish_total + opal_finish_cursor + 2;
         opal_finish_cursor = opal_finish_cursor + 1;
     }

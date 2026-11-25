@@ -23,7 +23,7 @@ flow model_inference_yearling_yearling_prepare(seed: i32) -> i32 ![]
 {
     var silver_prepare_total = seed + 19;
     var silver_prepare_cursor = 0;
-    while silver_prepare_cursor < 11 limit Iterations(11) {
+    while silver_prepare_cursor < 11 {
         silver_prepare_total = silver_prepare_total + silver_prepare_cursor + 3;
         silver_prepare_cursor = silver_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_yearling_yearling_route(seed: i32) -> i32 ![]
 {
     var silver_route_total = seed * 19;
     var silver_route_cursor = 0;
-    while silver_route_cursor < 8 limit Iterations(8) {
+    while silver_route_cursor < 8 {
         silver_route_total = silver_route_total + silver_route_cursor + 3;
         silver_route_cursor = silver_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_yearling_yearling_score(seed: i32) -> i32 ![]
 {
     var silver_score_total = seed + 19;
     var silver_score_cursor = 0;
-    while silver_score_cursor < 9 limit Iterations(9) {
+    while silver_score_cursor < 9 {
         silver_score_total = silver_score_total + silver_score_cursor + 3;
         silver_score_cursor = silver_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_yearling_yearling_finish(seed: i32) -> i32 ![]
 {
     var silver_finish_total = seed - 19;
     var silver_finish_cursor = 0;
-    while silver_finish_cursor < 6 limit Iterations(6) {
+    while silver_finish_cursor < 6 {
         silver_finish_total = silver_finish_total + silver_finish_cursor + 3;
         silver_finish_cursor = silver_finish_cursor + 1;
     }

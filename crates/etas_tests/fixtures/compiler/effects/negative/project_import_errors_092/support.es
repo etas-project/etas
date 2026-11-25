@@ -25,7 +25,7 @@ flow project_negative_support_foxtrot_junction_prepare(seed: i32) -> i32 ![]
 {
     var willow_prepare_total = seed + 19;
     var willow_prepare_cursor = 0;
-    while willow_prepare_cursor < 8 limit Iterations(8) {
+    while willow_prepare_cursor < 8 {
         willow_prepare_total = willow_prepare_total + willow_prepare_cursor + 3;
         willow_prepare_cursor = willow_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_negative_support_foxtrot_junction_route(seed: i32) -> i32 ![]
 {
     var willow_route_total = seed * 19;
     var willow_route_cursor = 0;
-    while willow_route_cursor < 12 limit Iterations(12) {
+    while willow_route_cursor < 12 {
         willow_route_total = willow_route_total + willow_route_cursor + 3;
         willow_route_cursor = willow_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_negative_support_foxtrot_junction_score(seed: i32) -> i32 ![]
 {
     var willow_score_total = seed + 19;
     var willow_score_cursor = 0;
-    while willow_score_cursor < 9 limit Iterations(9) {
+    while willow_score_cursor < 9 {
         willow_score_total = willow_score_total + willow_score_cursor + 3;
         willow_score_cursor = willow_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_negative_support_foxtrot_junction_finish(seed: i32) -> i32 ![]
 {
     var willow_finish_total = seed - 19;
     var willow_finish_cursor = 0;
-    while willow_finish_cursor < 10 limit Iterations(10) {
+    while willow_finish_cursor < 10 {
         willow_finish_total = willow_finish_total + willow_finish_cursor + 3;
         willow_finish_cursor = willow_finish_cursor + 1;
     }

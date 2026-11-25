@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_parity_parity_entry(seed: i32) -> i32 ![]
     var parity_total = interprocedural_fixpoint_parity_parity_prepare(seed);
     parity_total = parity_total + interprocedural_fixpoint_parity_parity_route(seed + 1);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let parity_adjust: i32 -> i32 = (value: i32) => value + 13;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_parity_parity_prepare(seed: i32) -> i32 ![]
 {
     var nectar_prepare_total = seed + 17;
     var nectar_prepare_cursor = 0;
-    while nectar_prepare_cursor < 8 limit Iterations(8) {
+    while nectar_prepare_cursor < 8 {
         nectar_prepare_total = nectar_prepare_total + nectar_prepare_cursor + 6;
         nectar_prepare_cursor = nectar_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_parity_parity_route(seed: i32) -> i32 ![]
 {
     var nectar_route_total = seed * 17;
     var nectar_route_cursor = 0;
-    while nectar_route_cursor < 7 limit Iterations(7) {
+    while nectar_route_cursor < 7 {
         nectar_route_total = nectar_route_total + nectar_route_cursor + 6;
         nectar_route_cursor = nectar_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_parity_parity_score(seed: i32) -> i32 ![]
 {
     var nectar_score_total = seed + 17;
     var nectar_score_cursor = 0;
-    while nectar_score_cursor < 12 limit Iterations(12) {
+    while nectar_score_cursor < 12 {
         nectar_score_total = nectar_score_total + nectar_score_cursor + 6;
         nectar_score_cursor = nectar_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_parity_parity_finish(seed: i32) -> i32 ![]
 {
     var nectar_finish_total = seed - 17;
     var nectar_finish_cursor = 0;
-    while nectar_finish_cursor < 7 limit Iterations(7) {
+    while nectar_finish_cursor < 7 {
         nectar_finish_total = nectar_finish_total + nectar_finish_cursor + 6;
         nectar_finish_cursor = nectar_finish_cursor + 1;
     }

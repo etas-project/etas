@@ -2,6 +2,7 @@ module app.main;
 
 import std.collections.Array;
 import std.io.{println};
+import std.memory.StorageError;
 import app.agent.model.{request};
 import app.agent.service.{run_multi_agent};
 import app.agent.runtime_variants.{runtime_task, run_retry_checkpoint_version, run_memory_conflict_version, run_cached_review_version, run_abort_guard_version};
@@ -17,7 +18,7 @@ flow smoke_main(args: Array<string>) -> i32 ![Error<IOError>] {
     return 0;
 }
 
-flow main(args: Array<string>) -> i32 ![Error<IOError>, Memory] ~ MultiAgentRuntimeGate
+flow main(args: Array<string>) -> i32 ![Error<IOError>, Error<StorageError>, Memory] ~ MultiAgentRuntimeGate
 {
     let task = runtime_task("runtime", "draft");
     let conflict_task = runtime_task("runtime-conflict", "draft");
@@ -45,7 +46,7 @@ flow main(args: Array<string>) -> i32 ![Error<IOError>, Memory] ~ MultiAgentRunt
     return 0;
 }
 
-flow runtime_main(args: Array<string>) -> i32 ![Error<IOError>, Memory] ~ MultiAgentRuntimeGate
+flow runtime_main(args: Array<string>) -> i32 ![Error<IOError>, Error<StorageError>, Memory] ~ MultiAgentRuntimeGate
 {
     return main(args);
 }

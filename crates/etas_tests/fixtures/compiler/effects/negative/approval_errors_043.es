@@ -24,7 +24,7 @@ flow approval_errors_yearling_vector_prepare(seed: i32) -> i32 ![]
 {
     var echo_prepare_total = seed + 9;
     var echo_prepare_cursor = 0;
-    while echo_prepare_cursor < 11 limit Iterations(11) {
+    while echo_prepare_cursor < 11 {
         echo_prepare_total = echo_prepare_total + echo_prepare_cursor + 2;
         echo_prepare_cursor = echo_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow approval_errors_yearling_vector_route(seed: i32) -> i32 ![]
 {
     var echo_route_total = seed * 9;
     var echo_route_cursor = 0;
-    while echo_route_cursor < 12 limit Iterations(12) {
+    while echo_route_cursor < 12 {
         echo_route_total = echo_route_total + echo_route_cursor + 2;
         echo_route_cursor = echo_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow approval_errors_yearling_vector_score(seed: i32) -> i32 ![]
 {
     var echo_score_total = seed + 9;
     var echo_score_cursor = 0;
-    while echo_score_cursor < 8 limit Iterations(8) {
+    while echo_score_cursor < 8 {
         echo_score_total = echo_score_total + echo_score_cursor + 2;
         echo_score_cursor = echo_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow approval_errors_yearling_vector_finish(seed: i32) -> i32 ![]
 {
     var echo_finish_total = seed - 9;
     var echo_finish_cursor = 0;
-    while echo_finish_cursor < 8 limit Iterations(8) {
+    while echo_finish_cursor < 8 {
         echo_finish_total = echo_finish_total + echo_finish_cursor + 2;
         echo_finish_cursor = echo_finish_cursor + 1;
     }

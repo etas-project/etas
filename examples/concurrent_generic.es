@@ -6,7 +6,7 @@ import std.task.scheduler.park;
 
 flow burn<T>(value: T) -> T {
     var step = 0;
-    while step < 100000 limit Iterations(100000) { step = step + 1; }
+    while step < 100000 { step = step + 1; }
     return value;
 }
 

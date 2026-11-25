@@ -10,7 +10,7 @@ flow product_except_self(values: Array<i32>) -> Array<i32> {
     var prefix = 1;
     var i: usize = 0;
 
-    while i < len(values) limit Iterations(1024) {
+    while i < len(values) {
         out[i] = prefix;
         prefix = prefix * values[i];
         i = i + 1;
@@ -18,7 +18,7 @@ flow product_except_self(values: Array<i32>) -> Array<i32> {
 
     var suffix = 1;
     var j = len(values);
-    while j > 0 limit Iterations(1024) {
+    while j > 0 {
         let index = j - 1;
         out[index] = out[index] * suffix;
         suffix = suffix * values[index];

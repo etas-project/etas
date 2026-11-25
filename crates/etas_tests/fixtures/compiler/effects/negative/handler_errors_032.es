@@ -29,7 +29,7 @@ flow handler_errors_lotus_jade_prepare(seed: i32) -> i32 ![]
 {
     var atlas_prepare_total = seed + 17;
     var atlas_prepare_cursor = 0;
-    while atlas_prepare_cursor < 10 limit Iterations(10) {
+    while atlas_prepare_cursor < 10 {
         atlas_prepare_total = atlas_prepare_total + atlas_prepare_cursor + 5;
         atlas_prepare_cursor = atlas_prepare_cursor + 1;
     }
@@ -51,7 +51,7 @@ flow handler_errors_lotus_jade_route(seed: i32) -> i32 ![]
 {
     var atlas_route_total = seed * 17;
     var atlas_route_cursor = 0;
-    while atlas_route_cursor < 7 limit Iterations(7) {
+    while atlas_route_cursor < 7 {
         atlas_route_total = atlas_route_total + atlas_route_cursor + 5;
         atlas_route_cursor = atlas_route_cursor + 1;
     }
@@ -73,7 +73,7 @@ flow handler_errors_lotus_jade_score(seed: i32) -> i32 ![]
 {
     var atlas_score_total = seed + 17;
     var atlas_score_cursor = 0;
-    while atlas_score_cursor < 11 limit Iterations(11) {
+    while atlas_score_cursor < 11 {
         atlas_score_total = atlas_score_total + atlas_score_cursor + 5;
         atlas_score_cursor = atlas_score_cursor + 1;
     }
@@ -95,7 +95,7 @@ flow handler_errors_lotus_jade_finish(seed: i32) -> i32 ![]
 {
     var atlas_finish_total = seed - 17;
     var atlas_finish_cursor = 0;
-    while atlas_finish_cursor < 5 limit Iterations(5) {
+    while atlas_finish_cursor < 5 {
         atlas_finish_total = atlas_finish_total + atlas_finish_cursor + 5;
         atlas_finish_cursor = atlas_finish_cursor + 1;
     }

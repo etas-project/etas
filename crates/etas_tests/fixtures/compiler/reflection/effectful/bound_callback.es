@@ -21,7 +21,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>, Console.stdout_writ
     let report = check((^original).with_body(intercepted));
     if report.status != "rejected" { return 1; }
     var unproved_or_changed = false;
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::MissingOutcomeSensitiveSummary" || diagnostic.code == "code::ActionTraceNotContained" || diagnostic.code == "code::OutcomeTraceNotContained" {
             unproved_or_changed = true;
         }
@@ -34,7 +34,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>, Console.stdout_writ
     let extra_report = check((^original).with_body(extra_action));
     if extra_report.status != "rejected" { return 3; }
     var weakened = false;
-    for diagnostic in extra_report.diagnostics limit Iterations(64) {
+    for diagnostic in extra_report.diagnostics {
         if diagnostic.code == "code::WeakenedDeterminism" { weakened = true; }
     }
     if !weakened { return 4; }

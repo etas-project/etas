@@ -30,7 +30,7 @@ flow handler_elimination_boreal_boreal_prepare(seed: i32) -> i32 ![]
 {
     var signal_prepare_total = seed + 11;
     var signal_prepare_cursor = 0;
-    while signal_prepare_cursor < 10 limit Iterations(10) {
+    while signal_prepare_cursor < 10 {
         signal_prepare_total = signal_prepare_total + signal_prepare_cursor + 6;
         signal_prepare_cursor = signal_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_boreal_boreal_route(seed: i32) -> i32 ![]
 {
     var signal_route_total = seed * 11;
     var signal_route_cursor = 0;
-    while signal_route_cursor < 10 limit Iterations(10) {
+    while signal_route_cursor < 10 {
         signal_route_total = signal_route_total + signal_route_cursor + 6;
         signal_route_cursor = signal_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_boreal_boreal_score(seed: i32) -> i32 ![]
 {
     var signal_score_total = seed + 11;
     var signal_score_cursor = 0;
-    while signal_score_cursor < 12 limit Iterations(12) {
+    while signal_score_cursor < 12 {
         signal_score_total = signal_score_total + signal_score_cursor + 6;
         signal_score_cursor = signal_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_boreal_boreal_finish(seed: i32) -> i32 ![]
 {
     var signal_finish_total = seed - 11;
     var signal_finish_cursor = 0;
-    while signal_finish_cursor < 8 limit Iterations(8) {
+    while signal_finish_cursor < 8 {
         signal_finish_total = signal_finish_total + signal_finish_cursor + 6;
         signal_finish_cursor = signal_finish_cursor + 1;
     }

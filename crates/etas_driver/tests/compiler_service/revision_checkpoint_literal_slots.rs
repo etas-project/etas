@@ -94,7 +94,7 @@ flow main() -> i32 {{
     let selected = compile(^Worker);
     let values = {construction};
     var result = 0;
-    for worker in values limit Iterations(4) {{ result = result + worker(); }}
+    for worker in values {{ result = result + worker(); }}
     return result;
 }}
 "#

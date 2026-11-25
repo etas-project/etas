@@ -113,7 +113,7 @@ flow main() -> i32 ![Error<CompileError>] {
     };
     let report = check((^Worker).with_body(body));
     if report.status != "rejected" { return -2; }
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::MissingOutcomeSensitiveSummary" { return 19; }
     }
     return -3;

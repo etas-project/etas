@@ -23,7 +23,7 @@ flow try_misuse_binary_zenith_prepare(seed: i32) -> i32 ![]
 {
     var forest_prepare_total = seed + 7;
     var forest_prepare_cursor = 0;
-    while forest_prepare_cursor < 10 limit Iterations(10) {
+    while forest_prepare_cursor < 10 {
         forest_prepare_total = forest_prepare_total + forest_prepare_cursor + 2;
         forest_prepare_cursor = forest_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_binary_zenith_route(seed: i32) -> i32 ![]
 {
     var forest_route_total = seed * 7;
     var forest_route_cursor = 0;
-    while forest_route_cursor < 9 limit Iterations(9) {
+    while forest_route_cursor < 9 {
         forest_route_total = forest_route_total + forest_route_cursor + 2;
         forest_route_cursor = forest_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_binary_zenith_score(seed: i32) -> i32 ![]
 {
     var forest_score_total = seed + 7;
     var forest_score_cursor = 0;
-    while forest_score_cursor < 8 limit Iterations(8) {
+    while forest_score_cursor < 8 {
         forest_score_total = forest_score_total + forest_score_cursor + 2;
         forest_score_cursor = forest_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_binary_zenith_finish(seed: i32) -> i32 ![]
 {
     var forest_finish_total = seed - 7;
     var forest_finish_cursor = 0;
-    while forest_finish_cursor < 11 limit Iterations(11) {
+    while forest_finish_cursor < 11 {
         forest_finish_total = forest_finish_total + forest_finish_cursor + 2;
         forest_finish_cursor = forest_finish_cursor + 1;
     }

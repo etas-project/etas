@@ -8,7 +8,7 @@ import tests.compiler.support.algorithms.{join_i32_list, parse_i32_list};
 flow map_i32(values: Array<i32>, f: i32 -> i32) -> Array<i32> {
     var out: Array<i32> = [];
 
-    for value in values limit Iterations(1024) {
+    for value in values {
         out = out.push(f(value));
     }
 

@@ -46,7 +46,7 @@ flow main() -> string ![Error<CompileError>] {
     };
     let report = check((^Worker).with_body(body));
     var diagnostics = report.status;
-    for diagnostic in report.diagnostics limit Iterations(16) {
+    for diagnostic in report.diagnostics {
         diagnostics = diagnostics + "|" + diagnostic.code + ": " + diagnostic.message;
     }
     return diagnostics;
@@ -116,7 +116,7 @@ flow main() -> string ![Error<CompileError>] {
     };
     let report = check((^Worker).with_body(body));
     var diagnostics = report.status;
-    for diagnostic in report.diagnostics limit Iterations(16) {
+    for diagnostic in report.diagnostics {
         diagnostics = diagnostics + "|" + diagnostic.code + ": " + diagnostic.message;
     }
     return diagnostics;

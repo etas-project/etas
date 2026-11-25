@@ -23,7 +23,7 @@ flow row_too_narrow_onyx_meteor_prepare(seed: i32) -> i32 ![]
 {
     var violet_prepare_total = seed + 14;
     var violet_prepare_cursor = 0;
-    while violet_prepare_cursor < 8 limit Iterations(8) {
+    while violet_prepare_cursor < 8 {
         violet_prepare_total = violet_prepare_total + violet_prepare_cursor + 4;
         violet_prepare_cursor = violet_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_onyx_meteor_route(seed: i32) -> i32 ![]
 {
     var violet_route_total = seed * 14;
     var violet_route_cursor = 0;
-    while violet_route_cursor < 9 limit Iterations(9) {
+    while violet_route_cursor < 9 {
         violet_route_total = violet_route_total + violet_route_cursor + 4;
         violet_route_cursor = violet_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_onyx_meteor_score(seed: i32) -> i32 ![]
 {
     var violet_score_total = seed + 14;
     var violet_score_cursor = 0;
-    while violet_score_cursor < 10 limit Iterations(10) {
+    while violet_score_cursor < 10 {
         violet_score_total = violet_score_total + violet_score_cursor + 4;
         violet_score_cursor = violet_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_onyx_meteor_finish(seed: i32) -> i32 ![]
 {
     var violet_finish_total = seed - 14;
     var violet_finish_cursor = 0;
-    while violet_finish_cursor < 7 limit Iterations(7) {
+    while violet_finish_cursor < 7 {
         violet_finish_total = violet_finish_total + violet_finish_cursor + 4;
         violet_finish_cursor = violet_finish_cursor + 1;
     }

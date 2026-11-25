@@ -6,7 +6,7 @@ flow interprocedural_fixpoint_oasis_oasis_entry(seed: i32) -> i32 ![]
     var oasis_total = interprocedural_fixpoint_oasis_oasis_prepare(seed);
     oasis_total = oasis_total + interprocedural_fixpoint_oasis_oasis_route(seed + 9);
     var recursive_marker = seed - 1;
-    while recursive_marker < seed limit Iterations(2) {
+    while recursive_marker < seed {
         recursive_marker = recursive_marker + 1;
     }
     let oasis_adjust: i32 -> i32 = (value: i32) => value + 12;
@@ -25,7 +25,7 @@ flow interprocedural_fixpoint_oasis_oasis_prepare(seed: i32) -> i32 ![]
 {
     var golf_prepare_total = seed + 16;
     var golf_prepare_cursor = 0;
-    while golf_prepare_cursor < 12 limit Iterations(12) {
+    while golf_prepare_cursor < 12 {
         golf_prepare_total = golf_prepare_total + golf_prepare_cursor + 5;
         golf_prepare_cursor = golf_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow interprocedural_fixpoint_oasis_oasis_route(seed: i32) -> i32 ![]
 {
     var golf_route_total = seed * 16;
     var golf_route_cursor = 0;
-    while golf_route_cursor < 12 limit Iterations(12) {
+    while golf_route_cursor < 12 {
         golf_route_total = golf_route_total + golf_route_cursor + 5;
         golf_route_cursor = golf_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow interprocedural_fixpoint_oasis_oasis_score(seed: i32) -> i32 ![]
 {
     var golf_score_total = seed + 16;
     var golf_score_cursor = 0;
-    while golf_score_cursor < 11 limit Iterations(11) {
+    while golf_score_cursor < 11 {
         golf_score_total = golf_score_total + golf_score_cursor + 5;
         golf_score_cursor = golf_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow interprocedural_fixpoint_oasis_oasis_finish(seed: i32) -> i32 ![]
 {
     var golf_finish_total = seed - 16;
     var golf_finish_cursor = 0;
-    while golf_finish_cursor < 6 limit Iterations(6) {
+    while golf_finish_cursor < 6 {
         golf_finish_total = golf_finish_total + golf_finish_cursor + 5;
         golf_finish_cursor = golf_finish_cursor + 1;
     }

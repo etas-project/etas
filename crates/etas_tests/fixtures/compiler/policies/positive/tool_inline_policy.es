@@ -162,7 +162,7 @@ flow effects_positive_model_and_trace_union_prepare_28(seed: i32) -> i32 {
     var ledger_2 = seed + 4;
     var pivot_2 = ledger_2 * 5;
     var window_2 = 0;
-    while window_2 < 7 limit Iterations(7) {
+    while window_2 < 7 {
         pivot_2 = pivot_2 + window_2 + 4;
         window_2 = window_2 + 1;
     }
@@ -193,7 +193,7 @@ flow effects_positive_model_and_trace_union_route_28(seed: i32) -> i32 {
     var ledger_9 = seed - 11;
     var pivot_9 = seed + 22;
     var window_9 = 1;
-    while window_9 <= 13 limit Iterations(13) {
+    while window_9 <= 13 {
         ledger_9 = ledger_9 + (pivot_9 % (16));
         pivot_9 = pivot_9 + window_9;
         window_9 = window_9 + 1;
@@ -207,7 +207,7 @@ flow effects_positive_model_and_trace_union_route_28(seed: i32) -> i32 {
     var effects_positive_model_and_trace_union_route_28_north_gate = seed + 29;
     var effects_positive_model_and_trace_union_route_28_south_gate = effects_positive_model_and_trace_union_route_28_north_gate % 5;
     var effects_positive_model_and_trace_union_route_28_east_gate = effects_positive_model_and_trace_union_route_28_south_gate + effects_positive_model_and_trace_union_route_28_north_gate;
-    while effects_positive_model_and_trace_union_route_28_south_gate < 4 limit Iterations(4) {
+    while effects_positive_model_and_trace_union_route_28_south_gate < 4 {
         effects_positive_model_and_trace_union_route_28_east_gate = effects_positive_model_and_trace_union_route_28_east_gate + effects_positive_model_and_trace_union_route_28_south_gate;
         effects_positive_model_and_trace_union_route_28_south_gate = effects_positive_model_and_trace_union_route_28_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow effects_positive_model_and_trace_union_score_28(seed: i32) -> i32 {
     var ledger_7 = seed * 9;
     var pivot_7 = ledger_7 + 18;
     var window_7 = 0;
-    while window_7 < 13 limit Iterations(13) {
+    while window_7 < 13 {
         if window_7 % 2 == 0 {
             pivot_7 = pivot_7 + window_7;
         } else {
@@ -251,7 +251,7 @@ flow effects_positive_model_and_trace_union_finish_28(seed: i32) -> i32 {
     var ledger_20 = seed + 66;
     var pivot_20 = ledger_20 / 22;
     var window_20 = 22;
-    while window_20 > 0 limit Iterations(23) {
+    while window_20 > 0 {
         pivot_20 = pivot_20 + window_20;
         ledger_20 = ledger_20 + pivot_20;
         window_20 = window_20 - 1;
@@ -265,7 +265,7 @@ flow effects_positive_model_and_trace_union_finish_28(seed: i32) -> i32 {
     var effects_positive_model_and_trace_union_finish_28_final_seed = seed + 37;
     var effects_positive_model_and_trace_union_finish_28_final_mask = effects_positive_model_and_trace_union_finish_28_final_seed - 5;
     var effects_positive_model_and_trace_union_finish_28_final_roll = effects_positive_model_and_trace_union_finish_28_final_mask * 3;
-    while effects_positive_model_and_trace_union_finish_28_final_mask > 0 limit Iterations(12) {
+    while effects_positive_model_and_trace_union_finish_28_final_mask > 0 {
         effects_positive_model_and_trace_union_finish_28_final_roll = effects_positive_model_and_trace_union_finish_28_final_roll + effects_positive_model_and_trace_union_finish_28_final_mask;
         effects_positive_model_and_trace_union_finish_28_final_mask = effects_positive_model_and_trace_union_finish_28_final_mask - 1;
     }

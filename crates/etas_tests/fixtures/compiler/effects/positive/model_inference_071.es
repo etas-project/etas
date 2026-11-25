@@ -23,7 +23,7 @@ flow model_inference_vector_vector_prepare(seed: i32) -> i32 ![]
 {
     var echo_prepare_total = seed + 17;
     var echo_prepare_cursor = 0;
-    while echo_prepare_cursor < 9 limit Iterations(9) {
+    while echo_prepare_cursor < 9 {
         echo_prepare_total = echo_prepare_total + echo_prepare_cursor + 1;
         echo_prepare_cursor = echo_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_vector_vector_route(seed: i32) -> i32 ![]
 {
     var echo_route_total = seed * 17;
     var echo_route_cursor = 0;
-    while echo_route_cursor < 12 limit Iterations(12) {
+    while echo_route_cursor < 12 {
         echo_route_total = echo_route_total + echo_route_cursor + 1;
         echo_route_cursor = echo_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_vector_vector_score(seed: i32) -> i32 ![]
 {
     var echo_score_total = seed + 17;
     var echo_score_cursor = 0;
-    while echo_score_cursor < 7 limit Iterations(7) {
+    while echo_score_cursor < 7 {
         echo_score_total = echo_score_total + echo_score_cursor + 1;
         echo_score_cursor = echo_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_vector_vector_finish(seed: i32) -> i32 ![]
 {
     var echo_finish_total = seed - 17;
     var echo_finish_cursor = 0;
-    while echo_finish_cursor < 12 limit Iterations(12) {
+    while echo_finish_cursor < 12 {
         echo_finish_total = echo_finish_total + echo_finish_cursor + 1;
         echo_finish_cursor = echo_finish_cursor + 1;
     }

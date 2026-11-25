@@ -4,7 +4,7 @@ import std.collections.{List, len};
 
 flow bfs(queue: List<i32>) -> i32 {
     var head = 0;
-    while head < len(queue) limit Iterations(4096) {
+    while head < len(queue) {
         queue.push(queue[head]);
     }
     return 0;

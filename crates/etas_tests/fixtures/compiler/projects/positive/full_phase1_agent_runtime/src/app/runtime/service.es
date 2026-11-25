@@ -1,15 +1,16 @@
 module app.runtime.service;
 
 import std.io.{println};
-import std.memory.{version};
+import std.memory.{StorageError, version};
 import std.runtime.{checkpoint};
+import std.task.{run, Scheduler};
 import app.runtime.agent.{RuntimePlanner, RuntimeReviewer};
 import app.runtime.model.{RuntimeRequest, RuntimeReview, fallback_review, review_request};
 
-alias RuntimeMemorySchema = MemoryRegion<{
+type RuntimeMemorySchema = {
     Reviews: Store<string, RuntimeReview>,
     Drafts: Store<string, string>,
-}>;
+};
 
 let RuntimeMemory =
     std.memory.region<RuntimeMemorySchema>(
@@ -17,16 +18,19 @@ let RuntimeMemory =
         store = "full-phase1-runtime"
     );
 
-public flow run_runtime(request: RuntimeRequest) -> RuntimeReview ![Error<IOError>, Memory]
+public flow run_runtime(request: RuntimeRequest) -> RuntimeReview ![Error<IOError>, Error<StorageError>, Memory]
 {
     checkpoint("before-runtime-agent");
     RuntimeMemory.Drafts.put(request.topic, request.draft);
 
-    let plan = RuntimePlanner.run(request);
-    var review = fallback_review(request.topic);
-    retry limit Attempts(2) {
-        review = RuntimeReviewer.run(review_request(request, plan));
-    }
+    let review = run((scheduler: Scheduler) => {
+        let plan = RuntimePlanner {}.run(request);
+        var reply = fallback_review(request.topic);
+        retry {
+            reply = RuntimeReviewer {}.run(review_request(request, plan));
+        }
+        return reply;
+    });
     println(review.summary);
 
     RuntimeMemory.Reviews.upsert(request.topic, review);
@@ -35,8 +39,11 @@ public flow run_runtime(request: RuntimeRequest) -> RuntimeReview ![Error<IOErro
         RuntimeMemory.Reviews.put_versioned(request.topic, review, stale);
         review
     } with {
-        Error<MemoryConflict>.raise(conflict) => {
-            finish fallback_review(request.topic);
+        Error<StorageError>.raise(error) => {
+            if error.code == "condition_conflict" {
+                finish fallback_review(request.topic);
+            }
+            perform Error.raise<StorageError>(error);
         }
     };
     if handled.score < 0 {
@@ -47,5 +54,5 @@ public flow run_runtime(request: RuntimeRequest) -> RuntimeReview ![Error<IOErro
     let cached = RuntimeMemory.Reviews.get(request.topic);
     checkpoint("after-runtime-memory");
 
-    return handled;
+    return cached.unwrap();
 }

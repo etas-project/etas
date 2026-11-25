@@ -22,7 +22,7 @@ flow approval_velvet_velvet_prepare(seed: i32) -> i32 ![]
 {
     var jigsaw_prepare_total = seed + 12;
     var jigsaw_prepare_cursor = 0;
-    while jigsaw_prepare_cursor < 10 limit Iterations(10) {
+    while jigsaw_prepare_cursor < 10 {
         jigsaw_prepare_total = jigsaw_prepare_total + jigsaw_prepare_cursor + 5;
         jigsaw_prepare_cursor = jigsaw_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_velvet_velvet_route(seed: i32) -> i32 ![]
 {
     var jigsaw_route_total = seed * 12;
     var jigsaw_route_cursor = 0;
-    while jigsaw_route_cursor < 12 limit Iterations(12) {
+    while jigsaw_route_cursor < 12 {
         jigsaw_route_total = jigsaw_route_total + jigsaw_route_cursor + 5;
         jigsaw_route_cursor = jigsaw_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_velvet_velvet_score(seed: i32) -> i32 ![]
 {
     var jigsaw_score_total = seed + 12;
     var jigsaw_score_cursor = 0;
-    while jigsaw_score_cursor < 11 limit Iterations(11) {
+    while jigsaw_score_cursor < 11 {
         jigsaw_score_total = jigsaw_score_total + jigsaw_score_cursor + 5;
         jigsaw_score_cursor = jigsaw_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_velvet_velvet_finish(seed: i32) -> i32 ![]
 {
     var jigsaw_finish_total = seed - 12;
     var jigsaw_finish_cursor = 0;
-    while jigsaw_finish_cursor < 12 limit Iterations(12) {
+    while jigsaw_finish_cursor < 12 {
         jigsaw_finish_total = jigsaw_finish_total + jigsaw_finish_cursor + 5;
         jigsaw_finish_cursor = jigsaw_finish_cursor + 1;
     }

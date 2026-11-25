@@ -11,7 +11,7 @@ enum Link { End, Next(Link) }
 flow main(args: Array<string>) -> i32 {
     var chain = Link.End;
     var count: i32 = 0;
-    while count < 4000 limit Iterations(5000) {
+    while count < 4000 {
         chain = Link.Next(chain);
         count = count + 1;
     }

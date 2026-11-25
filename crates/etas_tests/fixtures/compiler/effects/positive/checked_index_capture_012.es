@@ -24,7 +24,7 @@ flow checked_index_capture_mango_mango_prepare(seed: i32) -> i32 ![]
 {
     var meadow_prepare_total = seed + 15;
     var meadow_prepare_cursor = 0;
-    while meadow_prepare_cursor < 10 limit Iterations(10) {
+    while meadow_prepare_cursor < 10 {
         meadow_prepare_total = meadow_prepare_total + meadow_prepare_cursor + 5;
         meadow_prepare_cursor = meadow_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_mango_mango_route(seed: i32) -> i32 ![]
 {
     var meadow_route_total = seed * 15;
     var meadow_route_cursor = 0;
-    while meadow_route_cursor < 7 limit Iterations(7) {
+    while meadow_route_cursor < 7 {
         meadow_route_total = meadow_route_total + meadow_route_cursor + 5;
         meadow_route_cursor = meadow_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_mango_mango_score(seed: i32) -> i32 ![]
 {
     var meadow_score_total = seed + 15;
     var meadow_score_cursor = 0;
-    while meadow_score_cursor < 11 limit Iterations(11) {
+    while meadow_score_cursor < 11 {
         meadow_score_total = meadow_score_total + meadow_score_cursor + 5;
         meadow_score_cursor = meadow_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_mango_mango_finish(seed: i32) -> i32 ![]
 {
     var meadow_finish_total = seed - 15;
     var meadow_finish_cursor = 0;
-    while meadow_finish_cursor < 9 limit Iterations(9) {
+    while meadow_finish_cursor < 9 {
         meadow_finish_total = meadow_finish_total + meadow_finish_cursor + 5;
         meadow_finish_cursor = meadow_finish_cursor + 1;
     }

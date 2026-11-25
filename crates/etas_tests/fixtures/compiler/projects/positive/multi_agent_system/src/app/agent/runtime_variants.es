@@ -1,9 +1,13 @@
 module app.agent.runtime_variants;
 
+import std.agent.prompt.Prompt;
+import std.json.JsonValue;
+import std.runtime.limits.Tokens;
 import std.core.{abort};
 import std.io.{println};
-import std.memory.{version};
+import std.memory.{StorageError, version};
 import std.runtime.{checkpoint};
+import std.task.{run, Scheduler};
 
 public type RuntimeTask = {
     topic: string,
@@ -25,11 +29,11 @@ public type RuntimeReview = {
     score: i32,
 };
 
-alias RuntimeMemorySchema = MemoryRegion<{
+type RuntimeMemorySchema = {
     Drafts: Store<string, string>,
     Evidence: Store<string, string>,
     Reviews: Store<string, RuntimeReview>,
-}>;
+};
 
 let RuntimeMemory =
     std.memory.region<RuntimeMemorySchema>(
@@ -42,28 +46,47 @@ public tool EvidenceLookup(input: RuntimeTask) -> string {
 }
 
 @limits([Tokens(96)])
-public agent Planner(input: RuntimeTask) -> string
-{
-    return perform infer(Prompt.new()
-        .system(Trusted("Return a concise plan for the task."))
-        .data(input));
+public agent Planner = {};
+
+impl Planner {
+    public flow run(self, input: RuntimeTask) -> string {
+        return perform infer(Prompt.new()
+            .system(Trusted("Return a concise plan for the task."))
+            .data(JsonValue.Object({
+                "topic" => JsonValue.String(input.topic),
+                "draft" => JsonValue.String(input.draft),
+            })));
+    }
 }
 
 @tools([EvidenceLookup], choice = "required")
 @limits([Tokens(256)])
-public agent Researcher(input: RuntimeTask) -> RuntimeEvidence
-{
-    return perform infer(Prompt.new()
-        .system(Trusted("Your first assistant response must be an EvidenceLookup tool call, not text. EvidenceLookup arguments must be a JSON object with topic:string and draft:string copied from input. After the tool result is returned, answer with JSON containing evidence:string."))
-        .data(input));
+public agent Researcher = {};
+
+impl Researcher {
+    public flow run(self, input: RuntimeTask) -> RuntimeEvidence {
+        return perform infer(Prompt.new()
+            .system(Trusted("Your first assistant response must be an EvidenceLookup tool call, not text. EvidenceLookup arguments must be a JSON object with topic:string and draft:string copied from input. After the tool result is returned, answer with JSON containing evidence:string."))
+            .data(JsonValue.Object({
+                "topic" => JsonValue.String(input.topic),
+                "draft" => JsonValue.String(input.draft),
+            })));
+    }
 }
 
 @limits([Tokens(128)])
-public agent Reviewer(input: RuntimeReviewInput) -> RuntimeReview
-{
-    return perform infer(Prompt.new()
-        .system(Trusted("Return JSON with summary:string and score:i32."))
-        .data(input));
+public agent Reviewer = {};
+
+impl Reviewer {
+    public flow run(self, input: RuntimeReviewInput) -> RuntimeReview {
+        return perform infer(Prompt.new()
+            .system(Trusted("Return JSON with summary:string and score:i32."))
+            .data(JsonValue.Object({
+                "topic" => JsonValue.String(input.topic),
+                "plan" => JsonValue.String(input.plan),
+                "evidence" => JsonValue.String(input.evidence),
+            })));
+    }
 }
 
 public flow runtime_task(topic: string, draft: string) -> RuntimeTask {
@@ -95,9 +118,11 @@ public flow fallback_review(topic: string) -> RuntimeReview {
 public flow run_three_agent_version(task: RuntimeTask) -> RuntimeReview
     ![Error<IOError>, Memory]
 {
-    let plan = Planner.run(task);
-    let evidence = Researcher.run(task);
-    let review = Reviewer.run(runtime_review_input(task.topic, plan, evidence.evidence));
+    let review = run((scheduler: Scheduler) => {
+        let plan = Planner {}.run(task);
+        let evidence = Researcher {}.run(task);
+        return Reviewer {}.run(runtime_review_input(task.topic, plan, evidence.evidence));
+    });
     println(review.summary);
     return review;
 }
@@ -106,19 +131,21 @@ public flow run_retry_checkpoint_version(task: RuntimeTask) -> RuntimeReview
     ![Error<IOError>, Memory]
 {
     checkpoint("multi-agent-retry-start");
-    var plan = "";
-    retry limit Attempts(2) {
-        plan = Planner.run(task);
-    }
-    let evidence = Researcher.run(task);
-    let review = Reviewer.run(runtime_review_input(task.topic, plan, evidence.evidence));
+    let review = run((scheduler: Scheduler) => {
+        var plan = "";
+        retry {
+            plan = Planner {}.run(task);
+        }
+        let evidence = Researcher {}.run(task);
+        return Reviewer {}.run(runtime_review_input(task.topic, plan, evidence.evidence));
+    });
     checkpoint("multi-agent-retry-end");
     println(review.summary);
     return review;
 }
 
 public flow run_memory_conflict_version(task: RuntimeTask) -> RuntimeReview
-    ![Error<IOError>, Memory]
+    ![Error<IOError>, Error<StorageError>, Memory]
 {
     RuntimeMemory.Drafts.put(task.topic, task.draft);
     let review = run_three_agent_version(task);
@@ -128,8 +155,11 @@ public flow run_memory_conflict_version(task: RuntimeTask) -> RuntimeReview
         RuntimeMemory.Reviews.put_versioned(task.topic, review, stale);
         review
     } with {
-        Error<MemoryConflict>.raise(conflict) => {
-            finish fallback_review(task.topic);
+        Error<StorageError>.raise(error) => {
+            if error.code == "condition_conflict" {
+                finish fallback_review(task.topic);
+            }
+            perform Error.raise<StorageError>(error);
         }
     };
     RuntimeMemory.Reviews.upsert(task.topic, handled);
@@ -137,7 +167,7 @@ public flow run_memory_conflict_version(task: RuntimeTask) -> RuntimeReview
 }
 
 public flow run_cached_review_version(task: RuntimeTask) -> RuntimeReview
-    ![Error<IOError>, Memory]
+    ![Error<IOError>, Error<StorageError>, Memory]
 {
     RuntimeMemory.Drafts.upsert(task.topic, task.draft);
     let review = run_retry_checkpoint_version(task);
@@ -145,11 +175,11 @@ public flow run_cached_review_version(task: RuntimeTask) -> RuntimeReview
     RuntimeMemory.Reviews.upsert(task.topic, review);
     let cached = RuntimeMemory.Reviews.get(task.topic);
     checkpoint("multi-agent-cache-read");
-    return review;
+    return cached.unwrap();
 }
 
 public flow run_abort_guard_version(task: RuntimeTask) -> RuntimeReview
-    ![Error<IOError>, Memory]
+    ![Error<IOError>, Error<StorageError>, Memory]
 {
     if task.topic == "" {
         abort("runtime variant requires a topic");

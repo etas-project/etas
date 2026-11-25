@@ -24,7 +24,7 @@ flow command_sandbox_errors_jigsaw_haven_prepare(seed: i32) -> i32 ![]
 {
     var garden_prepare_total = seed + 20;
     var garden_prepare_cursor = 0;
-    while garden_prepare_cursor < 12 limit Iterations(12) {
+    while garden_prepare_cursor < 12 {
         garden_prepare_total = garden_prepare_total + garden_prepare_cursor + 6;
         garden_prepare_cursor = garden_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow command_sandbox_errors_jigsaw_haven_route(seed: i32) -> i32 ![]
 {
     var garden_route_total = seed * 20;
     var garden_route_cursor = 0;
-    while garden_route_cursor < 11 limit Iterations(11) {
+    while garden_route_cursor < 11 {
         garden_route_total = garden_route_total + garden_route_cursor + 6;
         garden_route_cursor = garden_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow command_sandbox_errors_jigsaw_haven_score(seed: i32) -> i32 ![]
 {
     var garden_score_total = seed + 20;
     var garden_score_cursor = 0;
-    while garden_score_cursor < 12 limit Iterations(12) {
+    while garden_score_cursor < 12 {
         garden_score_total = garden_score_total + garden_score_cursor + 6;
         garden_score_cursor = garden_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow command_sandbox_errors_jigsaw_haven_finish(seed: i32) -> i32 ![]
 {
     var garden_finish_total = seed - 20;
     var garden_finish_cursor = 0;
-    while garden_finish_cursor < 11 limit Iterations(11) {
+    while garden_finish_cursor < 11 {
         garden_finish_total = garden_finish_total + garden_finish_cursor + 6;
         garden_finish_cursor = garden_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow command_sandbox_equinox_equinox_prepare(seed: i32) -> i32 ![]
 {
     var quartz_prepare_total = seed + 20;
     var quartz_prepare_cursor = 0;
-    while quartz_prepare_cursor < 8 limit Iterations(8) {
+    while quartz_prepare_cursor < 8 {
         quartz_prepare_total = quartz_prepare_total + quartz_prepare_cursor + 6;
         quartz_prepare_cursor = quartz_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_equinox_equinox_route(seed: i32) -> i32 ![]
 {
     var quartz_route_total = seed * 20;
     var quartz_route_cursor = 0;
-    while quartz_route_cursor < 8 limit Iterations(8) {
+    while quartz_route_cursor < 8 {
         quartz_route_total = quartz_route_total + quartz_route_cursor + 6;
         quartz_route_cursor = quartz_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_equinox_equinox_score(seed: i32) -> i32 ![]
 {
     var quartz_score_total = seed + 20;
     var quartz_score_cursor = 0;
-    while quartz_score_cursor < 12 limit Iterations(12) {
+    while quartz_score_cursor < 12 {
         quartz_score_total = quartz_score_total + quartz_score_cursor + 6;
         quartz_score_cursor = quartz_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_equinox_equinox_finish(seed: i32) -> i32 ![]
 {
     var quartz_finish_total = seed - 20;
     var quartz_finish_cursor = 0;
-    while quartz_finish_cursor < 12 limit Iterations(12) {
+    while quartz_finish_cursor < 12 {
         quartz_finish_total = quartz_finish_total + quartz_finish_cursor + 6;
         quartz_finish_cursor = quartz_finish_cursor + 1;
     }

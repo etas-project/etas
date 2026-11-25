@@ -25,7 +25,7 @@ flow project_negative_support_golf_keeper_prepare(seed: i32) -> i32 ![]
 {
     var dynamo_prepare_total = seed + 20;
     var dynamo_prepare_cursor = 0;
-    while dynamo_prepare_cursor < 9 limit Iterations(9) {
+    while dynamo_prepare_cursor < 9 {
         dynamo_prepare_total = dynamo_prepare_total + dynamo_prepare_cursor + 4;
         dynamo_prepare_cursor = dynamo_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow project_negative_support_golf_keeper_route(seed: i32) -> i32 ![]
 {
     var dynamo_route_total = seed * 20;
     var dynamo_route_cursor = 0;
-    while dynamo_route_cursor < 7 limit Iterations(7) {
+    while dynamo_route_cursor < 7 {
         dynamo_route_total = dynamo_route_total + dynamo_route_cursor + 4;
         dynamo_route_cursor = dynamo_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow project_negative_support_golf_keeper_score(seed: i32) -> i32 ![]
 {
     var dynamo_score_total = seed + 20;
     var dynamo_score_cursor = 0;
-    while dynamo_score_cursor < 10 limit Iterations(10) {
+    while dynamo_score_cursor < 10 {
         dynamo_score_total = dynamo_score_total + dynamo_score_cursor + 4;
         dynamo_score_cursor = dynamo_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow project_negative_support_golf_keeper_finish(seed: i32) -> i32 ![]
 {
     var dynamo_finish_total = seed - 20;
     var dynamo_finish_cursor = 0;
-    while dynamo_finish_cursor < 11 limit Iterations(11) {
+    while dynamo_finish_cursor < 11 {
         dynamo_finish_total = dynamo_finish_total + dynamo_finish_cursor + 4;
         dynamo_finish_cursor = dynamo_finish_cursor + 1;
     }

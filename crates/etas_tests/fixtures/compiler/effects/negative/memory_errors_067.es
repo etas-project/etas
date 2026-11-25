@@ -24,7 +24,7 @@ flow memory_errors_window_uplink_prepare(seed: i32) -> i32 ![]
 {
     var winter_prepare_total = seed + 14;
     var winter_prepare_cursor = 0;
-    while winter_prepare_cursor < 10 limit Iterations(10) {
+    while winter_prepare_cursor < 10 {
         winter_prepare_total = winter_prepare_total + winter_prepare_cursor + 5;
         winter_prepare_cursor = winter_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_window_uplink_route(seed: i32) -> i32 ![]
 {
     var winter_route_total = seed * 14;
     var winter_route_cursor = 0;
-    while winter_route_cursor < 12 limit Iterations(12) {
+    while winter_route_cursor < 12 {
         winter_route_total = winter_route_total + winter_route_cursor + 5;
         winter_route_cursor = winter_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_window_uplink_score(seed: i32) -> i32 ![]
 {
     var winter_score_total = seed + 14;
     var winter_score_cursor = 0;
-    while winter_score_cursor < 11 limit Iterations(11) {
+    while winter_score_cursor < 11 {
         winter_score_total = winter_score_total + winter_score_cursor + 5;
         winter_score_cursor = winter_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_window_uplink_finish(seed: i32) -> i32 ![]
 {
     var winter_finish_total = seed - 14;
     var winter_finish_cursor = 0;
-    while winter_finish_cursor < 8 limit Iterations(8) {
+    while winter_finish_cursor < 8 {
         winter_finish_total = winter_finish_total + winter_finish_cursor + 5;
         winter_finish_cursor = winter_finish_cursor + 1;
     }

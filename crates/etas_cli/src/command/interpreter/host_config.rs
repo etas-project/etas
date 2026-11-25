@@ -924,12 +924,14 @@ impl CliHostConfig {
             grants.push(etas_host::HostActionGrant::allow("Fs", "read"));
             grants.push(etas_host::HostActionGrant::allow("Fs", "list"));
             grants.push(etas_host::HostActionGrant::allow("Fs", "stat"));
+            grants.push(etas_host::HostActionGrant::allow("Fs", "canonicalize"));
             if matches!(
                 self.filesystem_mode,
                 FilesystemMode::ReadWrite | FilesystemMode::Destructive
             ) {
                 grants.push(etas_host::HostActionGrant::allow("Fs", "write"));
                 grants.push(etas_host::HostActionGrant::allow("Fs", "atomic_replace"));
+                grants.push(etas_host::HostActionGrant::allow("Fs", "sync"));
             }
         }
         for (region, config) in &self.filesystem_regions {
@@ -939,7 +941,7 @@ impl CliHostConfig {
                 ))]
             };
             if config.read {
-                for action in ["read", "list", "stat"] {
+                for action in ["read", "list", "stat", "canonicalize"] {
                     grants.push(etas_host::HostActionGrant::allow_with_args(
                         "Fs",
                         action,
@@ -948,7 +950,7 @@ impl CliHostConfig {
                 }
             }
             if config.write {
-                for action in ["write", "atomic_replace"] {
+                for action in ["write", "atomic_replace", "sync"] {
                     grants.push(etas_host::HostActionGrant::allow_with_args(
                         "Fs",
                         action,

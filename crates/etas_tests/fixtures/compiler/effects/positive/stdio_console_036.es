@@ -23,7 +23,7 @@ flow stdio_console_kepler_kepler_prepare(seed: i32) -> i32 ![]
 {
     var hotel_prepare_total = seed + 20;
     var hotel_prepare_cursor = 0;
-    while hotel_prepare_cursor < 9 limit Iterations(9) {
+    while hotel_prepare_cursor < 9 {
         hotel_prepare_total = hotel_prepare_total + hotel_prepare_cursor + 1;
         hotel_prepare_cursor = hotel_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_kepler_kepler_route(seed: i32) -> i32 ![]
 {
     var hotel_route_total = seed * 20;
     var hotel_route_cursor = 0;
-    while hotel_route_cursor < 7 limit Iterations(7) {
+    while hotel_route_cursor < 7 {
         hotel_route_total = hotel_route_total + hotel_route_cursor + 1;
         hotel_route_cursor = hotel_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_kepler_kepler_score(seed: i32) -> i32 ![]
 {
     var hotel_score_total = seed + 20;
     var hotel_score_cursor = 0;
-    while hotel_score_cursor < 7 limit Iterations(7) {
+    while hotel_score_cursor < 7 {
         hotel_score_total = hotel_score_total + hotel_score_cursor + 1;
         hotel_score_cursor = hotel_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_kepler_kepler_finish(seed: i32) -> i32 ![]
 {
     var hotel_finish_total = seed - 20;
     var hotel_finish_cursor = 0;
-    while hotel_finish_cursor < 9 limit Iterations(9) {
+    while hotel_finish_cursor < 9 {
         hotel_finish_total = hotel_finish_total + hotel_finish_cursor + 1;
         hotel_finish_cursor = hotel_finish_cursor + 1;
     }

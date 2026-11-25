@@ -16,7 +16,7 @@ flow partition(values: Array<i32>, low: usize, high: usize) -> PartitionResult {
     var i = low;
     var j = low;
 
-    while j < high limit Iterations(1024) {
+    while j < high {
         if out[j] <= pivot {
             let tmp = out[i];
             out[i] = out[j];

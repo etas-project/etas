@@ -23,7 +23,7 @@ flow diagnostic_quality_western_union_prepare(seed: i32) -> i32 ![]
 {
     var rocket_prepare_total = seed + 19;
     var rocket_prepare_cursor = 0;
-    while rocket_prepare_cursor < 9 limit Iterations(9) {
+    while rocket_prepare_cursor < 9 {
         rocket_prepare_total = rocket_prepare_total + rocket_prepare_cursor + 1;
         rocket_prepare_cursor = rocket_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow diagnostic_quality_western_union_route(seed: i32) -> i32 ![]
 {
     var rocket_route_total = seed * 19;
     var rocket_route_cursor = 0;
-    while rocket_route_cursor < 12 limit Iterations(12) {
+    while rocket_route_cursor < 12 {
         rocket_route_total = rocket_route_total + rocket_route_cursor + 1;
         rocket_route_cursor = rocket_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow diagnostic_quality_western_union_score(seed: i32) -> i32 ![]
 {
     var rocket_score_total = seed + 19;
     var rocket_score_cursor = 0;
-    while rocket_score_cursor < 7 limit Iterations(7) {
+    while rocket_score_cursor < 7 {
         rocket_score_total = rocket_score_total + rocket_score_cursor + 1;
         rocket_score_cursor = rocket_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow diagnostic_quality_western_union_finish(seed: i32) -> i32 ![]
 {
     var rocket_finish_total = seed - 19;
     var rocket_finish_cursor = 0;
-    while rocket_finish_cursor < 8 limit Iterations(8) {
+    while rocket_finish_cursor < 8 {
         rocket_finish_total = rocket_finish_total + rocket_finish_cursor + 1;
         rocket_finish_cursor = rocket_finish_cursor + 1;
     }

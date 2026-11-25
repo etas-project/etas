@@ -118,6 +118,16 @@ impl ArtifactStdProvider {
                 .into_iter()
                 .map(etas_code::CallableId::method),
         );
+        required.extend(consumer.types.value_equality_dependencies(&consumer.type_store)
+            .into_iter().map(etas_code::CallableId::method));
+        required.extend(
+            consumer
+                .types
+                .generic_method_dependencies(&consumer.type_store)
+                .map_err(invalid)?
+                .into_iter()
+                .map(etas_code::CallableId::method),
+        );
         let index = self.sdk.object_index()?;
         let Some(roots) = required
             .iter()

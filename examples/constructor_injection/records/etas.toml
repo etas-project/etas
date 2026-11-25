@@ -1,0 +1,12 @@
+[package]
+name = "constructor-record-consumer"
+version = "0.1.0"
+edition = "2026"
+[source]
+root = "src"
+[[bin]]
+name = "constructor-record-consumer"
+module = "app.main"
+flow = "main"
+[dependencies]
+wiring = { package = "constructor-wiring", version = "0.1.0", import = "wiring", path = "../library" }

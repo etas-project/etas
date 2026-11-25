@@ -23,7 +23,7 @@ flow row_contract_extra_valley_valley_prepare(seed: i32) -> i32 ![]
 {
     var equinox_prepare_total = seed + 4;
     var equinox_prepare_cursor = 0;
-    while equinox_prepare_cursor < 9 limit Iterations(9) {
+    while equinox_prepare_cursor < 9 {
         equinox_prepare_total = equinox_prepare_total + equinox_prepare_cursor + 5;
         equinox_prepare_cursor = equinox_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_extra_valley_valley_route(seed: i32) -> i32 ![]
 {
     var equinox_route_total = seed * 4;
     var equinox_route_cursor = 0;
-    while equinox_route_cursor < 7 limit Iterations(7) {
+    while equinox_route_cursor < 7 {
         equinox_route_total = equinox_route_total + equinox_route_cursor + 5;
         equinox_route_cursor = equinox_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_extra_valley_valley_score(seed: i32) -> i32 ![]
 {
     var equinox_score_total = seed + 4;
     var equinox_score_cursor = 0;
-    while equinox_score_cursor < 11 limit Iterations(11) {
+    while equinox_score_cursor < 11 {
         equinox_score_total = equinox_score_total + equinox_score_cursor + 5;
         equinox_score_cursor = equinox_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_extra_valley_valley_finish(seed: i32) -> i32 ![]
 {
     var equinox_finish_total = seed - 4;
     var equinox_finish_cursor = 0;
-    while equinox_finish_cursor < 5 limit Iterations(5) {
+    while equinox_finish_cursor < 5 {
         equinox_finish_total = equinox_finish_total + equinox_finish_cursor + 5;
         equinox_finish_cursor = equinox_finish_cursor + 1;
     }

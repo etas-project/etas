@@ -168,7 +168,7 @@ flow policies_negative_handler_cannot_hide_denied_write_prepare_37(seed: i32) ->
     var ledger_2 = seed - 4;
     var pivot_2 = seed + 8;
     var window_2 = 1;
-    while window_2 <= 6 limit Iterations(6) {
+    while window_2 <= 6 {
         ledger_2 = ledger_2 + (pivot_2 % (9));
         pivot_2 = pivot_2 + window_2;
         window_2 = window_2 + 1;
@@ -198,7 +198,7 @@ flow policies_negative_handler_cannot_hide_denied_write_route_37(seed: i32) -> i
     var ledger_7 = seed * 9;
     var pivot_7 = ledger_7 + 18;
     var window_7 = 0;
-    while window_7 < 13 limit Iterations(13) {
+    while window_7 < 13 {
         if window_7 % 2 == 0 {
             pivot_7 = pivot_7 + window_7;
         } else {
@@ -212,7 +212,7 @@ flow policies_negative_handler_cannot_hide_denied_write_route_37(seed: i32) -> i
     var policies_negative_handler_cannot_hide_denied_write_route_37_north_gate = seed + 38;
     var policies_negative_handler_cannot_hide_denied_write_route_37_south_gate = policies_negative_handler_cannot_hide_denied_write_route_37_north_gate % 7;
     var policies_negative_handler_cannot_hide_denied_write_route_37_east_gate = policies_negative_handler_cannot_hide_denied_write_route_37_south_gate + policies_negative_handler_cannot_hide_denied_write_route_37_north_gate;
-    while policies_negative_handler_cannot_hide_denied_write_route_37_south_gate < 4 limit Iterations(4) {
+    while policies_negative_handler_cannot_hide_denied_write_route_37_south_gate < 4 {
         policies_negative_handler_cannot_hide_denied_write_route_37_east_gate = policies_negative_handler_cannot_hide_denied_write_route_37_east_gate + policies_negative_handler_cannot_hide_denied_write_route_37_south_gate;
         policies_negative_handler_cannot_hide_denied_write_route_37_south_gate = policies_negative_handler_cannot_hide_denied_write_route_37_south_gate + 1;
     }
@@ -227,7 +227,7 @@ flow policies_negative_handler_cannot_hide_denied_write_score_37(seed: i32) -> i
     var ledger_16 = seed + 54;
     var pivot_16 = ledger_16 / 18;
     var window_16 = 18;
-    while window_16 > 0 limit Iterations(19) {
+    while window_16 > 0 {
         pivot_16 = pivot_16 + window_16;
         ledger_16 = ledger_16 + pivot_16;
         window_16 = window_16 - 1;
@@ -256,7 +256,7 @@ flow policies_negative_handler_cannot_hide_denied_write_finish_37(seed: i32) -> 
     var ledger_14 = seed + 16;
     var pivot_14 = ledger_14 * 17;
     var window_14 = 0;
-    while window_14 < 19 limit Iterations(19) {
+    while window_14 < 19 {
         pivot_14 = pivot_14 + window_14 + 16;
         window_14 = window_14 + 1;
     }
@@ -271,7 +271,7 @@ flow policies_negative_handler_cannot_hide_denied_write_finish_37(seed: i32) -> 
     var policies_negative_handler_cannot_hide_denied_write_finish_37_final_seed = seed + 46;
     var policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask = policies_negative_handler_cannot_hide_denied_write_finish_37_final_seed - 2;
     var policies_negative_handler_cannot_hide_denied_write_finish_37_final_roll = policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask * 4;
-    while policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask > 0 limit Iterations(12) {
+    while policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask > 0 {
         policies_negative_handler_cannot_hide_denied_write_finish_37_final_roll = policies_negative_handler_cannot_hide_denied_write_finish_37_final_roll + policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask;
         policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask = policies_negative_handler_cannot_hide_denied_write_finish_37_final_mask - 1;
     }

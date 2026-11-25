@@ -161,7 +161,7 @@ flow policies_negative_deny_web_search_prepare_36(seed: i32) -> i32 {
     var ledger_1 = seed + 3;
     var pivot_1 = ledger_1 * 4;
     var window_1 = 0;
-    while window_1 < 6 limit Iterations(6) {
+    while window_1 < 6 {
         pivot_1 = pivot_1 + window_1 + 3;
         window_1 = window_1 + 1;
     }
@@ -192,7 +192,7 @@ flow policies_negative_deny_web_search_route_36(seed: i32) -> i32 {
     var ledger_6 = seed - 8;
     var pivot_6 = seed + 16;
     var window_6 = 1;
-    while window_6 <= 10 limit Iterations(10) {
+    while window_6 <= 10 {
         ledger_6 = ledger_6 + (pivot_6 % (13));
         pivot_6 = pivot_6 + window_6;
         window_6 = window_6 + 1;
@@ -206,7 +206,7 @@ flow policies_negative_deny_web_search_route_36(seed: i32) -> i32 {
     var policies_negative_deny_web_search_route_36_north_gate = seed + 37;
     var policies_negative_deny_web_search_route_36_south_gate = policies_negative_deny_web_search_route_36_north_gate % 6;
     var policies_negative_deny_web_search_route_36_east_gate = policies_negative_deny_web_search_route_36_south_gate + policies_negative_deny_web_search_route_36_north_gate;
-    while policies_negative_deny_web_search_route_36_south_gate < 4 limit Iterations(4) {
+    while policies_negative_deny_web_search_route_36_south_gate < 4 {
         policies_negative_deny_web_search_route_36_east_gate = policies_negative_deny_web_search_route_36_east_gate + policies_negative_deny_web_search_route_36_south_gate;
         policies_negative_deny_web_search_route_36_south_gate = policies_negative_deny_web_search_route_36_south_gate + 1;
     }
@@ -221,7 +221,7 @@ flow policies_negative_deny_web_search_score_36(seed: i32) -> i32 {
     var ledger_15 = seed * 17;
     var pivot_15 = ledger_15 + 26;
     var window_15 = 0;
-    while window_15 < 21 limit Iterations(21) {
+    while window_15 < 21 {
         if window_15 % 2 == 0 {
             pivot_15 = pivot_15 + window_15;
         } else {
@@ -250,7 +250,7 @@ flow policies_negative_deny_web_search_finish_36(seed: i32) -> i32 {
     var ledger_13 = seed + 45;
     var pivot_13 = ledger_13 / 15;
     var window_13 = 15;
-    while window_13 > 0 limit Iterations(16) {
+    while window_13 > 0 {
         pivot_13 = pivot_13 + window_13;
         ledger_13 = ledger_13 + pivot_13;
         window_13 = window_13 - 1;
@@ -264,7 +264,7 @@ flow policies_negative_deny_web_search_finish_36(seed: i32) -> i32 {
     var policies_negative_deny_web_search_finish_36_final_seed = seed + 45;
     var policies_negative_deny_web_search_finish_36_final_mask = policies_negative_deny_web_search_finish_36_final_seed - 1;
     var policies_negative_deny_web_search_finish_36_final_roll = policies_negative_deny_web_search_finish_36_final_mask * 3;
-    while policies_negative_deny_web_search_finish_36_final_mask > 0 limit Iterations(12) {
+    while policies_negative_deny_web_search_finish_36_final_mask > 0 {
         policies_negative_deny_web_search_finish_36_final_roll = policies_negative_deny_web_search_finish_36_final_roll + policies_negative_deny_web_search_finish_36_final_mask;
         policies_negative_deny_web_search_finish_36_final_mask = policies_negative_deny_web_search_finish_36_final_mask - 1;
     }

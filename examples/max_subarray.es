@@ -9,7 +9,7 @@ flow max_subarray_sum(values: Array<i32>) -> i32 {
     var best = values[0];
     var current = values[0];
 
-    while index < 6 limit Iterations(16) {
+    while index < 6 {
         let value = values[index];
         if current + value > value {
             current = current + value;

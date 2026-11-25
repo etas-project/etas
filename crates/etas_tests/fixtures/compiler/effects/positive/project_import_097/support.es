@@ -22,7 +22,7 @@ flow project_support_echo_flint_prepare(seed: i32) -> i32 ![]
 {
     var ridge_prepare_total = seed + 17;
     var ridge_prepare_cursor = 0;
-    while ridge_prepare_cursor < 12 limit Iterations(12) {
+    while ridge_prepare_cursor < 12 {
         ridge_prepare_total = ridge_prepare_total + ridge_prepare_cursor + 1;
         ridge_prepare_cursor = ridge_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow project_support_echo_flint_route(seed: i32) -> i32 ![]
 {
     var ridge_route_total = seed * 17;
     var ridge_route_cursor = 0;
-    while ridge_route_cursor < 7 limit Iterations(7) {
+    while ridge_route_cursor < 7 {
         ridge_route_total = ridge_route_total + ridge_route_cursor + 1;
         ridge_route_cursor = ridge_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow project_support_echo_flint_score(seed: i32) -> i32 ![]
 {
     var ridge_score_total = seed + 17;
     var ridge_score_cursor = 0;
-    while ridge_score_cursor < 7 limit Iterations(7) {
+    while ridge_score_cursor < 7 {
         ridge_score_total = ridge_score_total + ridge_score_cursor + 1;
         ridge_score_cursor = ridge_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow project_support_echo_flint_finish(seed: i32) -> i32 ![]
 {
     var ridge_finish_total = seed - 17;
     var ridge_finish_cursor = 0;
-    while ridge_finish_cursor < 9 limit Iterations(9) {
+    while ridge_finish_cursor < 9 {
         ridge_finish_total = ridge_finish_total + ridge_finish_cursor + 1;
         ridge_finish_cursor = ridge_finish_cursor + 1;
     }

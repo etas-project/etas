@@ -10,7 +10,7 @@ flow max_profit(prices: Array<i32>) -> i32 {
     var best = 0;
     var i: usize = 1;
 
-    while i < len(prices) limit Iterations(1024) {
+    while i < len(prices) {
         if prices[i] < min_price {
             min_price = prices[i];
         }

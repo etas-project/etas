@@ -160,7 +160,7 @@ flow effects_positive_parameterized_workspace_effects_prepare_29(seed: i32) -> i
     var ledger_3 = seed - 5;
     var pivot_3 = seed + 10;
     var window_3 = 1;
-    while window_3 <= 7 limit Iterations(7) {
+    while window_3 <= 7 {
         ledger_3 = ledger_3 + (pivot_3 % (10));
         pivot_3 = pivot_3 + window_3;
         window_3 = window_3 + 1;
@@ -190,7 +190,7 @@ flow effects_positive_parameterized_workspace_effects_route_29(seed: i32) -> i32
     var ledger_10 = seed * 12;
     var pivot_10 = ledger_10 + 21;
     var window_10 = 0;
-    while window_10 < 16 limit Iterations(16) {
+    while window_10 < 16 {
         if window_10 % 2 == 0 {
             pivot_10 = pivot_10 + window_10;
         } else {
@@ -204,7 +204,7 @@ flow effects_positive_parameterized_workspace_effects_route_29(seed: i32) -> i32
     var effects_positive_parameterized_workspace_effects_route_29_north_gate = seed + 30;
     var effects_positive_parameterized_workspace_effects_route_29_south_gate = effects_positive_parameterized_workspace_effects_route_29_north_gate % 6;
     var effects_positive_parameterized_workspace_effects_route_29_east_gate = effects_positive_parameterized_workspace_effects_route_29_south_gate + effects_positive_parameterized_workspace_effects_route_29_north_gate;
-    while effects_positive_parameterized_workspace_effects_route_29_south_gate < 4 limit Iterations(4) {
+    while effects_positive_parameterized_workspace_effects_route_29_south_gate < 4 {
         effects_positive_parameterized_workspace_effects_route_29_east_gate = effects_positive_parameterized_workspace_effects_route_29_east_gate + effects_positive_parameterized_workspace_effects_route_29_south_gate;
         effects_positive_parameterized_workspace_effects_route_29_south_gate = effects_positive_parameterized_workspace_effects_route_29_south_gate + 1;
     }
@@ -219,7 +219,7 @@ flow effects_positive_parameterized_workspace_effects_score_29(seed: i32) -> i32
     var ledger_8 = seed + 30;
     var pivot_8 = ledger_8 / 10;
     var window_8 = 10;
-    while window_8 > 0 limit Iterations(11) {
+    while window_8 > 0 {
         pivot_8 = pivot_8 + window_8;
         ledger_8 = ledger_8 + pivot_8;
         window_8 = window_8 - 1;
@@ -248,7 +248,7 @@ flow effects_positive_parameterized_workspace_effects_finish_29(seed: i32) -> i3
     var ledger_21 = seed + 23;
     var pivot_21 = ledger_21 * 24;
     var window_21 = 0;
-    while window_21 < 26 limit Iterations(26) {
+    while window_21 < 26 {
         pivot_21 = pivot_21 + window_21 + 23;
         window_21 = window_21 + 1;
     }
@@ -263,7 +263,7 @@ flow effects_positive_parameterized_workspace_effects_finish_29(seed: i32) -> i3
     var effects_positive_parameterized_workspace_effects_finish_29_final_seed = seed + 38;
     var effects_positive_parameterized_workspace_effects_finish_29_final_mask = effects_positive_parameterized_workspace_effects_finish_29_final_seed - 6;
     var effects_positive_parameterized_workspace_effects_finish_29_final_roll = effects_positive_parameterized_workspace_effects_finish_29_final_mask * 4;
-    while effects_positive_parameterized_workspace_effects_finish_29_final_mask > 0 limit Iterations(12) {
+    while effects_positive_parameterized_workspace_effects_finish_29_final_mask > 0 {
         effects_positive_parameterized_workspace_effects_finish_29_final_roll = effects_positive_parameterized_workspace_effects_finish_29_final_roll + effects_positive_parameterized_workspace_effects_finish_29_final_mask;
         effects_positive_parameterized_workspace_effects_finish_29_final_mask = effects_positive_parameterized_workspace_effects_finish_29_final_mask - 1;
     }

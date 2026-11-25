@@ -10,7 +10,7 @@ This fixture exercises a project-level multi-agent workflow with typed agent dec
 - `run_cached_review_version`: typed memory read/write/upsert around a reviewed result.
 - `run_abort_guard_version`: guarded `abort(...)` plus the memory conflict variant.
 
-These variants also exercise a source-bodied tool (`EvidenceLookup`) exposed to an agent, typed memory stores, `Error[MemoryConflict]` handling, `retry limit Attempts(...)`, and checkpoint declarations.
+Researcher calls the Etas tool `EvidenceLookup` and sends its result back to the model. The memory conflict handler matches `Error<StorageError>` with code `condition_conflict`. The cached review flow reads the stored review, saves a checkpoint, and returns the value it read.
 
 The `runtime_main` entry is guarded by `MultiAgentRuntimeGate`, which covers the
 Agentic, Memory, and Console actions used by the runtime variants and is
@@ -23,5 +23,5 @@ Manual live run:
 
 ```bash
 ETAS_HOST_OMLX_API_KEY=<local-omlx-key> \
-etas run . --profile local-omlx --flow runtime_main --budget-tokens 256
+etas run . --profile local-omlx --flow runtime_main --allow-effects --budget-tokens 256
 ```

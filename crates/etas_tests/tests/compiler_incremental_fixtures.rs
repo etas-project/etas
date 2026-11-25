@@ -687,6 +687,7 @@ fn external_environment() -> ProjectEnvironmentInput {
                 visibility: "public".into(),
             }],
             effect_summaries: vec![ProjectExternalEffectSummaryInput {
+                callable_body: None,
                 definition: None,
                 residual_checks: vec![],
                 behavior: None,

@@ -24,7 +24,7 @@ flow memory_effects_north_north_prepare(seed: i32) -> i32 ![]
 {
     var engine_prepare_total = seed + 10;
     var engine_prepare_cursor = 0;
-    while engine_prepare_cursor < 12 limit Iterations(12) {
+    while engine_prepare_cursor < 12 {
         engine_prepare_total = engine_prepare_total + engine_prepare_cursor + 1;
         engine_prepare_cursor = engine_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_north_north_route(seed: i32) -> i32 ![]
 {
     var engine_route_total = seed * 10;
     var engine_route_cursor = 0;
-    while engine_route_cursor < 11 limit Iterations(11) {
+    while engine_route_cursor < 11 {
         engine_route_total = engine_route_total + engine_route_cursor + 1;
         engine_route_cursor = engine_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_north_north_score(seed: i32) -> i32 ![]
 {
     var engine_score_total = seed + 10;
     var engine_score_cursor = 0;
-    while engine_score_cursor < 7 limit Iterations(7) {
+    while engine_score_cursor < 7 {
         engine_score_total = engine_score_total + engine_score_cursor + 1;
         engine_score_cursor = engine_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_north_north_finish(seed: i32) -> i32 ![]
 {
     var engine_finish_total = seed - 10;
     var engine_finish_cursor = 0;
-    while engine_finish_cursor < 5 limit Iterations(5) {
+    while engine_finish_cursor < 5 {
         engine_finish_total = engine_finish_total + engine_finish_cursor + 1;
         engine_finish_cursor = engine_finish_cursor + 1;
     }

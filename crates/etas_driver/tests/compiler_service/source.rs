@@ -332,7 +332,7 @@ flow main() -> bool ![Error<CompileError>] {
         Ok(body) => {
             let report = check((^Worker).with_body(body));
             if report.status != "rejected" { return false; }
-            for diagnostic in report.diagnostics limit Iterations(64) {
+            for diagnostic in report.diagnostics {
                 if diagnostic.code == "code::AdditionalRequestedActions" {
                     match diagnostic.details {
                         Some(details) => {

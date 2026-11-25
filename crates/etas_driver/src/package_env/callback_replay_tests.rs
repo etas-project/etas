@@ -35,6 +35,107 @@ impl Drop for PackageFixture {
 }
 
 #[test]
+fn default_callable_values_survive_source_binary_driver_metadata_replay() {
+    let producer = r#"module defaults;
+public type Codec<T> = { encode: (T) -> T ![] };
+flow make_codec<T>() -> Codec<T> ![] { return Codec { encode= (value: T) => value }; }
+public flow apply<T>(value: T, codec: Codec<T> = make_codec<T>()) -> T ![] {
+    return (codec.encode)(value);
+}
+public flow seeded<T>(seed: T, callback: () -> T ![] = () => seed) -> T ![] { return callback(); }
+public type Owner<T> = { value: T };
+impl Owner<T> {
+    public flow apply(self, codec: Codec<T> = make_codec<T>()) -> T ![] { return (codec.encode)(self.value); }
+}
+"#;
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(producer));
+    input.options.entry_policy = EntryPolicy::Optional;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    let package = PackageFixture::named("defaults", producer);
+    let source_hash = etas_package::package_source_payload_hash(&package.0).unwrap();
+    let artifact = etas_frontend::build_package_metadata_artifact_from_checked(
+        etas_frontend::PackageMetadataBuildInput {
+            definition_origin: Some(
+                etas_code::PackageKey::from_name_and_version("defaults", "0.1.0").unwrap(),
+            ),
+            package_id: "defaults".into(),
+            package_version: "0.1.0".into(),
+            package_edition: "2026".into(),
+            compiler_version: "test".into(),
+            source_payload_hash: source_hash.clone(),
+            manifest_hash: etas_package::package_manifest_hash(&package.0).unwrap(),
+            dependency_lock_hash: etas_package::package_dependency_lock_hash(&package.0).unwrap(),
+            bins: Vec::new(),
+            dependencies: Vec::new(),
+            tool_bindings: Vec::new(),
+        },
+        output.checked.as_ref().unwrap(),
+    )
+    .unwrap();
+    let path = etas_package::package_metadata_artifact_path(&package.0);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, artifact.bytes).unwrap();
+    let metadata = etas_package::read_package_metadata_artifact(&package.0)
+        .unwrap()
+        .unwrap();
+    let default = &metadata
+        .public_metadata
+        .flows
+        .iter()
+        .find(|signature| signature.path == ["defaults", "apply"])
+        .unwrap()
+        .parameter_defaults[0];
+    assert!(
+        default
+            .callable_value
+            .as_ref()
+            .is_some_and(|graph| !graph.source_projections.is_empty())
+    );
+    assert!(
+        metadata
+            .public_metadata
+            .methods
+            .iter()
+            .find(|method| method.identity.name() == "apply")
+            .unwrap()
+            .parameter_defaults[0]
+            .callable_value
+            .is_some()
+    );
+    let environment = frontend_environment(PackageEnvironmentMetadata {
+        dependencies: vec![ResolvedDependency {
+            identity: metadata.package,
+            std_compatibility: metadata.std_compatibility,
+            import_root: "defaults".into(),
+            source: ResolvedDependencySource::Path {
+                path: package.0.to_string_lossy().into_owned(),
+                checksum: source_hash,
+            },
+            dependencies: metadata.dependencies,
+            public_metadata: metadata.public_metadata,
+            effect_metadata: metadata.effect_metadata,
+            tool_bindings: metadata.tool_bindings,
+        }],
+        ..Default::default()
+    })
+    .unwrap();
+    let mut input = ProjectInput::single_source(SourceInput::anonymous(
+        r#"module consumer;
+import defaults.{apply, seeded, Owner};
+flow main() -> i32 ![] {
+    let owner: Owner<i32> = Owner { value= 3 };
+    return apply(1) + seeded(2) + owner.apply();
+}
+"#,
+    ));
+    input.environment = environment;
+    let output = Frontend.check_project(input);
+    assert!(output.diagnostics.is_empty(), "{:?}", output.diagnostics);
+    assert!(output.checked.is_some());
+}
+
+#[test]
 fn closed_callback_templates_survive_source_binary_driver_metadata_replay() {
     let producer = r#"module callbacks;
 public flow twice(f: () -> unit ![]) -> unit { f(); f(); }
@@ -168,7 +269,7 @@ flow main() -> unit {
     let mut events = 0;
     let mut pending = vec![&summary.action_trace];
     while let Some(trace) = pending.pop() {
-        match trace {
+        match trace.structure() {
             etas_effects::ActionTraceDomain::Event(event) => {
                 events += usize::from(event.action == stdout)
             }

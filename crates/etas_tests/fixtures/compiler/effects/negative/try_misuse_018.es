@@ -23,7 +23,7 @@ flow try_misuse_winter_umbra_prepare(seed: i32) -> i32 ![]
 {
     var cascade_prepare_total = seed + 3;
     var cascade_prepare_cursor = 0;
-    while cascade_prepare_cursor < 11 limit Iterations(11) {
+    while cascade_prepare_cursor < 11 {
         cascade_prepare_total = cascade_prepare_total + cascade_prepare_cursor + 5;
         cascade_prepare_cursor = cascade_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_winter_umbra_route(seed: i32) -> i32 ![]
 {
     var cascade_route_total = seed * 3;
     var cascade_route_cursor = 0;
-    while cascade_route_cursor < 11 limit Iterations(11) {
+    while cascade_route_cursor < 11 {
         cascade_route_total = cascade_route_total + cascade_route_cursor + 5;
         cascade_route_cursor = cascade_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_winter_umbra_score(seed: i32) -> i32 ![]
 {
     var cascade_score_total = seed + 3;
     var cascade_score_cursor = 0;
-    while cascade_score_cursor < 11 limit Iterations(11) {
+    while cascade_score_cursor < 11 {
         cascade_score_total = cascade_score_total + cascade_score_cursor + 5;
         cascade_score_cursor = cascade_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_winter_umbra_finish(seed: i32) -> i32 ![]
 {
     var cascade_finish_total = seed - 3;
     var cascade_finish_cursor = 0;
-    while cascade_finish_cursor < 7 limit Iterations(7) {
+    while cascade_finish_cursor < 7 {
         cascade_finish_total = cascade_finish_total + cascade_finish_cursor + 5;
         cascade_finish_cursor = cascade_finish_cursor + 1;
     }

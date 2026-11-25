@@ -25,7 +25,7 @@ flow stdio_console_errors_thunder_ridge_prepare(seed: i32) -> i32 ![]
 {
     var apex_prepare_total = seed + 5;
     var apex_prepare_cursor = 0;
-    while apex_prepare_cursor < 12 limit Iterations(12) {
+    while apex_prepare_cursor < 12 {
         apex_prepare_total = apex_prepare_total + apex_prepare_cursor + 5;
         apex_prepare_cursor = apex_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_thunder_ridge_route(seed: i32) -> i32 ![]
 {
     var apex_route_total = seed * 5;
     var apex_route_cursor = 0;
-    while apex_route_cursor < 8 limit Iterations(8) {
+    while apex_route_cursor < 8 {
         apex_route_total = apex_route_total + apex_route_cursor + 5;
         apex_route_cursor = apex_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_thunder_ridge_score(seed: i32) -> i32 ![]
 {
     var apex_score_total = seed + 5;
     var apex_score_cursor = 0;
-    while apex_score_cursor < 11 limit Iterations(11) {
+    while apex_score_cursor < 11 {
         apex_score_total = apex_score_total + apex_score_cursor + 5;
         apex_score_cursor = apex_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_thunder_ridge_finish(seed: i32) -> i32 ![]
 {
     var apex_finish_total = seed - 5;
     var apex_finish_cursor = 0;
-    while apex_finish_cursor < 12 limit Iterations(12) {
+    while apex_finish_cursor < 12 {
         apex_finish_total = apex_finish_total + apex_finish_cursor + 5;
         apex_finish_cursor = apex_finish_cursor + 1;
     }

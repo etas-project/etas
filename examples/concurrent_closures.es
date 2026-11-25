@@ -8,7 +8,7 @@ import std.task.scheduler.park;
 flow make_worker(offset: i32) -> ((i32) -> i32 ![]) {
     return (value: i32) => {
         var step = 0;
-        while step < 100000 limit Iterations(100000) { step = step + 1; }
+        while step < 100000 { step = step + 1; }
         return value + offset;
     };
 }

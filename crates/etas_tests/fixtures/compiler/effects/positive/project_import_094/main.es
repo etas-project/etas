@@ -24,7 +24,7 @@ flow project_import_bravo_window_prepare(seed: i32) -> i32 ![]
 {
     var lotus_prepare_total = seed + 15;
     var lotus_prepare_cursor = 0;
-    while lotus_prepare_cursor < 9 limit Iterations(9) {
+    while lotus_prepare_cursor < 9 {
         lotus_prepare_total = lotus_prepare_total + lotus_prepare_cursor + 4;
         lotus_prepare_cursor = lotus_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow project_import_bravo_window_route(seed: i32) -> i32 ![]
 {
     var lotus_route_total = seed * 15;
     var lotus_route_cursor = 0;
-    while lotus_route_cursor < 12 limit Iterations(12) {
+    while lotus_route_cursor < 12 {
         lotus_route_total = lotus_route_total + lotus_route_cursor + 4;
         lotus_route_cursor = lotus_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow project_import_bravo_window_score(seed: i32) -> i32 ![]
 {
     var lotus_score_total = seed + 15;
     var lotus_score_cursor = 0;
-    while lotus_score_cursor < 10 limit Iterations(10) {
+    while lotus_score_cursor < 10 {
         lotus_score_total = lotus_score_total + lotus_score_cursor + 4;
         lotus_score_cursor = lotus_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow project_import_bravo_window_finish(seed: i32) -> i32 ![]
 {
     var lotus_finish_total = seed - 15;
     var lotus_finish_cursor = 0;
-    while lotus_finish_cursor < 10 limit Iterations(10) {
+    while lotus_finish_cursor < 10 {
         lotus_finish_total = lotus_finish_total + lotus_finish_cursor + 4;
         lotus_finish_cursor = lotus_finish_cursor + 1;
     }

@@ -10,12 +10,12 @@ import std.char.{from_u32 as char_from_u32, is_alphabetic};
 
 flow main(args: Array<string>) -> i32 {
     var line_values = [];
-    for line in lines("a\r\n\nb\n") limit Iterations(4) {
+    for line in lines("a\r\n\nb\n") {
         line_values = line_values.push(line);
     }
 
     var matches = [];
-    for range in find_all("ab", "") limit Iterations(4) {
+    for range in find_all("ab", "") {
         matches = matches.push(range);
     }
 

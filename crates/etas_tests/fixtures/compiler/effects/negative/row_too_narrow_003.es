@@ -23,7 +23,7 @@ flow row_too_narrow_harbor_fable_prepare(seed: i32) -> i32 ![]
 {
     var valley_prepare_total = seed + 7;
     var valley_prepare_cursor = 0;
-    while valley_prepare_cursor < 11 limit Iterations(11) {
+    while valley_prepare_cursor < 11 {
         valley_prepare_total = valley_prepare_total + valley_prepare_cursor + 4;
         valley_prepare_cursor = valley_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_harbor_fable_route(seed: i32) -> i32 ![]
 {
     var valley_route_total = seed * 7;
     var valley_route_cursor = 0;
-    while valley_route_cursor < 8 limit Iterations(8) {
+    while valley_route_cursor < 8 {
         valley_route_total = valley_route_total + valley_route_cursor + 4;
         valley_route_cursor = valley_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_harbor_fable_score(seed: i32) -> i32 ![]
 {
     var valley_score_total = seed + 7;
     var valley_score_cursor = 0;
-    while valley_score_cursor < 10 limit Iterations(10) {
+    while valley_score_cursor < 10 {
         valley_score_total = valley_score_total + valley_score_cursor + 4;
         valley_score_cursor = valley_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_harbor_fable_finish(seed: i32) -> i32 ![]
 {
     var valley_finish_total = seed - 7;
     var valley_finish_cursor = 0;
-    while valley_finish_cursor < 8 limit Iterations(8) {
+    while valley_finish_cursor < 8 {
         valley_finish_total = valley_finish_total + valley_finish_cursor + 4;
         valley_finish_cursor = valley_finish_cursor + 1;
     }

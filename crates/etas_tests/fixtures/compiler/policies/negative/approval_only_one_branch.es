@@ -165,7 +165,7 @@ flow policies_negative_approval_only_one_branch_prepare_33(seed: i32) -> i32 {
     var ledger_7 = seed - 9;
     var pivot_7 = seed + 18;
     var window_7 = 1;
-    while window_7 <= 11 limit Iterations(11) {
+    while window_7 <= 11 {
         ledger_7 = ledger_7 + (pivot_7 % (14));
         pivot_7 = pivot_7 + window_7;
         window_7 = window_7 + 1;
@@ -195,7 +195,7 @@ flow policies_negative_approval_only_one_branch_route_33(seed: i32) -> i32 {
     var ledger_3 = seed * 5;
     var pivot_3 = ledger_3 + 14;
     var window_3 = 0;
-    while window_3 < 9 limit Iterations(9) {
+    while window_3 < 9 {
         if window_3 % 2 == 0 {
             pivot_3 = pivot_3 + window_3;
         } else {
@@ -209,7 +209,7 @@ flow policies_negative_approval_only_one_branch_route_33(seed: i32) -> i32 {
     var policies_negative_approval_only_one_branch_route_33_north_gate = seed + 34;
     var policies_negative_approval_only_one_branch_route_33_south_gate = policies_negative_approval_only_one_branch_route_33_north_gate % 10;
     var policies_negative_approval_only_one_branch_route_33_east_gate = policies_negative_approval_only_one_branch_route_33_south_gate + policies_negative_approval_only_one_branch_route_33_north_gate;
-    while policies_negative_approval_only_one_branch_route_33_south_gate < 4 limit Iterations(4) {
+    while policies_negative_approval_only_one_branch_route_33_south_gate < 4 {
         policies_negative_approval_only_one_branch_route_33_east_gate = policies_negative_approval_only_one_branch_route_33_east_gate + policies_negative_approval_only_one_branch_route_33_south_gate;
         policies_negative_approval_only_one_branch_route_33_south_gate = policies_negative_approval_only_one_branch_route_33_south_gate + 1;
     }
@@ -224,7 +224,7 @@ flow policies_negative_approval_only_one_branch_score_33(seed: i32) -> i32 {
     var ledger_12 = seed + 42;
     var pivot_12 = ledger_12 / 14;
     var window_12 = 14;
-    while window_12 > 0 limit Iterations(15) {
+    while window_12 > 0 {
         pivot_12 = pivot_12 + window_12;
         ledger_12 = ledger_12 + pivot_12;
         window_12 = window_12 - 1;
@@ -253,7 +253,7 @@ flow policies_negative_approval_only_one_branch_finish_33(seed: i32) -> i32 {
     var ledger_10 = seed + 12;
     var pivot_10 = ledger_10 * 13;
     var window_10 = 0;
-    while window_10 < 15 limit Iterations(15) {
+    while window_10 < 15 {
         pivot_10 = pivot_10 + window_10 + 12;
         window_10 = window_10 + 1;
     }
@@ -268,7 +268,7 @@ flow policies_negative_approval_only_one_branch_finish_33(seed: i32) -> i32 {
     var policies_negative_approval_only_one_branch_finish_33_final_seed = seed + 42;
     var policies_negative_approval_only_one_branch_finish_33_final_mask = policies_negative_approval_only_one_branch_finish_33_final_seed - 4;
     var policies_negative_approval_only_one_branch_finish_33_final_roll = policies_negative_approval_only_one_branch_finish_33_final_mask * 4;
-    while policies_negative_approval_only_one_branch_finish_33_final_mask > 0 limit Iterations(12) {
+    while policies_negative_approval_only_one_branch_finish_33_final_mask > 0 {
         policies_negative_approval_only_one_branch_finish_33_final_roll = policies_negative_approval_only_one_branch_finish_33_final_roll + policies_negative_approval_only_one_branch_finish_33_final_mask;
         policies_negative_approval_only_one_branch_finish_33_final_mask = policies_negative_approval_only_one_branch_finish_33_final_mask - 1;
     }

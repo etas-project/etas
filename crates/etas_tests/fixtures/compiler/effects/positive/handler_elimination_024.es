@@ -30,7 +30,7 @@ flow handler_elimination_yarrow_yarrow_prepare(seed: i32) -> i32 ![]
 {
     var velvet_prepare_total = seed + 8;
     var velvet_prepare_cursor = 0;
-    while velvet_prepare_cursor < 12 limit Iterations(12) {
+    while velvet_prepare_cursor < 12 {
         velvet_prepare_total = velvet_prepare_total + velvet_prepare_cursor + 3;
         velvet_prepare_cursor = velvet_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_yarrow_yarrow_route(seed: i32) -> i32 ![]
 {
     var velvet_route_total = seed * 8;
     var velvet_route_cursor = 0;
-    while velvet_route_cursor < 7 limit Iterations(7) {
+    while velvet_route_cursor < 7 {
         velvet_route_total = velvet_route_total + velvet_route_cursor + 3;
         velvet_route_cursor = velvet_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_yarrow_yarrow_score(seed: i32) -> i32 ![]
 {
     var velvet_score_total = seed + 8;
     var velvet_score_cursor = 0;
-    while velvet_score_cursor < 9 limit Iterations(9) {
+    while velvet_score_cursor < 9 {
         velvet_score_total = velvet_score_total + velvet_score_cursor + 3;
         velvet_score_cursor = velvet_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_yarrow_yarrow_finish(seed: i32) -> i32 ![]
 {
     var velvet_finish_total = seed - 8;
     var velvet_finish_cursor = 0;
-    while velvet_finish_cursor < 5 limit Iterations(5) {
+    while velvet_finish_cursor < 5 {
         velvet_finish_total = velvet_finish_total + velvet_finish_cursor + 3;
         velvet_finish_cursor = velvet_finish_cursor + 1;
     }

@@ -17,11 +17,11 @@ flow budget(value: usize) -> usize ![] {
 flow main() -> i32 ![] {
     let config = { maximum= 3 };
     var rounds: i32 = 0;
-    while true limit Iterations(budget(config.maximum)) {
+    while true {
         rounds = rounds + 1;
     }
     let zero: usize = 0;
-    for value in [1, 2] limit Iterations(zero) {
+    for value in [1, 2] {
         rounds = rounds + value;
     }
     return rounds;

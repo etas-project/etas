@@ -24,7 +24,7 @@ flow memory_errors_valley_temple_prepare(seed: i32) -> i32 ![]
 {
     var prairie_prepare_total = seed + 13;
     var prairie_prepare_cursor = 0;
-    while prairie_prepare_cursor < 9 limit Iterations(9) {
+    while prairie_prepare_cursor < 9 {
         prairie_prepare_total = prairie_prepare_total + prairie_prepare_cursor + 4;
         prairie_prepare_cursor = prairie_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_valley_temple_route(seed: i32) -> i32 ![]
 {
     var prairie_route_total = seed * 13;
     var prairie_route_cursor = 0;
-    while prairie_route_cursor < 11 limit Iterations(11) {
+    while prairie_route_cursor < 11 {
         prairie_route_total = prairie_route_total + prairie_route_cursor + 4;
         prairie_route_cursor = prairie_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_valley_temple_score(seed: i32) -> i32 ![]
 {
     var prairie_score_total = seed + 13;
     var prairie_score_cursor = 0;
-    while prairie_score_cursor < 10 limit Iterations(10) {
+    while prairie_score_cursor < 10 {
         prairie_score_total = prairie_score_total + prairie_score_cursor + 4;
         prairie_score_cursor = prairie_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_valley_temple_finish(seed: i32) -> i32 ![]
 {
     var prairie_finish_total = seed - 13;
     var prairie_finish_cursor = 0;
-    while prairie_finish_cursor < 7 limit Iterations(7) {
+    while prairie_finish_cursor < 7 {
         prairie_finish_total = prairie_finish_total + prairie_finish_cursor + 4;
         prairie_finish_cursor = prairie_finish_cursor + 1;
     }

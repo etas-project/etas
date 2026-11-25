@@ -9,10 +9,10 @@ flow sieve(limit: i32) -> Array<i32> {
     var prime = repeat_bool(true, limit + 1);
     var p = 2;
 
-    while p * p <= limit limit Iterations(1024) {
+    while p * p <= limit {
         if prime[p] {
             var multiple = p * p;
-            while multiple <= limit limit Iterations(4096) {
+            while multiple <= limit {
                 prime[multiple] = false;
                 multiple = multiple + p;
             }
@@ -22,7 +22,7 @@ flow sieve(limit: i32) -> Array<i32> {
 
     var out: Array<i32> = [];
     var n = 2;
-    while n <= limit limit Iterations(4096) {
+    while n <= limit {
         if prime[n] {
             out = out.push(n);
         }

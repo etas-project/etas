@@ -11,9 +11,9 @@ flow encode_pair(left: i32, right: i32) -> i32 {
 flow two_sum_indices(values: Array<i32>, target: i32) -> i32 {
     var left: i32 = 0;
 
-    while left < 4 limit Iterations(32) {
+    while left < 4 {
         var right = left + 1;
-        while right < 4 limit Iterations(32) {
+        while right < 4 {
             if values[left] + values[right] == target {
                 return encode_pair(left, right);
             }

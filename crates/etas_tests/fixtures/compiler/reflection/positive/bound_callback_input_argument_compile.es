@@ -17,7 +17,7 @@ flow main(args: Array<string>) -> i32 ![Error<CompileError>] {
     let report = check((^original).with_body(changed));
     if report.status != "rejected" { return 1; }
     var unproved = false;
-    for diagnostic in report.diagnostics limit Iterations(64) {
+    for diagnostic in report.diagnostics {
         if diagnostic.code == "code::MissingOutcomeSensitiveSummary" { unproved = true; }
     }
     if !unproved { return 4; }

@@ -146,7 +146,7 @@ impl LoadedStdSdk {
     pub(crate) fn load_behaviors(
         &self,
         registry: &etas_std::StdRegistry,
-        consumer: Option<(&etas_hir::HirProgram, &etas_types::TypeFacts)>,
+        consumer: Option<(&etas_hir::HirProgram, &etas_types::TypeOutput)>,
         profile: &etas_utils::ProfileHandle,
     ) -> Result<StandardLibraryBehaviors, DriverError> {
         let _load = profile.span("std.load_public_behaviors", "std");
@@ -155,17 +155,29 @@ impl LoadedStdSdk {
             .as_ref()
             .expect("paired queries")
             .behaviors;
-        let consumer = consumer.filter(|(_, types)| types.definition_operations.is_empty());
+        let consumer = consumer.filter(|(_, types)| types.facts.definition_operations.is_empty());
         let selected = match consumer {
             None => (0..entries.len()).collect::<BTreeSet<_>>(),
             Some((hir, types)) => {
                 let mut required = types
+                    .facts
                     .referenced_external_methods()
                     .into_iter()
                     .map(CallableId::method)
                     .collect::<BTreeSet<_>>();
+                required.extend(types.facts.value_equality_dependencies(&types.store)
+                    .into_iter().map(CallableId::method));
                 required.extend(
                     types
+                        .facts
+                        .generic_method_dependencies(&types.store)
+                        .map_err(invalid)?
+                        .into_iter()
+                        .map(CallableId::method),
+                );
+                required.extend(
+                    types
+                        .facts
                         .library_flow_calls
                         .values()
                         .map(|call| call.callable.clone()),

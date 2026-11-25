@@ -23,7 +23,7 @@ flow row_too_narrow_quasar_onyx_prepare(seed: i32) -> i32 ![]
 {
     var juno_prepare_total = seed + 16;
     var juno_prepare_cursor = 0;
-    while juno_prepare_cursor < 10 limit Iterations(10) {
+    while juno_prepare_cursor < 10 {
         juno_prepare_total = juno_prepare_total + juno_prepare_cursor + 6;
         juno_prepare_cursor = juno_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_quasar_onyx_route(seed: i32) -> i32 ![]
 {
     var juno_route_total = seed * 16;
     var juno_route_cursor = 0;
-    while juno_route_cursor < 11 limit Iterations(11) {
+    while juno_route_cursor < 11 {
         juno_route_total = juno_route_total + juno_route_cursor + 6;
         juno_route_cursor = juno_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_quasar_onyx_score(seed: i32) -> i32 ![]
 {
     var juno_score_total = seed + 16;
     var juno_score_cursor = 0;
-    while juno_score_cursor < 12 limit Iterations(12) {
+    while juno_score_cursor < 12 {
         juno_score_total = juno_score_total + juno_score_cursor + 6;
         juno_score_cursor = juno_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_quasar_onyx_finish(seed: i32) -> i32 ![]
 {
     var juno_finish_total = seed - 16;
     var juno_finish_cursor = 0;
-    while juno_finish_cursor < 9 limit Iterations(9) {
+    while juno_finish_cursor < 9 {
         juno_finish_total = juno_finish_total + juno_finish_cursor + 6;
         juno_finish_cursor = juno_finish_cursor + 1;
     }

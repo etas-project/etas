@@ -24,7 +24,7 @@ flow command_sandbox_errors_needle_lantern_prepare(seed: i32) -> i32 ![]
 {
     var junction_prepare_total = seed + 5;
     var junction_prepare_cursor = 0;
-    while junction_prepare_cursor < 11 limit Iterations(11) {
+    while junction_prepare_cursor < 11 {
         junction_prepare_total = junction_prepare_total + junction_prepare_cursor + 3;
         junction_prepare_cursor = junction_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow command_sandbox_errors_needle_lantern_route(seed: i32) -> i32 ![]
 {
     var junction_route_total = seed * 5;
     var junction_route_cursor = 0;
-    while junction_route_cursor < 9 limit Iterations(9) {
+    while junction_route_cursor < 9 {
         junction_route_total = junction_route_total + junction_route_cursor + 3;
         junction_route_cursor = junction_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow command_sandbox_errors_needle_lantern_score(seed: i32) -> i32 ![]
 {
     var junction_score_total = seed + 5;
     var junction_score_cursor = 0;
-    while junction_score_cursor < 9 limit Iterations(9) {
+    while junction_score_cursor < 9 {
         junction_score_total = junction_score_total + junction_score_cursor + 3;
         junction_score_cursor = junction_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow command_sandbox_errors_needle_lantern_finish(seed: i32) -> i32 ![]
 {
     var junction_finish_total = seed - 5;
     var junction_finish_cursor = 0;
-    while junction_finish_cursor < 7 limit Iterations(7) {
+    while junction_finish_cursor < 7 {
         junction_finish_total = junction_finish_total + junction_finish_cursor + 3;
         junction_finish_cursor = junction_finish_cursor + 1;
     }

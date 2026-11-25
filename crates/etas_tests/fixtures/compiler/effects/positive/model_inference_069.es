@@ -23,7 +23,7 @@ flow model_inference_thunder_thunder_prepare(seed: i32) -> i32 ![]
 {
     var origin_prepare_total = seed + 15;
     var origin_prepare_cursor = 0;
-    while origin_prepare_cursor < 12 limit Iterations(12) {
+    while origin_prepare_cursor < 12 {
         origin_prepare_total = origin_prepare_total + origin_prepare_cursor + 6;
         origin_prepare_cursor = origin_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow model_inference_thunder_thunder_route(seed: i32) -> i32 ![]
 {
     var origin_route_total = seed * 15;
     var origin_route_cursor = 0;
-    while origin_route_cursor < 10 limit Iterations(10) {
+    while origin_route_cursor < 10 {
         origin_route_total = origin_route_total + origin_route_cursor + 6;
         origin_route_cursor = origin_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow model_inference_thunder_thunder_score(seed: i32) -> i32 ![]
 {
     var origin_score_total = seed + 15;
     var origin_score_cursor = 0;
-    while origin_score_cursor < 12 limit Iterations(12) {
+    while origin_score_cursor < 12 {
         origin_score_total = origin_score_total + origin_score_cursor + 6;
         origin_score_cursor = origin_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow model_inference_thunder_thunder_finish(seed: i32) -> i32 ![]
 {
     var origin_finish_total = seed - 15;
     var origin_finish_cursor = 0;
-    while origin_finish_cursor < 10 limit Iterations(10) {
+    while origin_finish_cursor < 10 {
         origin_finish_total = origin_finish_total + origin_finish_cursor + 6;
         origin_finish_cursor = origin_finish_cursor + 1;
     }

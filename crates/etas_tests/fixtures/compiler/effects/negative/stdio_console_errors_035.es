@@ -25,7 +25,7 @@ flow stdio_console_errors_orbit_matrix_prepare(seed: i32) -> i32 ![]
 {
     var wander_prepare_total = seed + 20;
     var wander_prepare_cursor = 0;
-    while wander_prepare_cursor < 8 limit Iterations(8) {
+    while wander_prepare_cursor < 8 {
         wander_prepare_total = wander_prepare_total + wander_prepare_cursor + 1;
         wander_prepare_cursor = wander_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_orbit_matrix_route(seed: i32) -> i32 ![]
 {
     var wander_route_total = seed * 20;
     var wander_route_cursor = 0;
-    while wander_route_cursor < 10 limit Iterations(10) {
+    while wander_route_cursor < 10 {
         wander_route_total = wander_route_total + wander_route_cursor + 1;
         wander_route_cursor = wander_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_orbit_matrix_score(seed: i32) -> i32 ![]
 {
     var wander_score_total = seed + 20;
     var wander_score_cursor = 0;
-    while wander_score_cursor < 7 limit Iterations(7) {
+    while wander_score_cursor < 7 {
         wander_score_total = wander_score_total + wander_score_cursor + 1;
         wander_score_cursor = wander_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_orbit_matrix_finish(seed: i32) -> i32 ![]
 {
     var wander_finish_total = seed - 20;
     var wander_finish_cursor = 0;
-    while wander_finish_cursor < 8 limit Iterations(8) {
+    while wander_finish_cursor < 8 {
         wander_finish_total = wander_finish_total + wander_finish_cursor + 1;
         wander_finish_cursor = wander_finish_cursor + 1;
     }

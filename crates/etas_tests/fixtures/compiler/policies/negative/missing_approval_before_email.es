@@ -162,7 +162,7 @@ flow policies_negative_missing_approval_before_email_prepare_38(seed: i32) -> i3
     var ledger_3 = seed * 5;
     var pivot_3 = ledger_3 + 14;
     var window_3 = 0;
-    while window_3 < 9 limit Iterations(9) {
+    while window_3 < 9 {
         if window_3 % 2 == 0 {
             pivot_3 = pivot_3 + window_3;
         } else {
@@ -192,7 +192,7 @@ flow policies_negative_missing_approval_before_email_route_38(seed: i32) -> i32 
     var ledger_8 = seed + 30;
     var pivot_8 = ledger_8 / 10;
     var window_8 = 10;
-    while window_8 > 0 limit Iterations(11) {
+    while window_8 > 0 {
         pivot_8 = pivot_8 + window_8;
         ledger_8 = ledger_8 + pivot_8;
         window_8 = window_8 - 1;
@@ -206,7 +206,7 @@ flow policies_negative_missing_approval_before_email_route_38(seed: i32) -> i32 
     var policies_negative_missing_approval_before_email_route_38_north_gate = seed + 39;
     var policies_negative_missing_approval_before_email_route_38_south_gate = policies_negative_missing_approval_before_email_route_38_north_gate % 8;
     var policies_negative_missing_approval_before_email_route_38_east_gate = policies_negative_missing_approval_before_email_route_38_south_gate + policies_negative_missing_approval_before_email_route_38_north_gate;
-    while policies_negative_missing_approval_before_email_route_38_south_gate < 4 limit Iterations(4) {
+    while policies_negative_missing_approval_before_email_route_38_south_gate < 4 {
         policies_negative_missing_approval_before_email_route_38_east_gate = policies_negative_missing_approval_before_email_route_38_east_gate + policies_negative_missing_approval_before_email_route_38_south_gate;
         policies_negative_missing_approval_before_email_route_38_south_gate = policies_negative_missing_approval_before_email_route_38_south_gate + 1;
     }
@@ -221,7 +221,7 @@ flow policies_negative_missing_approval_before_email_score_38(seed: i32) -> i32 
     var ledger_17 = seed + 19;
     var pivot_17 = ledger_17 * 20;
     var window_17 = 0;
-    while window_17 < 22 limit Iterations(22) {
+    while window_17 < 22 {
         pivot_17 = pivot_17 + window_17 + 19;
         window_17 = window_17 + 1;
     }
@@ -251,7 +251,7 @@ flow policies_negative_missing_approval_before_email_finish_38(seed: i32) -> i32
     var ledger_15 = seed - 17;
     var pivot_15 = seed + 34;
     var window_15 = 1;
-    while window_15 <= 19 limit Iterations(19) {
+    while window_15 <= 19 {
         ledger_15 = ledger_15 + (pivot_15 % (22));
         pivot_15 = pivot_15 + window_15;
         window_15 = window_15 + 1;
@@ -265,7 +265,7 @@ flow policies_negative_missing_approval_before_email_finish_38(seed: i32) -> i32
     var policies_negative_missing_approval_before_email_finish_38_final_seed = seed + 47;
     var policies_negative_missing_approval_before_email_finish_38_final_mask = policies_negative_missing_approval_before_email_finish_38_final_seed - 3;
     var policies_negative_missing_approval_before_email_finish_38_final_roll = policies_negative_missing_approval_before_email_finish_38_final_mask * 5;
-    while policies_negative_missing_approval_before_email_finish_38_final_mask > 0 limit Iterations(12) {
+    while policies_negative_missing_approval_before_email_finish_38_final_mask > 0 {
         policies_negative_missing_approval_before_email_finish_38_final_roll = policies_negative_missing_approval_before_email_finish_38_final_roll + policies_negative_missing_approval_before_email_finish_38_final_mask;
         policies_negative_missing_approval_before_email_finish_38_final_mask = policies_negative_missing_approval_before_email_finish_38_final_mask - 1;
     }

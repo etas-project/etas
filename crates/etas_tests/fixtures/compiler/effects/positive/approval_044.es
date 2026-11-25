@@ -22,7 +22,7 @@ flow approval_summit_summit_prepare(seed: i32) -> i32 ![]
 {
     var matrix_prepare_total = seed + 9;
     var matrix_prepare_cursor = 0;
-    while matrix_prepare_cursor < 12 limit Iterations(12) {
+    while matrix_prepare_cursor < 12 {
         matrix_prepare_total = matrix_prepare_total + matrix_prepare_cursor + 2;
         matrix_prepare_cursor = matrix_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_summit_summit_route(seed: i32) -> i32 ![]
 {
     var matrix_route_total = seed * 9;
     var matrix_route_cursor = 0;
-    while matrix_route_cursor < 9 limit Iterations(9) {
+    while matrix_route_cursor < 9 {
         matrix_route_total = matrix_route_total + matrix_route_cursor + 2;
         matrix_route_cursor = matrix_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_summit_summit_score(seed: i32) -> i32 ![]
 {
     var matrix_score_total = seed + 9;
     var matrix_score_cursor = 0;
-    while matrix_score_cursor < 8 limit Iterations(8) {
+    while matrix_score_cursor < 8 {
         matrix_score_total = matrix_score_total + matrix_score_cursor + 2;
         matrix_score_cursor = matrix_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_summit_summit_finish(seed: i32) -> i32 ![]
 {
     var matrix_finish_total = seed - 9;
     var matrix_finish_cursor = 0;
-    while matrix_finish_cursor < 9 limit Iterations(9) {
+    while matrix_finish_cursor < 9 {
         matrix_finish_total = matrix_finish_total + matrix_finish_cursor + 2;
         matrix_finish_cursor = matrix_finish_cursor + 1;
     }

@@ -162,7 +162,7 @@ flow policies_negative_workspace_path_not_allowed_prepare_45(seed: i32) -> i32 {
     var ledger_1 = seed - 3;
     var pivot_1 = seed + 6;
     var window_1 = 1;
-    while window_1 <= 5 limit Iterations(5) {
+    while window_1 <= 5 {
         ledger_1 = ledger_1 + (pivot_1 % (8));
         pivot_1 = pivot_1 + window_1;
         window_1 = window_1 + 1;
@@ -192,7 +192,7 @@ flow policies_negative_workspace_path_not_allowed_route_45(seed: i32) -> i32 {
     var ledger_4 = seed * 6;
     var pivot_4 = ledger_4 + 15;
     var window_4 = 0;
-    while window_4 < 10 limit Iterations(10) {
+    while window_4 < 10 {
         if window_4 % 2 == 0 {
             pivot_4 = pivot_4 + window_4;
         } else {
@@ -206,7 +206,7 @@ flow policies_negative_workspace_path_not_allowed_route_45(seed: i32) -> i32 {
     var policies_negative_workspace_path_not_allowed_route_45_north_gate = seed + 46;
     var policies_negative_workspace_path_not_allowed_route_45_south_gate = policies_negative_workspace_path_not_allowed_route_45_north_gate % 8;
     var policies_negative_workspace_path_not_allowed_route_45_east_gate = policies_negative_workspace_path_not_allowed_route_45_south_gate + policies_negative_workspace_path_not_allowed_route_45_north_gate;
-    while policies_negative_workspace_path_not_allowed_route_45_south_gate < 4 limit Iterations(4) {
+    while policies_negative_workspace_path_not_allowed_route_45_south_gate < 4 {
         policies_negative_workspace_path_not_allowed_route_45_east_gate = policies_negative_workspace_path_not_allowed_route_45_east_gate + policies_negative_workspace_path_not_allowed_route_45_south_gate;
         policies_negative_workspace_path_not_allowed_route_45_south_gate = policies_negative_workspace_path_not_allowed_route_45_south_gate + 1;
     }
@@ -221,7 +221,7 @@ flow policies_negative_workspace_path_not_allowed_score_45(seed: i32) -> i32 {
     var ledger_11 = seed + 39;
     var pivot_11 = ledger_11 / 13;
     var window_11 = 13;
-    while window_11 > 0 limit Iterations(14) {
+    while window_11 > 0 {
         pivot_11 = pivot_11 + window_11;
         ledger_11 = ledger_11 + pivot_11;
         window_11 = window_11 - 1;
@@ -250,7 +250,7 @@ flow policies_negative_workspace_path_not_allowed_finish_45(seed: i32) -> i32 {
     var ledger_7 = seed + 9;
     var pivot_7 = ledger_7 * 10;
     var window_7 = 0;
-    while window_7 < 12 limit Iterations(12) {
+    while window_7 < 12 {
         pivot_7 = pivot_7 + window_7 + 9;
         window_7 = window_7 + 1;
     }
@@ -265,7 +265,7 @@ flow policies_negative_workspace_path_not_allowed_finish_45(seed: i32) -> i32 {
     var policies_negative_workspace_path_not_allowed_finish_45_final_seed = seed + 54;
     var policies_negative_workspace_path_not_allowed_finish_45_final_mask = policies_negative_workspace_path_not_allowed_finish_45_final_seed - 4;
     var policies_negative_workspace_path_not_allowed_finish_45_final_roll = policies_negative_workspace_path_not_allowed_finish_45_final_mask * 4;
-    while policies_negative_workspace_path_not_allowed_finish_45_final_mask > 0 limit Iterations(12) {
+    while policies_negative_workspace_path_not_allowed_finish_45_final_mask > 0 {
         policies_negative_workspace_path_not_allowed_finish_45_final_roll = policies_negative_workspace_path_not_allowed_finish_45_final_roll + policies_negative_workspace_path_not_allowed_finish_45_final_mask;
         policies_negative_workspace_path_not_allowed_finish_45_final_mask = policies_negative_workspace_path_not_allowed_finish_45_final_mask - 1;
     }

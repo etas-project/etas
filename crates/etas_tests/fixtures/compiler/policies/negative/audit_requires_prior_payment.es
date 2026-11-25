@@ -164,7 +164,7 @@ flow policies_negative_missing_audit_after_payment_prepare_39(seed: i32) -> i32 
     var ledger_4 = seed + 18;
     var pivot_4 = ledger_4 / 6;
     var window_4 = 6;
-    while window_4 > 0 limit Iterations(7) {
+    while window_4 > 0 {
         pivot_4 = pivot_4 + window_4;
         ledger_4 = ledger_4 + pivot_4;
         window_4 = window_4 - 1;
@@ -194,7 +194,7 @@ flow policies_negative_missing_audit_after_payment_route_39(seed: i32) -> i32 {
     var ledger_9 = seed + 11;
     var pivot_9 = ledger_9 * 12;
     var window_9 = 0;
-    while window_9 < 14 limit Iterations(14) {
+    while window_9 < 14 {
         pivot_9 = pivot_9 + window_9 + 11;
         window_9 = window_9 + 1;
     }
@@ -209,7 +209,7 @@ flow policies_negative_missing_audit_after_payment_route_39(seed: i32) -> i32 {
     var policies_negative_missing_audit_after_payment_route_39_north_gate = seed + 40;
     var policies_negative_missing_audit_after_payment_route_39_south_gate = policies_negative_missing_audit_after_payment_route_39_north_gate % 9;
     var policies_negative_missing_audit_after_payment_route_39_east_gate = policies_negative_missing_audit_after_payment_route_39_south_gate + policies_negative_missing_audit_after_payment_route_39_north_gate;
-    while policies_negative_missing_audit_after_payment_route_39_south_gate < 4 limit Iterations(4) {
+    while policies_negative_missing_audit_after_payment_route_39_south_gate < 4 {
         policies_negative_missing_audit_after_payment_route_39_east_gate = policies_negative_missing_audit_after_payment_route_39_east_gate + policies_negative_missing_audit_after_payment_route_39_south_gate;
         policies_negative_missing_audit_after_payment_route_39_south_gate = policies_negative_missing_audit_after_payment_route_39_south_gate + 1;
     }
@@ -224,7 +224,7 @@ flow policies_negative_missing_audit_after_payment_score_39(seed: i32) -> i32 {
     var ledger_5 = seed - 7;
     var pivot_5 = seed + 14;
     var window_5 = 1;
-    while window_5 <= 9 limit Iterations(9) {
+    while window_5 <= 9 {
         ledger_5 = ledger_5 + (pivot_5 % (12));
         pivot_5 = pivot_5 + window_5;
         window_5 = window_5 + 1;
@@ -253,7 +253,7 @@ flow policies_negative_missing_audit_after_payment_finish_39(seed: i32) -> i32 {
     var ledger_16 = seed * 18;
     var pivot_16 = ledger_16 + 27;
     var window_16 = 0;
-    while window_16 < 22 limit Iterations(22) {
+    while window_16 < 22 {
         if window_16 % 2 == 0 {
             pivot_16 = pivot_16 + window_16;
         } else {
@@ -267,7 +267,7 @@ flow policies_negative_missing_audit_after_payment_finish_39(seed: i32) -> i32 {
     var policies_negative_missing_audit_after_payment_finish_39_final_seed = seed + 48;
     var policies_negative_missing_audit_after_payment_finish_39_final_mask = policies_negative_missing_audit_after_payment_finish_39_final_seed - 4;
     var policies_negative_missing_audit_after_payment_finish_39_final_roll = policies_negative_missing_audit_after_payment_finish_39_final_mask * 6;
-    while policies_negative_missing_audit_after_payment_finish_39_final_mask > 0 limit Iterations(12) {
+    while policies_negative_missing_audit_after_payment_finish_39_final_mask > 0 {
         policies_negative_missing_audit_after_payment_finish_39_final_roll = policies_negative_missing_audit_after_payment_finish_39_final_roll + policies_negative_missing_audit_after_payment_finish_39_final_mask;
         policies_negative_missing_audit_after_payment_finish_39_final_mask = policies_negative_missing_audit_after_payment_finish_39_final_mask - 1;
     }

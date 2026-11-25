@@ -25,7 +25,7 @@ flow latent_effect_errors_isotope_galaxy_prepare(seed: i32) -> i32 ![]
 {
     var bravo_prepare_total = seed + 6;
     var bravo_prepare_cursor = 0;
-    while bravo_prepare_cursor < 11 limit Iterations(11) {
+    while bravo_prepare_cursor < 11 {
         bravo_prepare_total = bravo_prepare_total + bravo_prepare_cursor + 2;
         bravo_prepare_cursor = bravo_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_isotope_galaxy_route(seed: i32) -> i32 ![]
 {
     var bravo_route_total = seed * 6;
     var bravo_route_cursor = 0;
-    while bravo_route_cursor < 11 limit Iterations(11) {
+    while bravo_route_cursor < 11 {
         bravo_route_total = bravo_route_total + bravo_route_cursor + 2;
         bravo_route_cursor = bravo_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_isotope_galaxy_score(seed: i32) -> i32 ![]
 {
     var bravo_score_total = seed + 6;
     var bravo_score_cursor = 0;
-    while bravo_score_cursor < 8 limit Iterations(8) {
+    while bravo_score_cursor < 8 {
         bravo_score_total = bravo_score_total + bravo_score_cursor + 2;
         bravo_score_cursor = bravo_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_isotope_galaxy_finish(seed: i32) -> i32 ![]
 {
     var bravo_finish_total = seed - 6;
     var bravo_finish_cursor = 0;
-    while bravo_finish_cursor < 11 limit Iterations(11) {
+    while bravo_finish_cursor < 11 {
         bravo_finish_total = bravo_finish_total + bravo_finish_cursor + 2;
         bravo_finish_cursor = bravo_finish_cursor + 1;
     }

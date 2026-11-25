@@ -14,7 +14,7 @@ flow fibonacci(n: i32) -> i32 {
     var curr = 1;
     var i = 2;
 
-    while i <= n limit Iterations(256) {
+    while i <= n {
         let next = prev + curr;
         prev = curr;
         curr = next;

@@ -34,6 +34,7 @@ struct EffectItemReport {
     escaping_effects: String,
     requested_actions: String,
     default_actions: String,
+    required_authority: String,
     residual_checks: Vec<String>,
     trace_spec_obligations: Vec<String>,
     requirements: Vec<String>,
@@ -148,6 +149,7 @@ fn effect_item_report(
         escaping_effects: effect_row_text(&summary.escaping_effects, registry, types),
         requested_actions: effect_row_text(&summary.requested_actions, registry, types),
         default_actions: effect_row_text(&summary.default_actions, registry, types),
+        required_authority: effect_row_text(&summary.required_authority(), registry, types),
         residual_checks: summary
             .residual_checks
             .iter()
@@ -161,7 +163,12 @@ fn effect_item_report(
             .iter()
             .map(requirement_text)
             .collect(),
-        requirements: summary.requirements.iter().map(requirement_text).collect(),
+        requirements: summary
+            .requirements
+            .iter()
+            .filter(|fact| !matches!(fact, etas_effects::RequirementFact::HostAuthority(_)))
+            .map(requirement_text)
+            .collect(),
         determinism: format!("{:?}", summary.determinism),
         support: support_text(&summary.support),
         summary: serde_json::to_value(summary).map_err(|error| {
@@ -199,6 +206,10 @@ fn render_report(
                     .map_err(stdout_error)?;
                 writeln!(stdout, "  default actions: {}", item.default_actions)
                     .map_err(stdout_error)?;
+                if item.required_authority != "[]" {
+                    writeln!(stdout, "  required authority: {}", item.required_authority)
+                        .map_err(stdout_error)?;
+                }
                 if !item.residual_checks.is_empty() {
                     writeln!(
                         stdout,

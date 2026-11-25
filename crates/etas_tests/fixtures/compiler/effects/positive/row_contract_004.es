@@ -23,7 +23,7 @@ flow row_contract_echo_echo_prepare(seed: i32) -> i32 ![]
 {
     var fable_prepare_total = seed + 7;
     var fable_prepare_cursor = 0;
-    while fable_prepare_cursor < 12 limit Iterations(12) {
+    while fable_prepare_cursor < 12 {
         fable_prepare_total = fable_prepare_total + fable_prepare_cursor + 4;
         fable_prepare_cursor = fable_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_echo_echo_route(seed: i32) -> i32 ![]
 {
     var fable_route_total = seed * 7;
     var fable_route_cursor = 0;
-    while fable_route_cursor < 11 limit Iterations(11) {
+    while fable_route_cursor < 11 {
         fable_route_total = fable_route_total + fable_route_cursor + 4;
         fable_route_cursor = fable_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_echo_echo_score(seed: i32) -> i32 ![]
 {
     var fable_score_total = seed + 7;
     var fable_score_cursor = 0;
-    while fable_score_cursor < 10 limit Iterations(10) {
+    while fable_score_cursor < 10 {
         fable_score_total = fable_score_total + fable_score_cursor + 4;
         fable_score_cursor = fable_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_echo_echo_finish(seed: i32) -> i32 ![]
 {
     var fable_finish_total = seed - 7;
     var fable_finish_cursor = 0;
-    while fable_finish_cursor < 9 limit Iterations(9) {
+    while fable_finish_cursor < 9 {
         fable_finish_total = fable_finish_total + fable_finish_cursor + 4;
         fable_finish_cursor = fable_finish_cursor + 1;
     }

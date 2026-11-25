@@ -23,7 +23,7 @@ flow higher_order_latent_anchor_anchor_prepare(seed: i32) -> i32 ![]
 {
     var glacier_prepare_total = seed + 21;
     var glacier_prepare_cursor = 0;
-    while glacier_prepare_cursor < 8 limit Iterations(8) {
+    while glacier_prepare_cursor < 8 {
         glacier_prepare_total = glacier_prepare_total + glacier_prepare_cursor + 5;
         glacier_prepare_cursor = glacier_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_anchor_anchor_route(seed: i32) -> i32 ![]
 {
     var glacier_route_total = seed * 21;
     var glacier_route_cursor = 0;
-    while glacier_route_cursor < 10 limit Iterations(10) {
+    while glacier_route_cursor < 10 {
         glacier_route_total = glacier_route_total + glacier_route_cursor + 5;
         glacier_route_cursor = glacier_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_anchor_anchor_score(seed: i32) -> i32 ![]
 {
     var glacier_score_total = seed + 21;
     var glacier_score_cursor = 0;
-    while glacier_score_cursor < 11 limit Iterations(11) {
+    while glacier_score_cursor < 11 {
         glacier_score_total = glacier_score_total + glacier_score_cursor + 5;
         glacier_score_cursor = glacier_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_anchor_anchor_finish(seed: i32) -> i32 ![]
 {
     var glacier_finish_total = seed - 21;
     var glacier_finish_cursor = 0;
-    while glacier_finish_cursor < 8 limit Iterations(8) {
+    while glacier_finish_cursor < 8 {
         glacier_finish_total = glacier_finish_total + glacier_finish_cursor + 5;
         glacier_finish_cursor = glacier_finish_cursor + 1;
     }

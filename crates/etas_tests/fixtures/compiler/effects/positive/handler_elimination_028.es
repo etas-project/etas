@@ -30,7 +30,7 @@ flow handler_elimination_cobalt_cobalt_prepare(seed: i32) -> i32 ![]
 {
     var anchor_prepare_total = seed + 12;
     var anchor_prepare_cursor = 0;
-    while anchor_prepare_cursor < 11 limit Iterations(11) {
+    while anchor_prepare_cursor < 11 {
         anchor_prepare_total = anchor_prepare_total + anchor_prepare_cursor + 0;
         anchor_prepare_cursor = anchor_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_cobalt_cobalt_route(seed: i32) -> i32 ![]
 {
     var anchor_route_total = seed * 12;
     var anchor_route_cursor = 0;
-    while anchor_route_cursor < 11 limit Iterations(11) {
+    while anchor_route_cursor < 11 {
         anchor_route_total = anchor_route_total + anchor_route_cursor + 0;
         anchor_route_cursor = anchor_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_cobalt_cobalt_score(seed: i32) -> i32 ![]
 {
     var anchor_score_total = seed + 12;
     var anchor_score_cursor = 0;
-    while anchor_score_cursor < 6 limit Iterations(6) {
+    while anchor_score_cursor < 6 {
         anchor_score_total = anchor_score_total + anchor_score_cursor + 0;
         anchor_score_cursor = anchor_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_cobalt_cobalt_finish(seed: i32) -> i32 ![]
 {
     var anchor_finish_total = seed - 12;
     var anchor_finish_cursor = 0;
-    while anchor_finish_cursor < 9 limit Iterations(9) {
+    while anchor_finish_cursor < 9 {
         anchor_finish_total = anchor_finish_total + anchor_finish_cursor + 0;
         anchor_finish_cursor = anchor_finish_cursor + 1;
     }

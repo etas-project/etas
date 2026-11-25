@@ -18,8 +18,8 @@ flow coin_change(coins: Array<i32>, amount: i32) -> i32 {
     dp[0] = 0;
 
     var value = 1;
-    while value <= amount limit Iterations(4096) {
-        for coin in coins limit Iterations(256) {
+    while value <= amount {
+        for coin in coins {
             if coin <= value {
                 dp[value] = min_i32(dp[value], dp[value - coin] + 1);
             }

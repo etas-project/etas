@@ -23,7 +23,7 @@ flow command_sandbox_helios_helios_prepare(seed: i32) -> i32 ![]
 {
     var lagoon_prepare_total = seed + 4;
     var lagoon_prepare_cursor = 0;
-    while lagoon_prepare_cursor < 11 limit Iterations(11) {
+    while lagoon_prepare_cursor < 11 {
         lagoon_prepare_total = lagoon_prepare_total + lagoon_prepare_cursor + 2;
         lagoon_prepare_cursor = lagoon_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_helios_helios_route(seed: i32) -> i32 ![]
 {
     var lagoon_route_total = seed * 4;
     var lagoon_route_cursor = 0;
-    while lagoon_route_cursor < 11 limit Iterations(11) {
+    while lagoon_route_cursor < 11 {
         lagoon_route_total = lagoon_route_total + lagoon_route_cursor + 2;
         lagoon_route_cursor = lagoon_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_helios_helios_score(seed: i32) -> i32 ![]
 {
     var lagoon_score_total = seed + 4;
     var lagoon_score_cursor = 0;
-    while lagoon_score_cursor < 8 limit Iterations(8) {
+    while lagoon_score_cursor < 8 {
         lagoon_score_total = lagoon_score_total + lagoon_score_cursor + 2;
         lagoon_score_cursor = lagoon_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_helios_helios_finish(seed: i32) -> i32 ![]
 {
     var lagoon_finish_total = seed - 4;
     var lagoon_finish_cursor = 0;
-    while lagoon_finish_cursor < 7 limit Iterations(7) {
+    while lagoon_finish_cursor < 7 {
         lagoon_finish_total = lagoon_finish_total + lagoon_finish_cursor + 2;
         lagoon_finish_cursor = lagoon_finish_cursor + 1;
     }

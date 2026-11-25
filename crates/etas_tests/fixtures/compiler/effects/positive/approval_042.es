@@ -22,7 +22,7 @@ flow approval_quasar_quasar_prepare(seed: i32) -> i32 ![]
 {
     var yonder_prepare_total = seed + 7;
     var yonder_prepare_cursor = 0;
-    while yonder_prepare_cursor < 10 limit Iterations(10) {
+    while yonder_prepare_cursor < 10 {
         yonder_prepare_total = yonder_prepare_total + yonder_prepare_cursor + 0;
         yonder_prepare_cursor = yonder_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_quasar_quasar_route(seed: i32) -> i32 ![]
 {
     var yonder_route_total = seed * 7;
     var yonder_route_cursor = 0;
-    while yonder_route_cursor < 7 limit Iterations(7) {
+    while yonder_route_cursor < 7 {
         yonder_route_total = yonder_route_total + yonder_route_cursor + 0;
         yonder_route_cursor = yonder_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_quasar_quasar_score(seed: i32) -> i32 ![]
 {
     var yonder_score_total = seed + 7;
     var yonder_score_cursor = 0;
-    while yonder_score_cursor < 6 limit Iterations(6) {
+    while yonder_score_cursor < 6 {
         yonder_score_total = yonder_score_total + yonder_score_cursor + 0;
         yonder_score_cursor = yonder_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_quasar_quasar_finish(seed: i32) -> i32 ![]
 {
     var yonder_finish_total = seed - 7;
     var yonder_finish_cursor = 0;
-    while yonder_finish_cursor < 7 limit Iterations(7) {
+    while yonder_finish_cursor < 7 {
         yonder_finish_total = yonder_finish_total + yonder_finish_cursor + 0;
         yonder_finish_cursor = yonder_finish_cursor + 1;
     }

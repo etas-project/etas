@@ -23,7 +23,7 @@ flow row_too_narrow_glacier_ember_prepare(seed: i32) -> i32 ![]
 {
     var oasis_prepare_total = seed + 6;
     var oasis_prepare_cursor = 0;
-    while oasis_prepare_cursor < 10 limit Iterations(10) {
+    while oasis_prepare_cursor < 10 {
         oasis_prepare_total = oasis_prepare_total + oasis_prepare_cursor + 3;
         oasis_prepare_cursor = oasis_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_glacier_ember_route(seed: i32) -> i32 ![]
 {
     var oasis_route_total = seed * 6;
     var oasis_route_cursor = 0;
-    while oasis_route_cursor < 7 limit Iterations(7) {
+    while oasis_route_cursor < 7 {
         oasis_route_total = oasis_route_total + oasis_route_cursor + 3;
         oasis_route_cursor = oasis_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_glacier_ember_score(seed: i32) -> i32 ![]
 {
     var oasis_score_total = seed + 6;
     var oasis_score_cursor = 0;
-    while oasis_score_cursor < 9 limit Iterations(9) {
+    while oasis_score_cursor < 9 {
         oasis_score_total = oasis_score_total + oasis_score_cursor + 3;
         oasis_score_cursor = oasis_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_glacier_ember_finish(seed: i32) -> i32 ![]
 {
     var oasis_finish_total = seed - 6;
     var oasis_finish_cursor = 0;
-    while oasis_finish_cursor < 7 limit Iterations(7) {
+    while oasis_finish_cursor < 7 {
         oasis_finish_total = oasis_finish_total + oasis_finish_cursor + 3;
         oasis_finish_cursor = oasis_finish_cursor + 1;
     }

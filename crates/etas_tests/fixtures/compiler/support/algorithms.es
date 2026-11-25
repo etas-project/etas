@@ -21,7 +21,7 @@ public flow join_i32_list(values: Array<i32>, separator: string) -> string {
     var parts: Array<string> = [];
     var index: usize = 0;
 
-    while index < list_len(values) limit Iterations(4096) {
+    while index < list_len(values) {
         parts = parts.push(from_i32(values[index]));
         index = index + 1;
     }
@@ -32,7 +32,7 @@ public flow join_i32_list(values: Array<i32>, separator: string) -> string {
 public flow len_i32_list(values: Array<i32>) -> i32 {
     var count: i32 = 0;
 
-    for _value in values limit Iterations(4096) {
+    for _value in values {
         count = count + 1;
     }
 
@@ -42,7 +42,7 @@ public flow len_i32_list(values: Array<i32>) -> i32 {
 public flow len_i32_grid(values: Array<Array<i32>>) -> i32 {
     var count: i32 = 0;
 
-    for _value in values limit Iterations(4096) {
+    for _value in values {
         count = count + 1;
     }
 
@@ -53,7 +53,7 @@ public flow matrix_i32(rows: i32, cols: i32, fill: i32) -> Array<Array<i32>> {
     var out: Array<Array<i32>> = [];
     var row: i32 = 0;
 
-    while row < rows limit Iterations(4096) {
+    while row < rows {
         out = out.push(repeat_i32(fill, cols));
         row = row + 1;
     }
@@ -73,7 +73,7 @@ public flow parse_i32_list(input: string) -> Array<i32> {
     var out: Array<i32> = [];
     var index: usize = 0;
 
-    while index < list_len(parts) limit Iterations(4096) {
+    while index < list_len(parts) {
         if parts[index] != "" {
             out = out.push(parse_i32(parts[index]));
         }
@@ -87,7 +87,7 @@ public flow repeat_bool(value: bool, count: i32) -> Array<bool> {
     var out: Array<bool> = [];
     var index: i32 = 0;
 
-    while index < count limit Iterations(4096) {
+    while index < count {
         out = out.push(value);
         index = index + 1;
     }
@@ -99,7 +99,7 @@ public flow repeat_i32(value: i32, count: i32) -> Array<i32> {
     var out: Array<i32> = [];
     var index: i32 = 0;
 
-    while index < count limit Iterations(4096) {
+    while index < count {
         out = out.push(value);
         index = index + 1;
     }
@@ -111,7 +111,7 @@ public flow slice(values: Array<i32>, start: usize, end: usize) -> Array<i32> {
     var out: Array<i32> = [];
     var index = start;
 
-    while index < end limit Iterations(4096) {
+    while index < end {
         out = out.push(values[index]);
         index = index + 1;
     }
@@ -121,7 +121,7 @@ public flow slice(values: Array<i32>, start: usize, end: usize) -> Array<i32> {
 
 public flow split_lines(input: string) -> Array<string> {
     var output: Array<string> = [];
-    for line in lines(input) limit Iterations(4096) {
+    for line in lines(input) {
         output = output.push(line);
     }
     return output;

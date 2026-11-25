@@ -24,7 +24,7 @@ flow checked_index_capture_lima_lima_prepare(seed: i32) -> i32 ![]
 {
     var flint_prepare_total = seed + 14;
     var flint_prepare_cursor = 0;
-    while flint_prepare_cursor < 9 limit Iterations(9) {
+    while flint_prepare_cursor < 9 {
         flint_prepare_total = flint_prepare_total + flint_prepare_cursor + 4;
         flint_prepare_cursor = flint_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_lima_lima_route(seed: i32) -> i32 ![]
 {
     var flint_route_total = seed * 14;
     var flint_route_cursor = 0;
-    while flint_route_cursor < 12 limit Iterations(12) {
+    while flint_route_cursor < 12 {
         flint_route_total = flint_route_total + flint_route_cursor + 4;
         flint_route_cursor = flint_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_lima_lima_score(seed: i32) -> i32 ![]
 {
     var flint_score_total = seed + 14;
     var flint_score_cursor = 0;
-    while flint_score_cursor < 10 limit Iterations(10) {
+    while flint_score_cursor < 10 {
         flint_score_total = flint_score_total + flint_score_cursor + 4;
         flint_score_cursor = flint_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_lima_lima_finish(seed: i32) -> i32 ![]
 {
     var flint_finish_total = seed - 14;
     var flint_finish_cursor = 0;
-    while flint_finish_cursor < 8 limit Iterations(8) {
+    while flint_finish_cursor < 8 {
         flint_finish_total = flint_finish_total + flint_finish_cursor + 4;
         flint_finish_cursor = flint_finish_cursor + 1;
     }

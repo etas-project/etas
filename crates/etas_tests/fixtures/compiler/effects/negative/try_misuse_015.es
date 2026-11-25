@@ -23,7 +23,7 @@ flow try_misuse_tidal_ripple_prepare(seed: i32) -> i32 ![]
 {
     var forge_prepare_total = seed + 19;
     var forge_prepare_cursor = 0;
-    while forge_prepare_cursor < 8 limit Iterations(8) {
+    while forge_prepare_cursor < 8 {
         forge_prepare_total = forge_prepare_total + forge_prepare_cursor + 2;
         forge_prepare_cursor = forge_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_tidal_ripple_route(seed: i32) -> i32 ![]
 {
     var forge_route_total = seed * 19;
     var forge_route_cursor = 0;
-    while forge_route_cursor < 8 limit Iterations(8) {
+    while forge_route_cursor < 8 {
         forge_route_total = forge_route_total + forge_route_cursor + 2;
         forge_route_cursor = forge_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_tidal_ripple_score(seed: i32) -> i32 ![]
 {
     var forge_score_total = seed + 19;
     var forge_score_cursor = 0;
-    while forge_score_cursor < 8 limit Iterations(8) {
+    while forge_score_cursor < 8 {
         forge_score_total = forge_score_total + forge_score_cursor + 2;
         forge_score_cursor = forge_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_tidal_ripple_finish(seed: i32) -> i32 ![]
 {
     var forge_finish_total = seed - 19;
     var forge_finish_cursor = 0;
-    while forge_finish_cursor < 12 limit Iterations(12) {
+    while forge_finish_cursor < 12 {
         forge_finish_total = forge_finish_total + forge_finish_cursor + 2;
         forge_finish_cursor = forge_finish_cursor + 1;
     }

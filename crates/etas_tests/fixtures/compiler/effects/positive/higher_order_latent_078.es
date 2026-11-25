@@ -23,7 +23,7 @@ flow higher_order_latent_dune_dune_prepare(seed: i32) -> i32 ![]
 {
     var cipher_prepare_total = seed + 5;
     var cipher_prepare_cursor = 0;
-    while cipher_prepare_cursor < 11 limit Iterations(11) {
+    while cipher_prepare_cursor < 11 {
         cipher_prepare_total = cipher_prepare_total + cipher_prepare_cursor + 1;
         cipher_prepare_cursor = cipher_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_dune_dune_route(seed: i32) -> i32 ![]
 {
     var cipher_route_total = seed * 5;
     var cipher_route_cursor = 0;
-    while cipher_route_cursor < 7 limit Iterations(7) {
+    while cipher_route_cursor < 7 {
         cipher_route_total = cipher_route_total + cipher_route_cursor + 1;
         cipher_route_cursor = cipher_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_dune_dune_score(seed: i32) -> i32 ![]
 {
     var cipher_score_total = seed + 5;
     var cipher_score_cursor = 0;
-    while cipher_score_cursor < 7 limit Iterations(7) {
+    while cipher_score_cursor < 7 {
         cipher_score_total = cipher_score_total + cipher_score_cursor + 1;
         cipher_score_cursor = cipher_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_dune_dune_finish(seed: i32) -> i32 ![]
 {
     var cipher_finish_total = seed - 5;
     var cipher_finish_cursor = 0;
-    while cipher_finish_cursor < 11 limit Iterations(11) {
+    while cipher_finish_cursor < 11 {
         cipher_finish_total = cipher_finish_total + cipher_finish_cursor + 1;
         cipher_finish_cursor = cipher_finish_cursor + 1;
     }

@@ -16,7 +16,7 @@ flow main(args: Array<string>) -> i32 {
     let map: Map<Report<i32>, string> = { left => "found" };
     checkpoint("record-keys");
     var count = 0;
-    for key in keys limit Iterations(4) { count = count + 1; }
+    for key in keys { count = count + 1; }
     if left.status == right.status && left.state == right.state && left == right
         && count == 1 && map.get(right) == Some("found") { return 0; }
     return 1;

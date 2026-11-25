@@ -15,7 +15,7 @@ flow is_valid(text: string) -> bool {
     var stack: Array<char> = [];
     var i = 0;
 
-    while i < string_len(text) limit Iterations(4096) {
+    while i < string_len(text) {
         let ch = char_at(text, i);
         if ch == '(' || ch == '[' || ch == '{' {
             stack = stack.push(ch);

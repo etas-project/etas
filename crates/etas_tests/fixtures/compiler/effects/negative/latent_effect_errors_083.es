@@ -25,7 +25,7 @@ flow latent_effect_errors_nimbus_legend_prepare(seed: i32) -> i32 ![]
 {
     var kepler_prepare_total = seed + 11;
     var kepler_prepare_cursor = 0;
-    while kepler_prepare_cursor < 11 limit Iterations(11) {
+    while kepler_prepare_cursor < 11 {
         kepler_prepare_total = kepler_prepare_total + kepler_prepare_cursor + 0;
         kepler_prepare_cursor = kepler_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_nimbus_legend_route(seed: i32) -> i32 ![]
 {
     var kepler_route_total = seed * 11;
     var kepler_route_cursor = 0;
-    while kepler_route_cursor < 10 limit Iterations(10) {
+    while kepler_route_cursor < 10 {
         kepler_route_total = kepler_route_total + kepler_route_cursor + 0;
         kepler_route_cursor = kepler_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_nimbus_legend_score(seed: i32) -> i32 ![]
 {
     var kepler_score_total = seed + 11;
     var kepler_score_cursor = 0;
-    while kepler_score_cursor < 6 limit Iterations(6) {
+    while kepler_score_cursor < 6 {
         kepler_score_total = kepler_score_total + kepler_score_cursor + 0;
         kepler_score_cursor = kepler_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_nimbus_legend_finish(seed: i32) -> i32 ![]
 {
     var kepler_finish_total = seed - 11;
     var kepler_finish_cursor = 0;
-    while kepler_finish_cursor < 8 limit Iterations(8) {
+    while kepler_finish_cursor < 8 {
         kepler_finish_total = kepler_finish_total + kepler_finish_cursor + 0;
         kepler_finish_cursor = kepler_finish_cursor + 1;
     }

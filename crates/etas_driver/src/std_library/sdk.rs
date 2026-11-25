@@ -20,7 +20,7 @@ mod load;
 pub mod objects;
 pub use load::{LoadedStdSdk, load_standard_library_sdk};
 
-pub const STD_SDK_SCHEMA: u32 = 2;
+pub const STD_SDK_SCHEMA: u32 = 3;
 pub const STD_TOOLCHAIN_ID: &str = env!("ETAS_TOOLCHAIN_ID");
 const ARTIFACT_PATH: &str = "artifacts/std.etasmeta";
 const EFFECT_ANALYSIS_PATH: &str = "artifacts/std.effects.etasmeta";

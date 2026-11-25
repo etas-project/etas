@@ -30,7 +30,7 @@ flow handler_elimination_xenon_xenon_prepare(seed: i32) -> i32 ![]
 {
     var onyx_prepare_total = seed + 7;
     var onyx_prepare_cursor = 0;
-    while onyx_prepare_cursor < 11 limit Iterations(11) {
+    while onyx_prepare_cursor < 11 {
         onyx_prepare_total = onyx_prepare_total + onyx_prepare_cursor + 2;
         onyx_prepare_cursor = onyx_prepare_cursor + 1;
     }
@@ -52,7 +52,7 @@ flow handler_elimination_xenon_xenon_route(seed: i32) -> i32 ![]
 {
     var onyx_route_total = seed * 7;
     var onyx_route_cursor = 0;
-    while onyx_route_cursor < 12 limit Iterations(12) {
+    while onyx_route_cursor < 12 {
         onyx_route_total = onyx_route_total + onyx_route_cursor + 2;
         onyx_route_cursor = onyx_route_cursor + 1;
     }
@@ -74,7 +74,7 @@ flow handler_elimination_xenon_xenon_score(seed: i32) -> i32 ![]
 {
     var onyx_score_total = seed + 7;
     var onyx_score_cursor = 0;
-    while onyx_score_cursor < 8 limit Iterations(8) {
+    while onyx_score_cursor < 8 {
         onyx_score_total = onyx_score_total + onyx_score_cursor + 2;
         onyx_score_cursor = onyx_score_cursor + 1;
     }
@@ -96,7 +96,7 @@ flow handler_elimination_xenon_xenon_finish(seed: i32) -> i32 ![]
 {
     var onyx_finish_total = seed - 7;
     var onyx_finish_cursor = 0;
-    while onyx_finish_cursor < 12 limit Iterations(12) {
+    while onyx_finish_cursor < 12 {
         onyx_finish_total = onyx_finish_total + onyx_finish_cursor + 2;
         onyx_finish_cursor = onyx_finish_cursor + 1;
     }

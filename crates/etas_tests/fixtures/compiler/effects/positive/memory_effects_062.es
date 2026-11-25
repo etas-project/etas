@@ -24,7 +24,7 @@ flow memory_effects_lotus_lotus_prepare(seed: i32) -> i32 ![]
 {
     var orbit_prepare_total = seed + 8;
     var orbit_prepare_cursor = 0;
-    while orbit_prepare_cursor < 10 limit Iterations(10) {
+    while orbit_prepare_cursor < 10 {
         orbit_prepare_total = orbit_prepare_total + orbit_prepare_cursor + 6;
         orbit_prepare_cursor = orbit_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_lotus_lotus_route(seed: i32) -> i32 ![]
 {
     var orbit_route_total = seed * 8;
     var orbit_route_cursor = 0;
-    while orbit_route_cursor < 9 limit Iterations(9) {
+    while orbit_route_cursor < 9 {
         orbit_route_total = orbit_route_total + orbit_route_cursor + 6;
         orbit_route_cursor = orbit_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_lotus_lotus_score(seed: i32) -> i32 ![]
 {
     var orbit_score_total = seed + 8;
     var orbit_score_cursor = 0;
-    while orbit_score_cursor < 12 limit Iterations(12) {
+    while orbit_score_cursor < 12 {
         orbit_score_total = orbit_score_total + orbit_score_cursor + 6;
         orbit_score_cursor = orbit_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_lotus_lotus_finish(seed: i32) -> i32 ![]
 {
     var orbit_finish_total = seed - 8;
     var orbit_finish_cursor = 0;
-    while orbit_finish_cursor < 11 limit Iterations(11) {
+    while orbit_finish_cursor < 11 {
         orbit_finish_total = orbit_finish_total + orbit_finish_cursor + 6;
         orbit_finish_cursor = orbit_finish_cursor + 1;
     }

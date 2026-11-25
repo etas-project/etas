@@ -13,7 +13,7 @@ type Row = { text: string }
 flow build(prefix: string) -> string {
     var text = prefix;
     var i = 0;
-    while i < 64 limit Iterations(128) {
+    while i < 64 {
         text = text + "中😀";
         i = i + 1;
     }
@@ -39,7 +39,7 @@ flow main(args: Array<string>) -> i32 {
     let combined = left + (right + "tail");
     var prepended = "tail";
     var index = 0;
-    while index < 64 limit Iterations(128) {
+    while index < 64 {
         prepended = "中😀" + prepended;
         index = index + 1;
     }

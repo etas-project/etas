@@ -29,6 +29,29 @@ fn legacy_cli_command() -> Command {
     command
 }
 
+fn source_cli_command() -> Command {
+    static BINARY: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    Command::new(BINARY.get_or_init(|| {
+        if let Some(binary) = std::env::var_os("ETAS_STD_DELIVERY_BINARY") {
+            return PathBuf::from(binary);
+        }
+        let prefix = Path::new(env!("CARGO_TARGET_TMPDIR")).join("agent-fixtures");
+        let output = Command::new(env!("CARGO_BIN_EXE_etas"))
+            .args(["--no-config", "std", "install", "--prefix"])
+            .arg(&prefix)
+            .output()
+            .expect("install the Agent fixture SDK");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        prefix
+            .join("bin")
+            .join(format!("etas{}", std::env::consts::EXE_SUFFIX))
+    }))
+}
+
 #[cfg(unix)]
 #[path = "cli/atomic_replace.rs"]
 mod atomic_replace;
@@ -2452,7 +2475,7 @@ import std.text.unicode.NFKC;
 
 flow main() -> i32 ![] {
     let normalized: string = normalize("ﬃ", NFKC);
-    for line in scan_lines("a\nb") limit Iterations(2) {
+    for line in scan_lines("a\nb") {
         let observed: string = line;
     }
     return match parse("40") {
@@ -3963,7 +3986,7 @@ public flow repeat_once<effect E>(
     ready: bool,
     callback: () -> unit ![E],
 ) -> unit ![E] {
-    while ready limit Iterations(1) {
+    while ready {
         callback();
     }
     return;
@@ -5140,7 +5163,7 @@ enum Link { End, Next(Link) }
 flow main(args: Array<string>) -> i32 {
     var chain = Link.End;
     var count: i32 = 0;
-    while count < 1000 limit Iterations(2000) {
+    while count < 1000 {
         chain = Link.Next(chain);
         count = count + 1;
     }
@@ -5284,12 +5307,17 @@ fn project_agent_system_smoke_checks_effects_and_runs_with_openai_mock() {
     let _guard = lock_model_cli_e2e();
     let project = copy_project_fixture("agent-system-smoke", &agent_system_smoke_project());
 
-    let (code, stdout, stderr) = run(["etas", "check", path(&project)]);
+    let (code, stdout, stderr) =
+        run_process_with_command(source_cli_command(), ["check", path(&project)], "");
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("checked "), "{stdout}");
     assert!(!stderr.contains("error["), "{stderr}");
 
-    let (code, stdout, stderr) = run(["etas", "--format", "json", "effects", path(&project)]);
+    let (code, stdout, stderr) = run_process_with_command(
+        source_cli_command(),
+        ["--format", "json", "effects", path(&project)],
+        "",
+    );
     assert_eq!(code, 0, "{stderr}");
     assert!(!stdout.contains("Unknown.action"), "{stdout}");
     assert!(stdout.contains("Agentic.infer"), "{stdout}");
@@ -5303,7 +5331,7 @@ fn project_agent_system_smoke_checks_effects_and_runs_with_openai_mock() {
         &base_url,
         "agent-smoke-mock",
     );
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5360,7 +5388,7 @@ backend = "memory"
 
 [runtime.profiles.local-omlx.policy]
 mode = "local-static"
-rules = ["model=allow", "memory=approval", "console=allow"]
+rules = ["agentic=allow", "model=allow", "memory=approval", "console=allow"]
 
 [runtime.profiles.local-omlx.approval]
 mode = "auto"
@@ -5369,7 +5397,7 @@ mode = "auto"
     )
     .expect("write oMLX thinking-control profile");
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5490,7 +5518,7 @@ fn runtime_profile_model_deadline_controls_slow_request() {
     let (base_url, server) =
         spawn_delayed_openai_completion_server("within deadline", Duration::from_millis(150));
     write_model_deadline_runtime_profile(&project, &base_url, 500);
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5513,7 +5541,7 @@ fn runtime_profile_model_deadline_controls_slow_request() {
     let (base_url, server) =
         spawn_delayed_openai_completion_server("too late", Duration::from_millis(250));
     write_model_deadline_runtime_profile(&project, &base_url, 100);
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, _stdout, stderr) = run_process_with_command(
         command,
@@ -5559,7 +5587,7 @@ backend = "memory"
     )
     .unwrap();
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     for name in [
         "ETAS_HOST_MODEL_ADAPTER",
         "ETAS_HOST_MODEL_BASE_URL",
@@ -5603,12 +5631,17 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         &full_phase1_agent_runtime_project(),
     );
 
-    let (code, stdout, stderr) = run(["etas", "check", path(&project)]);
+    let (code, stdout, stderr) =
+        run_process_with_command(source_cli_command(), ["check", path(&project)], "");
     assert_eq!(code, 0, "{stderr}");
     assert!(stdout.contains("checked "), "{stdout}");
     assert!(!stderr.contains("error["), "{stderr}");
 
-    let (code, stdout, stderr) = run(["etas", "--format", "json", "effects", path(&project)]);
+    let (code, stdout, stderr) = run_process_with_command(
+        source_cli_command(),
+        ["--format", "json", "effects", path(&project)],
+        "",
+    );
     assert_eq!(code, 0, "{stderr}");
     assert!(!stdout.contains("Unknown.action"), "{stdout}");
     assert!(
@@ -5638,7 +5671,7 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5726,7 +5759,7 @@ fn full_phase1_agent_runtime_check_effects_and_runs_with_mock_host() {
         "full runtime checkpoint must record completed source/tool boundary ledger: {checkpoint_json}"
     );
 
-    let mut resume = crate::legacy_cli_command();
+    let mut resume = source_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -5762,7 +5795,7 @@ fn full_phase1_agent_runtime_repairs_invalid_model_tool_args() {
         &model_base_url,
         "full-phase1-runtime-tool-repair",
     );
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5836,7 +5869,7 @@ fn full_phase1_agent_runtime_uses_trace_spec_with_http_provider() {
         &policy_url,
         "full-phase1-runtime-http",
     );
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5936,7 +5969,7 @@ fn full_phase1_agent_runtime_resume_rejects_incompatible_host_profile() {
         &model_base_url,
         "full-phase1-runtime",
     );
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -5980,7 +6013,7 @@ fn full_phase1_agent_runtime_resume_rejects_incompatible_host_profile() {
         "model = \"different-model\"",
     );
     std::fs::write(&local_manifest, local_profile).unwrap();
-    let mut resume = crate::legacy_cli_command();
+    let mut resume = source_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -6245,7 +6278,7 @@ flow read_directory() -> unit ![Fs.list<ProjectRoot>, Fs.read<ProjectRoot>, Erro
         Ok(target) => list(target),
         Err(_) => abort("invalid workspace directory"),
     };
-    for entry in entries limit Iterations(16) {
+    for entry in entries {
         let _contents = read_bytes(entry);
     }
     return;
@@ -6655,7 +6688,11 @@ allow = ["{tool_network_authority}"]
 fn multi_agent_system_runtime_variants_check_effects() {
     let _guard = lock_model_cli_e2e();
     let project = multi_agent_system_project();
-    let (code, stdout, stderr) = run(["etas", "--format", "json", "effects", path(&project)]);
+    let (code, stdout, stderr) = run_process_with_command(
+        source_cli_command(),
+        ["--format", "json", "effects", path(&project)],
+        "",
+    );
 
     assert_eq!(code, 0, "{stderr}");
     assert!(!stdout.contains("Unknown.action"), "{stdout}");
@@ -6702,7 +6739,7 @@ fn multi_agent_system_default_main_runs_full_runtime_with_mock_host() {
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6822,7 +6859,7 @@ fn multi_agent_system_runtime_variants_resume_does_not_replay_completed_boundari
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -6842,7 +6879,7 @@ fn multi_agent_system_runtime_variants_resume_does_not_replay_completed_boundari
     assert_eq!(code, 0, "stderr={stderr:?}\nstdout={stdout:?}");
     assert!(checkpoint_dir.join("checkpoint-1.json").is_file());
 
-    let mut resume = crate::legacy_cli_command();
+    let mut resume = source_cli_command();
     remove_legacy_runtime_host_env(&mut resume);
     let (code, stdout, stderr) = run_process_with_command(
         resume,
@@ -6903,7 +6940,7 @@ fn multi_agent_system_runtime_variants_http_policy_approval_preserves_grants() {
     ));
     let _ = std::fs::remove_dir_all(&checkpoint_dir);
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -7028,7 +7065,7 @@ fn multi_agent_system_runs_simple_multi_agent_with_mock_model() {
         "simple-multi-agent-mock",
     );
 
-    let mut command = crate::legacy_cli_command();
+    let mut command = source_cli_command();
     remove_legacy_runtime_host_env(&mut command);
     let (code, stdout, stderr) = run_process_with_command(
         command,
@@ -7081,7 +7118,7 @@ fn full_phase1_agent_runtime_runs_with_live_omlx_openai() {
         "etas-full-phase1-live-omlx-{}",
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
-    let command = live_omlx_openai_command();
+    let command = live_omlx_openai_command(source_cli_command());
     let (code, stdout, stderr) = run_process_with_command(
         command,
         [
@@ -7134,7 +7171,7 @@ fn full_phase1_agent_runtime_runs_with_live_omlx_openai() {
         "live full runtime checkpoint must record memory resource versions: {checkpoint_json}"
     );
 
-    let resume = live_omlx_openai_command();
+    let resume = live_omlx_openai_command(source_cli_command());
     let (code, stdout, stderr) = run_process_with_command(
         resume,
         [
@@ -7166,7 +7203,7 @@ fn multi_agent_system_runs_with_live_omlx_openai() {
         "etas-multi-agent-live-omlx-{}",
         NEXT_FILE.fetch_add(1, Ordering::Relaxed)
     ));
-    let command = live_omlx_openai_command();
+    let command = live_omlx_openai_command(source_cli_command());
     let (code, stdout, stderr) = run_process_with_command(
         command,
         [
@@ -7225,7 +7262,7 @@ fn project_agent_system_smoke_runs_with_live_omlx_openai() {
         return;
     }
     let project = agent_system_smoke_project();
-    let command = live_omlx_openai_command();
+    let command = live_omlx_openai_command(source_cli_command());
     let (code, stdout, stderr) = run_process_with_command(
         command,
         [
@@ -7262,7 +7299,7 @@ fn project_agent_typed_record_runs_with_live_omlx_openai() {
         .join("effect_agent_console_bridge");
     let project = copy_project_fixture("effect-agent-console-bridge-live-omlx", &source_project);
     write_live_omlx_runtime_profile(&project, "effect-agent-console-live-omlx");
-    let command = live_omlx_openai_command();
+    let command = live_omlx_openai_command(crate::legacy_cli_command());
     let (code, stdout, stderr) = run_process_with_command(
         command,
         [
@@ -7654,8 +7691,7 @@ fn spawn_memory_approval_policy_server() -> (String, thread::JoinHandle<Vec<Stri
     (base_url, handle)
 }
 
-fn live_omlx_openai_command() -> Command {
-    let mut command = crate::legacy_cli_command();
+fn live_omlx_openai_command(mut command: Command) -> Command {
     remove_legacy_runtime_host_env(&mut command);
     if let Ok(key) = std::env::var("ETAS_HOST_OMLX_API_KEY") {
         command.env("ETAS_HOST_OMLX_API_KEY", key);
@@ -7718,7 +7754,7 @@ backend = "memory"
 
 [runtime.profiles.{profile}.policy]
 mode = "local-static"
-rules = ["model=allow", "tool=allow", "memory=approval", "console=allow"]
+rules = ["agentic=allow", "model=allow", "tool=allow", "memory=approval", "console=allow"]
 
 [runtime.profiles.{profile}.approval]
 mode = "auto"
@@ -7758,7 +7794,7 @@ backend = "memory"
 
 [runtime.profiles.model-deadline.policy]
 mode = "local-static"
-rules = ["model=allow", "memory=approval", "console=allow"]
+rules = ["agentic=allow", "model=allow", "memory=approval", "console=allow"]
 
 [runtime.profiles.model-deadline.approval]
 mode = "auto"
@@ -8321,47 +8357,22 @@ fn spawn_multi_agent_runtime_variants_server() -> (String, thread::JoinHandle<Ve
     let addr = listener.local_addr().expect("mock server address");
     let base_url = mock_server_base_url(addr, "/v1");
     let shutdown_token = mock_server_shutdown_token(&base_url);
-    listener
-        .set_nonblocking(true)
-        .expect("mock server nonblocking mode");
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
     let handle = thread::spawn(move || {
-        let _ = ready_tx.send(());
         let mut requests = Vec::new();
-        let deadline = Instant::now() + Duration::from_secs(300);
         loop {
-            match listener.accept() {
-                Ok((mut stream, _)) => {
-                    let request = read_http_request(&mut stream);
-                    if let Some(should_shutdown) =
-                        mock_server_request_was_shutdown(&request, &shutdown_token)
-                    {
-                        if should_shutdown {
-                            return requests;
-                        }
-                        continue;
-                    }
-                    if request.is_empty() {
-                        continue;
-                    }
-                    let body = multi_agent_runtime_response_for_request(&request, requests.len())
-                        .to_string();
-                    write_http_json_response(&mut stream, &body);
-                    requests.push(request);
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    if Instant::now() > deadline {
-                        return requests;
-                    }
-                    thread::sleep(Duration::from_millis(10));
-                }
-                Err(error) => panic!("mock OpenAI server failed to accept request: {error}"),
+            let (mut stream, _) = listener.accept().expect("accept mock model request");
+            let request = read_http_request(&mut stream);
+            match mock_server_request_was_shutdown(&request, &shutdown_token) {
+                Some(true) => return requests,
+                Some(false) => continue,
+                None if request.is_empty() => continue,
+                None => {}
             }
+            let body = multi_agent_runtime_response_for_request(&request, requests.len());
+            write_http_json_response(&mut stream, &body.to_string());
+            requests.push(request);
         }
     });
-    ready_rx
-        .recv_timeout(Duration::from_secs(5))
-        .expect("mock OpenAI server should be ready");
     (base_url, handle)
 }
 
@@ -8825,6 +8836,9 @@ fn package_action_trace_parameter_calls(
     expected: &str,
 ) -> usize {
     match trace {
+        etas_package::PackageActionTraceMetadata::Recursive { child, .. } => child
+            .as_deref()
+            .map_or(0, |child| package_action_trace_parameter_calls(child, expected)),
         etas_package::PackageActionTraceMetadata::ParameterCall { parameter } => {
             usize::from(matches!(
                 parameter,

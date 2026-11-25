@@ -23,7 +23,7 @@ flow higher_order_latent_haven_haven_prepare(seed: i32) -> i32 ![]
 {
     var garden_prepare_total = seed + 9;
     var garden_prepare_cursor = 0;
-    while garden_prepare_cursor < 10 limit Iterations(10) {
+    while garden_prepare_cursor < 10 {
         garden_prepare_total = garden_prepare_total + garden_prepare_cursor + 5;
         garden_prepare_cursor = garden_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_haven_haven_route(seed: i32) -> i32 ![]
 {
     var garden_route_total = seed * 9;
     var garden_route_cursor = 0;
-    while garden_route_cursor < 11 limit Iterations(11) {
+    while garden_route_cursor < 11 {
         garden_route_total = garden_route_total + garden_route_cursor + 5;
         garden_route_cursor = garden_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_haven_haven_score(seed: i32) -> i32 ![]
 {
     var garden_score_total = seed + 9;
     var garden_score_cursor = 0;
-    while garden_score_cursor < 11 limit Iterations(11) {
+    while garden_score_cursor < 11 {
         garden_score_total = garden_score_total + garden_score_cursor + 5;
         garden_score_cursor = garden_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_haven_haven_finish(seed: i32) -> i32 ![]
 {
     var garden_finish_total = seed - 9;
     var garden_finish_cursor = 0;
-    while garden_finish_cursor < 7 limit Iterations(7) {
+    while garden_finish_cursor < 7 {
         garden_finish_total = garden_finish_total + garden_finish_cursor + 5;
         garden_finish_cursor = garden_finish_cursor + 1;
     }

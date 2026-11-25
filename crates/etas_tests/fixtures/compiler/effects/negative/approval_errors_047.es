@@ -24,7 +24,7 @@ flow approval_errors_cascade_anchor_prepare(seed: i32) -> i32 ![]
 {
     var glacier_prepare_total = seed + 13;
     var glacier_prepare_cursor = 0;
-    while glacier_prepare_cursor < 10 limit Iterations(10) {
+    while glacier_prepare_cursor < 10 {
         glacier_prepare_total = glacier_prepare_total + glacier_prepare_cursor + 6;
         glacier_prepare_cursor = glacier_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow approval_errors_cascade_anchor_route(seed: i32) -> i32 ![]
 {
     var glacier_route_total = seed * 13;
     var glacier_route_cursor = 0;
-    while glacier_route_cursor < 10 limit Iterations(10) {
+    while glacier_route_cursor < 10 {
         glacier_route_total = glacier_route_total + glacier_route_cursor + 6;
         glacier_route_cursor = glacier_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow approval_errors_cascade_anchor_score(seed: i32) -> i32 ![]
 {
     var glacier_score_total = seed + 13;
     var glacier_score_cursor = 0;
-    while glacier_score_cursor < 12 limit Iterations(12) {
+    while glacier_score_cursor < 12 {
         glacier_score_total = glacier_score_total + glacier_score_cursor + 6;
         glacier_score_cursor = glacier_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow approval_errors_cascade_anchor_finish(seed: i32) -> i32 ![]
 {
     var glacier_finish_total = seed - 13;
     var glacier_finish_cursor = 0;
-    while glacier_finish_cursor < 12 limit Iterations(12) {
+    while glacier_finish_cursor < 12 {
         glacier_finish_total = glacier_finish_total + glacier_finish_cursor + 6;
         glacier_finish_cursor = glacier_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow diagnostic_quality_voyage_terra_prepare(seed: i32) -> i32 ![]
 {
     var kingdom_prepare_total = seed + 18;
     var kingdom_prepare_cursor = 0;
-    while kingdom_prepare_cursor < 8 limit Iterations(8) {
+    while kingdom_prepare_cursor < 8 {
         kingdom_prepare_total = kingdom_prepare_total + kingdom_prepare_cursor + 0;
         kingdom_prepare_cursor = kingdom_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow diagnostic_quality_voyage_terra_route(seed: i32) -> i32 ![]
 {
     var kingdom_route_total = seed * 18;
     var kingdom_route_cursor = 0;
-    while kingdom_route_cursor < 11 limit Iterations(11) {
+    while kingdom_route_cursor < 11 {
         kingdom_route_total = kingdom_route_total + kingdom_route_cursor + 0;
         kingdom_route_cursor = kingdom_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow diagnostic_quality_voyage_terra_score(seed: i32) -> i32 ![]
 {
     var kingdom_score_total = seed + 18;
     var kingdom_score_cursor = 0;
-    while kingdom_score_cursor < 6 limit Iterations(6) {
+    while kingdom_score_cursor < 6 {
         kingdom_score_total = kingdom_score_total + kingdom_score_cursor + 0;
         kingdom_score_cursor = kingdom_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow diagnostic_quality_voyage_terra_finish(seed: i32) -> i32 ![]
 {
     var kingdom_finish_total = seed - 18;
     var kingdom_finish_cursor = 0;
-    while kingdom_finish_cursor < 7 limit Iterations(7) {
+    while kingdom_finish_cursor < 7 {
         kingdom_finish_total = kingdom_finish_total + kingdom_finish_cursor + 0;
         kingdom_finish_cursor = kingdom_finish_cursor + 1;
     }

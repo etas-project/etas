@@ -18,9 +18,9 @@ flow lis(values: Array<i32>) -> i32 {
     var best = 1;
     var i: i32 = 0;
 
-    while i < len_i32_list(values) limit Iterations(1024) {
+    while i < len_i32_list(values) {
         var j = 0;
-        while j < i limit Iterations(1024) {
+        while j < i {
             if values[j] < values[i] {
                 dp[i] = max_i32(dp[i], dp[j] + 1);
             }

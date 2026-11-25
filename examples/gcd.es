@@ -8,7 +8,7 @@ flow gcd(a0: i32, b0: i32) -> i32 {
     var a = a0;
     var b = b0;
 
-    while b != 0 limit Iterations(32) {
+    while b != 0 {
         let remainder = a % b;
         a = b;
         b = remainder;

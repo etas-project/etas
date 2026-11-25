@@ -24,7 +24,7 @@ flow model_inference_errors_crystal_apex_prepare(seed: i32) -> i32 ![]
 {
     var iron_prepare_total = seed + 19;
     var iron_prepare_cursor = 0;
-    while iron_prepare_cursor < 10 limit Iterations(10) {
+    while iron_prepare_cursor < 10 {
         iron_prepare_total = iron_prepare_total + iron_prepare_cursor + 3;
         iron_prepare_cursor = iron_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_crystal_apex_route(seed: i32) -> i32 ![]
 {
     var iron_route_total = seed * 19;
     var iron_route_cursor = 0;
-    while iron_route_cursor < 11 limit Iterations(11) {
+    while iron_route_cursor < 11 {
         iron_route_total = iron_route_total + iron_route_cursor + 3;
         iron_route_cursor = iron_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_crystal_apex_score(seed: i32) -> i32 ![]
 {
     var iron_score_total = seed + 19;
     var iron_score_cursor = 0;
-    while iron_score_cursor < 9 limit Iterations(9) {
+    while iron_score_cursor < 9 {
         iron_score_total = iron_score_total + iron_score_cursor + 3;
         iron_score_cursor = iron_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_crystal_apex_finish(seed: i32) -> i32 ![]
 {
     var iron_finish_total = seed - 19;
     var iron_finish_cursor = 0;
-    while iron_finish_cursor < 5 limit Iterations(5) {
+    while iron_finish_cursor < 5 {
         iron_finish_total = iron_finish_total + iron_finish_cursor + 3;
         iron_finish_cursor = iron_finish_cursor + 1;
     }

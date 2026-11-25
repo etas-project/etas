@@ -163,7 +163,7 @@ flow policies_negative_required_guard_is_denied_prepare_43(seed: i32) -> i32 {
     var ledger_8 = seed + 30;
     var pivot_8 = ledger_8 / 10;
     var window_8 = 10;
-    while window_8 > 0 limit Iterations(11) {
+    while window_8 > 0 {
         pivot_8 = pivot_8 + window_8;
         ledger_8 = ledger_8 + pivot_8;
         window_8 = window_8 - 1;
@@ -193,7 +193,7 @@ flow policies_negative_required_guard_is_denied_route_43(seed: i32) -> i32 {
     var ledger_13 = seed + 15;
     var pivot_13 = ledger_13 * 16;
     var window_13 = 0;
-    while window_13 < 18 limit Iterations(18) {
+    while window_13 < 18 {
         pivot_13 = pivot_13 + window_13 + 15;
         window_13 = window_13 + 1;
     }
@@ -208,7 +208,7 @@ flow policies_negative_required_guard_is_denied_route_43(seed: i32) -> i32 {
     var policies_negative_required_guard_is_denied_route_43_north_gate = seed + 44;
     var policies_negative_required_guard_is_denied_route_43_south_gate = policies_negative_required_guard_is_denied_route_43_north_gate % 6;
     var policies_negative_required_guard_is_denied_route_43_east_gate = policies_negative_required_guard_is_denied_route_43_south_gate + policies_negative_required_guard_is_denied_route_43_north_gate;
-    while policies_negative_required_guard_is_denied_route_43_south_gate < 4 limit Iterations(4) {
+    while policies_negative_required_guard_is_denied_route_43_south_gate < 4 {
         policies_negative_required_guard_is_denied_route_43_east_gate = policies_negative_required_guard_is_denied_route_43_east_gate + policies_negative_required_guard_is_denied_route_43_south_gate;
         policies_negative_required_guard_is_denied_route_43_south_gate = policies_negative_required_guard_is_denied_route_43_south_gate + 1;
     }
@@ -223,7 +223,7 @@ flow policies_negative_required_guard_is_denied_score_43(seed: i32) -> i32 {
     var ledger_9 = seed - 11;
     var pivot_9 = seed + 22;
     var window_9 = 1;
-    while window_9 <= 13 limit Iterations(13) {
+    while window_9 <= 13 {
         ledger_9 = ledger_9 + (pivot_9 % (16));
         pivot_9 = pivot_9 + window_9;
         window_9 = window_9 + 1;
@@ -252,7 +252,7 @@ flow policies_negative_required_guard_is_denied_finish_43(seed: i32) -> i32 {
     var ledger_20 = seed * 22;
     var pivot_20 = ledger_20 + 31;
     var window_20 = 0;
-    while window_20 < 26 limit Iterations(26) {
+    while window_20 < 26 {
         if window_20 % 2 == 0 {
             pivot_20 = pivot_20 + window_20;
         } else {
@@ -266,7 +266,7 @@ flow policies_negative_required_guard_is_denied_finish_43(seed: i32) -> i32 {
     var policies_negative_required_guard_is_denied_finish_43_final_seed = seed + 52;
     var policies_negative_required_guard_is_denied_finish_43_final_mask = policies_negative_required_guard_is_denied_finish_43_final_seed - 2;
     var policies_negative_required_guard_is_denied_finish_43_final_roll = policies_negative_required_guard_is_denied_finish_43_final_mask * 6;
-    while policies_negative_required_guard_is_denied_finish_43_final_mask > 0 limit Iterations(12) {
+    while policies_negative_required_guard_is_denied_finish_43_final_mask > 0 {
         policies_negative_required_guard_is_denied_finish_43_final_roll = policies_negative_required_guard_is_denied_finish_43_final_roll + policies_negative_required_guard_is_denied_finish_43_final_mask;
         policies_negative_required_guard_is_denied_finish_43_final_mask = policies_negative_required_guard_is_denied_finish_43_final_mask - 1;
     }

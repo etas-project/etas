@@ -23,7 +23,7 @@ flow command_sandbox_forge_forge_prepare(seed: i32) -> i32 ![]
 {
     var xenon_prepare_total = seed + 21;
     var xenon_prepare_cursor = 0;
-    while xenon_prepare_cursor < 9 limit Iterations(9) {
+    while xenon_prepare_cursor < 9 {
         xenon_prepare_total = xenon_prepare_total + xenon_prepare_cursor + 0;
         xenon_prepare_cursor = xenon_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_forge_forge_route(seed: i32) -> i32 ![]
 {
     var xenon_route_total = seed * 21;
     var xenon_route_cursor = 0;
-    while xenon_route_cursor < 9 limit Iterations(9) {
+    while xenon_route_cursor < 9 {
         xenon_route_total = xenon_route_total + xenon_route_cursor + 0;
         xenon_route_cursor = xenon_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_forge_forge_score(seed: i32) -> i32 ![]
 {
     var xenon_score_total = seed + 21;
     var xenon_score_cursor = 0;
-    while xenon_score_cursor < 6 limit Iterations(6) {
+    while xenon_score_cursor < 6 {
         xenon_score_total = xenon_score_total + xenon_score_cursor + 0;
         xenon_score_cursor = xenon_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_forge_forge_finish(seed: i32) -> i32 ![]
 {
     var xenon_finish_total = seed - 21;
     var xenon_finish_cursor = 0;
-    while xenon_finish_cursor < 5 limit Iterations(5) {
+    while xenon_finish_cursor < 5 {
         xenon_finish_total = xenon_finish_total + xenon_finish_cursor + 0;
         xenon_finish_cursor = xenon_finish_cursor + 1;
     }

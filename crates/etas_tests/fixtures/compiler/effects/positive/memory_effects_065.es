@@ -24,7 +24,7 @@ flow memory_effects_orbit_orbit_prepare(seed: i32) -> i32 ![]
 {
     var lantern_prepare_total = seed + 11;
     var lantern_prepare_cursor = 0;
-    while lantern_prepare_cursor < 8 limit Iterations(8) {
+    while lantern_prepare_cursor < 8 {
         lantern_prepare_total = lantern_prepare_total + lantern_prepare_cursor + 2;
         lantern_prepare_cursor = lantern_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_effects_orbit_orbit_route(seed: i32) -> i32 ![]
 {
     var lantern_route_total = seed * 11;
     var lantern_route_cursor = 0;
-    while lantern_route_cursor < 12 limit Iterations(12) {
+    while lantern_route_cursor < 12 {
         lantern_route_total = lantern_route_total + lantern_route_cursor + 2;
         lantern_route_cursor = lantern_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_effects_orbit_orbit_score(seed: i32) -> i32 ![]
 {
     var lantern_score_total = seed + 11;
     var lantern_score_cursor = 0;
-    while lantern_score_cursor < 8 limit Iterations(8) {
+    while lantern_score_cursor < 8 {
         lantern_score_total = lantern_score_total + lantern_score_cursor + 2;
         lantern_score_cursor = lantern_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_effects_orbit_orbit_finish(seed: i32) -> i32 ![]
 {
     var lantern_finish_total = seed - 11;
     var lantern_finish_cursor = 0;
-    while lantern_finish_cursor < 6 limit Iterations(6) {
+    while lantern_finish_cursor < 6 {
         lantern_finish_total = lantern_finish_total + lantern_finish_cursor + 2;
         lantern_finish_cursor = lantern_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow row_contract_delta_delta_prepare(seed: i32) -> i32 ![]
 {
     var yarrow_prepare_total = seed + 6;
     var yarrow_prepare_cursor = 0;
-    while yarrow_prepare_cursor < 11 limit Iterations(11) {
+    while yarrow_prepare_cursor < 11 {
         yarrow_prepare_total = yarrow_prepare_total + yarrow_prepare_cursor + 3;
         yarrow_prepare_cursor = yarrow_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_delta_delta_route(seed: i32) -> i32 ![]
 {
     var yarrow_route_total = seed * 6;
     var yarrow_route_cursor = 0;
-    while yarrow_route_cursor < 10 limit Iterations(10) {
+    while yarrow_route_cursor < 10 {
         yarrow_route_total = yarrow_route_total + yarrow_route_cursor + 3;
         yarrow_route_cursor = yarrow_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_delta_delta_score(seed: i32) -> i32 ![]
 {
     var yarrow_score_total = seed + 6;
     var yarrow_score_cursor = 0;
-    while yarrow_score_cursor < 9 limit Iterations(9) {
+    while yarrow_score_cursor < 9 {
         yarrow_score_total = yarrow_score_total + yarrow_score_cursor + 3;
         yarrow_score_cursor = yarrow_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_delta_delta_finish(seed: i32) -> i32 ![]
 {
     var yarrow_finish_total = seed - 6;
     var yarrow_finish_cursor = 0;
-    while yarrow_finish_cursor < 8 limit Iterations(8) {
+    while yarrow_finish_cursor < 8 {
         yarrow_finish_total = yarrow_finish_total + yarrow_finish_cursor + 3;
         yarrow_finish_cursor = yarrow_finish_cursor + 1;
     }

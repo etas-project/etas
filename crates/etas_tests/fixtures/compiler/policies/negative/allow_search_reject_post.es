@@ -162,7 +162,7 @@ flow policies_negative_allow_search_reject_post_prepare_31(seed: i32) -> i32 {
     var ledger_5 = seed + 21;
     var pivot_5 = ledger_5 / 7;
     var window_5 = 7;
-    while window_5 > 0 limit Iterations(8) {
+    while window_5 > 0 {
         pivot_5 = pivot_5 + window_5;
         ledger_5 = ledger_5 + pivot_5;
         window_5 = window_5 - 1;
@@ -192,7 +192,7 @@ flow policies_negative_allow_search_reject_post_route_31(seed: i32) -> i32 {
     var ledger_12 = seed + 14;
     var pivot_12 = ledger_12 * 15;
     var window_12 = 0;
-    while window_12 < 17 limit Iterations(17) {
+    while window_12 < 17 {
         pivot_12 = pivot_12 + window_12 + 14;
         window_12 = window_12 + 1;
     }
@@ -207,7 +207,7 @@ flow policies_negative_allow_search_reject_post_route_31(seed: i32) -> i32 {
     var policies_negative_allow_search_reject_post_route_31_north_gate = seed + 32;
     var policies_negative_allow_search_reject_post_route_31_south_gate = policies_negative_allow_search_reject_post_route_31_north_gate % 8;
     var policies_negative_allow_search_reject_post_route_31_east_gate = policies_negative_allow_search_reject_post_route_31_south_gate + policies_negative_allow_search_reject_post_route_31_north_gate;
-    while policies_negative_allow_search_reject_post_route_31_south_gate < 4 limit Iterations(4) {
+    while policies_negative_allow_search_reject_post_route_31_south_gate < 4 {
         policies_negative_allow_search_reject_post_route_31_east_gate = policies_negative_allow_search_reject_post_route_31_east_gate + policies_negative_allow_search_reject_post_route_31_south_gate;
         policies_negative_allow_search_reject_post_route_31_south_gate = policies_negative_allow_search_reject_post_route_31_south_gate + 1;
     }
@@ -222,7 +222,7 @@ flow policies_negative_allow_search_reject_post_score_31(seed: i32) -> i32 {
     var ledger_10 = seed - 12;
     var pivot_10 = seed + 24;
     var window_10 = 1;
-    while window_10 <= 14 limit Iterations(14) {
+    while window_10 <= 14 {
         ledger_10 = ledger_10 + (pivot_10 % (17));
         pivot_10 = pivot_10 + window_10;
         window_10 = window_10 + 1;
@@ -251,7 +251,7 @@ flow policies_negative_allow_search_reject_post_finish_31(seed: i32) -> i32 {
     var ledger_8 = seed * 10;
     var pivot_8 = ledger_8 + 19;
     var window_8 = 0;
-    while window_8 < 14 limit Iterations(14) {
+    while window_8 < 14 {
         if window_8 % 2 == 0 {
             pivot_8 = pivot_8 + window_8;
         } else {
@@ -265,7 +265,7 @@ flow policies_negative_allow_search_reject_post_finish_31(seed: i32) -> i32 {
     var policies_negative_allow_search_reject_post_finish_31_final_seed = seed + 40;
     var policies_negative_allow_search_reject_post_finish_31_final_mask = policies_negative_allow_search_reject_post_finish_31_final_seed - 2;
     var policies_negative_allow_search_reject_post_finish_31_final_roll = policies_negative_allow_search_reject_post_finish_31_final_mask * 6;
-    while policies_negative_allow_search_reject_post_finish_31_final_mask > 0 limit Iterations(12) {
+    while policies_negative_allow_search_reject_post_finish_31_final_mask > 0 {
         policies_negative_allow_search_reject_post_finish_31_final_roll = policies_negative_allow_search_reject_post_finish_31_final_roll + policies_negative_allow_search_reject_post_finish_31_final_mask;
         policies_negative_allow_search_reject_post_finish_31_final_mask = policies_negative_allow_search_reject_post_finish_31_final_mask - 1;
     }

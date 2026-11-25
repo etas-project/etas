@@ -24,7 +24,7 @@ flow checked_index_capture_quartz_quartz_prepare(seed: i32) -> i32 ![]
 {
     var packet_prepare_total = seed + 19;
     var packet_prepare_cursor = 0;
-    while packet_prepare_cursor < 9 limit Iterations(9) {
+    while packet_prepare_cursor < 9 {
         packet_prepare_total = packet_prepare_total + packet_prepare_cursor + 2;
         packet_prepare_cursor = packet_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow checked_index_capture_quartz_quartz_route(seed: i32) -> i32 ![]
 {
     var packet_route_total = seed * 19;
     var packet_route_cursor = 0;
-    while packet_route_cursor < 11 limit Iterations(11) {
+    while packet_route_cursor < 11 {
         packet_route_total = packet_route_total + packet_route_cursor + 2;
         packet_route_cursor = packet_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow checked_index_capture_quartz_quartz_score(seed: i32) -> i32 ![]
 {
     var packet_score_total = seed + 19;
     var packet_score_cursor = 0;
-    while packet_score_cursor < 8 limit Iterations(8) {
+    while packet_score_cursor < 8 {
         packet_score_total = packet_score_total + packet_score_cursor + 2;
         packet_score_cursor = packet_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow checked_index_capture_quartz_quartz_finish(seed: i32) -> i32 ![]
 {
     var packet_finish_total = seed - 19;
     var packet_finish_cursor = 0;
-    while packet_finish_cursor < 5 limit Iterations(5) {
+    while packet_finish_cursor < 5 {
         packet_finish_total = packet_finish_total + packet_finish_cursor + 2;
         packet_finish_cursor = packet_finish_cursor + 1;
     }

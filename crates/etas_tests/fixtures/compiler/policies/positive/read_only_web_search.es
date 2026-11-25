@@ -158,7 +158,7 @@ flow effects_positive_flow_value_latent_effect_prepare_21(seed: i32) -> i32 {
     var ledger_4 = seed - 6;
     var pivot_4 = seed + 12;
     var window_4 = 1;
-    while window_4 <= 8 limit Iterations(8) {
+    while window_4 <= 8 {
         ledger_4 = ledger_4 + (pivot_4 % (11));
         pivot_4 = pivot_4 + window_4;
         window_4 = window_4 + 1;
@@ -188,7 +188,7 @@ flow effects_positive_flow_value_latent_effect_route_21(seed: i32) -> i32 {
     var ledger_13 = seed * 15;
     var pivot_13 = ledger_13 + 24;
     var window_13 = 0;
-    while window_13 < 19 limit Iterations(19) {
+    while window_13 < 19 {
         if window_13 % 2 == 0 {
             pivot_13 = pivot_13 + window_13;
         } else {
@@ -202,7 +202,7 @@ flow effects_positive_flow_value_latent_effect_route_21(seed: i32) -> i32 {
     var effects_positive_flow_value_latent_effect_route_21_north_gate = seed + 22;
     var effects_positive_flow_value_latent_effect_route_21_south_gate = effects_positive_flow_value_latent_effect_route_21_north_gate % 5;
     var effects_positive_flow_value_latent_effect_route_21_east_gate = effects_positive_flow_value_latent_effect_route_21_south_gate + effects_positive_flow_value_latent_effect_route_21_north_gate;
-    while effects_positive_flow_value_latent_effect_route_21_south_gate < 4 limit Iterations(4) {
+    while effects_positive_flow_value_latent_effect_route_21_south_gate < 4 {
         effects_positive_flow_value_latent_effect_route_21_east_gate = effects_positive_flow_value_latent_effect_route_21_east_gate + effects_positive_flow_value_latent_effect_route_21_south_gate;
         effects_positive_flow_value_latent_effect_route_21_south_gate = effects_positive_flow_value_latent_effect_route_21_south_gate + 1;
     }
@@ -217,7 +217,7 @@ flow effects_positive_flow_value_latent_effect_score_21(seed: i32) -> i32 {
     var ledger_13 = seed + 45;
     var pivot_13 = ledger_13 / 15;
     var window_13 = 15;
-    while window_13 > 0 limit Iterations(16) {
+    while window_13 > 0 {
         pivot_13 = pivot_13 + window_13;
         ledger_13 = ledger_13 + pivot_13;
         window_13 = window_13 - 1;
@@ -246,7 +246,7 @@ flow effects_positive_flow_value_latent_effect_finish_21(seed: i32) -> i32 {
     var ledger_13 = seed + 15;
     var pivot_13 = ledger_13 * 16;
     var window_13 = 0;
-    while window_13 < 18 limit Iterations(18) {
+    while window_13 < 18 {
         pivot_13 = pivot_13 + window_13 + 15;
         window_13 = window_13 + 1;
     }
@@ -261,7 +261,7 @@ flow effects_positive_flow_value_latent_effect_finish_21(seed: i32) -> i32 {
     var effects_positive_flow_value_latent_effect_finish_21_final_seed = seed + 30;
     var effects_positive_flow_value_latent_effect_finish_21_final_mask = effects_positive_flow_value_latent_effect_finish_21_final_seed - 4;
     var effects_positive_flow_value_latent_effect_finish_21_final_roll = effects_positive_flow_value_latent_effect_finish_21_final_mask * 4;
-    while effects_positive_flow_value_latent_effect_finish_21_final_mask > 0 limit Iterations(12) {
+    while effects_positive_flow_value_latent_effect_finish_21_final_mask > 0 {
         effects_positive_flow_value_latent_effect_finish_21_final_roll = effects_positive_flow_value_latent_effect_finish_21_final_roll + effects_positive_flow_value_latent_effect_finish_21_final_mask;
         effects_positive_flow_value_latent_effect_finish_21_final_mask = effects_positive_flow_value_latent_effect_finish_21_final_mask - 1;
     }

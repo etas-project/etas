@@ -29,7 +29,7 @@ flow handler_errors_islet_grove_prepare(seed: i32) -> i32 ![]
 {
     var ember_prepare_total = seed + 14;
     var ember_prepare_cursor = 0;
-    while ember_prepare_cursor < 12 limit Iterations(12) {
+    while ember_prepare_cursor < 12 {
         ember_prepare_total = ember_prepare_total + ember_prepare_cursor + 2;
         ember_prepare_cursor = ember_prepare_cursor + 1;
     }
@@ -51,7 +51,7 @@ flow handler_errors_islet_grove_route(seed: i32) -> i32 ![]
 {
     var ember_route_total = seed * 14;
     var ember_route_cursor = 0;
-    while ember_route_cursor < 10 limit Iterations(10) {
+    while ember_route_cursor < 10 {
         ember_route_total = ember_route_total + ember_route_cursor + 2;
         ember_route_cursor = ember_route_cursor + 1;
     }
@@ -73,7 +73,7 @@ flow handler_errors_islet_grove_score(seed: i32) -> i32 ![]
 {
     var ember_score_total = seed + 14;
     var ember_score_cursor = 0;
-    while ember_score_cursor < 8 limit Iterations(8) {
+    while ember_score_cursor < 8 {
         ember_score_total = ember_score_total + ember_score_cursor + 2;
         ember_score_cursor = ember_score_cursor + 1;
     }
@@ -95,7 +95,7 @@ flow handler_errors_islet_grove_finish(seed: i32) -> i32 ![]
 {
     var ember_finish_total = seed - 14;
     var ember_finish_cursor = 0;
-    while ember_finish_cursor < 10 limit Iterations(10) {
+    while ember_finish_cursor < 10 {
         ember_finish_total = ember_finish_total + ember_finish_cursor + 2;
         ember_finish_cursor = ember_finish_cursor + 1;
     }

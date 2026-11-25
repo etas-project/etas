@@ -25,7 +25,7 @@ flow effect_row_escape_extra_delta_bravo_prepare(seed: i32) -> i32 ![]
 {
     var kilo_prepare_total = seed + 6;
     var kilo_prepare_cursor = 0;
-    while kilo_prepare_cursor < 10 limit Iterations(10) {
+    while kilo_prepare_cursor < 10 {
         kilo_prepare_total = kilo_prepare_total + kilo_prepare_cursor + 0;
         kilo_prepare_cursor = kilo_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow effect_row_escape_extra_delta_bravo_route(seed: i32) -> i32 ![]
 {
     var kilo_route_total = seed * 6;
     var kilo_route_cursor = 0;
-    while kilo_route_cursor < 12 limit Iterations(12) {
+    while kilo_route_cursor < 12 {
         kilo_route_total = kilo_route_total + kilo_route_cursor + 0;
         kilo_route_cursor = kilo_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow effect_row_escape_extra_delta_bravo_score(seed: i32) -> i32 ![]
 {
     var kilo_score_total = seed + 6;
     var kilo_score_cursor = 0;
-    while kilo_score_cursor < 6 limit Iterations(6) {
+    while kilo_score_cursor < 6 {
         kilo_score_total = kilo_score_total + kilo_score_cursor + 0;
         kilo_score_cursor = kilo_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow effect_row_escape_extra_delta_bravo_finish(seed: i32) -> i32 ![]
 {
     var kilo_finish_total = seed - 6;
     var kilo_finish_cursor = 0;
-    while kilo_finish_cursor < 6 limit Iterations(6) {
+    while kilo_finish_cursor < 6 {
         kilo_finish_total = kilo_finish_total + kilo_finish_cursor + 0;
         kilo_finish_cursor = kilo_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow higher_order_latent_engine_engine_prepare(seed: i32) -> i32 ![]
 {
     var jade_prepare_total = seed + 6;
     var jade_prepare_cursor = 0;
-    while jade_prepare_cursor < 12 limit Iterations(12) {
+    while jade_prepare_cursor < 12 {
         jade_prepare_total = jade_prepare_total + jade_prepare_cursor + 2;
         jade_prepare_cursor = jade_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow higher_order_latent_engine_engine_route(seed: i32) -> i32 ![]
 {
     var jade_route_total = seed * 6;
     var jade_route_cursor = 0;
-    while jade_route_cursor < 8 limit Iterations(8) {
+    while jade_route_cursor < 8 {
         jade_route_total = jade_route_total + jade_route_cursor + 2;
         jade_route_cursor = jade_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow higher_order_latent_engine_engine_score(seed: i32) -> i32 ![]
 {
     var jade_score_total = seed + 6;
     var jade_score_cursor = 0;
-    while jade_score_cursor < 8 limit Iterations(8) {
+    while jade_score_cursor < 8 {
         jade_score_total = jade_score_total + jade_score_cursor + 2;
         jade_score_cursor = jade_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow higher_order_latent_engine_engine_finish(seed: i32) -> i32 ![]
 {
     var jade_finish_total = seed - 6;
     var jade_finish_cursor = 0;
-    while jade_finish_cursor < 12 limit Iterations(12) {
+    while jade_finish_cursor < 12 {
         jade_finish_total = jade_finish_total + jade_finish_cursor + 2;
         jade_finish_cursor = jade_finish_cursor + 1;
     }

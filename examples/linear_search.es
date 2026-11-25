@@ -7,7 +7,7 @@ import std.text.from_i32;
 flow linear_search(values: Array<i32>, target: i32) -> i32 {
     var index: i32 = 0;
 
-    while index < 5 limit Iterations(16) {
+    while index < 5 {
         if values[index] == target {
             return index;
         }

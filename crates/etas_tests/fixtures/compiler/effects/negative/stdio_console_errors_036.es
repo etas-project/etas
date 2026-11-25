@@ -25,7 +25,7 @@ flow stdio_console_errors_pulse_north_prepare(seed: i32) -> i32 ![]
 {
     var engine_prepare_total = seed + 21;
     var engine_prepare_cursor = 0;
-    while engine_prepare_cursor < 9 limit Iterations(9) {
+    while engine_prepare_cursor < 9 {
         engine_prepare_total = engine_prepare_total + engine_prepare_cursor + 2;
         engine_prepare_cursor = engine_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_pulse_north_route(seed: i32) -> i32 ![]
 {
     var engine_route_total = seed * 21;
     var engine_route_cursor = 0;
-    while engine_route_cursor < 11 limit Iterations(11) {
+    while engine_route_cursor < 11 {
         engine_route_total = engine_route_total + engine_route_cursor + 2;
         engine_route_cursor = engine_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_pulse_north_score(seed: i32) -> i32 ![]
 {
     var engine_score_total = seed + 21;
     var engine_score_cursor = 0;
-    while engine_score_cursor < 8 limit Iterations(8) {
+    while engine_score_cursor < 8 {
         engine_score_total = engine_score_total + engine_score_cursor + 2;
         engine_score_cursor = engine_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_pulse_north_finish(seed: i32) -> i32 ![]
 {
     var engine_finish_total = seed - 21;
     var engine_finish_cursor = 0;
-    while engine_finish_cursor < 9 limit Iterations(9) {
+    while engine_finish_cursor < 9 {
         engine_finish_total = engine_finish_total + engine_finish_cursor + 2;
         engine_finish_cursor = engine_finish_cursor + 1;
     }

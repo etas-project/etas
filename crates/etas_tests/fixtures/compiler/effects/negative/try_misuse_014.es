@@ -23,7 +23,7 @@ flow try_misuse_summit_quasar_prepare(seed: i32) -> i32 ![]
 {
     var yonder_prepare_total = seed + 18;
     var yonder_prepare_cursor = 0;
-    while yonder_prepare_cursor < 12 limit Iterations(12) {
+    while yonder_prepare_cursor < 12 {
         yonder_prepare_total = yonder_prepare_total + yonder_prepare_cursor + 1;
         yonder_prepare_cursor = yonder_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow try_misuse_summit_quasar_route(seed: i32) -> i32 ![]
 {
     var yonder_route_total = seed * 18;
     var yonder_route_cursor = 0;
-    while yonder_route_cursor < 7 limit Iterations(7) {
+    while yonder_route_cursor < 7 {
         yonder_route_total = yonder_route_total + yonder_route_cursor + 1;
         yonder_route_cursor = yonder_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow try_misuse_summit_quasar_score(seed: i32) -> i32 ![]
 {
     var yonder_score_total = seed + 18;
     var yonder_score_cursor = 0;
-    while yonder_score_cursor < 7 limit Iterations(7) {
+    while yonder_score_cursor < 7 {
         yonder_score_total = yonder_score_total + yonder_score_cursor + 1;
         yonder_score_cursor = yonder_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow try_misuse_summit_quasar_finish(seed: i32) -> i32 ![]
 {
     var yonder_finish_total = seed - 18;
     var yonder_finish_cursor = 0;
-    while yonder_finish_cursor < 11 limit Iterations(11) {
+    while yonder_finish_cursor < 11 {
         yonder_finish_total = yonder_finish_total + yonder_finish_cursor + 1;
         yonder_finish_cursor = yonder_finish_cursor + 1;
     }

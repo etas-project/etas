@@ -24,7 +24,7 @@ flow command_sandbox_errors_iron_garden_prepare(seed: i32) -> i32 ![]
 {
     var zircon_prepare_total = seed + 19;
     var zircon_prepare_cursor = 0;
-    while zircon_prepare_cursor < 11 limit Iterations(11) {
+    while zircon_prepare_cursor < 11 {
         zircon_prepare_total = zircon_prepare_total + zircon_prepare_cursor + 5;
         zircon_prepare_cursor = zircon_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow command_sandbox_errors_iron_garden_route(seed: i32) -> i32 ![]
 {
     var zircon_route_total = seed * 19;
     var zircon_route_cursor = 0;
-    while zircon_route_cursor < 10 limit Iterations(10) {
+    while zircon_route_cursor < 10 {
         zircon_route_total = zircon_route_total + zircon_route_cursor + 5;
         zircon_route_cursor = zircon_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow command_sandbox_errors_iron_garden_score(seed: i32) -> i32 ![]
 {
     var zircon_score_total = seed + 19;
     var zircon_score_cursor = 0;
-    while zircon_score_cursor < 11 limit Iterations(11) {
+    while zircon_score_cursor < 11 {
         zircon_score_total = zircon_score_total + zircon_score_cursor + 5;
         zircon_score_cursor = zircon_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow command_sandbox_errors_iron_garden_finish(seed: i32) -> i32 ![]
 {
     var zircon_finish_total = seed - 19;
     var zircon_finish_cursor = 0;
-    while zircon_finish_cursor < 10 limit Iterations(10) {
+    while zircon_finish_cursor < 10 {
         zircon_finish_total = zircon_finish_total + zircon_finish_cursor + 5;
         zircon_finish_cursor = zircon_finish_cursor + 1;
     }

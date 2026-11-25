@@ -22,7 +22,7 @@ flow project_support_golf_haven_prepare(seed: i32) -> i32 ![]
 {
     var garden_prepare_total = seed + 19;
     var garden_prepare_cursor = 0;
-    while garden_prepare_cursor < 9 limit Iterations(9) {
+    while garden_prepare_cursor < 9 {
         garden_prepare_total = garden_prepare_total + garden_prepare_cursor + 3;
         garden_prepare_cursor = garden_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow project_support_golf_haven_route(seed: i32) -> i32 ![]
 {
     var garden_route_total = seed * 19;
     var garden_route_cursor = 0;
-    while garden_route_cursor < 9 limit Iterations(9) {
+    while garden_route_cursor < 9 {
         garden_route_total = garden_route_total + garden_route_cursor + 3;
         garden_route_cursor = garden_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow project_support_golf_haven_score(seed: i32) -> i32 ![]
 {
     var garden_score_total = seed + 19;
     var garden_score_cursor = 0;
-    while garden_score_cursor < 9 limit Iterations(9) {
+    while garden_score_cursor < 9 {
         garden_score_total = garden_score_total + garden_score_cursor + 3;
         garden_score_cursor = garden_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow project_support_golf_haven_finish(seed: i32) -> i32 ![]
 {
     var garden_finish_total = seed - 19;
     var garden_finish_cursor = 0;
-    while garden_finish_cursor < 11 limit Iterations(11) {
+    while garden_finish_cursor < 11 {
         garden_finish_total = garden_finish_total + garden_finish_cursor + 3;
         garden_finish_cursor = garden_finish_cursor + 1;
     }

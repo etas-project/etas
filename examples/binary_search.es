@@ -8,7 +8,7 @@ flow binary_search(values: Array<i32>, target: i32) -> i32 {
     var low: i32 = 0;
     var high: i32 = 4;
 
-    while low <= high limit Iterations(16) {
+    while low <= high {
         let mid = low + ((high - low) / 2);
         let probe = values[mid];
 

@@ -23,7 +23,7 @@ flow row_contract_foxtrot_foxtrot_prepare(seed: i32) -> i32 ![]
 {
     var meteor_prepare_total = seed + 8;
     var meteor_prepare_cursor = 0;
-    while meteor_prepare_cursor < 8 limit Iterations(8) {
+    while meteor_prepare_cursor < 8 {
         meteor_prepare_total = meteor_prepare_total + meteor_prepare_cursor + 5;
         meteor_prepare_cursor = meteor_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_foxtrot_foxtrot_route(seed: i32) -> i32 ![]
 {
     var meteor_route_total = seed * 8;
     var meteor_route_cursor = 0;
-    while meteor_route_cursor < 12 limit Iterations(12) {
+    while meteor_route_cursor < 12 {
         meteor_route_total = meteor_route_total + meteor_route_cursor + 5;
         meteor_route_cursor = meteor_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_foxtrot_foxtrot_score(seed: i32) -> i32 ![]
 {
     var meteor_score_total = seed + 8;
     var meteor_score_cursor = 0;
-    while meteor_score_cursor < 11 limit Iterations(11) {
+    while meteor_score_cursor < 11 {
         meteor_score_total = meteor_score_total + meteor_score_cursor + 5;
         meteor_score_cursor = meteor_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_foxtrot_foxtrot_finish(seed: i32) -> i32 ![]
 {
     var meteor_finish_total = seed - 8;
     var meteor_finish_cursor = 0;
-    while meteor_finish_cursor < 10 limit Iterations(10) {
+    while meteor_finish_cursor < 10 {
         meteor_finish_total = meteor_finish_total + meteor_finish_cursor + 5;
         meteor_finish_cursor = meteor_finish_cursor + 1;
     }

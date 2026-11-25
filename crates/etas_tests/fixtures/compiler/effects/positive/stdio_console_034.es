@@ -23,7 +23,7 @@ flow stdio_console_ion_ion_prepare(seed: i32) -> i32 ![]
 {
     var schema_prepare_total = seed + 18;
     var schema_prepare_cursor = 0;
-    while schema_prepare_cursor < 12 limit Iterations(12) {
+    while schema_prepare_cursor < 12 {
         schema_prepare_total = schema_prepare_total + schema_prepare_cursor + 6;
         schema_prepare_cursor = schema_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_ion_ion_route(seed: i32) -> i32 ![]
 {
     var schema_route_total = seed * 18;
     var schema_route_cursor = 0;
-    while schema_route_cursor < 11 limit Iterations(11) {
+    while schema_route_cursor < 11 {
         schema_route_total = schema_route_total + schema_route_cursor + 6;
         schema_route_cursor = schema_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_ion_ion_score(seed: i32) -> i32 ![]
 {
     var schema_score_total = seed + 18;
     var schema_score_cursor = 0;
-    while schema_score_cursor < 12 limit Iterations(12) {
+    while schema_score_cursor < 12 {
         schema_score_total = schema_score_total + schema_score_cursor + 6;
         schema_score_cursor = schema_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_ion_ion_finish(seed: i32) -> i32 ![]
 {
     var schema_finish_total = seed - 18;
     var schema_finish_cursor = 0;
-    while schema_finish_cursor < 7 limit Iterations(7) {
+    while schema_finish_cursor < 7 {
         schema_finish_total = schema_finish_total + schema_finish_cursor + 6;
         schema_finish_cursor = schema_finish_cursor + 1;
     }

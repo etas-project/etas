@@ -169,6 +169,7 @@ fn public_metadata_to_metadata(
     metadata: &PackagePublicMetadata,
 ) -> Result<etas_package_metadata::PublicMetadata, PackageError> {
     Ok(etas_package_metadata::PublicMetadata {
+        constructor_contracts: metadata.constructor_contracts.clone(),
         scoped_callbacks: metadata.scoped_callbacks.clone(),
         definition_origins: metadata.definition_origins.clone(),
         definition_descriptors: metadata.definition_descriptors.clone(),
@@ -1108,6 +1109,7 @@ fn effect_summary_to_metadata(
             })
             .transpose()?,
         behavior: summary.behavior.clone(),
+        callable_body: summary.callable_body.clone(),
         returned_callables: summary.returned_callables.clone(),
         item: summary.item.clone(),
         public_effects: effect_row_to_metadata(&summary.public_effects)?,
@@ -1126,6 +1128,15 @@ fn action_trace_to_metadata(
     trace: &PackageActionTraceMetadata,
 ) -> Result<etas_package_metadata::ActionTrace, PackageError> {
     Ok(match trace {
+        PackageActionTraceMetadata::Recursive { id, child } => {
+            etas_package_metadata::ActionTrace::Recursive {
+                id: *id,
+                body: child
+                    .as_ref()
+                    .map(|child| action_trace_to_metadata(child).map(Box::new))
+                    .transpose()?,
+            }
+        }
         PackageActionTraceMetadata::Empty => etas_package_metadata::ActionTrace::Empty,
         PackageActionTraceMetadata::Event { action, source } => {
             etas_package_metadata::ActionTrace::Event(etas_package_metadata::ActionTraceEvent {

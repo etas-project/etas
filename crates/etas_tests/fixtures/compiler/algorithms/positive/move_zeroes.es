@@ -9,7 +9,7 @@ flow move_zeroes(values: Array<i32>) -> Array<i32> {
     var write: usize = 0;
     var read: usize = 0;
 
-    while read < len(values) limit Iterations(1024) {
+    while read < len(values) {
         if values[read] != 0 {
             values[write] = values[read];
             write = write + 1;
@@ -17,7 +17,7 @@ flow move_zeroes(values: Array<i32>) -> Array<i32> {
         read = read + 1;
     }
 
-    while write < len(values) limit Iterations(1024) {
+    while write < len(values) {
         values[write] = 0;
         write = write + 1;
     }

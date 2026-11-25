@@ -18,7 +18,7 @@ flow max_subarray(values: Array<i32>) -> i32 {
     var current = values[0];
     var i: usize = 1;
 
-    while i < len(values) limit Iterations(4096) {
+    while i < len(values) {
         current = max_i32(values[i], current + values[i]);
         best = max_i32(best, current);
         i = i + 1;

@@ -8,9 +8,9 @@ import tests.compiler.support.algorithms.{abs, join_i32_list, len_i32_list, matr
 flow two_sum(values: Array<i32>, target: i32) -> Array<i32> {
     var i = 0;
 
-    while i < len_i32_list(values) limit Iterations(1024) {
+    while i < len_i32_list(values) {
         var j = i + 1;
-        while j < len_i32_list(values) limit Iterations(1024) {
+        while j < len_i32_list(values) {
             if values[i] + values[j] == target {
                 return [i, j];
             }

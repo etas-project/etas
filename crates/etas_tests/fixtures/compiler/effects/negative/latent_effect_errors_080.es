@@ -25,7 +25,7 @@ flow latent_effect_errors_keeper_isotope_prepare(seed: i32) -> i32 ![]
 {
     var pearl_prepare_total = seed + 8;
     var pearl_prepare_cursor = 0;
-    while pearl_prepare_cursor < 8 limit Iterations(8) {
+    while pearl_prepare_cursor < 8 {
         pearl_prepare_total = pearl_prepare_total + pearl_prepare_cursor + 4;
         pearl_prepare_cursor = pearl_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_keeper_isotope_route(seed: i32) -> i32 ![]
 {
     var pearl_route_total = seed * 8;
     var pearl_route_cursor = 0;
-    while pearl_route_cursor < 7 limit Iterations(7) {
+    while pearl_route_cursor < 7 {
         pearl_route_total = pearl_route_total + pearl_route_cursor + 4;
         pearl_route_cursor = pearl_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_keeper_isotope_score(seed: i32) -> i32 ![]
 {
     var pearl_score_total = seed + 8;
     var pearl_score_cursor = 0;
-    while pearl_score_cursor < 10 limit Iterations(10) {
+    while pearl_score_cursor < 10 {
         pearl_score_total = pearl_score_total + pearl_score_cursor + 4;
         pearl_score_cursor = pearl_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_keeper_isotope_finish(seed: i32) -> i32 ![]
 {
     var pearl_finish_total = seed - 8;
     var pearl_finish_cursor = 0;
-    while pearl_finish_cursor < 5 limit Iterations(5) {
+    while pearl_finish_cursor < 5 {
         pearl_finish_total = pearl_finish_total + pearl_finish_cursor + 4;
         pearl_finish_cursor = pearl_finish_cursor + 1;
     }

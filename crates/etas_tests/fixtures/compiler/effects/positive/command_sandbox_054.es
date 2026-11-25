@@ -23,7 +23,7 @@ flow command_sandbox_drift_drift_prepare(seed: i32) -> i32 ![]
 {
     var juliet_prepare_total = seed + 19;
     var juliet_prepare_cursor = 0;
-    while juliet_prepare_cursor < 12 limit Iterations(12) {
+    while juliet_prepare_cursor < 12 {
         juliet_prepare_total = juliet_prepare_total + juliet_prepare_cursor + 5;
         juliet_prepare_cursor = juliet_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow command_sandbox_drift_drift_route(seed: i32) -> i32 ![]
 {
     var juliet_route_total = seed * 19;
     var juliet_route_cursor = 0;
-    while juliet_route_cursor < 7 limit Iterations(7) {
+    while juliet_route_cursor < 7 {
         juliet_route_total = juliet_route_total + juliet_route_cursor + 5;
         juliet_route_cursor = juliet_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow command_sandbox_drift_drift_score(seed: i32) -> i32 ![]
 {
     var juliet_score_total = seed + 19;
     var juliet_score_cursor = 0;
-    while juliet_score_cursor < 11 limit Iterations(11) {
+    while juliet_score_cursor < 11 {
         juliet_score_total = juliet_score_total + juliet_score_cursor + 5;
         juliet_score_cursor = juliet_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow command_sandbox_drift_drift_finish(seed: i32) -> i32 ![]
 {
     var juliet_finish_total = seed - 19;
     var juliet_finish_cursor = 0;
-    while juliet_finish_cursor < 11 limit Iterations(11) {
+    while juliet_finish_cursor < 11 {
         juliet_finish_total = juliet_finish_total + juliet_finish_cursor + 5;
         juliet_finish_cursor = juliet_finish_cursor + 1;
     }

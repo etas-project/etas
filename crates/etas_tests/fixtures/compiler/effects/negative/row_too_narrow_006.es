@@ -23,7 +23,7 @@ flow row_too_narrow_kepler_ion_prepare(seed: i32) -> i32 ![]
 {
     var schema_prepare_total = seed + 10;
     var schema_prepare_cursor = 0;
-    while schema_prepare_cursor < 9 limit Iterations(9) {
+    while schema_prepare_cursor < 9 {
         schema_prepare_total = schema_prepare_total + schema_prepare_cursor + 0;
         schema_prepare_cursor = schema_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_too_narrow_kepler_ion_route(seed: i32) -> i32 ![]
 {
     var schema_route_total = seed * 10;
     var schema_route_cursor = 0;
-    while schema_route_cursor < 11 limit Iterations(11) {
+    while schema_route_cursor < 11 {
         schema_route_total = schema_route_total + schema_route_cursor + 0;
         schema_route_cursor = schema_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_too_narrow_kepler_ion_score(seed: i32) -> i32 ![]
 {
     var schema_score_total = seed + 10;
     var schema_score_cursor = 0;
-    while schema_score_cursor < 6 limit Iterations(6) {
+    while schema_score_cursor < 6 {
         schema_score_total = schema_score_total + schema_score_cursor + 0;
         schema_score_cursor = schema_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_too_narrow_kepler_ion_finish(seed: i32) -> i32 ![]
 {
     var schema_finish_total = seed - 10;
     var schema_finish_cursor = 0;
-    while schema_finish_cursor < 11 limit Iterations(11) {
+    while schema_finish_cursor < 11 {
         schema_finish_total = schema_finish_total + schema_finish_cursor + 0;
         schema_finish_cursor = schema_finish_cursor + 1;
     }

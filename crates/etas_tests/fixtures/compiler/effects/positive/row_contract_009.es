@@ -23,7 +23,7 @@ flow row_contract_juliet_juliet_prepare(seed: i32) -> i32 ![]
 {
     var pulse_prepare_total = seed + 12;
     var pulse_prepare_cursor = 0;
-    while pulse_prepare_cursor < 12 limit Iterations(12) {
+    while pulse_prepare_cursor < 12 {
         pulse_prepare_total = pulse_prepare_total + pulse_prepare_cursor + 2;
         pulse_prepare_cursor = pulse_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_juliet_juliet_route(seed: i32) -> i32 ![]
 {
     var pulse_route_total = seed * 12;
     var pulse_route_cursor = 0;
-    while pulse_route_cursor < 10 limit Iterations(10) {
+    while pulse_route_cursor < 10 {
         pulse_route_total = pulse_route_total + pulse_route_cursor + 2;
         pulse_route_cursor = pulse_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_juliet_juliet_score(seed: i32) -> i32 ![]
 {
     var pulse_score_total = seed + 12;
     var pulse_score_cursor = 0;
-    while pulse_score_cursor < 8 limit Iterations(8) {
+    while pulse_score_cursor < 8 {
         pulse_score_total = pulse_score_total + pulse_score_cursor + 2;
         pulse_score_cursor = pulse_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_juliet_juliet_finish(seed: i32) -> i32 ![]
 {
     var pulse_finish_total = seed - 12;
     var pulse_finish_cursor = 0;
-    while pulse_finish_cursor < 6 limit Iterations(6) {
+    while pulse_finish_cursor < 6 {
         pulse_finish_total = pulse_finish_total + pulse_finish_cursor + 2;
         pulse_finish_cursor = pulse_finish_cursor + 1;
     }

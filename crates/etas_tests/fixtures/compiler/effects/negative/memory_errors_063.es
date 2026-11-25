@@ -24,7 +24,7 @@ flow memory_errors_saffron_quantum_prepare(seed: i32) -> i32 ![]
 {
     var umber_prepare_total = seed + 10;
     var umber_prepare_cursor = 0;
-    while umber_prepare_cursor < 11 limit Iterations(11) {
+    while umber_prepare_cursor < 11 {
         umber_prepare_total = umber_prepare_total + umber_prepare_cursor + 1;
         umber_prepare_cursor = umber_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow memory_errors_saffron_quantum_route(seed: i32) -> i32 ![]
 {
     var umber_route_total = seed * 10;
     var umber_route_cursor = 0;
-    while umber_route_cursor < 8 limit Iterations(8) {
+    while umber_route_cursor < 8 {
         umber_route_total = umber_route_total + umber_route_cursor + 1;
         umber_route_cursor = umber_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow memory_errors_saffron_quantum_score(seed: i32) -> i32 ![]
 {
     var umber_score_total = seed + 10;
     var umber_score_cursor = 0;
-    while umber_score_cursor < 7 limit Iterations(7) {
+    while umber_score_cursor < 7 {
         umber_score_total = umber_score_total + umber_score_cursor + 1;
         umber_score_cursor = umber_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow memory_errors_saffron_quantum_finish(seed: i32) -> i32 ![]
 {
     var umber_finish_total = seed - 10;
     var umber_finish_cursor = 0;
-    while umber_finish_cursor < 12 limit Iterations(12) {
+    while umber_finish_cursor < 12 {
         umber_finish_total = umber_finish_total + umber_finish_cursor + 1;
         umber_finish_cursor = umber_finish_cursor + 1;
     }

@@ -23,7 +23,7 @@ flow row_contract_kilo_kilo_prepare(seed: i32) -> i32 ![]
 {
     var yearling_prepare_total = seed + 13;
     var yearling_prepare_cursor = 0;
-    while yearling_prepare_cursor < 8 limit Iterations(8) {
+    while yearling_prepare_cursor < 8 {
         yearling_prepare_total = yearling_prepare_total + yearling_prepare_cursor + 3;
         yearling_prepare_cursor = yearling_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow row_contract_kilo_kilo_route(seed: i32) -> i32 ![]
 {
     var yearling_route_total = seed * 13;
     var yearling_route_cursor = 0;
-    while yearling_route_cursor < 11 limit Iterations(11) {
+    while yearling_route_cursor < 11 {
         yearling_route_total = yearling_route_total + yearling_route_cursor + 3;
         yearling_route_cursor = yearling_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow row_contract_kilo_kilo_score(seed: i32) -> i32 ![]
 {
     var yearling_score_total = seed + 13;
     var yearling_score_cursor = 0;
-    while yearling_score_cursor < 9 limit Iterations(9) {
+    while yearling_score_cursor < 9 {
         yearling_score_total = yearling_score_total + yearling_score_cursor + 3;
         yearling_score_cursor = yearling_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow row_contract_kilo_kilo_finish(seed: i32) -> i32 ![]
 {
     var yearling_finish_total = seed - 13;
     var yearling_finish_cursor = 0;
-    while yearling_finish_cursor < 7 limit Iterations(7) {
+    while yearling_finish_cursor < 7 {
         yearling_finish_total = yearling_finish_total + yearling_finish_cursor + 3;
         yearling_finish_cursor = yearling_finish_cursor + 1;
     }

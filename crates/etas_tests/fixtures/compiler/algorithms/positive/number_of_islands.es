@@ -27,9 +27,9 @@ flow count_islands(grid: Array<Array<i32>>) -> i32 {
     var count = 0;
     var row = 0;
 
-    while row < len_i32_grid(current) limit Iterations(1024) {
+    while row < len_i32_grid(current) {
         var col = 0;
-        while col < len_i32_list(current[row]) limit Iterations(1024) {
+        while col < len_i32_list(current[row]) {
             if current[row][col] == 1 {
                 count = count + 1;
                 current = flood(current, row, col);

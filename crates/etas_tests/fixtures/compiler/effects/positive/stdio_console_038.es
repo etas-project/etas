@@ -23,7 +23,7 @@ flow stdio_console_meteor_meteor_prepare(seed: i32) -> i32 ![]
 {
     var violet_prepare_total = seed + 3;
     var violet_prepare_cursor = 0;
-    while violet_prepare_cursor < 11 limit Iterations(11) {
+    while violet_prepare_cursor < 11 {
         violet_prepare_total = violet_prepare_total + violet_prepare_cursor + 3;
         violet_prepare_cursor = violet_prepare_cursor + 1;
     }
@@ -45,7 +45,7 @@ flow stdio_console_meteor_meteor_route(seed: i32) -> i32 ![]
 {
     var violet_route_total = seed * 3;
     var violet_route_cursor = 0;
-    while violet_route_cursor < 9 limit Iterations(9) {
+    while violet_route_cursor < 9 {
         violet_route_total = violet_route_total + violet_route_cursor + 3;
         violet_route_cursor = violet_route_cursor + 1;
     }
@@ -67,7 +67,7 @@ flow stdio_console_meteor_meteor_score(seed: i32) -> i32 ![]
 {
     var violet_score_total = seed + 3;
     var violet_score_cursor = 0;
-    while violet_score_cursor < 9 limit Iterations(9) {
+    while violet_score_cursor < 9 {
         violet_score_total = violet_score_total + violet_score_cursor + 3;
         violet_score_cursor = violet_score_cursor + 1;
     }
@@ -89,7 +89,7 @@ flow stdio_console_meteor_meteor_finish(seed: i32) -> i32 ![]
 {
     var violet_finish_total = seed - 3;
     var violet_finish_cursor = 0;
-    while violet_finish_cursor < 11 limit Iterations(11) {
+    while violet_finish_cursor < 11 {
         violet_finish_total = violet_finish_total + violet_finish_cursor + 3;
         violet_finish_cursor = violet_finish_cursor + 1;
     }

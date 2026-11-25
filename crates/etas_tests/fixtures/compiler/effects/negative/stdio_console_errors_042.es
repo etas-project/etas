@@ -25,7 +25,7 @@ flow stdio_console_errors_wander_unity_prepare(seed: i32) -> i32 ![]
 {
     var western_prepare_total = seed + 8;
     var western_prepare_cursor = 0;
-    while western_prepare_cursor < 10 limit Iterations(10) {
+    while western_prepare_cursor < 10 {
         western_prepare_total = western_prepare_total + western_prepare_cursor + 1;
         western_prepare_cursor = western_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow stdio_console_errors_wander_unity_route(seed: i32) -> i32 ![]
 {
     var western_route_total = seed * 8;
     var western_route_cursor = 0;
-    while western_route_cursor < 11 limit Iterations(11) {
+    while western_route_cursor < 11 {
         western_route_total = western_route_total + western_route_cursor + 1;
         western_route_cursor = western_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow stdio_console_errors_wander_unity_score(seed: i32) -> i32 ![]
 {
     var western_score_total = seed + 8;
     var western_score_cursor = 0;
-    while western_score_cursor < 7 limit Iterations(7) {
+    while western_score_cursor < 7 {
         western_score_total = western_score_total + western_score_cursor + 1;
         western_score_cursor = western_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow stdio_console_errors_wander_unity_finish(seed: i32) -> i32 ![]
 {
     var western_finish_total = seed - 8;
     var western_finish_cursor = 0;
-    while western_finish_cursor < 7 limit Iterations(7) {
+    while western_finish_cursor < 7 {
         western_finish_total = western_finish_total + western_finish_cursor + 1;
         western_finish_cursor = western_finish_cursor + 1;
     }

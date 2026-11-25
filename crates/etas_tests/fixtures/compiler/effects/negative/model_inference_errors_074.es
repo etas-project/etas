@@ -24,7 +24,7 @@ flow model_inference_errors_estate_crystal_prepare(seed: i32) -> i32 ![]
 {
     var window_prepare_total = seed + 21;
     var window_prepare_cursor = 0;
-    while window_prepare_cursor < 12 limit Iterations(12) {
+    while window_prepare_cursor < 12 {
         window_prepare_total = window_prepare_total + window_prepare_cursor + 5;
         window_prepare_cursor = window_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow model_inference_errors_estate_crystal_route(seed: i32) -> i32 ![]
 {
     var window_route_total = seed * 21;
     var window_route_cursor = 0;
-    while window_route_cursor < 7 limit Iterations(7) {
+    while window_route_cursor < 7 {
         window_route_total = window_route_total + window_route_cursor + 5;
         window_route_cursor = window_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow model_inference_errors_estate_crystal_score(seed: i32) -> i32 ![]
 {
     var window_score_total = seed + 21;
     var window_score_cursor = 0;
-    while window_score_cursor < 11 limit Iterations(11) {
+    while window_score_cursor < 11 {
         window_score_total = window_score_total + window_score_cursor + 5;
         window_score_cursor = window_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow model_inference_errors_estate_crystal_finish(seed: i32) -> i32 ![]
 {
     var window_finish_total = seed - 21;
     var window_finish_cursor = 0;
-    while window_finish_cursor < 7 limit Iterations(7) {
+    while window_finish_cursor < 7 {
         window_finish_total = window_finish_total + window_finish_cursor + 5;
         window_finish_cursor = window_finish_cursor + 1;
     }

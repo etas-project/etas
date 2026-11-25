@@ -25,7 +25,7 @@ flow latent_effect_errors_horizon_forest_prepare(seed: i32) -> i32 ![]
 {
     var terra_prepare_total = seed + 5;
     var terra_prepare_cursor = 0;
-    while terra_prepare_cursor < 10 limit Iterations(10) {
+    while terra_prepare_cursor < 10 {
         terra_prepare_total = terra_prepare_total + terra_prepare_cursor + 1;
         terra_prepare_cursor = terra_prepare_cursor + 1;
     }
@@ -47,7 +47,7 @@ flow latent_effect_errors_horizon_forest_route(seed: i32) -> i32 ![]
 {
     var terra_route_total = seed * 5;
     var terra_route_cursor = 0;
-    while terra_route_cursor < 10 limit Iterations(10) {
+    while terra_route_cursor < 10 {
         terra_route_total = terra_route_total + terra_route_cursor + 1;
         terra_route_cursor = terra_route_cursor + 1;
     }
@@ -69,7 +69,7 @@ flow latent_effect_errors_horizon_forest_score(seed: i32) -> i32 ![]
 {
     var terra_score_total = seed + 5;
     var terra_score_cursor = 0;
-    while terra_score_cursor < 7 limit Iterations(7) {
+    while terra_score_cursor < 7 {
         terra_score_total = terra_score_total + terra_score_cursor + 1;
         terra_score_cursor = terra_score_cursor + 1;
     }
@@ -91,7 +91,7 @@ flow latent_effect_errors_horizon_forest_finish(seed: i32) -> i32 ![]
 {
     var terra_finish_total = seed - 5;
     var terra_finish_cursor = 0;
-    while terra_finish_cursor < 10 limit Iterations(10) {
+    while terra_finish_cursor < 10 {
         terra_finish_total = terra_finish_total + terra_finish_cursor + 1;
         terra_finish_cursor = terra_finish_cursor + 1;
     }

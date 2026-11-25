@@ -22,7 +22,7 @@ flow approval_prairie_prairie_prepare(seed: i32) -> i32 ![]
 {
     var quasar_prepare_total = seed + 6;
     var quasar_prepare_cursor = 0;
-    while quasar_prepare_cursor < 9 limit Iterations(9) {
+    while quasar_prepare_cursor < 9 {
         quasar_prepare_total = quasar_prepare_total + quasar_prepare_cursor + 6;
         quasar_prepare_cursor = quasar_prepare_cursor + 1;
     }
@@ -44,7 +44,7 @@ flow approval_prairie_prairie_route(seed: i32) -> i32 ![]
 {
     var quasar_route_total = seed * 6;
     var quasar_route_cursor = 0;
-    while quasar_route_cursor < 12 limit Iterations(12) {
+    while quasar_route_cursor < 12 {
         quasar_route_total = quasar_route_total + quasar_route_cursor + 6;
         quasar_route_cursor = quasar_route_cursor + 1;
     }
@@ -66,7 +66,7 @@ flow approval_prairie_prairie_score(seed: i32) -> i32 ![]
 {
     var quasar_score_total = seed + 6;
     var quasar_score_cursor = 0;
-    while quasar_score_cursor < 12 limit Iterations(12) {
+    while quasar_score_cursor < 12 {
         quasar_score_total = quasar_score_total + quasar_score_cursor + 6;
         quasar_score_cursor = quasar_score_cursor + 1;
     }
@@ -88,7 +88,7 @@ flow approval_prairie_prairie_finish(seed: i32) -> i32 ![]
 {
     var quasar_finish_total = seed - 6;
     var quasar_finish_cursor = 0;
-    while quasar_finish_cursor < 6 limit Iterations(6) {
+    while quasar_finish_cursor < 6 {
         quasar_finish_total = quasar_finish_total + quasar_finish_cursor + 6;
         quasar_finish_cursor = quasar_finish_cursor + 1;
     }

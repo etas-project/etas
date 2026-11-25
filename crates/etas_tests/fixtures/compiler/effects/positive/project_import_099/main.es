@@ -24,7 +24,7 @@ flow project_import_golf_crystal_prepare(seed: i32) -> i32 ![]
 {
     var window_prepare_total = seed + 20;
     var window_prepare_cursor = 0;
-    while window_prepare_cursor < 9 limit Iterations(9) {
+    while window_prepare_cursor < 9 {
         window_prepare_total = window_prepare_total + window_prepare_cursor + 2;
         window_prepare_cursor = window_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow project_import_golf_crystal_route(seed: i32) -> i32 ![]
 {
     var window_route_total = seed * 20;
     var window_route_cursor = 0;
-    while window_route_cursor < 11 limit Iterations(11) {
+    while window_route_cursor < 11 {
         window_route_total = window_route_total + window_route_cursor + 2;
         window_route_cursor = window_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow project_import_golf_crystal_score(seed: i32) -> i32 ![]
 {
     var window_score_total = seed + 20;
     var window_score_cursor = 0;
-    while window_score_cursor < 8 limit Iterations(8) {
+    while window_score_cursor < 8 {
         window_score_total = window_score_total + window_score_cursor + 2;
         window_score_cursor = window_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow project_import_golf_crystal_finish(seed: i32) -> i32 ![]
 {
     var window_finish_total = seed - 20;
     var window_finish_cursor = 0;
-    while window_finish_cursor < 7 limit Iterations(7) {
+    while window_finish_cursor < 7 {
         window_finish_total = window_finish_total + window_finish_cursor + 2;
         window_finish_cursor = window_finish_cursor + 1;
     }

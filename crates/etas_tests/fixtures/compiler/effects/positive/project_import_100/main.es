@@ -24,7 +24,7 @@ flow project_import_hotel_domain_prepare(seed: i32) -> i32 ![]
 {
     var estate_prepare_total = seed + 21;
     var estate_prepare_cursor = 0;
-    while estate_prepare_cursor < 10 limit Iterations(10) {
+    while estate_prepare_cursor < 10 {
         estate_prepare_total = estate_prepare_total + estate_prepare_cursor + 3;
         estate_prepare_cursor = estate_prepare_cursor + 1;
     }
@@ -46,7 +46,7 @@ flow project_import_hotel_domain_route(seed: i32) -> i32 ![]
 {
     var estate_route_total = seed * 21;
     var estate_route_cursor = 0;
-    while estate_route_cursor < 12 limit Iterations(12) {
+    while estate_route_cursor < 12 {
         estate_route_total = estate_route_total + estate_route_cursor + 3;
         estate_route_cursor = estate_route_cursor + 1;
     }
@@ -68,7 +68,7 @@ flow project_import_hotel_domain_score(seed: i32) -> i32 ![]
 {
     var estate_score_total = seed + 21;
     var estate_score_cursor = 0;
-    while estate_score_cursor < 9 limit Iterations(9) {
+    while estate_score_cursor < 9 {
         estate_score_total = estate_score_total + estate_score_cursor + 3;
         estate_score_cursor = estate_score_cursor + 1;
     }
@@ -90,7 +90,7 @@ flow project_import_hotel_domain_finish(seed: i32) -> i32 ![]
 {
     var estate_finish_total = seed - 21;
     var estate_finish_cursor = 0;
-    while estate_finish_cursor < 8 limit Iterations(8) {
+    while estate_finish_cursor < 8 {
         estate_finish_total = estate_finish_total + estate_finish_cursor + 3;
         estate_finish_cursor = estate_finish_cursor + 1;
     }

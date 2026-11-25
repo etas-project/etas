@@ -106,18 +106,22 @@ impl CliHost {
             CliToolRouter::from_bindings(&config.tool_bindings, config.tool_private_resolution)?;
         let memory = memory_client(&config.memory_mode)?;
         let session = session_client(&config.session_mode)?;
+        let network_enabled = !config.program_network_allowlist.is_empty();
+        let filesystem_enabled =
+            config.filesystem_mode != FilesystemMode::None || !config.filesystem_regions.is_empty();
         let byte_streams =
-            (!config.program_network_allowlist.is_empty()).then(etas_host::ByteStreamStore::new);
+            (network_enabled || filesystem_enabled).then(etas_host::ByteStreamStore::new);
         let mut workspace_regions = etas_host::WorkspaceRegionRegistry::default();
         for (identity, region) in &config.filesystem_regions {
             workspace_regions
                 .insert(identity.clone(), region.root.clone())
                 .map_err(|error| CliError::InvalidUsage(error.message))?;
         }
-        let filesystem = if config.filesystem_mode != FilesystemMode::None
-            || !config.filesystem_regions.is_empty()
-        {
-            Some(LocalFilesystemClient::new(workspace_regions.clone()))
+        let filesystem = if filesystem_enabled {
+            Some(
+                LocalFilesystemClient::new(workspace_regions.clone())
+                    .with_streams(byte_streams.clone().unwrap()),
+            )
         } else {
             None
         };
@@ -132,7 +136,7 @@ impl CliHost {
                 command: !config.command_allowed_programs.is_empty(),
                 network: !config.program_network_allowlist.is_empty(),
                 tcp: !config.program_network_allowlist.is_empty(),
-                stream: !config.program_network_allowlist.is_empty(),
+                stream: byte_streams.is_some(),
                 tls: !config.program_network_allowlist.is_empty(),
                 browser: false,
                 secret_access: config.secret_mode != SecretMode::None,
@@ -148,9 +152,9 @@ impl CliHost {
             memory,
             session,
             filesystem,
-            tcp: byte_streams.clone().map(LocalTcpClient::new),
+            tcp: network_enabled.then(|| LocalTcpClient::new(byte_streams.clone().unwrap())),
             stream: byte_streams.clone().map(LocalStreamClient::new),
-            tls: byte_streams.map(LocalTlsClient::new),
+            tls: network_enabled.then(|| LocalTlsClient::new(byte_streams.unwrap())),
             secret: (config.secret_mode == SecretMode::Env).then_some(EnvSecretClient),
             command: (!config.command_allowed_programs.is_empty())
                 .then(|| LocalCommandClient::with_regions(workspace_regions)),
@@ -1041,8 +1045,7 @@ pub(crate) fn run_checked(
     let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
     options.event_observer = Some(journal.clone());
     options.profile = profile.clone();
-    options.host_context.authority.policy.active_trace_specs = active_trace_specs;
-    options.host_context.authority.policy.trace_spec_facts = trace_spec_facts;
+    include_source_trace_policy(&mut options, &config, active_trace_specs, trace_spec_facts);
     apply_budget_overrides(&mut options, budget_overrides);
     super::lifecycle::run_controlled(
         config.shutdown_grace_ms,
@@ -1097,8 +1100,7 @@ pub(crate) fn resume_checked(
     options.profile = profile.clone();
     let journal = std::sync::Arc::new(super::lifecycle::EventJournal::default());
     options.event_observer = Some(journal.clone());
-    options.host_context.authority.policy.active_trace_specs = active_trace_specs;
-    options.host_context.authority.policy.trace_spec_facts = trace_spec_facts;
+    include_source_trace_policy(&mut options, &config, active_trace_specs, trace_spec_facts);
     super::lifecycle::run_controlled(
         config.shutdown_grace_ms,
         etas_interpreter::Interpreter.create_source_resume(
@@ -1110,6 +1112,24 @@ pub(crate) fn resume_checked(
         lifecycle,
         &journal,
     )
+}
+
+fn include_source_trace_policy(
+    options: &mut RunOptions,
+    config: &CliHostConfig,
+    active: Vec<String>,
+    facts: Vec<HostValue>,
+) {
+    // Checked source contracts use static proof and residual monitors. Export
+    // them as Host policy only when a trace policy adapter was configured.
+    // An explicit boundary policy reference remains in config.run_options().
+    if config.policy_mode != PolicyMode::DenyUnknown
+        || config.policy_local.is_some()
+        || config.policy_http.is_some()
+    {
+        options.host_context.authority.policy.active_trace_specs = active;
+        options.host_context.authority.policy.trace_spec_facts = facts;
+    }
 }
 
 fn active_trace_specs_for_entry(
