@@ -1,5 +1,16 @@
 use super::*;
 
+fn rewrite_join_result(assembly: &Path, rewrite: impl FnOnce(&str) -> String) {
+    let mut source = fs::read_to_string(assembly).unwrap();
+    let start = source.find("public flow join(").unwrap();
+    let end = start + source[start..].find("\n}").unwrap();
+    let result = start + source[start..end].rfind("return ").unwrap() + "return ".len();
+    let semicolon = result + source[result..end].find(';').unwrap();
+    let replacement = rewrite(&source[result..semicolon]);
+    source.replace_range(result..semicolon, &replacement);
+    fs::write(assembly, source).unwrap();
+}
+
 #[test]
 fn installed_std_executes_new_generic_flow_and_rebuilt_join_body_in_external_processes() {
     let root = temp_path(
@@ -586,19 +597,7 @@ public flow bridge_summary(value: string) -> Result<string, string> ![] { return
     .unwrap();
     assert_eq!(package_run["value"]["value"], "0");
     let assembly = source.join("library/std/text/assembly.es");
-    let text = fs::read_to_string(&assembly).unwrap();
-    let start = text.find("public flow join(").unwrap();
-    let end = text.find("public flow repeat(").unwrap();
-    fs::write(
-        assembly,
-        format!(
-            "{}{}{}",
-            &text[..start],
-            text[start..end].replace("return output;", "return \"rebuilt:\" + output;"),
-            &text[end..]
-        ),
-    )
-    .unwrap();
+    rewrite_join_result(&assembly, |result| format!("\"rebuilt:\" + ({result})"));
     invoke(&[
         "--cache",
         "off",
@@ -2137,20 +2136,7 @@ public flow sdk_echo<T>(value: T) -> T ![] {
         .path()
         .join("std");
     let text = moved_std.join("library/std/text/assembly.es");
-    let assembly = fs::read_to_string(&text).unwrap();
-    let start = assembly.find("public flow join(").unwrap();
-    let end = assembly.find("public flow repeat(").unwrap();
-    let join = &assembly[start..end];
-    fs::write(
-        &text,
-        format!(
-            "{}{}{}",
-            &assembly[..start],
-            join.replace("return output;", "return output + \"!\";"),
-            &assembly[end..]
-        ),
-    )
-    .unwrap();
+    rewrite_join_result(&text, |result| format!("({result}) + \"!\""));
     let rebuilt = root.join("rebuilt/std");
     invoke(
         &relocated_binary,
