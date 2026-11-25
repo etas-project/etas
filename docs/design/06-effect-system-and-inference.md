@@ -132,7 +132,7 @@ host execution is needed only for the specified primitive endpoints.
 | `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
 | `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
-| `Inject<T>` | `get` | Typed dependency request; no default provider or authority grant |
+| `Inject<T>` | `get(name: string)` | Named, typed dependency request; no default provider or authority grant |
 
 `Async` is exported by `std.task`. Default handlers support ordinary managed
 execution; custom handlers can bind `as k` and use checked scheduler transfer.
@@ -582,7 +582,8 @@ capture may cross requests. Resumption targets the exact suspended request.
 
 Ordinary action arms must explicitly complete by one of these forms.
 The [dependency sugar](02-general-programming-constructs.md#72-constructor-injection)
-`T => expr;` expands to `Inject<T>.get() => { resume expr; }` only.
+expands field arms to `Inject<T>.get("name") => { resume expr; }`,
+type arms to `Inject<T>.get(_) => { resume expr; }`.
 `Action(...) => expr` is not an implicit fallback. A direct arm `return` is
 rejected; a nested flow has its own ordinary return target. Actions returning
 `never`, including `Error.raise`, cannot resume or bind resumable k.
@@ -783,12 +784,12 @@ Effect inference computes an upper bound over effects that may occur during exec
 | `e?` | Effects of `e` minus the captured `Error<E>`, result type becomes `Result<T, E>` |
 | `expr with h` / `handle expr with h` | Expression effects minus fully handled effects, plus handler arm effects |
 
-Constructor injection uses ordinary action handling, with no separate DI effect:
+Constructor injection follows ordinary action handling:
 
 ```text
 initialize(C { supplied }) =
     supplied expressions in source order
-    ; perform provider(f)() for omitted injected fields in declaration order
+    ; perform omitted fields' provider requests in declaration order
     ; publish the completed record/instance
 
 escaping(construction) = effects of that checked sequence after handling

@@ -236,7 +236,7 @@ semantics. File formats and compiler pipelines are outside this SPEC.
 |---|---|
 | Identity and visibility | Package identity/version, logical modules, public items and expanded re-exports. |
 | Types and callables | Type/spec signatures, generic constraints, parameter names/defaults, receiver modes and transitive suspension facts. Unknown suspension is not non-suspension. |
-| Constructors | Field order, types/visibility, resolved `@inject` action identities/static selectors and omitted-field behavior; imports do not rebind provider names. |
+| Constructors | Field order/types/visibility, injection labels and resolved action identities/selectors; imports preserve omitted-field behavior and provider identity. |
 | Active agents | State schema, dispatch/role evidence, scoped-reference/capture bounds and temporal/state-dependence contracts. |
 | Effects and tools | Escaping and requested-action summaries, model schemas, required concrete bindings and trace constraints. |
 | Defaults | Definition-site bindings and revision identity; callers do not reinterpret default expressions. |

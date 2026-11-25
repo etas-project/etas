@@ -150,9 +150,8 @@ one another's update turns is not silently made reentrant.
 
 ## 3. Scoped Constructor Injection
 
-This independent example uses a deterministic reviewer so that injection can
-be tested without a model provider. Both a passive record and an active team
-obtain stored dependencies from the same handler scope.
+This standalone example injects two string fields and an active reviewer
+without requiring a model provider.
 
 ```etas
 spec ReviewRole ~ std.agent.Active {
@@ -166,13 +165,11 @@ impl EchoReviewer ~ ReviewRole {
     }
 }
 
-effect ReviewContext {
-    action label() -> string;
-}
-
 type ReviewConfig = {
-    @inject(ReviewContext.label)
+    @inject
     label: string,
+    @inject
+    footer: string,
 }
 
 agent ReviewTeam = {
@@ -187,44 +184,34 @@ impl ReviewTeam {
 }
 
 flow ScopedReview(text: string) -> string ![] {
-    let reviewer = EchoReviewer {};
+    let reviewer: ? ~ ReviewRole = EchoReviewer {};
+    let footer = "";
+    let dependencies = handler {
+        label => "review: ",
+        footer,
+        reviewer,
+    };
     return handle {
         let config = ReviewConfig {};
         let team = ReviewTeam {};
-        team.run(config.label + text)
-    } with {
-        ReviewContext.label() => resume "review: ";
-        (? ~ ReviewRole) => reviewer;
-    };
-}
-
-flow NestedLabels() -> (string, string) ![] {
-    return handle {
-        let inner = handle ReviewConfig {} with {
-            ReviewContext.label() => resume "inner";
-        };
-        let outer = ReviewConfig {};
-        (inner.label, outer.label)
-    } with {
-        ReviewContext.label() => resume "outer";
-    };
+        team.run(config.label + text + config.footer)
+    } with dependencies;
 }
 ```
 
-`NestedLabels()` returns `("inner", "outer")`: changing handler scope never
-re-resolves the saved fields.
-
-The type arm handles `Inject<? ~ ReviewRole>.get`; the named label action stays
-explicit. Saved fields need no handler on reads. The reviewer keeps its owner;
-`Agentic.create/call` remain requested metadata.
+`label` and `footer` select different string providers. The typed `reviewer`
+binding makes shorthand match the existential field. Reads use stored values;
+the reviewer keeps its owner. `Agentic.create/call` remain requested metadata.
 
 | Check, using the declarations above | Expected result |
 |---|---|
-| `ReviewConfig { label = "explicit" }` | No `ReviewContext.label` request, including at module scope if all other global-initializer rules hold. |
+| `ReviewConfig { label = "explicit", footer = "" }` | Neither provider runs; module-scope construction still obeys global-initializer rules. |
 | `ReviewTeam { reviewer }` | Explicit shorthand bypasses the provider; ordinary active construction/dispatch checks remain. |
-| Two `ReviewConfig {}` constructions | Two requests; no implicit singleton or memoization. |
-| `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Rejected: the declared closed row cannot cover the unhandled label action. |
-| Label handler uses `resume 42;` | Rejected: its action returns `string`. |
-| `@inject(ReviewContext.label())` | Rejected: annotation requires an action reference, not an invocation. |
+| Two `ReviewConfig {}` constructions | Four requests, one per omitted field per construction; no implicit cache. |
+| `handler { string => "fallback"; label => "review: "; }` | Named label wins within this handler; footer uses the type fallback. |
+| Inner `handler { string => "inner"; }` | Overrides outer string providers; saved fields do not change. |
+| `handler { label => "a"; label => "b"; }` | Rejected: duplicate name/type pair. |
+| `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Rejected: uncovered dependency requests cannot escape the closed row. |
+| `handler { label: string => 42; }` | Rejected: provider value does not match its declared type. |
 | Decoder receives no label | Missing required data, not implicit invocation of the label provider. |
 | Store a request-local injected reviewer into longer-lived state | Rejected when its owner scope would be escaped. |

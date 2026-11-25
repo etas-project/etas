@@ -18,6 +18,8 @@ Receiver methods omit the implicit `self` argument in API rows. Generic owner
 parameters come from the receiver or expected result type; method parameters
 such as `<U, effect E>` are shown explicitly. A row grouping several names
 assigns its contract to each name unless the behavior column distinguishes them.
+Opaque API types have private representations and controlled constructors;
+their omitted layouts in these tables are not `type T;` declarations.
 
 | Area | Owning Module | API Reference |
 |---|---|---|
@@ -468,8 +470,6 @@ state can evolve through `var self` during one run:
 ```etas
 module std.task.scheduler;
 
-public type SchedulerHandle;
-
 public type ReadyTask = {
     id: u64,
     enqueue_order: u64,
@@ -816,9 +816,9 @@ public spec Autonomous ~ Active {
 | Supervision | Ordinary flows select retry, reconstruction and durable recovery; default runtime behavior is failure propagation and cleanup, not hidden restart. |
 
 Field [`@inject`](02-general-programming-constructs.md#72-constructor-injection)
-uses standard `Inject<T>` (prelude-exported), whose action `get() -> T` has no
-default provider. `T => expr;` supplies it through an ordinary handler.
-Named dependency actions remain available; no registry, caching or grant is implied.
+uses standard `Inject<T>` (prelude-exported): `get(name: string) -> T`, with no
+default provider. Field/type arms and shorthand expand to ordinary handlers;
+explicit named actions remain supported. No registry, cache or grant is implied.
 
 A long-running updating `main` holds the instance's update turn; other updating
 requests wait. Snapshot queries can proceed. Event-driven services needing
@@ -1021,13 +1021,14 @@ state rollback. Its implementation is an ordinary checked Etas loop.
 
 ### 8.1 Typed Strategies And Signatures
 
-`std.security.declassify` defines these source-owned declarations.
+`std.security.declassify` exports privately represented strategy types:
+
+| Type | Compiler-recognized `std.role` |
+|---|---|
+| `SanitizationStrategy<T, U>` | `std.security.declassify.SanitizationStrategy` |
+| `DeclassificationStrategy<T, U>` | `std.security.declassify.DeclassificationStrategy` |
 
 ```etas
-@std.role("std.security.declassify.SanitizationStrategy")
-public type SanitizationStrategy<T, U>;
-@std.role("std.security.declassify.DeclassificationStrategy")
-public type DeclassificationStrategy<T, U>;
 public enum SecurityError {
     Rejected,
     Denied,

@@ -18,18 +18,15 @@ type Paper = {
 }
 ```
 
-#### 1.1.1 Alias, Nominal, And Bodyless Types
-
-Etas separates transparent aliases from nominal types:
+#### 1.1.1 Alias, Nominal, And Empty Types
 
 ```etas
 alias A = B;    // transparent alias
 type A = B;     // nominal/newtype with representation B
-type A;         // bodyless nominal type
+type A;         // shorthand for type A = {};
 ```
 
-`alias` introduces no new type identity. It is a source-level abbreviation used
-to shorten long type expressions:
+An `alias` abbreviates a type without introducing a new identity:
 
 ```etas
 alias JsonText = string;
@@ -38,9 +35,8 @@ let raw: string = "hello";
 let json: JsonText = raw;    // accepted: JsonText is string
 ```
 
-`type A = B` introduces a distinct nominal type whose runtime representation may
-still be `B`. Assignment between the nominal type and its representation requires
-an explicit constructor, accessor, or conversion flow:
+`type A = B` introduces a distinct nominal identity with representation `B`.
+Conversion requires an explicit constructor, accessor, or flow:
 
 ```etas
 type UserId = string;
@@ -51,20 +47,14 @@ let project: ProjectId = user;    // rejected
 let raw: string = user;           // rejected without explicit conversion
 ```
 
-This keeps domain IDs, paths, secrets, error categories, and structured agent
-messages from being accidentally mixed just because they have the same runtime
-shape.
-
-`type A;` declares a nominal type with no public representation. It has two
-intended uses:
-
-1. zero-runtime marker types used only as type indices;
-2. opaque runtime handles whose values are created by trusted standard-library,
-   runtime, or package APIs.
+`type T;` is exactly `type T = {};`, including generic parameters and bounds.
+Both define an empty nominal record, constructible as `T {}`, with the same
+`impl` methods and spec conformance rules. Distinct declarations retain distinct
+type identities. The short form is neither an abstract type nor a forward declaration.
 
 ```etas
 type WorkspaceRoot;
-type ReportsRoot;
+type ReportsRoot = {};
 
 spec Region;
 impl WorkspaceRoot ~ Region;
@@ -72,16 +62,12 @@ impl ReportsRoot ~ Region;
 
 type WorkspacePath<R ~ Region> = string;
 
-type TcpStream;
+let root = WorkspaceRoot {};
 ```
 
-`WorkspaceRoot` and `ReportsRoot` are marker types: if they only appear in type
-arguments, spec implementations, effect indices, and trace-spec predicates, the
-compiler does not allocate runtime values for them. `TcpStream` is also
-bodyless, but it represents an opaque runtime handle because values of that type
-are returned and passed at runtime.
-
-
+Marker use alone creates no runtime value. Protected resources such as `TcpStream`
+use private representations and controlled constructors, not empty declarations;
+see [Visibility](02-general-programming-constructs.md#104-visibility).
 
 #### 1.1.2 Algebraic Data Types And Recursion
 

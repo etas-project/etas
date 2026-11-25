@@ -21,7 +21,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 | `?` | Convert exactly one residual `Error<E>` family to `Result<T, E>`. |
 | `A \| B`, `x ~> A` | Compose stages into a flow; apply a value to a stage. |
 | `@limits(...)` | Scoped resource bounds; nested and concurrent work share applicable parent accounts. |
-| Field `@inject` / `@inject(Action)` | Resolve an omitted field by type or named action at construction; explicit initialization wins. |
+| Field `@inject` / `@inject(Action)` | Resolve omitted fields by name/type or named action; explicit initialization wins. |
 | `protocol` | Role/message declaration; not a replacement for trace specs. |
 | `^` | Reflection extension over retained definitions; checked compilation preserves the original contract. |
 

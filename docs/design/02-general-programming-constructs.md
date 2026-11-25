@@ -858,48 +858,48 @@ for pure lazy adapters and callbacks whose effects occur during consumption.
 
 ### 7.2 Constructor Injection
 
-For an omitted field of type `T`, bare `@inject` requests the standard
-`Inject<T>.get()` action. `@inject(Action)` instead names a zero-argument
-action returning an assignable value, resolved at the declaration site under
-its generic bounds. Neither form executes at declaration time.
+For an omitted field `name: T`, `@inject` requests `Inject<T>.get("name")`.
+`@inject(Action)` instead uses a declaration-site-resolved, zero-argument action
+returning an assignable value. Neither form executes at declaration time.
 
 ```etas
-type AppConfig = { name: string };
 type Config = {
     @inject
-    context: AppConfig,
-    retries: u32,
+    primary: string,
+    @inject
+    replica: string,
 }
 
-flow configured(context: AppConfig) -> Config {
-    Config { retries = 3 } with {
-        AppConfig => context;
-    }
+flow configured(primary: string, replica: string) -> Config {
+    Config {} with { primary, replica }
 }
 ```
 
-In a handler, `T => expr;` expands to `Inject<T>.get() => { resume expr; }`.
-The right side is an expression of assignable type, including a block with a
-tail value, evaluated per request. It is not an implicit `finish` or a match
-for other actions returning `T`; ordinary action arms still require explicit
-completion. Direct arm-level `return` remains invalid.
+| Dependency arm | Expansion |
+|---|---|
+| `name => expr;` | `Inject<T>.get("name") => { resume expr; }`; infer T from expr. |
+| `name: T => expr;` | Same request, with explicit expected T, including existential packing. |
+| `name,` or final `name` | `name => name;`; the right name is a lexical value, not a new binding. |
+| `T => expr;` | `Inject<T>.get(_) => { resume expr; }`; type-wide fallback. |
+
+Both `handler { ... }` and anonymous `with { ... }` accept these arms.
+They accept comma or semicolon separators; only a final shorthand
+may omit one. A bare arrow head resolving to a value type uses the type form;
+otherwise a simple identifier is a field label. `name: T` forces the field form.
+Other non-type heads are rejected. Ordinary action arms remain explicit.
+Right sides, including tail-valued blocks, run per request; they implicitly
+resume, never finish. Direct arm-level `return` is invalid.
 
 | Rule | Contract |
 |---|---|
-| Target | One annotation per stored field of a named nominal record or agent; not aliases, anonymous records, enum payloads, parameters or methods. Normal visibility rules apply. |
-| Type key | `T` must be a value type, not an effect/spec name. Match normalized types: aliases agree, distinct nominal types do not. Duplicate arms for the same dependency request, including expanded sugar, are rejected. No search for conforming implementations. |
-| Explicit value | `field = expr` or shorthand `field` suppresses that provider. Missing unannotated fields, duplicate/unknown fields and invalid annotations are rejected. Use explicit values or named actions for distinct roles of the same type. |
-| Order | After validation, evaluate supplied expressions once in source order, then request omitted injected fields once in declaration order. No implicit caching or dependency-cycle resolution. |
-| Resolution | Nearest matching handler, otherwise a registered default. `Inject<T>.get` has no default provider; missing handling propagates an ordinary effect obligation. A named annotation must reference an action, not a tag, flow or invocation. |
-| Completion | Publish only fully initialized values. Error, cancellation or `finish` may abandon construction; clean up newly owned agent scopes, not committed external effects. |
-| Stored value | Later reads, copies, patterns, equality/hash and serialization use the stored value under their normal rules; no provider is rerun. Later handlers do not replace fields. |
-| Scope | Store the value, not ambient handlers or grants. Capture/lifetime rules apply; existing agent references keep their owners, fresh children follow initialization-scope ownership. |
-| Decoding | Required schema fields stay required; derived decoding never invokes providers. Custom decoders may construct explicitly with checked effects. |
-
-Performed providers and their behavior remain in escaping/requested-action and
-ordered trace analysis, with normal authority, cancellation and budget checks.
-For per-request resolution, perform the dependency action in the method; stored
-fields are never effectful getters.
+| Target | One annotation per stored field of a nominal record or agent; normal visibility applies. Other targets, non-action explicit arguments and invocations are rejected. |
+| Matching | Match names and normalized types: aliases agree; nominal types remain distinct. No implementation search. Nearest matching handler wins; exact-name Inject arms precede its type-wide arm. Duplicate name/type or type-wide keys, including expanded forms, are rejected. |
+| Field identity | Names are dependency labels, not instance access. Same-name/same-type fields share a provider across constructors; use nested handlers or named actions to distinguish them. Renaming changes this contract. |
+| Construction | Explicit fields/shorthand suppress their providers. Validate missing/duplicate/unknown fields, evaluate supplied values in source order, then omitted providers in declaration order. No implicit cache or cycle resolution. |
+| Effects | Retain requested names, types and provider behavior in summaries. Remove only covered requests; unknown names need a type-wide arm. Inject has no default provider; uncovered demands escape. Ordinary authority, trace, cancellation and budget rules apply. |
+| Completion | Publish fully initialized values only. Error, cancellation or `finish` abandons construction and cleans up new agent scopes, not external effects. |
+| Lifetime | Store values, not ambient grants/handlers. Capture and owner bounds remain; existing references are not adopted. Later reads/copies/patterns/equality/serialization use stored values, never providers. |
+| Decoding | Required schema fields stay required; derived decoding never invokes providers. Custom constructors/decoders retain checked effects. |
 
 ## 8. Encapsulation and Methods
 
@@ -1172,6 +1172,8 @@ public type Session = {
 A public type does not make its private fields visible. Code outside the
 defining module can name `Session`, pass it around, and call public methods, but
 cannot directly read or write `state` or `token_budget`.
+An ordinary record with private fields cannot be constructed outside its defining
+module; use a public factory. Field injection does not bypass this restriction.
 
 Methods inside `impl` blocks default to `private`. Public methods form the
 callable API of the type:
