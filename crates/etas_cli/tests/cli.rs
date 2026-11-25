@@ -2380,7 +2380,7 @@ public flow normalize_text(text: string, form: Normalization) -> string ![] {
         .expect("builtin metadata should publish Iter<T>");
     assert!(matches!(
         iter.generic_params.as_slice(),
-        [etas_package::metadata::PackageCallableGenericParamMetadata { name, kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type, bounds }]
+        [etas_package::metadata::PackageCallableGenericParamMetadata { name, kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type, bounds, .. }]
             if name == "T" && bounds.is_empty()
     ));
     assert!(

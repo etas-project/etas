@@ -687,6 +687,7 @@ fn callable_generic_params_from_metadata(
         .into_iter()
         .map(|param| {
             Ok(PackageCallableGenericParamMetadata {
+                requires_copy: param.requires_copy,
                 name: param.name,
                 kind: match param.kind {
                     etas_package_metadata::GenericParamKind::Type => {

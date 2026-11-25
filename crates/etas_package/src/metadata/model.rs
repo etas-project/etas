@@ -405,6 +405,8 @@ pub struct PackageEffectActionSignatureMetadata {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageCallableGenericParamMetadata {
+    #[serde(default)]
+    pub requires_copy: Option<bool>,
     pub name: String,
     pub kind: PackageCallableGenericParamKindMetadata,
     #[serde(default)]

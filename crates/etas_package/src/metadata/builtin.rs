@@ -268,6 +268,7 @@ fn callable_generic_params(params: &[StdGenericParam]) -> Vec<PackageCallableGen
     params
         .iter()
         .map(|param| PackageCallableGenericParamMetadata {
+            requires_copy: None,
             name: param.name.clone(),
             kind: match param.kind {
                 etas_std::StdGenericParamKind::Type => {

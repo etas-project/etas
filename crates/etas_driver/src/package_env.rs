@@ -1052,6 +1052,7 @@ fn callable_generic_params_input(
         .iter()
         .map(
             |param| etas_frontend::ProjectExternalCallableGenericParamInput {
+                requires_copy: param.requires_copy,
                 name: param.name.clone(),
                 kind: match param.kind {
                     etas_package::metadata::PackageCallableGenericParamKindMetadata::Type => {
@@ -2247,6 +2248,7 @@ mod tests {
                         path: vec!["errors".to_owned(), "Net".to_owned(), "request".to_owned()],
                         generic_params: vec![
                             etas_package::metadata::PackageActionGenericParamMetadata {
+                                requires_copy: None,
                                 name: "resource".to_owned(),
                                 kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type,
                                 bounds: Vec::new(),
@@ -2307,11 +2309,13 @@ mod tests {
     fn frontend_environment_preserves_generic_callable_effect_identity() {
         let generics = vec![
             etas_package::metadata::PackageCallableGenericParamMetadata {
+                requires_copy: None,
                 name: "R".to_owned(),
                 kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Type,
                 bounds: Vec::new(),
             },
             etas_package::metadata::PackageCallableGenericParamMetadata {
+                requires_copy: None,
                 name: "E".to_owned(),
                 kind: etas_package::metadata::PackageCallableGenericParamKindMetadata::Effect,
                 bounds: Vec::new(),
