@@ -2054,6 +2054,7 @@ requested/error summaries through captures, imports and prompt encoding.
 | Session Boundary | Rule |
 |---|---|
 | Lease failure | Confirmed transfer precedes successor invocation. Unwind releases or revokes the lease; uncertain backend outcomes fence use until reconciled or safely expired. Never assume release succeeded or repeat a handoff blindly. Failed transfer raises a non-resumable storage error. |
+| Lease cleanup | On scope exit, including unwinding, a confirmed current generation is released through `Session.release(lease)`. The nearest matching explicit Handler takes precedence over the runtime default. If the last transfer has an uncertain outcome, the host revokes the chain using its scope credential and records the outcome. |
 | Lease scope | Standard move/escape checking follows lease values through methods and containers. Ordinary session/message arguments remain copyable; passing them alone is not exclusive handoff. Lease ownership does not alter agent-instance ownership or authorize session reads/writes. |
 | Effect coverage | `Session extends Memory`; read/reconcile require history-read authority, publication requires context-write authority. Concrete session ids are runtime payloads, not arbitrary static type selectors. |
 | Cursor / fence | A changed generation or incompatible history invalidates it; stale publication never overwrites newer context. |
