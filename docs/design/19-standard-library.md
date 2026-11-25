@@ -816,9 +816,9 @@ public spec Autonomous ~ Active {
 | Supervision | Ordinary flows select retry, reconstruction and durable recovery; default runtime behavior is failure propagation and cleanup, not hidden restart. |
 
 Field [`@inject`](02-general-programming-constructs.md#72-constructor-injection)
-is compiler-recognized constructor sugar, not a std service-container API.
-Packages define ordinary dependency actions/handlers; there is no implicit
-registration, getter resolution or permission grant.
+uses standard `Inject<T>` (prelude-exported), whose action `get() -> T` has no
+default provider. `T => expr;` supplies it through an ordinary handler.
+Named dependency actions remain available; no registry, caching or grant is implied.
 
 A long-running updating `main` holds the instance's update turn; other updating
 requests wait. Snapshot queries can proceed. Event-driven services needing

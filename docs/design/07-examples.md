@@ -168,7 +168,6 @@ impl EchoReviewer ~ ReviewRole {
 
 effect ReviewContext {
     action label() -> string;
-    action reviewer() -> ? ~ ReviewRole;
 }
 
 type ReviewConfig = {
@@ -177,7 +176,7 @@ type ReviewConfig = {
 }
 
 agent ReviewTeam = {
-    @inject(ReviewContext.reviewer)
+    @inject
     reviewer: ? ~ ReviewRole,
 }
 
@@ -195,7 +194,7 @@ flow ScopedReview(text: string) -> string ![] {
         team.run(config.label + text)
     } with {
         ReviewContext.label() => resume "review: ";
-        ReviewContext.reviewer() => resume reviewer;
+        (? ~ ReviewRole) => reviewer;
     };
 }
 
@@ -215,17 +214,15 @@ flow NestedLabels() -> (string, string) ![] {
 `NestedLabels()` returns `("inner", "outer")`: changing handler scope never
 re-resolves the saved fields.
 
-The constructor requests are handled; `Agentic.create/call` remain requested
-metadata under the normal runtime contract. `team.run` does not need a
-`ReviewContext` handler to read its saved reviewer. That reference still belongs
-to the caller's scope, not to the team.
+The type arm handles `Inject<? ~ ReviewRole>.get`; the named label action stays
+explicit. Saved fields need no handler on reads. The reviewer keeps its owner;
+`Agentic.create/call` remain requested metadata.
 
 | Check, using the declarations above | Expected result |
 |---|---|
 | `ReviewConfig { label = "explicit" }` | No `ReviewContext.label` request, including at module scope if all other global-initializer rules hold. |
 | `ReviewTeam { reviewer }` | Explicit shorthand bypasses the provider; ordinary active construction/dispatch checks remain. |
 | Two `ReviewConfig {}` constructions | Two requests; no implicit singleton or memoization. |
-| Construct under an inner label handler, then read under an outer one | The stored inner value remains; reads do not re-resolve it. |
 | `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Rejected: the declared closed row cannot cover the unhandled label action. |
 | Label handler uses `resume 42;` | Rejected: its action returns `string`. |
 | `@inject(ReviewContext.label())` | Rejected: annotation requires an action reference, not an invocation. |

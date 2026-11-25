@@ -992,7 +992,7 @@ when a value-level boundary is needed.
 Handlers eliminate handled escaping actions and add their own effects.
 `resume value` supplies the action's result; `finish value` supplies the
 whole handled expression's result. A `never` action cannot resume.
-Implicit fallback expression arms and direct arm-level `return` are rejected.
+Ordinary action arms have no implicit fallback; direct arm-level `return` is rejected.
 Full typing, completion and dispatch rules are in
 [Handler Scope](06-effect-system-and-inference.md#22-handler-scope).
 

@@ -70,7 +70,7 @@ in reflection/action metadata; ordinary execution requires a receiver.
 Instance, declaration and revision identities are distinct. References cannot
 be forged from metadata and do not derive structural Eq/Hash from private state.
 
-Stored fields may use [`@inject(Action)`](02-general-programming-constructs.md#72-constructor-injection)
+Stored fields may use [`@inject` or `@inject(Action)`](02-general-programming-constructs.md#72-constructor-injection)
 for construction-time resolution through `with`. A field then retains the
 returned value, not its provider handler or authority. For per-request routing,
 perform the dependency action inside the method; ordinary field reads remain

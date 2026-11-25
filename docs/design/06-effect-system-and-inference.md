@@ -132,6 +132,7 @@ host execution is needed only for the specified primitive endpoints.
 | `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
 | `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
+| `Inject<T>` | `get` | Typed dependency request; no default provider or authority grant |
 
 `Async` is exported by `std.task`. Default handlers support ordinary managed
 execution; custom handlers can bind `as k` and use checked scheduler transfer.
@@ -578,7 +579,9 @@ capture may cross requests. Resumption targets the exact suspended request.
 | Scheduler transfer | `never` | Consume `as k`, park/requeue the original task; no detached or duplicate continuation. |
 | `abort(...)` or another non-returning expression | `never` | Leave the path without producing a value. |
 
-Every reachable arm path must explicitly complete by one of these forms.
+Ordinary action arms must explicitly complete by one of these forms.
+The [dependency sugar](02-general-programming-constructs.md#72-constructor-injection)
+`T => expr;` expands to `Inject<T>.get() => { resume expr; }` only.
 `Action(...) => expr` is not an implicit fallback. A direct arm `return` is
 rejected; a nested flow has its own ordinary return target. Actions returning
 `never`, including `Error.raise`, cannot resume or bind resumable k.

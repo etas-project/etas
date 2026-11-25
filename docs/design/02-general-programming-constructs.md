@@ -96,7 +96,7 @@ passed to annotations such as `@tools([repo.read])`.
 
 Annotations use `@` and do not introduce a new keyword. Item annotations attach
 metadata or compiler-recognized contracts to the following declaration.
-`@inject(Action)` additionally attaches to a stored field of a nominal record
+`@inject` or `@inject(Action)` attaches to a stored field of a nominal record
 `type` or `agent`; its construction-only contract is defined in
 [Constructor Injection](#72-constructor-injection):
 
@@ -858,56 +858,48 @@ for pure lazy adapters and callbacks whose effects occur during consumption.
 
 ### 7.2 Constructor Injection
 
-`@inject(Action)` supplies an omitted stored field through a zero-argument effect
-action. It adds no keyword, global registry, service-container type or implicit
-handler. The annotation names an action; it does not execute it at declaration
-time.
+For an omitted field of type `T`, bare `@inject` requests the standard
+`Inject<T>.get()` action. `@inject(Action)` instead names a zero-argument
+action returning an assignable value, resolved at the declaration site under
+its generic bounds. Neither form executes at declaration time.
 
 ```etas
-effect BuildContext {
-    action label() -> string;
-}
-
+type AppConfig = { name: string };
 type Config = {
-    @inject(BuildContext.label)
-    label: string,
+    @inject
+    context: AppConfig,
     retries: u32,
 }
-```
 
-`Config { retries = 3 }` elaborates to:
-
-```etas
-Config {
-    retries = 3,
-    label = perform BuildContext.label(),
+flow configured(context: AppConfig) -> Config {
+    Config { retries = 3 } with {
+        AppConfig => context;
+    }
 }
 ```
+
+In a handler, `T => expr;` expands to `Inject<T>.get() => { resume expr; }`.
+The right side is an expression of assignable type, including a block with a
+tail value, evaluated per request. It is not an implicit `finish` or a match
+for other actions returning `T`; ordinary action arms still require explicit
+completion. Direct arm-level `return` remains invalid.
 
 | Rule | Contract |
 |---|---|
-| Target | One `@inject` per stored field of a named nominal record `type` or `agent`. Not on aliases, anonymous structural records, enum payloads, parameters or methods. Existing visibility/construction restrictions still apply. |
-| Action reference | Resolve at the field declaration site, including imports and static selectors, under the enclosing generic bounds. It must name an action with zero ordinary parameters, not a tag, flow, action invocation or runtime expression. Its result must be assignable to the field type; use the normal generic/spec/existential checks. |
-| Explicit value | `field = expr` and shorthand `field` override injection without requesting the action. Missing unannotated fields, duplicate/unknown fields and invalid annotations are compile errors. |
-| Evaluation order | Validate the construction, then evaluate supplied expressions once in source order; next request each omitted injected field once in field-declaration order. No reordering to canonical field order. |
-| Resolution | Each request uses the nearest matching active handler, otherwise the action's registered default. An unhandled demand propagates normally and must satisfy the enclosing effect/entry contract; no automatic provider is invented. |
-| Result | Publish only a fully initialized value/instance. An error, cancellation or nonlocal handler `finish` can abandon construction; completed external effects are not rolled back. Agent initialization additionally cleans up its newly owned scope. |
-| Stored value | Reads, copies, pattern matching, equality/hash and serialization use the stored value; they never re-run injection. These operations retain their ordinary type/spec requirements. |
-| Scope | Changing a later handler does not replace an existing field. Construction stores the returned value, not the ambient handler stack or grants; injected closures/handlers retain their ordinary capture rules. |
-| References | Lifetimes must fit the destination. An injected existing agent reference keeps its owner; storing it does not adopt it. Fresh instances created in an active initialization scope use that scope's ownership rules. |
-| Schema/decoding | Injection is a source-construction default, not an optional schema field or decoder fallback. Derived decoders must obtain required fields from data and do not run providers. A custom decoder may explicitly construct a value, with those effects checked normally. |
+| Target | One annotation per stored field of a named nominal record or agent; not aliases, anonymous records, enum payloads, parameters or methods. Normal visibility rules apply. |
+| Type key | `T` must be a value type, not an effect/spec name. Match normalized types: aliases agree, distinct nominal types do not. Duplicate arms for the same dependency request, including expanded sugar, are rejected. No search for conforming implementations. |
+| Explicit value | `field = expr` or shorthand `field` suppresses that provider. Missing unannotated fields, duplicate/unknown fields and invalid annotations are rejected. Use explicit values or named actions for distinct roles of the same type. |
+| Order | After validation, evaluate supplied expressions once in source order, then request omitted injected fields once in declaration order. No implicit caching or dependency-cycle resolution. |
+| Resolution | Nearest matching handler, otherwise a registered default. `Inject<T>.get` has no default provider; missing handling propagates an ordinary effect obligation. A named annotation must reference an action, not a tag, flow or invocation. |
+| Completion | Publish only fully initialized values. Error, cancellation or `finish` may abandon construction; clean up newly owned agent scopes, not committed external effects. |
+| Stored value | Later reads, copies, patterns, equality/hash and serialization use the stored value under their normal rules; no provider is rerun. Later handlers do not replace fields. |
+| Scope | Store the value, not ambient handlers or grants. Capture/lifetime rules apply; existing agent references keep their owners, fresh children follow initialization-scope ownership. |
+| Decoding | Required schema fields stay required; derived decoding never invokes providers. Custom decoders may construct explicitly with checked effects. |
 
-Unlike action-free parameter defaults, injection deliberately contributes the
-omitted actions to the constructor's effects, requested-action and ordered
-trace summaries. Explicit overrides remove only their omitted requests.
-Providers' own behavior, authority checks, cancellation and limits remain
-visible; an empty escaping row after handling does not imply purity.
-
-`@inject` never creates an effectful getter. For request-dependent resolution,
-write `perform Context.dependency()` in the method instead of annotating a stored
-field. Repeated constructions make independent requests, even for the same
-action; provider code chooses whether to reuse a value. No caching or dependency
-cycle resolution is implicit.
+Performed providers and their behavior remain in escaping/requested-action and
+ordered trace analysis, with normal authority, cancellation and budget checks.
+For per-request resolution, perform the dependency action in the method; stored
+fields are never effectful getters.
 
 ## 8. Encapsulation and Methods
 

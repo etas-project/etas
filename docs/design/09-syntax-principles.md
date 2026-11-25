@@ -141,7 +141,7 @@ PrimitiveType ::= "bool" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
 RecordType    ::= "{" FieldDecl* "}"
 FieldDecl     ::= InjectAnnotation? Visibility? Ident ":" TypeExpr ","?
 InjectAnnotation
-              ::= "@" "inject" "(" EffectRef ")"
+              ::= "@" "inject" ("(" EffectRef ")")?
 Visibility    ::= "private" | "public"
 
 TupleType     ::= "(" TypeList ")"
@@ -186,7 +186,7 @@ EffectActionDecl
               ::= "action" Ident TypeParams? ParamList ReturnType ";"
 ```
 
-Kinds, `~` evidence, handler types and existential packing follow [Types](05-type-system-and-errors.md). `InjectAnnotation` is permitted only on direct nominal record/agent fields and must name a zero-argument action; see [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
+Kinds, `~` evidence, handler types and existential packing follow [Types](05-type-system-and-errors.md). Field `@inject` selects `Inject<T>.get`; an explicit argument names a zero-argument action. See [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
 
 ### 2.3 Top-Level Bindings
 
@@ -348,6 +348,7 @@ HandlerValueExpr
 HandlerExpr   ::= "handler" HandlerBlock
 HandlerBlock  ::= "{" HandlerArm* "}"
 HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" ContinuationBinder? "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+                | TypeExpr "=>" Expr ";"  // Inject<T>.get() => { resume Expr; }
 ContinuationBinder
               ::= "as" Ident
 HandlerArmBlock
@@ -396,7 +397,7 @@ BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
                 | "&&" | "||"
 ```
 
-Arrow types associate right; stage operators associate left. `with` applies a handler, not configuration. Handler arms must explicitly resume/finish or take a `never` path. `@inject` affects omitted constructor fields, never field reads. Empty-state type stages require an existing public `run`; stateful types, even fully injected ones, require construction. See [Flows](04-flows-human-gates-and-protocols.md).
+Arrow types associate right; stage operators associate left. `with` applies a handler. Ordinary action arms require explicit completion; type arms use the fixed injection expansion. `@inject` affects construction, never field reads. Empty-state type stages require a public `run`; stateful types require construction. See [Flows](04-flows-human-gates-and-protocols.md).
 
 ### 2.9 Names And Patterns
 
