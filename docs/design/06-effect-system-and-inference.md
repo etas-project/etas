@@ -764,6 +764,7 @@ Effect inference computes an upper bound over effects that may occur during exec
 |---|---|
 | Pure expression | `{}`; constructing a record is pure only when its evaluated initializers are pure. |
 | Nominal record/agent construction | Supplied initializer effects, then omitted `@inject` actions and their handling behavior; active construction additionally retains `Agentic.create<A>` and startup summaries. |
+| Record-value update `base { fields }` | Base evaluation, then replacement effects in source order; retain requested/trace/capture behavior. No implicit provider, mutation or agent action. |
 | Stored-field access | Receiver-expression effects only; never re-request an injected field. Active privacy/snapshot rules still apply. |
 | Flow call | Callee effect set |
 | Etas tool call | Tool boundary effects plus inferred body effects |

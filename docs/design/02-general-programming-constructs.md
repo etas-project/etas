@@ -596,34 +596,29 @@ type Paper = {
 }
 ```
 
-Record construction requires each field exactly once, except omitted fields
-with `@inject` on a named nominal declaration. Unknown or duplicate fields are
-errors. Explicit initialization and shorthand are equivalent:
+Resolve a record head by name/kind, not capitalization:
+
+| Form | Meaning |
+|---|---|
+| `{ fields }` / `Paper { fields }` | Construct; supply required fields except omitted nominal `@inject` fields. |
+| `paper { title, year }` | Same record type; replace listed fields, retain others. Shorthand means `title = title, year = year`. |
+| Agent head | A type constructs an instance; an instance cannot be updated this way. |
 
 ```etas
-let input = {
-    topic = topic,
-    papers = papers
-};
-
-let same_input = { topic, papers };
-```
-
-`{ topic, papers }` expands to `{ topic = topic, papers = papers }`. Both count
-as explicit initialization, so neither triggers injection:
-
-```etas
-agent Writer = {};
-impl Writer {
-    public flow run(self, input: { topic: string, papers: Array<Citation> }) -> Draft {
-        return perform infer<Draft>(WriterPrompt(input));
-    }
+flow revise(paper: Paper, title: string, year: u32) -> Paper {
+    return paper { title, year };
 }
-
-let draft = (Writer {}).run({ topic, papers });
 ```
 
-Shorthand preserves field names for schemas, tracing and debugging.
+| Update Rule | Contract |
+|---|---|
+| Type | A value path must have a known ordinary record type; preserve its nominal identity/generic arguments or structural shape. Reject unknown/duplicate fields and type mismatches. |
+| Evaluation | Snapshot the base once, then replacements once in source order. Names resolve lexically, not to old/new fields. |
+| Retention | No implicit base mutation or initializer/provider reruns; `base {}` preserves its value. Failure yields no partial result; external effects are not rolled back. |
+| Encapsulation | Full-reconstruction visibility (including retained fields), copy/affine and lifetime checks apply. No resource cloning; immutable backing may be shared. |
+| Syntax | Parenthesize constructions/updates in control heads, e.g. `for author in (paper { title }).authors { ... }`; see [Grammar](09-syntax-principles.md#27-statements). |
+
+Expand to hygienic temporaries and ordinary reconstruction, not runtime reflection.
 
 Tuples are useful for small positional values:
 
@@ -903,7 +898,7 @@ resume, never finish. Direct arm-level `return` is invalid.
 
 ## 8. Encapsulation and Methods
 
-Etas records should support private fields and methods so domain objects can protect their own invariants. This matters for long-running agent state such as sessions, interrupts, approvals, and resumable executions.
+Private fields and methods protect record invariants.
 
 ```etas
 enum SessionState {
@@ -924,64 +919,25 @@ type Session = {
 }
 ```
 
-Methods are declared in an `impl` block whose target kind is an ordinary type.
-A method uses the same `flow` form as a top-level callable. Plain `self` is an
-immutable parameter; a state-changing method may return an updated value or
-use the restricted [`var self`](#32-restricted-updating-receivers) mode. Private
-fields remain inaccessible outside the defining module.
-
-`impl` is also used by the effect system to attach `action` signatures to an effect tag, but the forms are kind-checked and cannot be mixed:
-
-```text
-impl TypeName   { flow... }    // ordinary methods
-impl EffectName { action...; } // effect actions
-```
-
-An ordinary type `impl` cannot contain `action`, and an effect `impl` cannot contain ordinary `flow` methods.
-An active agent target accepts request methods and model-callable member tools;
-its receiver and state rules are defined in the agent chapter. Target kind is
-resolved from the declaration, without an additional keyword.
+`impl T` defines ordinary `flow` methods. Plain `self` reads a value; updates
+return a new value or use restricted [`var self`](#32-restricted-updating-receivers).
+Private access is module-scoped. Target kind restricts members: ordinary types
+accept flows, effects accept actions, agents accept request flows/member tools.
+These kinds cannot be mixed; active receiver rules remain in
+[Agents](03-agents-tools-prompts-memory.md#13-operational-intuition).
 
 ```etas
 impl Session {
-    flow new(tenant_id: TenantId, user_id: UserId) -> Result<Session, SessionError> {
-        if is_empty(tenant_id) || is_empty(user_id) {
-            return Err(MissingIdentity);
-        }
-
-        let id = new_session_id();
-        return Ok(Session {
-            id,
-            tenant_id,
-            user_id,
-            state = Running,
-            current_interrupt = None,
-            events = [SessionStarted { id }],
-        });
-    }
-
     flow pause(self, interrupt: Interrupt) -> Result<Session, SessionError> {
         if !valid_transition(self.state, Waiting) {
             return Err(InvalidStateTransition { from = self.state, to = Waiting });
         }
 
-        return Ok(Session {
-            id = self.id,
-            tenant_id = self.tenant_id,
-            user_id = self.user_id,
+        return Ok(self {
             state = Waiting,
             current_interrupt = Some(interrupt),
             events = self.events.push(InterruptRaised { id = self.id }),
         });
-    }
-
-    flow is_terminal(self) -> bool {
-        match self.state {
-            Completed => true,
-            Failed(_) => true,
-            Cancelled(_) => true,
-            _ => false,
-        }
     }
 }
 ```
@@ -1172,8 +1128,8 @@ public type Session = {
 A public type does not make its private fields visible. Code outside the
 defining module can name `Session`, pass it around, and call public methods, but
 cannot directly read or write `state` or `token_budget`.
-An ordinary record with private fields cannot be constructed outside its defining
-module; use a public factory. Field injection does not bypass this restriction.
+An ordinary record with private fields cannot be constructed or record-updated
+outside its defining module; use public factories/methods. Injection is no bypass.
 
 Methods inside `impl` blocks default to `private`. Public methods form the
 callable API of the type:

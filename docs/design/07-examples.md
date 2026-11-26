@@ -193,8 +193,9 @@ flow ScopedReview(text: string) -> string ![] {
     };
     return handle {
         let config = ReviewConfig {};
+        let decorated = config { footer = " [reviewed]" };
         let team = ReviewTeam {};
-        team.run(config.label + text + config.footer)
+        team.run(decorated.label + text + decorated.footer)
     } with dependencies;
 }
 ```
@@ -208,6 +209,7 @@ the reviewer keeps its owner. `Agentic.create/call` remain requested metadata.
 | `ReviewConfig { label = "explicit", footer = "" }` | Neither provider runs; module-scope construction still obeys global-initializer rules. |
 | `ReviewTeam { reviewer }` | Explicit shorthand bypasses the provider; ordinary active construction/dispatch checks remain. |
 | Two `ReviewConfig {}` constructions | Four requests, one per omitted field per construction; no implicit cache. |
+| `config { footer = " [reviewed]" }`, for `config: ReviewConfig` | New record retains label without provider calls; config is unchanged. Agent-instance heads are rejected. |
 | `handler { string => "fallback"; label => "review: "; }` | Named label wins within this handler; footer uses the type fallback. |
 | Inner `handler { string => "inner"; }` | Overrides outer string providers; saved fields do not change. |
 | `handler { label => "a"; label => "b"; }` | Rejected: duplicate name/type pair. |

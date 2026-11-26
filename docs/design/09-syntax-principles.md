@@ -278,14 +278,15 @@ VarStmt       ::= "var" Pattern TypeAnnot? "=" Expr ";"
 AssignStmt    ::= Expr "=" Expr ";"
 TypeAnnot     ::= ":" TypeExpr
 
-IfStmt        ::= "if" Expr Block ("else" (IfStmt | Block))?
-MatchStmt     ::= "match" Expr "{" MatchArm* "}"
+HeadExpr      ::= Expr  // record expressions require grouping at head delimiter depth
+IfStmt        ::= "if" HeadExpr Block ("else" (IfStmt | Block))?
+MatchStmt     ::= "match" HeadExpr "{" MatchArm* "}"
 MatchArm      ::= Pattern "=>" (Expr | Block) ","?
 
 LocalAnnotation
               ::= Annotation  // checked: only the recognized @limits contract
-ForStmt       ::= LocalAnnotation* "for" Pattern "in" Expr Block
-WhileStmt     ::= LocalAnnotation* "while" Expr Block
+ForStmt       ::= LocalAnnotation* "for" Pattern "in" HeadExpr Block
+WhileStmt     ::= LocalAnnotation* "while" HeadExpr Block
 RetryStmt     ::= LocalAnnotation* "retry" Block
 AnnotatedBlock
               ::= LocalAnnotation+ Block
@@ -367,9 +368,9 @@ LambdaExpr    ::= ParamList "=>" (Expr | Block)
 ArgList       ::= Arg ("," Arg)* ","?
 Arg           ::= Ident "=" Expr | Expr
 
-RecordExpr    ::= Path? "{" FieldInit* "}"
+RecordExpr    ::= Path? "{" FieldInit* "}"  // type head: construct; record-value head: update
 FieldInit     ::= Ident ("=" Expr)? ","?
-TupleExpr     ::= "(" ArgList? ")"
+TupleExpr     ::= "(" ArgList? ")"  // one unnamed expression without a comma is grouping
 ArrayExpr     ::= "[" CommaExprList? "]"
 ListExpr      ::= "[" SemiExprList? "]"
                 | Expr "::" Expr
@@ -390,7 +391,7 @@ SliceExpr     ::= Expr "[" Expr "," Expr ")"
 TryExpr       ::= Expr "?"
 UnaryExpr     ::= UnaryOp Expr
 BinaryExpr    ::= Expr BinaryOp Expr
-IfExpr        ::= "if" Expr Block "else" Block
+IfExpr        ::= "if" HeadExpr Block "else" Block
 MatchExpr     ::= MatchStmt
 
 UnaryOp       ::= "!" | "-"
@@ -400,6 +401,11 @@ BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
 ```
 
 Arrow types associate right; stage operators associate left. `with` applies a handler. Dependency arms implicitly resume; action arms require explicit completion. Injection never changes field reads. Empty-state type stages require a public `run`; stateful types require construction. See [Flows](04-flows-human-gates-and-protocols.md).
+
+At control-head delimiter depth, `{` begins the following block/arms; group
+record expressions in parentheses. Elsewhere the resolved head kind selects
+construction or update. Value-headed updates are expressions, not patterns; see
+[Composite Types](02-general-programming-constructs.md#7-composite-types).
 
 ### 2.9 Names And Patterns
 

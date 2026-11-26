@@ -184,19 +184,13 @@ Active agent references do not derive structural Eq/Hash. Whole-record
 comparison therefore requires separate valid evidence for any agent-valued
 field; matching private state does not make two instances equal.
 
-Supplied record field expressions run in source order, followed by omitted
-`@inject` actions in declaration order. Equality/hash compare the completed
-stored fields, never providers or annotations. Canonical layout cannot reorder
-observable initialization; see [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
-
-For a field `f: T` annotated with action `a`, checking requires a zero-argument
-signature `a() -> U` whose result is assignable to `T` by the ordinary rules (no new coercion).
-Declaration-site generic/spec bounds must justify this for every admitted
-instantiation. At each nominal construction, fill only omitted annotated fields
-with checked `perform a()` expressions before effect/trace analysis. This
-changes the construction's behavior, not the resulting nominal type or the
-effect of subsequent stored-field reads. Lifetime, visibility and schema rules
-are unchanged.
+Fresh construction evaluates supplied fields in source order, then omitted
+`@inject` actions in declaration order. Record update evaluates its base once,
+then replacements in source order, retaining other stored fields without injection.
+Equality/hash use completed stored values; canonical layout cannot reorder
+observable evaluation. Provider typing and generic bounds follow
+[Constructor Injection](02-general-programming-constructs.md#72-constructor-injection);
+type-preserving update follows [Composite Types](02-general-programming-constructs.md#7-composite-types).
 
 Standard collection abstractions use their specified logical equality, not the
 fields of a particular source/runtime representation. Sequence collections
