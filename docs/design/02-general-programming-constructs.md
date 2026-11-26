@@ -862,7 +862,7 @@ resume like ordinary action tails, never implicitly finish. No arm-level `return
 | Rule | Contract |
 |---|---|
 | Target | One annotation per nominal record/agent field or eligible parameter. Reject enum payloads, anonymous-record fields, receivers, lambdas, action parameters and non-action annotation arguments. |
-| Matching | Match names/normalized types; aliases agree, nominal types differ. Nearest handler wins, then exact name before type-wide arm. Reject duplicate keys, including expanded sugar; no implementation search. |
+| Matching | Match names/normalized types; aliases agree, nominal types differ. Nearest layer wins, then exact name before type-wide arm, including merged `+` arms. Reject duplicate keys after expansion; no implementation search. |
 | Labels | Names identify demands, not owners. Same-name/same-type fields and parameters use the same matching rules; use nested handlers or named actions to distinguish them. Renaming changes the contract. |
 | Construction | Follow section 7, interleaving omitted defaults/providers in field order. No implicit provider cache or dependency-cycle resolution. |
 | Effects | Retain demand names/types and provider behavior. Inject has no default provider; uncovered requests escape. Unknown labels need type-wide coverage. Handling never grants authority or certifies an injected identity. |

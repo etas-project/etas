@@ -4,20 +4,14 @@
 
 ### 1.1 Calls And Values
 
-Flows are first-class callables with inferred return/effect types. Construction
-of a flow value does not execute it; calls preserve its latent behavior and
-capture constraints. Declaration and inference rules are in
+Flows have inferred return/effect types; creation does not execute their bodies.
+Calls preserve latent behavior/captures; see
 [General Constructs](02-general-programming-constructs.md#4-flows-as-the-ordinary-callable-unit).
 
 ### 1.2 Stage Composition
 
-Etas also supports a stage composition operator:
-
-```etas
-let pipeline = Researcher | Writer | Publisher;
-```
-
-The operands of `|` are stages, and the operator is left-associative. A stage may be an `agent`, a `flow`, or a `tool`, as long as the output type of the left stage matches the input type of the right stage:
+`A | B` composes stages left-associatively. Agent, flow and tool stages require
+matching intermediate types:
 
 ```text
 stage(A) ~ Stage<I, M, E1>
@@ -26,16 +20,10 @@ stage(B) ~ Stage<M, O, E2>
 A | B: I -> O ![E1 + E2]
 ```
 
-For an empty-state agent type with an explicitly defined public `run`, stage
-conversion constructs an instance per invocation; a bound instance stage reuses
-its reference and scope. Stateful agents require explicit construction. Neither
-form hides creation, instance-access or state-dependence metadata.
-
-The result is a flow value, not a new nominal `agent`. Composition preserves
-the selected stage methods and their behavior summaries; prompts and model
-calls occur only where those methods actually request them.
-
-Examples:
+An empty-state agent type needs explicit public `run`; stage conversion creates
+an instance per invocation. Bound stages reuse their reference/scope; stateful
+agents need explicit construction. Preserve creation, access and state summaries.
+Composition returns a flow, not an agent; only executed methods request models.
 
 ```etas
 let draft_pipeline = Researcher | Writer;
@@ -46,30 +34,21 @@ let checked_pipeline = Researcher | sanitize_notes | Writer;
 
 let publish_pipeline = Researcher | Writer | publish.write;
 // publish_pipeline: Topic -> PublishedPost
-```
 
-The effect set of a composed flow is the union of the stage effects. Its determinism class is the maximum of the stage classes:
-
-```text
-Deterministic < NonDeterministic
-```
-
-Any composition containing a stage whose method/body summary is
-`NonDeterministic` is itself `NonDeterministic`. An agent's nominal identity
-alone does not change this classification.
-
-`|` composes stages into a flow value. `~>` applies a value to a stage or composed flow:
-
-```etas
 let pipeline = Researcher | Writer | Publisher;
 let post = topic ~> pipeline;
-
 let same_post = topic ~> (Researcher | Writer | Publisher);
 ```
 
+Stage effects union; determinism takes the maximum under
+`Deterministic < NonDeterministic`, based on behavior, not nominal agent identity.
+`x ~> stage` evaluates x then applies the stage. With two Handler operands,
+`~>` instead constructs [ordered nesting](06-effect-system-and-inference.md#24-handler-composition);
+it never implicitly installs a handler around x. `|` remains stage composition.
+
 ### 1.3 Concurrent Composition
 
-Etas does not need a dedicated `parallel` statement. Concurrent flow or tool composition can be expressed by a standard library combinator:
+Concurrent flows/tools use a library combinator, not a `parallel` keyword:
 
 ```etas
 let (a, b, c) = join((
@@ -79,11 +58,8 @@ let (a, b, c) = join((
 ));
 ```
 
-`join` is a structured standard-library combinator, not a keyword.
-
-The full concurrency model, including effect/resource conflicts, trace-spec/runtime-policy
-ordering, limits, cancellation, and trace semantics, is specified in
-[Concurrency](16-concurrency.md).
+`join` follows [Concurrency](16-concurrency.md): effects/resource conflicts,
+trace constraints, limits, cancellation and task scopes remain checked.
 
 ### 1.4 Resource Contracts and Budgeted Loops
 

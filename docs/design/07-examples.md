@@ -1,6 +1,6 @@
 # Examples
 
-Sections 1 and 2 share declarations; section 3 is independent.
+Sections 1 and 2 share declarations; sections 3 and 4 are independent.
 
 ## 1. Stateful Team, Roles And Upward Effects
 
@@ -203,11 +203,8 @@ tool format_note(content: string, @inject(Auth.current_user) user: string)
 flow ScopedReview(text: string) -> string ![] {
     let reviewer: ? ~ ReviewRole = EchoReviewer {};
     let footer = "";
-    let dependencies = handler {
-        label => "review: ",
-        footer,
-        reviewer,
-    };
+    let dependencies = handler { label => "review: "; }
+        + handler { footer, reviewer, };
     return handle {
         let config = ReviewConfig {};
         let decorated = config { footer = " [reviewed]" };
@@ -227,9 +224,9 @@ identity data, not proof; `format_note` includes it in output intentionally.
 | `ReviewTeam { reviewer }` | Explicit shorthand skips injection, not agent checks. |
 | Two `ReviewConfig {}` constructions | Four requests, one per omitted field per construction; no implicit cache. |
 | `config { footer = " [reviewed]" }` | Retain label without injection; original unchanged. Agent heads rejected. |
-| `handler { string => "fallback"; label => "review: "; }` | Named label wins within this handler; footer uses the type fallback. |
+| `handler { string => "fallback"; } + handler { label => "review: "; }` | Named label wins within the merged layer; footer uses the type fallback. |
 | Inner `handler { string => "inner"; }` | Overrides outer string providers; saved fields do not change. |
-| `handler { label => "a"; label => "b"; }` | Rejected: duplicate name/type pair. |
+| `handler { label => "a"; } + handler { label => "b"; }` | Rejected: duplicate name/type pair, as in a single literal. |
 | `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Reject uncovered requests at the closed row. |
 | `handler { label: string => 42; }` | Rejected: provider value does not match its declared type. |
 | Decoder receives no label | Missing required data, not implicit invocation of the label provider. |
@@ -244,3 +241,34 @@ identity data, not proof; `format_note` includes it in output intentionally.
 | `ReviewConfig {}` without providers | Requests both strings; their empty type default is not a fallback. |
 | `type Nested = { config: ReviewConfig }; Nested {} with { label => "review: "; footer => ""; }` | Recursively construct config, requesting label then footer. Defaults, nested records and preserving updates are illustrated in [Composite Types](02-general-programming-constructs.md#7-composite-types). |
 | `type Node = { next: Node }; Node {}` | Reject infinite default expansion; the recursive declaration itself remains valid. `next: Option<Node>` would default to None. |
+
+## 4. Ordered And Merged Handlers
+
+```etas
+effect Job { action run() -> i32; }
+effect Audit { action record(value: i32) -> unit; }
+
+flow RunHandled() -> i32 ![] {
+    let job = handler {
+        Job.run() => {
+            perform Audit.record(7);
+            7
+        }
+    };
+    let audit = handler { Audit.record(value) => (); };
+    return perform Job.run() with (job ~> audit);
+}
+```
+
+The audit is a mock, not durable logging. With these handler values:
+
+| Expression/check | Result |
+|---|---|
+| `perform Job.run() with (job ~> audit)` | 7; audit handles the inner arm's request. |
+| `perform Job.run() with (audit ~> job)` | Audit.record escapes: job's arm cannot use an inner handler. |
+| `perform Job.run() with (job + audit)` | Audit.record escapes from the merged layer; not equivalent to nesting. |
+| `(perform Job.run() with (job + audit)) with audit` | 7; the outer audit handles it. |
+| `job + job` / `(job ~> audit) + job` | Reject duplicate coverage / merging nested layers. |
+| `perform Job.run() ~> job` | Reject: `~>` does not install a Handler around a computation. |
+| `e with (make1() ~> make2())` | Factories 1,2 outside both layers, then e; failure skips e. |
+| `(e with make1()) with make2()` | Factory 2 first, then 1 under it; cannot generally reorder. |

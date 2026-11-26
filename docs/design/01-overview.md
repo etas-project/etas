@@ -19,7 +19,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 | `spec`, `impl`, `~` | Type, callable and trace constraints; generic evidence and explicit implementations. |
 | `? ~ Spec` | Existential value retaining checked spec evidence and scope restrictions. |
 | `?` | Convert exactly one residual `Error<E>` family to `Result<T, E>`. |
-| `A \| B`, `x ~> A` | Compose stages into a flow; apply a value to a stage. |
+| `A \| B`, `~>`, `+` | Compose/apply stages; Handler `h1 ~> h2` nests inner-to-outer, `h1 + h2` merges one layer. Install with `with`. |
 | `@limits(...)` | Scoped resource bounds; nested and concurrent work share applicable parent accounts. |
 | `@inject` / `@inject(Action)` | Resolve omitted fields at construction, parameters at calls; explicit values win. Tool injected inputs are model-hidden. |
 | `protocol` | Role/message declaration; not a replacement for trace specs. |

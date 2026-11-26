@@ -239,6 +239,7 @@ semantics. File formats and compiler pipelines are outside this SPEC.
 | Constructors | Field order/types/visibility, default expressions with declaration-site bindings/revisions, injection labels/provider identities/selectors and recursive initialization summaries. Imports preserve omitted-field behavior. |
 | Agents | State schema, role evidence, instance alias/read-write summaries, scoped-reference/capture bounds and temporal/state-dependence contracts. |
 | Effects and tools | Escaping and requested-action summaries, model schemas, required concrete bindings and trace constraints. |
+| Handlers | Layer shape/order, arm coverage/priority, produced behavior, answer constraints and captures; rows alone cannot prove safe merging. |
 | Optional parameters | Pure defaults or injection labels/provider identities, generic types, hidden tool-schema projection and conditional binding behavior; preserve declaration-site bindings/revisions. |
 | Reflection | Body retention/export visibility and source/dependency fingerprints. Retained private bodies remain private. |
 | Standard symbols | Recognized symbol identities and compatible public contracts; package metadata cannot self-assign intrinsic status or authority. |

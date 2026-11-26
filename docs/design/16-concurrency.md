@@ -362,12 +362,9 @@ handle {
 } with DryRunWorkspace;
 ```
 
-Effects handled by the scoped handler are removed from the escaping effect row
-only if the handler covers those branch actions. Effects performed by handler
-arms still escape normally.
-
-Handler arms must not hide audit evidence: even when a branch action is handled,
-the trace records the attempted action and the handler decision.
+Use [layered effect transfer](06-effect-system-and-inference.md#24-handler-composition)
+for composed handlers; child tasks inherit the same layer order and delimiters,
+subject to capture checks. Handled requests/decisions remain in the trace.
 
 Field/parameter `@inject` uses the executing task's scoped handlers, not a registry.
 Concurrent resolutions remain independent and retain capture/cancellation/owner

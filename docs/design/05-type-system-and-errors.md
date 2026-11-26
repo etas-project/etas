@@ -912,39 +912,23 @@ when a value-level boundary is needed.
 
 ### 2.3 Runtime-Scoped Effect Handlers
 
-Handlers eliminate handled escaping actions and add arm effects. An ordinary
-tail value implicitly resumes with the action result B; explicit `finish` supplies
-the handled answer R. B and R are independent. `never` actions cannot resume;
-normal fallthrough without a tail and direct arm `return` are rejected. See
-[Handler Scope](06-effect-system-and-inference.md#22-handler-scope).
+Action result B and handled answer R are independent. Completion follows
+[Handler Scope](06-effect-system-and-inference.md#22-handler-scope); composition
+retains [layered summaries](06-effect-system-and-inference.md#24-handler-composition),
+not just handled/produced effect sets.
 
 #### 2.3.1 Scoped Continuation Handles
 
-`Action(args) as k => {... }` binds a single-shot continuation for a resumable
-action. Its type is inferred from the action result type, the handled answer
-type, residual computation effects, and its owning task scope. These facts are
-compiler-known; runtime signature data cannot forge a continuation. No public
-continuation type annotation or new ownership keyword is required.
+`Action(args) as k => {... }` infers a continuation from action result, handled
+answer, residual effects and task scope. These checked facts cannot be forged
+by runtime signature data; no public type annotation/ownership keyword is needed.
 
-Unlike ordinary value-semantic data, `k` is affine: it cannot be copied, and a
-transfer consumes the local binding. Aggregate or closure capture must preserve
-this non-copyability and scope bound. It may enter only scope-preserving
-scheduler storage, not an ordinary persistent/copying collection, global value,
-model payload, or return value that outlives its owner. The original task and
-handler frame must remain valid until resumption or cancellation. Merely
-abandoning the handle is not successful handler completion.
-
-Explicit/implicit resume consumes the same handle; a path cannot transfer then
-resume, or transfer twice. `finish`/unwinding cleans up the suspended computation.
-`never` actions have no resumable handle. Deferred execution checks one-use
-ownership and scope validity.
-
-`Task<T, E>` is a standard task-result handle; `E` is an effect-row parameter.
-Its owning scope and requested-action/trace contract remain checked metadata,
-not writable fields. Passing a task to another helper must preserve those
-facts. Task handles can be shared within their lifetime and awaited more than
-once without repeating the job; this does not make a continuation copyable.
-Task and scheduler handles cannot escape their owning structured scope.
+| Contract | Rule |
+|---|---|
+| Affinity | k cannot copy; transfer or explicit/implicit resume consumes it once. Aggregates/closures preserve scope and non-copyability. Never transfer then resume or transfer twice. |
+| Storage | Only scope-preserving scheduler storage, not copying/persistent containers, globals, model payloads or escaping returns. Keep task/frame alive until resume/cancellation; abandonment is not completion. |
+| Completion | `finish`/unwinding cleans up suspended work. `never` actions have no resumable handle. Delayed execution checks ownership and scope. |
+| `Task<T, E>` | Shareable task-result handle with effect-row E, not a copyable continuation. Repeated await does not rerun work. Helpers preserve checked owner/requested/trace metadata; task/scheduler handles cannot escape their structured scope. |
 
 See [Task And Scheduling APIs](19-standard-library.md#2-task-and-scheduling-apis)
 and [handler-based scheduling](16-concurrency.md#111-handler-based-scheduling).

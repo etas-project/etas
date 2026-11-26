@@ -360,7 +360,7 @@ HandlerArmBody
               ::= ResumeStmt | FinishStmt | Block | Expr ";"
 StageComposeExpr
               ::= PipelineStage "|" PipelineStage ("|" PipelineStage)*
-PipelineExpr  ::= Expr "~>" PipelineStage ("~>" PipelineStage)*
+PipelineExpr  ::= Expr "~>" Expr ("~>" Expr)*  // stage application or Handler nesting by operand types
 PipelineStage ::= Expr
 LambdaExpr    ::= ParamList "=>" (Expr | Block)
                 | Ident "=>" (Expr | Block)
@@ -400,7 +400,13 @@ BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
                 | "&&" | "||"
 ```
 
-Arrows associate right; stage operators left. A braceless action arm is one expression or explicit `resume`/`finish` statement, independent of line wrapping; other statements require a block. Expression bodies/block tails implicitly resume; normal fallthrough without a tail is invalid. `never` paths do not resume. See [completion rules](06-effect-system-and-inference.md#22-handler-scope) and [stage rules](04-flows-human-gates-and-protocols.md).
+Arrows associate right; stage operators and consecutive `with` associate left.
+`+` binds tighter than `~>`, both tighter than `with`: `e with h1 + h2 ~> h3`
+means `e with ((h1 + h2) ~> h3)`. Binary `+` also merges Handler values;
+operands must be expressions (`handler { ... }`, not bare arm blocks).
+See [Handler composition](06-effect-system-and-inference.md#24-handler-composition),
+[arm completion](06-effect-system-and-inference.md#22-handler-scope) and
+[stages](04-flows-human-gates-and-protocols.md).
 
 At control-head delimiter depth, `{` begins the following block/arms; group
 record expressions in parentheses. Elsewhere the resolved head kind selects

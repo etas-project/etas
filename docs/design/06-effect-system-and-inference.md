@@ -579,10 +579,9 @@ capture boundary.
 | `finish value;` | Handled expression's answer R | End that delimited computation with R. |
 | `never` path | No value | Abort, propagate failure or transfer to a scheduler; do not append resumption. |
 
-Completion is checked per reachable path: an explicit `resume`/`finish` branch
-does not disable another branch's implicit resumption. Only the arm's expression
-body or outer block tail gets this sugar, not each loop iteration or nested flow.
-Tail expressions retain ordinary effect inference and check against B, never R.
+Check each reachable path independently. Only the arm expression/outer block
+tail implicitly resumes, not loop iterations or nested flows. Infer its effects
+and check B, never R; another branch's explicit completion changes none of this.
 
 | Boundary | Rule |
 |---|---|
@@ -608,10 +607,7 @@ or unrelated work. See [Concurrency](16-concurrency.md#11-handlers-in-concurrent
 ### 2.3 Handler Values And Default Handling
 
 ```etas
-let first = handler {
-    Choice.choose(left, right) => left;
-};
-
+let first = handler { Choice.choose(left, right) => left; };
 let first_or_finish = handler {
     Choice.choose(left, right) => {
         if left == "" { finish "No available choice"; }
@@ -627,13 +623,10 @@ let first_or_finish = handler {
 | `![H => E]` | Bound produced effects by E. |
 | `![H => E for R]` | Bound both produced effects and answer type. |
 
-Produced effects default to inference (`_`), not `[]`. Each action fixes its B;
-the handled computation and `finish` constrain R independently.
-
-Handlers are first-class parameters/results/fields. `handler { ... }` constructs
-a value; `with` accepts one or a bare arm block. `expr with h` equals
-`handle expr with h`; trailing `flow ... { body } with h` handles the whole body.
-Module scope permits handler values, not executed `handle` expressions.
+Produced effects default to inference (`_`), not `[]`. Actions fix B; computation
+and `finish` constrain R. Handlers are first-class values; `with` accepts a value
+or bare arm block. `expr with h` means `handle expr with h`; trailing callable
+`with h` handles its body. Module scope permits values, not executed `handle`.
 
 ```etas
 flow fallback<E, R>(recover: E -> R) -> ![Error<E> for R] {
@@ -643,18 +636,44 @@ flow fallback<E, R>(recover: E -> R) -> ![Error<E> for R] {
 }
 ```
 
+Requests remain recorded and select the nearest matching handler, then the
+registered default. Resume does not also run that default;
+`std.runtime.default(Action, args...)` explicitly selects it without bypassing
+checks. Unhandled obligations escape. Default handling retains requested/ordered
+evidence and callee/tool errors; `println` still exposes `Error<IOError>`.
+
+### 2.4 Handler Composition
+
+Both operators construct Handler values, not flows, tasks or running scopes.
+
+| Form | Meaning when installed |
+|---|---|
+| `h1 ~> h2` | For evaluated values: `e with (h1 ~> h2)` equals `(e with h1) with h2`. Left is inner; arm requests reach outer layers, never inner ones. Preserve delimiters, `finish` targets and deep resumption. |
+| `h1 + h2` | Merge single-layer arms into one delimiter. Arm requests go outside it, not to sibling arms; no left/right override. |
+
+| Rule | Contract |
+|---|---|
+| Construction | Operands once, left to right in the current environment; install nothing/run no arms. Failure skips later operands without rolling back completed effects. |
+| Application | Evaluate H before e, outside H's new scope; factory actions need enclosing handlers. Then install H and evaluate e. Trailing callable H runs after parameter binding, before body entry. |
+| Factory nesting | `(e with make1()) with make2()` runs make2 first, then make1 under it. `e with (make1() ~> make2())` runs 1,2 outside both. Rewriting needs effect/capture/order proof or already bound values. |
+| Syntax | `+` binds tighter than `~>`, both tighter than `with`; all associate left. Use `with`, not `e ~> h`, to install a handler. Existing stage `~>` and numeric/string `+` remain type-directed. |
+| Layers | `~>` keeps ordered layers; grouping adds none. `+` requires proved single-layer operands (literal, merge or checked factory). Reject nested/unknown shape, never implicitly flatten. |
+| Conflicts | Normalize action identities/selectors, payload patterns and injection sugar. Single literals/merges reject duplicate or ambiguous coverage, including unproved disjointness; identical bodies do not excuse duplicates. No source/operand-order winner. |
+| Injection priority | Within a layer, exact name precedes the same type's fallback; duplicate name/type keys or type fallbacks conflict. Across layers, nearest match wins, even over an outer exact-name arm. |
+| Contracts | Preserve layer coverage/behavior/captures through factories/imports/containers. Check each B independently; reject incompatible answer constraints, infer unresolved R when installed. Affinity, owners, budgets and authority remain checked. |
+
+For one layer h, Hh is fully covered requests and Ph its arm-effect upper bound.
+Factory effects are separate:
+
 ```text
-escaping(expr with h) =
-    (escaping(expr) - fully handled actions) union effects(handler arms)
+F_h(E)          = (E - Hh) union Ph
+F_(h1 ~> h2)(E) = F_h2(F_h1(E))
+F_(h1 + h2)(E)  = (E - (H1 union H2)) union P1 union P2
+escaping(e with H) = escaping(evaluate H) union F_H(escaping(e))
 ```
 
-Requests record attempted behavior and use the nearest matching handler, or the
-registered default if none matches. Resuming never also runs that default.
-`std.runtime.default(Action, args...)` explicitly skips the current arm to call
-it, preserving checks/effects. Missing handling propagates an obligation.
-
-Default handling preserves callee/tool effects, errors, requested/default facts
-and ordered evidence; `println` still exposes `Error<IOError>`.
+Handler type syntax is unchanged. Rows cannot encode layer order/prove merges;
+retain checked structure, requested actions and traces, not just their union.
 
 ## 3. Command Sandboxing
 
@@ -784,7 +803,8 @@ Effect inference computes an upper bound over effects that may occur during exec
 | `@limits(bounds)` on a declaration, loop, retry, or block | Preserve the computation's effects and requested actions; add `Error<BudgetExceeded>` when the budget may be exhausted. Local bound expressions must be deterministic, non-suspending and action-free. Bounded-prefix `for` completion alone does not add this error. |
 | `perform E.action_name(...)` | Action reference `E.action_name` or `E.action_name<_>` unless a static selector is known, plus its root coverage |
 | `e?` | Effects of `e` minus the captured `Error<E>`, result type becomes `Result<T, E>` |
-| `expr with h` / `handle expr with h` | Expression effects minus fully handled effects, plus handler arm effects |
+| Handler `h1 ~> h2` / `h1 + h2` | Operand evaluation effects now; preserve ordered/merged latent summaries under section 2.4. |
+| `expr with h` / `handle expr with h` | Evaluate h, then apply its layered transfer to expr's effects; see section 2.4. |
 
 Binding follows ordinary action handling; for omitted parameters M:
 

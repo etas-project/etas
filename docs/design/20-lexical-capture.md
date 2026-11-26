@@ -2,13 +2,11 @@
 
 ## 1. Scope
 
-This chapter specifies the shared lexical capture, lifetime and task-affinity
-rules for anonymous flows (lambdas) and Handler values.
+Lambdas and Handlers share lexical capture, lifetime and task-affinity rules.
 
 ## 2. Binding Identity And Assignment
 
-A lambda or Handler resolves free variables in its definition's lexical scope.
-Creating the value records those bindings without executing its body.
+Creation records definition-site bindings without executing the body.
 
 | Captured binding | Reads | Assignment |
 | --- | --- | --- |
@@ -16,10 +14,8 @@ Creating the value records those bindings without executing its body.
 | Local `var` | Read the current value of the original binding | Rebind that original binding in the same task |
 | Restricted `var self` receiver | Subject to the existing updating-receiver access rules | Update access follows its existing scope and escape restrictions |
 
-A captured `var` keeps its binding identity even when a particular lambda only
-reads it. Mutability belongs to that declaration and does not depend on which
-expression happens to access it. Assignment is visible immediately after the
-assignment completes, following ordinary evaluation order.
+Even read-only capture retains a `var`'s mutable binding identity. Completed
+assignment is immediately observable in ordinary evaluation order.
 
 ```etas
 var n = 0;
@@ -32,19 +28,13 @@ current(); // 7
 saved();   // 0
 ```
 
-Separate lambdas and Handlers created in the same activation and capturing
-the same `var` observe the same binding. Lexical shadowing introduces a new
-binding. Separate invocations of the declaring flow also create distinct
-bindings, even though their declarations have the same source symbol.
-
-Invocation parameters, handler payload parameters and body-local declarations
-have their own activation-local bindings. A captured outer variable retains
-its identity across those invocations.
+Same-activation captures share bindings; shadowing and separate invocations
+create distinct bindings. Parameters, action payloads and locals belong to each
+activation; captured outer bindings retain their identity across calls.
 
 ## 3. Value Semantics And Callable Copies
 
-The ordinary value rules for numbers, records and collections continue to
-apply when assigning to a captured variable.
+Captured-variable assignment preserves ordinary data value semantics:
 
 ```etas
 var xs = [1];
@@ -56,29 +46,18 @@ append();
 // original is [1].
 ```
 
-Copying a lambda or Handler value preserves the identities of its captured
-bindings. Storing that callable in a tuple, record or collection preserves
-the same relationship. Updates to those value containers still follow their
-ordinary value semantics.
-
-To give a callable an independent captured value, introduce an immutable
-snapshot binding before constructing it, as with `snapshot` in section 2.
-Opaque resource values retain their declared resource identity and ownership
-contracts when copied or captured.
+Copies and containers preserve capture identities, not independent environments;
+container updates still have value semantics. Use an immutable snapshot for an
+independent captured value. Opaque resources retain identity/ownership.
+Handler `+`/`~>` preserves all constituent captures and their restrictions;
+composition creates no snapshot, task, new ownership or authority.
 
 ## 4. Captured Mutable Bindings And Lifetime
 
-A lambda or Handler that captures an outer local `var` is bound to that
-binding's current lexical scope. It may read and rebind the variable within
-that scope, but cannot escape it. This applies even when the callable only
-reads the captured mutable binding. Copies and enclosing value containers
-retain the same restriction.
-
-Returning such a callable, storing it in a longer-lived binding, or transferring
-it to another task is rejected. Passing it to another callable requires a
-checked promise that the argument remains within the owning scope. Lambdas
-and Handlers that capture only immutable values retain their ordinary value
-and return behavior.
+Capturing local `var`, even read-only, binds a callable and its copies/containers
+to that scope. Reject return, longer-lived storage or cross-task transfer;
+helper calls need checked non-escape. Immutable-only captures retain ordinary
+value/return behavior, subject to captured resource lifetimes.
 
 ```etas
 flow example() -> i32 ![] {
@@ -98,15 +77,12 @@ flow invalid_counter() -> (() -> i32 ![]) ![] {
 }
 ```
 
-Scope-bound resources, updating-receiver access and single-shot continuation
-handles retain their existing ownership and escape checks. An independent
-immutable snapshot can be captured where its value type permits it. Mutable
-module-global state remains prohibited.
+Resource, receiver and continuation ownership/escape checks still apply.
+Snapshots require copyable values; mutable module globals remain prohibited.
 
 ## 5. Handler Completion And Resumption
 
-Inline Handler arms and separately constructed Handler values use the same
-capture rules as lambdas.
+Inline and first-class Handler arms use the same capture rules:
 
 ```etas
 effect E { action tick() -> unit; }
@@ -125,59 +101,25 @@ flow example() -> i32 {
 }
 ```
 
-`example()` returns `1`. Code resumed after `perform` also observes the updated
-binding. A lambda and a Handler capturing the same `n` within this task see
-each other's assignments.
-
-Assignments completed before `resume`, `finish`, or error propagation remain
-observable while the binding remains live. These control forms do not roll
-back ordinary local assignment. The restricted updating receiver's separate
-commit/rollback contract applies to its pending receiver value.
+`example()` returns 1; resumed code and other same-task captures observe n's
+update. Resume, finish and errors do not roll back completed local assignments;
+pending receiver updates follow their separate commit/rollback contract.
 
 ## 6. Task Boundaries And Analysis
 
-Captured mutable local bindings belong to their owning logical task. A lambda
-or Handler retaining such a binding is task-local, including through nested
-callables or value containers. The logical task can suspend, resume or migrate
-between host threads while retaining the same bindings.
-
-Synchronous `run` and its protected `Scope.enter` execution remain in the
-caller's logical task. A scheduler's internal owner job does not introduce a
-new capture boundary; independently started tasks and concurrent branches do.
-
-Agent calls also remain in the calling logical task. Explicit `start`, concurrent
-branches, inherited handlers and task results must check capture affinity;
-a callable retaining local `var` cannot share that binding with another task.
-Capture an immutable snapshot for independent task input, or use an explicit
-shared resource with its checked Effect and ownership contract.
-
-Agent references may be captured as immutable values: copies still reach the
-same isolated instance and retain lifetime/access summaries. Neither `var self`
-nor pending state may be shared with child tasks; same-task handlers cannot
-bypass receiver exclusivity or escape checks.
-Capture needed field values/references in immutable local bindings first.
-A model-exposed member tool receives a snapshot supplied by checked dispatch,
-not a closure alias to the updating receiver.
-
-The compiler carries captured-binding read/write and task-affinity facts
-through higher-order calls, imports, callable containers and Handler metadata.
-Where static provenance is abstract, task admission checks the retained
-environment before permitting execution in another task. Changing a callable's
-ordinary function type does not discard its environment constraints.
-
-Local binding assignment adds no external Memory authority action by itself.
-The compiler still records its captured-state behavior. An empty escaping
-Effect row alone does not justify memoization, repeated-call elimination or
-automatic parallel execution for such a callable. Reads of a captured `var`
-can observe previous assignments, and writes change subsequent observations.
-Optimization requires the corresponding capture and state-dependence proof.
+| Boundary | Rule |
+|---|---|
+| Logical task | Mutable captures stay task-local across suspension, thread migration and containers/callables. Agent calls and synchronous `run`/`Scope.enter` stay in the caller task; scheduler owner jobs add no capture boundary. |
+| Child tasks | Check affinity for `start`, concurrent branches, inherited Handlers and task results. No captured-var sharing; use snapshots or checked shared resources. |
+| Agents | Reference copies retain aliases/lifetimes/access. Children cannot share `var self`/pending state; same-task handlers cannot bypass exclusivity. Capture fields first; member tools receive dispatch snapshots, not receiver aliases. |
+| Analysis | Higher-order calls, imports, containers and composition preserve read/write/affinity/environment constraints. Abstract provenance requires admission checks; type changes erase none. |
+| Optimization | Local rebinding adds no Memory action, but retains state dependence. Empty escaping rows do not justify memoization, call elimination or parallelization without capture/state proofs. |
 
 ## 7. Suspension And Restoration
 
-Suspension and checkpoint restoration preserve captured-binding identity,
-values and task ownership. Copies within a restored execution share the same
-captured binding; separate restorations are independent executions. Storage
-layout, cell representation and encoding are not language contracts.
+Suspension/restoration preserves binding identity, values and task ownership.
+Restored copies share bindings; separate restorations are independent. Storage
+layout/encoding is not a language contract.
 
 ## 8. Conformance Cases
 
