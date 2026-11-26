@@ -44,7 +44,7 @@ flow main(args: Array<string>) -> i32 {
     let counter = handle {
         Counter {}
     } with {
-        Inject<i32>.get() => resume 41;
+        Inject<i32>.get(_) => resume 41;
     };
 
     let ticker = Ticker { n = 41 };

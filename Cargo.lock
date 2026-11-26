@@ -586,7 +586,7 @@ dependencies = [
 [[package]]
 name = "etas_interpreter"
 version = "0.22.0"
-source = "git+https://github.com/etas-project/etas-interpreter.git?rev=d119d79bb9296fa512a87652ad7db80e3f6a8af6#d119d79bb9296fa512a87652ad7db80e3f6a8af6"
+source = "git+https://github.com/etas-project/etas-interpreter.git?rev=fb7a8bc03109b2c8c20f73780025b8f05f2a9a86#fb7a8bc03109b2c8c20f73780025b8f05f2a9a86"
 dependencies = [
  "bincode",
  "blake3",
