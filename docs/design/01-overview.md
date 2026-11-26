@@ -15,7 +15,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 | `agent` | Nominal type with isolated state, scoped identity and checked, suspendable methods; no implicit worker or generated `run`. |
 | `tool` | Explicit model-callable boundary; ordinary source bodies may delegate to flows or agents. |
 | `effect`, `action`, `perform` | Effect tags, operation signatures and checked requests. |
-| `handler`, `handle`, `with` | First-class handlers and delimited application; single-shot `resume`, early `finish`, optional scope-bound `as k`. |
+| `handler`, `handle`, `with` | First-class handlers; tail values implicitly `resume`, `finish` exits early. Resumption is single-shot; `as k` exposes a scoped continuation. |
 | `spec`, `impl`, `~` | Type, callable and trace constraints; generic evidence and explicit implementations. |
 | `? ~ Spec` | Existential value retaining checked spec evidence and scope restrictions. |
 | `?` | Convert exactly one residual `Error<E>` family to `Result<T, E>`. |

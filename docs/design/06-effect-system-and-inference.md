@@ -568,47 +568,56 @@ use agent-scoped `infer`. See [Tool Rules](03-agents-tools-prompts-memory.md#2-t
 
 ### 2.2 Handler Scope
 
-Handlers are dynamically scoped and single-shot. Values/arms capture lexically
-under [Capture Rules](20-lexical-capture.md). Agent methods use the caller's
-handler chain, not the creator's. A call alone adds no task boundary; explicit
-child tasks check mutable-capture affinity. Resume targets the suspended action.
+Handlers are dynamically scoped and single-shot, with [lexical captures](20-lexical-capture.md).
+Agent calls use caller handlers, not creator handlers; only child tasks add a
+capture boundary.
 
 | Arm completion | Value type | Behavior |
 |---|---|---|
-| `resume value;` | Action's declared result B | Continue at the suspended `perform`; `resume;` supplies unit. |
+| `Action(...) => expr;` or `=> { ... expr }` | Action result B | Evaluate the tail once, then implicitly `resume` its value at the suspended `perform`. |
+| `resume value;` | Action result B | Explicit resumption; `resume;` supplies unit. |
 | `finish value;` | Handled expression's answer R | End that delimited computation with R. |
-| Scheduler transfer | `never` | Consume `as k`, park/requeue the original task; no detached or duplicate continuation. |
-| `abort(...)` or another non-returning expression | `never` | Leave the path without producing a value. |
+| `never` path | No value | Abort, propagate failure or transfer to a scheduler; do not append resumption. |
 
-Ordinary action arms must explicitly complete by one of these forms.
-The [dependency sugar](02-general-programming-constructs.md#72-constructor-injection)
-expands field arms to `Inject<T>.get("name") => { resume expr; }`,
-type arms to `Inject<T>.get(_) => { resume expr; }`.
-`Action(...) => expr` is not an implicit fallback. A direct arm `return` is
-rejected; a nested flow has its own ordinary return target. Actions returning
-`never`, including `Error.raise`, cannot resume or bind resumable k.
+Completion is checked per reachable path: an explicit `resume`/`finish` branch
+does not disable another branch's implicit resumption. Only the arm's expression
+body or outer block tail gets this sugar, not each loop iteration or nested flow.
+Tail expressions retain ordinary effect inference and check against B, never R.
+
+| Boundary | Rule |
+|---|---|
+| Braces | Omit only for one expression (including a variable) or one explicit `resume`/`finish` statement. Bindings, assignments, loops and statement sequences require `{}`; line wrapping is irrelevant. |
+| Semicolon | In `=> expr;` it separates arms; inside `{ ... expr; }` it discards the value. |
+| Missing tail | Reject normal fallthrough, including `{}` or `{ (); }`; unit resumption requires tail `()`, `resume;` or `resume ();`. Terminating paths need no tail. |
+| `never` action | `Error<E>.raise(e) => value;` is invalid, not an implicit `finish`. Use `finish value;` or a non-returning path; no resumable `as k`. |
+| `as k` | Implicit/explicit resume consumes the same live continuation. No resumption after transfer or prior consumption. |
+| `return` | Rejected at arm level; nested flows keep their own return target. |
+
+[Dependency arms](02-general-programming-constructs.md#72-constructor-injection)
+retain their provider-to-`Inject<T>.get(...)` expansion and implicit resumption.
 
 `resume` is a control keyword, not a function value. Resumption reinstalls the
 original handler context (deep handling); actions performed by an arm use its
-enclosing handlers. `as k` exposes one scope-bound, non-copyable continuation;
-transfer invalidates the local handle. It cannot be serialized, placed in an
-ordinary copying container, resumed twice or detached from its task.
+enclosing handlers. `as k` is affine and scope-bound: no copying, serialization,
+double resume or detached task. Delayed resumption retains restrictions,
+cancellation and budget accounts.
 
-Delayed resumption preserves restrictions, cancellation and budget accounts.
-`finish` unwinds only the delimited subtree and pending receiver updates,
-not unrelated clients or already committed external actions. Scheduler and
-child-task completion rules are in [Concurrency](16-concurrency.md#11-handlers-in-concurrent-scopes).
+`finish` unwinds the delimited subtree and its pending updates, not prior commits
+or unrelated work. See [Concurrency](16-concurrency.md#11-handlers-in-concurrent-scopes).
 
 ### 2.3 Handler Values And Default Handling
 
 ```etas
 let first = handler {
-    Choice.choose(left, right) => resume left;
+    Choice.choose(left, right) => left;
 };
 
-flow choose(h: ![Choice]) -> string {
-    perform Choice.choose("a", "b") with h
-}
+let first_or_finish = handler {
+    Choice.choose(left, right) => {
+        if left == "" { finish "No available choice"; }
+        left
+    }
+};
 ```
 
 | Handler type | Meaning |
@@ -618,22 +627,18 @@ flow choose(h: ![Choice]) -> string {
 | `![H => E]` | Bound produced effects by E. |
 | `![H => E for R]` | Bound both produced effects and answer type. |
 
-Omitted produced effects mean `_`, not `[]`. Action result B comes from its
-signature; R comes from the handled computation and `finish` constraints.
-They need not be equal, and actions in one handler can return different types.
+Produced effects default to inference (`_`), not `[]`. Each action fixes its B;
+the handled computation and `finish` constrain R independently.
 
-Handlers are first-class parameters/results/fields. Use `handler { ... }` as
-a value; after `with`, either that value or a bare arm block is accepted.
-`expr with h` and `handle expr with h` are equivalent. A trailing
-`flow ... { body } with h` handles the entire body. A top-level handler value
-is permitted; a top-level executed `handle` expression is not a module item.
+Handlers are first-class parameters/results/fields. `handler { ... }` constructs
+a value; `with` accepts one or a bare arm block. `expr with h` equals
+`handle expr with h`; trailing `flow ... { body } with h` handles the whole body.
+Module scope permits handler values, not executed `handle` expressions.
 
 ```etas
 flow fallback<E, R>(recover: E -> R) -> ![Error<E> for R] {
     return handler {
-        Error<E>.raise(error) => {
-            finish recover(error);
-        }
+        Error<E>.raise(error) => finish recover(error);
     };
 }
 ```
@@ -643,16 +648,13 @@ escaping(expr with h) =
     (escaping(expr) - fully handled actions) union effects(handler arms)
 ```
 
-Each request records attempted behavior and uses the nearest matching scoped
-handler, otherwise its registered default. Resuming does not also execute the
-default. `std.runtime.default(Action, args...)` explicitly invokes the registered
-default while skipping the current arm; it retains all authority checks and
-produced effects. Missing handling propagates an obligation, not a hidden grant.
+Requests record attempted behavior and use the nearest matching handler, or the
+registered default if none matches. Resuming never also runs that default.
+`std.runtime.default(Action, args...)` explicitly skips the current arm to call
+it, preserving checks/effects. Missing handling propagates an obligation.
 
-Standard handling of `Agentic.infer/step` and `Console.*` consumes those
-actions, not unrelated tool effects or typed failures. For example,
-`std.io.println` still exposes `Error<IOError>`. Requested/default facts and
-ordered evidence remain visible independently of the escaping row.
+Default handling preserves callee/tool effects, errors, requested/default facts
+and ordered evidence; `println` still exposes `Error<IOError>`.
 
 ## 3. Command Sandboxing
 

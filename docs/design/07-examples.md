@@ -110,7 +110,7 @@ flow BuildWithTeam(goal: string) -> string {
     };
     return handle team.deliver(goal) with {
         AskLead.clarify(question) => {
-            resume (Clarifier {}).run({ goal, question });
+            (Clarifier {}).run({ goal, question })
         }
     };
 }
@@ -139,7 +139,7 @@ handle {
     let patch = std.task.await(work);
     (before, same.count(), patch)
 } with {
-    AskLead.clarify(question) => { resume question; }
+    AskLead.clarify(question) => question;
 }
 ```
 

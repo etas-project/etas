@@ -348,16 +348,14 @@ HandlerValueExpr
               ::= Expr  // must type-check as a handler value; a bare block is invalid
 HandlerExpr   ::= "handler" HandlerBlock
 HandlerBlock  ::= "{" HandlerArm* Ident? "}"  // optional final dependency shorthand
-HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" ContinuationBinder? "=>" (ResumeStmt | FinishStmt | HandlerArmBlock)
+HandlerArm    ::= Effect "." Ident StaticEffectArgs? "(" PatternList? ")" ContinuationBinder? "=>" HandlerArmBody
                 | InjectionHead "=>" Expr (";" | ",")
                 | Ident (";" | ",")
 InjectionHead ::= TypeExpr | Ident ":" TypeExpr  // bare Ident: type name or field label
 ContinuationBinder
               ::= "as" Ident
-HandlerArmBlock
-              ::= "{" Stmt* FinalNeverExpr? "}"
-FinalNeverExpr
-              ::= Expr  // must type-check as never
+HandlerArmBody
+              ::= ResumeStmt | FinishStmt | Block | Expr ";"
 StageComposeExpr
               ::= PipelineStage "|" PipelineStage ("|" PipelineStage)*
 PipelineExpr  ::= Expr "~>" PipelineStage ("~>" PipelineStage)*
@@ -400,7 +398,7 @@ BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
                 | "&&" | "||"
 ```
 
-Arrow types associate right; stage operators associate left. `with` applies a handler. Dependency arms implicitly resume; action arms require explicit completion. Injection never changes field reads. Empty-state type stages require a public `run`; stateful types require construction. See [Flows](04-flows-human-gates-and-protocols.md).
+Arrows associate right; stage operators left. A braceless action arm is one expression or explicit `resume`/`finish` statement, independent of line wrapping; other statements require a block. Expression bodies/block tails implicitly resume; normal fallthrough without a tail is invalid. `never` paths do not resume. See [completion rules](06-effect-system-and-inference.md#22-handler-scope) and [stage rules](04-flows-human-gates-and-protocols.md).
 
 At control-head delimiter depth, `{` begins the following block/arms; group
 record expressions in parentheses. Elsewhere the resolved head kind selects

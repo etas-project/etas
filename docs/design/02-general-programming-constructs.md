@@ -876,13 +876,11 @@ flow configured(primary: string, replica: string) -> Config {
 | `name,` or final `name` | `name => name;`; the right name is a lexical value, not a new binding. |
 | `T => expr;` | `Inject<T>.get(_) => { resume expr; }`; type-wide fallback. |
 
-Both `handler { ... }` and anonymous `with { ... }` accept these arms.
-They accept comma or semicolon separators; only a final shorthand
-may omit one. A bare arrow head resolving to a value type uses the type form;
-otherwise a simple identifier is a field label. `name: T` forces the field form.
-Other non-type heads are rejected. Ordinary action arms remain explicit.
-Right sides, including tail-valued blocks, run per request; they implicitly
-resume, never finish. Direct arm-level `return` is invalid.
+Both `handler { ... }` and anonymous `with { ... }` accept these arms, separated
+by comma/semicolon; only final shorthand may omit one. A type-name head selects
+the type form; other identifiers label fields, with `name: T` forcing that form.
+Reject other non-type heads. Provider expressions run per request and implicitly
+resume like ordinary action tails, never implicitly finish. No arm-level `return`.
 
 | Rule | Contract |
 |---|---|

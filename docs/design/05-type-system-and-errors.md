@@ -970,11 +970,10 @@ when a value-level boundary is needed.
 
 ### 2.3 Runtime-Scoped Effect Handlers
 
-Handlers eliminate handled escaping actions and add their own effects.
-`resume value` supplies the action's result; `finish value` supplies the
-whole handled expression's result. A `never` action cannot resume.
-Ordinary action arms have no implicit fallback; direct arm-level `return` is rejected.
-Full typing, completion and dispatch rules are in
+Handlers eliminate handled escaping actions and add arm effects. An ordinary
+tail value implicitly resumes with the action result B; explicit `finish` supplies
+the handled answer R. B and R are independent. `never` actions cannot resume;
+normal fallthrough without a tail and direct arm `return` are rejected. See
 [Handler Scope](06-effect-system-and-inference.md#22-handler-scope).
 
 #### 2.3.1 Scoped Continuation Handles
@@ -993,12 +992,10 @@ model payload, or return value that outlives its owner. The original task and
 handler frame must remain valid until resumption or cancellation. Merely
 abandoning the handle is not successful handler completion.
 
-Immediate `resume` uses the same handle even when `as k` was written. A path
-cannot transfer and then resume it, nor transfer it twice. `finish` and
-non-returning unwinding dispose of the affected suspended computation and run
-the required scope cleanup. Actions returning `never` cannot bind a resumable
-handle. The runtime also enforces one-use ownership and scope validity before
-executing a deferred continuation.
+Explicit/implicit resume consumes the same handle; a path cannot transfer then
+resume, or transfer twice. `finish`/unwinding cleans up the suspended computation.
+`never` actions have no resumable handle. Deferred execution checks one-use
+ownership and scope validity.
 
 `Task<T, E>` is a standard task-result handle; `E` is an effect-row parameter.
 Its owning scope and requested-action/trace contract remain checked metadata,

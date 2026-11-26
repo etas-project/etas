@@ -395,11 +395,10 @@ Async.await(task) as k => {
 }
 ```
 
-This extends the existing handler arm syntax; it is not a new expression for
-arbitrary continuation capture. `k` is inferred from the action result, handled
-answer, remaining effects, and owner. A `never`-returning action cannot bind it.
-Without `as k`, existing immediate `resume value;` remains unchanged. With
-`as k`, immediate resume and deferred transfer use the same one-shot handle.
+`as k` is not arbitrary continuation capture. Its type retains the action result,
+handled answer, residual effects and owner; `never` actions cannot bind it.
+Explicit/implicit immediate resumption and deferred transfer consume the same
+single-shot handle.
 
 ### 11.2 Ownership And Transfer
 
