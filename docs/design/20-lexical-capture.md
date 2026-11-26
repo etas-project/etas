@@ -145,16 +145,16 @@ Synchronous `run` and its protected `Scope.enter` execution remain in the
 caller's logical task. A scheduler's internal owner job does not introduce a
 new capture boundary; independently started tasks and concurrent branches do.
 
-Crossing to another task or active-agent request by `start`, mailbox dispatch,
-concurrent branch execution, inherited
-Handlers or task results requires checking this capture contract. A callable
-that retains a local `var` cannot share that binding with the other task.
+Agent calls also remain in the calling logical task. Explicit `start`, concurrent
+branches, inherited handlers and task results must check capture affinity;
+a callable retaining local `var` cannot share that binding with another task.
 Capture an immutable snapshot for independent task input, or use an explicit
 shared resource with its checked Effect and ownership contract.
 
 Agent references may be captured as immutable values: copies still reach the
-same isolated instance and retain its lifetime. Neither an active `var self`
-nor pending state may be shared with child tasks or cross-request handlers.
+same isolated instance and retain lifetime/access summaries. Neither `var self`
+nor pending state may be shared with child tasks; same-task handlers cannot
+bypass receiver exclusivity or escape checks.
 Capture needed field values/references in immutable local bindings first.
 A model-exposed member tool receives a snapshot supplied by checked dispatch,
 not a closure alias to the updating receiver.

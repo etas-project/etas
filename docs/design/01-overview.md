@@ -12,7 +12,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 | `type`, `alias`, `enum` | Nominal values, transparent aliases, products and recursive sums. |
 | `let`, `var` | Immutable or rebindable bindings; records/collections retain value semantics. Module bindings are read-only. |
 | `flow` | Ordinary callable; return type and effects are inferred unless constrained. |
-| `agent` | Nominal active type with private fields, scoped identity and explicit request methods in `impl`; no generated `run`. |
+| `agent` | Nominal type with isolated state, scoped identity and checked, suspendable methods; no implicit worker or generated `run`. |
 | `tool` | Explicit model-callable boundary; ordinary source bodies may delegate to flows or agents. |
 | `effect`, `action`, `perform` | Effect tags, operation signatures and checked requests. |
 | `handler`, `handle`, `with` | First-class handlers and delimited application; single-shot `resume`, early `finish`, optional scope-bound `as k`. |
@@ -31,7 +31,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 |---|---|
 | Program entry | Execute `main(args: Array<string>) -> i32`; do not execute arbitrary expressions at module load. |
 | Ordinary call | Execute in the calling task. Passive `var self` is a restricted, non-suspending local update. |
-| Agent call | Submit a typed request; isolate pending updates and preserve caller handlers, restrictions, budgets and cancellation. |
+| Agent call | Execute in the caller's task with shared-read/exclusive-write access, including across suspension; no mailbox or conflict queue. |
 | Agent identity | Copying a reference shares the instance, not its private state or lifecycle ownership. No OS-process or dedicated-thread requirement. |
 | Effects | `![...]` bounds escaping effects. Requested-action and trace facts retain handled behavior; neither a row nor a handler grants authority. |
 | Determinism | Infer `Deterministic` or `NonDeterministic` from reachable behavior and state dependencies. An empty escaping row alone proves neither purity nor safe parallelism. |
@@ -57,7 +57,7 @@ Primitive type names are listed in [General Constructs](02-general-programming-c
 
 | Layer | Owns |
 |---|---|
-| Language | Grammar, kinds/types, binding/value rules, effects/handlers, active requests, scope and constraint semantics. |
+| Language | Grammar, kinds/types, binding/value rules, effects/handlers, agent access, scope and constraint semantics. |
 | Recognized standard contracts | Symbol-specific rules for literals/indexing, `Result`/`Error` with `?`, `Index`, `Eq`, numeric specs, annotations, resource identities, active/inference boundaries, structured tasks and reflection descriptors. |
 | Ordinary standard APIs | Public types, flows, codecs, collections and wrappers; their names alone confer no special privilege. |
 | Execution support | Observable action dispatch, resource cleanup, cancellation, budgets, sandbox checks and protected evidence. This SPEC does not prescribe internal modules, IR or memory representation. |

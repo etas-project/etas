@@ -25,7 +25,7 @@ summaries. This is not value subtyping.
 
 | Root | Meaning |
 |---|---|
-| `Agentic` | Managed agent construction/requests and explicit model interaction |
+| `Agentic` | Managed agent construction/calls and explicit model interaction |
 | `Network` | Accesses external network resources |
 | `FileIO` | Reads or writes files visible to the runtime |
 | `Command` | Executes a sandboxed command or child process |
@@ -416,10 +416,10 @@ effect Agentic {
 | Boundary | Contract |
 |---|---|
 | `Agentic.create<A>` | Managed construction event; include supplied/injected initializer behavior and Autonomous startup separately. Its default handling does not consume dependency-provider actions. Not user-forgeable. |
-| `Agentic.call<A.method>` | Typed request dispatch; retains callee/role behavior, receiver mode and request context. |
+| `Agentic.call<A.method>` | Same-task checked invocation event, not enqueueing; retains instance access, callee/role behavior and caller context. |
 | `Agentic.infer<C, O>` | Full controller: model steps, checked tools and further steps until a validated output or failure/limit outcome. |
 | `Agentic.step<C, O>` | Exactly one generation, returning `Final(O)`, `CallTools(...)` or `Stopped(...)`; no tool execution, retries or hidden format-repair calls. |
-| Identity | `C` is a resolved method; concrete instance/request ids, snapshots and accounts are protected runtime context, not dynamic type arguments. |
+| Identity | `C` is a resolved method; concrete instance/call ids, tool snapshots and accounts are protected context, not dynamic type arguments. |
 | Default handling | These boundaries remain requested/default metadata without ordinary escaping obligations. Callee/tool/handler-produced effects and errors still propagate. |
 | Authorization | Current grants, trace specs, sandbox, trust, secrecy and budgets apply even to default-handled actions. |
 | Analysis | Preserve conservative transitive summaries through tool delegation and erased roles. Action sets do not encode temporal order. |
@@ -569,9 +569,9 @@ use agent-scoped `infer`. See [Tool Rules](03-agents-tools-prompts-memory.md#2-t
 ### 2.2 Handler Scope
 
 Handlers are dynamically scoped and single-shot. Values/arms capture lexically
-under [Capture Rules](20-lexical-capture.md). Agent requests inherit the caller's
-applicable handlers, not the receiver creator's; no caller-local mutable
-capture may cross requests. Resumption targets the exact suspended request.
+under [Capture Rules](20-lexical-capture.md). Agent methods use the caller's
+handler chain, not the creator's. A call alone adds no task boundary; explicit
+child tasks check mutable-capture affinity. Resume targets the suspended action.
 
 | Arm completion | Value type | Behavior |
 |---|---|---|
@@ -730,7 +730,7 @@ is non-deterministic even when default handling leaves an empty escaping row.
 Receiver mutation, captured state, state versions and non-suspension are separate
 facts. `![]` does not prove purity, memoizability or safe concurrency.
 Passive `var self` requires checked transitive non-suspension; active updating
-requests can suspend while retaining exclusive pending state. Neither ordinary
+calls can suspend while retaining exclusive pending state. Neither ordinary
 local writeback nor captured-var assignment implicitly performs `Memory.write`.
 
 ## 6. Declaration Defaults
@@ -765,11 +765,11 @@ Effect inference computes an upper bound over effects that may occur during exec
 | Pure expression | `{}`; constructing a record is pure only when its evaluated initializers are pure. |
 | Nominal record/agent construction | Supplied initializer effects, then omitted `@inject` actions and their handling behavior; active construction additionally retains `Agentic.create<A>` and startup summaries. |
 | Record-value update `base { fields }` | Base evaluation, then replacement effects in source order; retain requested/trace/capture behavior. No implicit provider, mutation or agent action. |
-| Stored-field access | Receiver-expression effects only; never re-request an injected field. Active privacy/snapshot rules still apply. |
+| Stored-field access | Receiver-expression effects only; never re-request an injected field. Agent privacy/access rules still apply. |
 | Flow call | Callee effect set |
 | Etas tool call | Tool boundary effects plus inferred body effects |
 | Runtime-provided primitive call | Declared effect metadata |
-| Agent call | Callee agent method summary: ordinary method-body effects, declared model-callable tool effects, typed memory API effects, other runtime effects, and requested actions from `perform infer` such as `Agentic.infer<Agent.method, O>` |
+| Agent call | Callee body/tool effects and requested actions, including inference. Preserve instance identity, read/write use, captures and suspension separately; effect rows alone cannot prove exclusive access. |
 | Typed memory read | Request `Memory.read<R>`; standard handling retains `Error<StorageError>` rather than hiding failure. |
 | Typed memory write | Request `Memory.write<R>`; standard handling retains storage errors/outcome data and the operation reference. |
 | Support flow call such as `approve(...)` | Callee effect set, usually `Approval.request` |

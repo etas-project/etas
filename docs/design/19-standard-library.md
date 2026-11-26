@@ -730,8 +730,8 @@ summaries as specified in section 4.4.
 active agent method or the original inference request being handled. A handler
 for `Agentic.infer<C, O>` can call `step` using that request's context even when
 the handler itself was defined in an ordinary flow. Merely naming another `C`
-does not switch identity or obtain its tools. With no applicable agent request
-context, these APIs cannot fabricate one from protocol data.
+does not switch identity or obtain its tools. Protocol data cannot fabricate
+an agent invocation or inference context.
 
 Before contacting a provider, `step` checks that the conversation is a valid
 next request, including that pending tool calls have results. Caller-built
@@ -807,26 +807,21 @@ public spec Autonomous ~ Active {
 | Contract | Behavior |
 |---|---|
 | `Active` | Evidence generated for nominal agent types only; preserved through role entailment and existential erasure. |
-| `Autonomous` | Start one automatic `main` request after initialization; its effects are inferred/retained in creation summaries. Owner cancellation stops and joins it. No automatic restart. |
-| `A { fields }` | Managed construction; default scheduling handles `Agentic.create<A>`, not user dependency actions. Complete supplied/injected fields before publishing/Autonomous startup; fresh field children belong here, existing references do not. |
-| `a.method(args)` | Typed mailbox request, default-handled `Agentic.call<A.method>` event; preserves method effects and caller context. |
-| `std.task.start/await` | Existing API for asynchronous requests and typed replies; no new send/receive keyword. |
-| Member tool dispatch | Bind the executing instance and a read-only request snapshot before presenting the argument schema. No update receiver; no self-mailbox deadlock. |
-| Scoped references | May appear in records, arrays, roles and closures; cannot outlive owner. No automatic persistence, source reflection of live state, or serialization to a model. |
-| Supervision | Ordinary flows select retry, reconstruction and durable recovery; default runtime behavior is failure propagation and cleanup, not hidden restart. |
+| `Autonomous` | Explicit opt-in to one structured `main` task after initialization; retain its access/effects in startup summaries. Owner exit cancels/joins it; no restart. |
+| `A { fields }` | Managed construction, recorded as `Agentic.create<A>`. No task unless Autonomous; complete supplied/injected fields first. Fresh children belong here; existing references do not. |
+| `a.method(args)` | Same-task checked invocation, recorded as default-handled `Agentic.call<A.method>`; no mailbox, implicit future or conflicting-call queue. |
+| `std.task.start/await` | Explicit task concurrency and completion; preserve instance-access summaries. |
+| Member tool dispatch | Bind an immutable state copy at the model/step boundary, not live receiver access. Calls through stored agent references still require access checks. |
 
 Field [`@inject`](02-general-programming-constructs.md#72-constructor-injection)
 uses standard `Inject<T>` (prelude-exported): `get(name: string) -> T`, with no
 default provider. Field/type arms and shorthand expand to ordinary handlers;
 explicit named actions remain supported. No registry, cache or grant is implied.
 
-A long-running updating `main` holds the instance's update turn; other updating
-requests wait. Snapshot queries can proceed. Event-driven services needing
-short update turns should have a supervising task issue separate requests,
-rather than hiding a permanent update inside `main`.
-Full state, cancellation and handler rules are in
+A long-running updating `main` excludes other readers/writers, not just updates.
+Instance access, scope bounds, supervision and explicit shared-state services follow
 [Agent Semantics](03-agents-tools-prompts-memory.md#1-agent) and
-[Concurrency](16-concurrency.md#117-active-agent-requests).
+[Concurrency](16-concurrency.md#117-agent-instance-access).
 
 ## 5. Numeric Helpers
 

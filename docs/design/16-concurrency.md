@@ -37,12 +37,10 @@ when there is no explicit selection. The behavioral `Scheduler` spec, default
 value, and protected execution contract are specified in
 [Scheduler Spec And Default Value](19-standard-library.md#24-scheduler-spec-and-default-value).
 
-Active instances are scope-owned lightweight concurrent entities, not OS
-processes or dedicated threads. Construction registers a mailbox; methods
-execute as coroutine requests. Scope exit stops admission, cancels/joins active
-requests and autonomous work, then destroys instances and owned descendants.
-An idle mailbox does not make ordinary scope completion wait forever.
-A scoped reference may be shared, but copying it does not reparent the instance.
+Agent instances own isolated state, not execution queues. Methods run in the
+calling task; only explicit task operations or opt-in `Autonomous` startup add
+concurrency. Scope exit settles active calls/owned tasks before releasing state.
+Reference copies neither reparent instances nor create independent update rights.
 See [Agent Ownership](03-agents-tools-prompts-memory.md#15-ownership-budgets-and-supervision).
 
 ## 3. Standard Combinators
@@ -152,8 +150,8 @@ external requests.
 
 ## 5. Effect-Free Concurrency
 
-An effect-free deterministic flow has no observable interaction with the
-outside world:
+A deterministic flow with no external requests or shared-state access is a
+candidate for concurrent evaluation:
 
 ```etas
 flow normalize(title: string) -> string {
@@ -161,9 +159,9 @@ flow normalize(title: string) -> string {
 }
 ```
 
-If two calls are data-independent, the compiler or runtime may run them in
-parallel, reorder them, memoize them, cancel and recompute them, or speculatively
-execute them.
+Reordering or concurrent execution requires data independence and preservation
+of observable behavior, capture/resource access, limits and failure outcomes.
+Determinism plus an empty escaping row alone is insufficient for agent methods.
 
 ```etas
 let a = normalize(left);
@@ -194,8 +192,8 @@ branches concurrently.
 
 ## 7. Effect And Resource Conflicts
 
-Effectful branches may still be safe to run concurrently when their actions and
-resource parameters do not conflict.
+Concurrency checks include external resources and instance access. These are
+necessary conditions, not a general proof that observations commute.
 
 | Branch A | Branch B | Default judgment |
 |---|---|---|
@@ -207,14 +205,15 @@ resource parameters do not conflict.
 | `ProjectWorkspace.write<_>` | `ProjectWorkspace.write<_>` | Runtime check or serialize when disjointness is unknown |
 | `AcademicSearch.search` | `AcademicSearch.search` | Safe, but shared budgets apply |
 | `CompanyEmail.send<WorkAccount>` | `StripePayment.charge<Account>` | Policy-sensitive |
+| Agent read | Same-instance read | Shared reads allowed; transitive effects still checked |
+| Agent write | Same-instance read/write | Overlap rejected, never queued |
+| Agent access | Distinct-instance access | Local state disjoint; external resources/handlers/budgets may still conflict |
 
-The conflict check is based on:
-
-```text
-effect tag + action name + resource parameters
-```
-
-not only on the coarse effect tag.
+Track action/resource parameters and instance identity/access mode, not only
+coarse tags. Store version checks require conditional operations such as
+`put_versioned`; ordinary unconditional writes are not lost-update protection.
+Shared services use explicit storage or library protocols. Channels/synchronizers
+remain [standard-library gaps](19-standard-library.md#16-scope-boundaries), not implicit agent behavior.
 
 ## 8. Policy Happens-Before
 
@@ -580,26 +579,20 @@ Omitting the explicit `handle ... with ...` layer uses the standard handler
 adapter automatically. Ready-order selection is independent of that adapter;
 neither choice grants authority or permits a task/continuation to escape.
 
-### 11.7 Active Agent Requests
+### 11.7 Agent Instance Access
+
+[Agent Semantics](03-agents-tools-prompts-memory.md#13-operational-intuition)
+defines shared reads, exclusive updates across suspension, helper calls,
+commit/unwind and alias guards. Concurrency adds these obligations:
 
 | Boundary | Contract |
 |---|---|
-| Call | `a.method(x)` submits a typed request and suspends the caller without blocking a host thread. `start(() => a.method(x))` permits other work before awaiting the reply. |
-| Admission | Preserve request identity, caller handlers/restrictions, accounts, cancellation and causal links. Do not reuse another client's approvals. |
-| Updating request | One pending state per instance; exclusive update right survives suspension. Only normal completion commits, once before reply. |
-| Read request | Committed snapshot at admission; may overlap updates but never observes pending state. |
-| Upward action | Dispatch to the nearest applicable request handler, then its caller environment; not automatically to the lifecycle owner. |
-| Handler safety | Cross-request handlers cannot capture caller-local `var` or a live updating receiver. Handler frames remain live until associated requests are cleaned up. |
-| Resume / finish | Resume exactly the suspended request. Finish unwinds the handled subtree and discards its pending updates; unrelated requests and prior commits survive. |
-| Reentrancy | No automatic updating reentrancy. Direct same-turn helper calls share pending state; external-reference callbacks are separate requests. |
-| Deadlock | Reject proven unavoidable waits statically; detect concrete closed request-wait cycles at runtime and fail the affected structured execution. Arbitrary communication graphs need not be acyclic. |
-| Scheduler/budgets | A blocked request releases its runnable slot, not its update right. Descendants share applicable accounts; execution stacks do not reset quotas. |
-| Lifecycle | Autonomous work is owned and cancelled; replacement/retry is explicit. A shared reference is not supervision ownership. |
-
-The runtime traces instance, request, parent-request and committed-state-version
-identities. Replay must preserve request order, admission snapshots, commit and
-cancel outcomes; recording only model replies is insufficient. Pure snapshots
-do not make effects through stored resource references conflict-free.
+| Source order | Ordinary calls remain sequential unless a transformation proves equivalence; no implicit future. |
+| Child work | Check instance-use summaries at `start`/combinator entry over overlapping task lifetimes. `await`/`join` establishes completion for later reuse; possible scheduler serialization is not proof. Receiver access starts at the actual call, not task creation. |
+| Identity | Bound methods, roles, imports, injected values and containers preserve aliases/access modes; copied references are not distinct instances. |
+| Context | Inherit caller restrictions, accounts, cancellation and handlers. Child tasks check capture affinity; a same-task agent call is not a capture boundary. |
+| Scheduling | Suspension releases a runnable slot, not receiver access or budget obligations. Scheduler ready queues remain; per-agent queues do not. |
+| Task waits | Reject proven unavoidable wait cycles; concrete closed cycles fail the affected structured execution. |
 
 ## 12. Trace And Replay
 
@@ -607,6 +600,9 @@ Concurrent traces retain task/scope identity, scheduler selection and decisions,
 action/handler events, continuation transfers, wakeup winners, budget usage and
 cancellation/failure outcomes. Replay preserves the recorded logical ordering;
 it need not reproduce wall-clock timing.
+Agent events retain instance/call/parent-call identity, access decisions, state
+versions and commit/abort outcomes. No mailbox order exists to replay, but model
+outputs, external observations and consequential task ordering still do.
 
 `Task`, `SchedulerHandle` and continuation handles cannot be serialized,
 hashed, compared, persisted or supplied to models/hosts as ordinary values.

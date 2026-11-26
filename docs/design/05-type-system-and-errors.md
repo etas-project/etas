@@ -350,11 +350,11 @@ Receiver mode and dispatch kind are part of the required contract. Implementatio
 match `self`/`var self`, arguments, results and effects exactly.
 Passive updating methods require non-suspension and direct-local-var writeback;
 they cannot be extracted as ordinary bound flow values. Active methods instead
-retain instance identity, scope and request-dispatch evidence in bound callables.
-Their exclusive update may suspend without exposing pending state.
+retain instance identity, scope and access evidence in bound callables. Extracting
+one does not acquire access; invocation may suspend while holding that access.
 
 `std.agent.Active` is compiler-provided marker evidence for active types.
-An updating role intended for mailbox dispatch entails it:
+An updating agent role entails it; it does not imply a background task:
 
 ```etas
 spec Reviewer ~ Active {
@@ -482,8 +482,8 @@ value has been packed.
 
 Existential evidence preserves receiver mode, dispatch kind, scopes and method
 summaries. Passive updating objects still require direct local `var` writeback
-and non-suspension, as for `? ~ Scheduler`. Active roles instead dispatch
-requests through scoped references:
+and non-suspension, as for `? ~ Scheduler`. Agent roles retain scoped instance
+identity and shared-read/exclusive-write obligations:
 
 ```etas
 let reviewers: Array<? ~ Reviewer> = [security, performance, mock];
@@ -492,7 +492,8 @@ let reviews = std.task.map_concurrent(reviewers, r => r.review(patch));
 
 Each element satisfies the same active role; a deterministic mock is also an
 agent. Packing does not grant ownership, erase tool/trace bounds, or permit a
-reference to outlive its instance.
+reference to outlive its instance. Repeated aliases in an array are not distinct
+agents: overlapping updates are rejected or guarded under the instance-access rules.
 
 #### 1.5.3 Callable Specs
 

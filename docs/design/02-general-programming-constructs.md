@@ -357,7 +357,7 @@ flow Example() {
 The restrictions are:
 
 - These rules govern passive type methods and their behavioral spec signatures.
-  Active agent receivers instead follow [exclusive request semantics](03-agents-tools-prompts-memory.md#13-operational-intuition).
+  Agent receivers instead follow [instance-access semantics](03-agents-tools-prompts-memory.md#13-operational-intuition).
   Free flows, tools and other parameters do not gain an updating mode.
 - The receiver must be a direct local `var` binding, or the current method's
   `var self` binding for a nested update. Reject `let`, ordinary parameters,
@@ -439,8 +439,7 @@ Anonymous flows and Handler values use the same lexical capture rules.
 Capturing a local `var` within its owning task preserves the original binding,
 and assignments are immediately visible to other accesses to that binding.
 Captured `let` bindings retain their immutability. Copying a callable preserves
-its captured bindings, and returned callables can extend ordinary binding
-lifetimes. Capture of mutable local state is task-local.
+its captured bindings. Captured local `var` bindings are scope-bound and task-local.
 
 The value, lifetime, concurrency, analysis and checkpoint requirements are
 defined in [Lambda And Handler Capture](20-lexical-capture.md).
@@ -448,7 +447,7 @@ defined in [Lambda And Handler Capture](20-lexical-capture.md).
 ## 4. Flows As The Ordinary Callable Unit
 
 A `flow` is an ordinary first-class callable. Use `tool` only for a
-model-callable boundary and an agent method for isolated active requests.
+model-callable boundary and an agent method for checked isolated-state access.
 Function types use `I -> O ![E]`, or `(A, B) -> O ![E]`; arrows associate
 right. Omitting a local effect row requests inference, not purity.
 
@@ -922,7 +921,7 @@ type Session = {
 `impl T` defines ordinary `flow` methods. Plain `self` reads a value; updates
 return a new value or use restricted [`var self`](#32-restricted-updating-receivers).
 Private access is module-scoped. Target kind restricts members: ordinary types
-accept flows, effects accept actions, agents accept request flows/member tools.
+accept flows, effects accept actions, agents accept checked methods/member tools.
 These kinds cannot be mixed; active receiver rules remain in
 [Agents](03-agents-tools-prompts-memory.md#13-operational-intuition).
 

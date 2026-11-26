@@ -51,8 +51,8 @@ For `normalize: (string) -> string ![]`, reflection infers
 Accessible methods and values referring to definitions or compiled revisions
 are reflectable. Snapshots are immutable; inspecting or editing one neither
 generates methods nor replaces active invocations or existing references.
-An instance descriptor exposes its code revision, not its state, mailbox,
-request contexts or child references. No new reflection keyword is required.
+An instance descriptor exposes its code revision, not state, access rights,
+call contexts or child references. No new reflection keyword is required.
 
 ## 3. Definition Types
 
@@ -309,7 +309,7 @@ Adopting a compiled implementation is separate from editing and compilation:
 calls through `current` execute the new implementation. Other bindings, the
 original declaration, and in-progress calls do not change. Old instances keep
 their owners and are not destroyed by rebinding one reference. Local adoption
-does not transfer state, children, mailbox contents or running continuations.
+does not transfer state, children, receiver access or running continuations.
 
 ## 6. Effectful Compilation
 

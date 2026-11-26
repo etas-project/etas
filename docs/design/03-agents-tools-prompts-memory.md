@@ -4,19 +4,17 @@
 
 ### 1.1 Agent as a First-Class Construct
 
-An `agent` declares a nominal active type. Each instance is a managed lightweight
-concurrent entity: it has isolated state, a typed request mailbox, and
-coroutine-style execution that can suspend and resume. It is not an OS process,
-does not require a dedicated thread, and is not itself a handle. An expression
-of agent type evaluates to a scoped reference to an instance.
+An `agent` declares a nominal managed type with isolated state and a checked
+execution context. Methods execute in the caller's logical task and may suspend.
+An instance is not a task, OS thread or process; it has no implicit mailbox or
+worker loop. An expression of agent type yields a scoped instance reference.
 
 | Construct | Value / execution contract |
 |---|---|
 | `type T = {... }` | Passive value; ordinary methods execute in the caller's task. |
-| `agent A = {... };` | Active type; construction creates an isolated instance in a managed scope. |
-| `impl A {... }` | Agent methods are request entrypoints; the same target-kind-checked `impl` form as other nominal types. |
-| `a.method(args)` | Submit a typed request and suspend the caller until its result. |
-| `std.task.start(() => a.method(args))` | Submit work through a child task and retain its completion handle. |
+| `agent A = {... };` | Declare a managed type with isolated instances, not a task per instance. |
+| `a.method(args)` | Execute and return in the current logical task; suspension does not block a scheduler thread. |
+| `std.task.start(() => a.method(args))` | Explicit child task; instance-access checks still apply. |
 | `perform infer<O>(prompt)` | Inference in the executing agent method's checked context. |
 
 Fields are private even when the agent type is public. External field access,
@@ -53,52 +51,49 @@ or made durable. Session and Store APIs retain their persistence contracts.
 
 | Form | Meaning |
 |---|---|
-| `agent A = {};` | Empty-state active type; declares no methods. |
-| `agent A = { fields };` | Active type with private instance state. |
-| `impl A { public flow run(self, x: I) -> O {... } }` | Explicit request method; inputs, output and effects belong to this method, not the agent declaration. |
-| `A { field = value,... }` | Fresh scoped instance; supplied initializers run once in source order, then omitted `@inject` actions in field order. |
+| `agent A = { fields };` | Private state; `{}` means no fields. Neither form generates methods. |
+| `impl A { public flow run(self, x: I) -> O {... } }` | Explicit method; inputs, output and effects belong to it, not the agent declaration. |
+| `A { field = value,... }` | Fresh scoped instance; construction/injection follows section 1.5. |
 | `let b = a;` | Copy an existing scoped reference, not its state or ownership. |
-| `a.run(x)` / `a.run` | Invoke/extract a bound request method; retain instance/scope evidence, never pending-state access. |
+| `a.run(x)` / `a.run` | Invoke/extract a bound method; retain instance, access mode and scope. Binding does not acquire access. |
 | `x ~> A` / `A \| B` | Existing stage-operator adapter for empty-state types with explicitly defined public `run`; construct per invocation. No generated method or singleton. |
 | Stateful stage | Construct an instance first, then use it or its bound method; injected fields still count as state. |
 | `^A` | Reflect the declaration without construction; a bare type name is not an instance. |
 
-Type specs apply to the active type; callable specs constrain explicit methods;
-trace specs constrain their behavior. There is no function-shaped agent
-declaration or automatically generated `run`. `A.run` may identify a method
-in reflection/action metadata; ordinary execution requires a receiver.
-Instance, declaration and revision identities are distinct. References cannot
-be forged from metadata and do not derive structural Eq/Hash from private state.
+Type/callable/trace specs constrain the type, methods and behavior respectively.
+No function-shaped agent declaration or generated `run` exists. `A.run` identifies
+a method in metadata; execution requires a receiver. Instance, declaration and
+revision identities remain distinct. Metadata cannot forge references; private
+state does not derive structural Eq/Hash.
 
 Stored fields may use [`@inject` or `@inject(Action)`](02-general-programming-constructs.md#72-constructor-injection)
 for construction-time resolution through `with`. A field then retains the
-returned value, not its provider handler or authority. For per-request routing,
+returned value, not its provider handler or authority. For per-call routing,
 perform the dependency action inside the method; ordinary field reads remain
 reads. Injection does not expose private state or convert dependency edges into
 lifecycle ownership edges.
 
 ### 1.3 Operational Intuition
 
-Each request carries validated arguments, receiver/method identity, reply
-routing, and a protected execution-context link. Local helper calls remain
-ordinary flow calls. Cross-instance calls always use request dispatch.
+Resolve the receiver once and evaluate arguments/defaults before acquiring
+instance access. A call then enters the checked agent context in the same task.
+Different instance identities isolate local state, not external resources.
 
 | Rule | Contract |
 |---|---|
-| Updating receiver | `var self` owns one exclusive pending state across inference/await. Field assignments update it; whole-`self` reassignment cannot replace instance identity. The receiver/update right is not an escapable value. |
-| Read receiver | `self` reads a committed immutable state snapshot taken at admission. Read requests may overlap updates; they do not observe pending writes or refresh after suspension. |
-| Commit | Publish pending local state once on normal return, including `Err(...)`; return the reply after commit. |
-| Failure | Escaping error, cancellation or unwinding by an enclosing `finish` discards pending state. Files, stores and other completed external effects are not rolled back. |
-| Reentrancy | Suspension yields scheduler execution, not the instance's update right. No automatic unrelated updating reentrancy. |
-| Same-instance helper | A direct synchronous call from an updating method to its own method uses the same pending state/turn. Re-entering through an external reference is a request, not this shortcut. |
-| Snapshot to update | A snapshot method calling an updating method sends a new request; its existing snapshot remains unchanged. |
-| References and closures | A scoped reference may cross tasks. A live update receiver, pending-state alias or task-local mutable capture may not. |
-| Determinism | Inferred from computation, requested actions, state observations and scheduling dependencies; `![]` is not evidence that a mailbox read is deterministic or non-suspending. |
+| Updating receiver | `var self` exclusively owns pending state for the whole call, including inference/await. No other activation may read/write that instance. Whole-`self` assignment cannot replace identity. |
+| Read receiver | `self` holds shared read access for the whole call; other readers may overlap, writers may not. There is no implicit old-state query during an update; explicitly return ordinary snapshot data before concurrent work. |
+| Commit / failure | Normal return, including `Err(...)`, commits once before exposing the result. Error escape, cancellation or `finish` unwinding discards pending state. Release access on every exit; completed external effects are not rolled back. |
+| Suspension | Yield scheduler execution, not instance access. Passive `var self` remains non-suspending; agent access may suspend without creating a new task. |
+| Helpers / reentry | Direct `self.method(...)` helper calls reuse the authorized receiver/pending state; only the outer updating call publishes it. A read receiver cannot upgrade to a writer. Aliased or callback reentry gets no such privilege, even in the same task. |
+| Static access | Track instance aliases and read/write use through calls, captures, tasks and imports. Reject known overlapping use of the same instance when either use writes. Distinct variable/field names do not prove distinct instances. |
+| Dynamic access | Where concrete identity is unknown, use an atomic pre-body guard; Strict mode requires proof. Conflict is a non-resumable access fault under ordinary task-failure propagation, not a queued call or implicit retry. Reject if no exact guard is possible. |
+| References | Copies keep identity/owner, not independent update rights. No live receiver or pending-state alias may escape; cross-task captures follow their ordinary rules. |
+| Determinism | Inferred from reachable computation and state/capture observations. `![]` alone proves neither purity, non-suspension nor access independence. |
 
 `var self` on ordinary types retains its local-binding, non-suspending writeback
-rules. On active types, the caller need not use a local `var`: mutation is of
-isolated instance state, not of the caller's reference. Dispatch evidence must
-preserve this receiver distinction.
+rules. On agents, the caller need not use a local `var`: mutation is of instance
+state, not the reference binding. Access evidence preserves this distinction.
 
 Agent methods may use ordinary control flow, call flows/tools/agents, construct
 context, and explicitly invoke inference or single-step model interaction.
@@ -107,11 +102,11 @@ Inference is not mandatory. Default-handled `Agentic.create<A>`,
 requested-action metadata; their handling does not erase callee errors,
 requested actions, trace obligations or cancellation.
 
-### 1.4 Roles, Tools And Request Context
+### 1.4 Roles, Tools And Call Context
 
 The standard marker spec `std.agent.Active` is compiler-provided evidence for
 active types; user `impl` cannot give a passive type active execution semantics.
-Behavioral roles for updating agents entail it:
+Updating agent roles entail it; `Active` does not start a worker:
 
 ```etas
 spec Reviewer ~ Active {
@@ -124,45 +119,43 @@ agent TechLead = {
 };
 ```
 
-`? ~ Reviewer` erases the concrete active type, not mailbox dispatch, lifetime,
-receiver mode or method summaries. A deterministic mock can be an empty-state
+`? ~ Reviewer` erases the concrete agent type, not identity, lifetime,
+receiver/access mode or method summaries. A deterministic mock can be an empty-state
 agent implementing the same role. A passive updating value cannot be packed
 as that active role.
 
 | Boundary | Contract |
 |---|---|
 | Model tools | `@tools([TechLead.ask_coder])` names a declared member tool; dispatch binds the current instance. The model supplies only ordinary schema-encodable arguments, never `self`. |
-| Member tools | Declared with `tool` inside `impl A`; optional plain `self` is an immutable copy of the request's state at the model/step boundary, never `var self` or a live pending-state alias. Tool callbacks do not enqueue behind their own blocked inference request. |
+| Member tools | Optional `self` is a checked immutable copy of the method state at the model/step boundary, not live receiver access. No reacquisition for this copy; calls through retained agent references still undergo access checks. |
 | Delegation | Tools may call other agents, directly or through helpers. Transitive effects, requested actions, lifetimes and budgets must be checked; a tool cannot directly use agent-scoped `infer`. |
-| Request context | Each call inherits the caller's applicable handlers, restrictions, budget accounts, cancellation and trace links, conjoined with receiver restrictions. References never convey new grants. |
-| Upward effects | An unhandled action goes to this request's environment, not automatically to the receiver's creator or a global supervisor. Concurrent clients retain separate contexts. |
-| Handler captures | Cross-request handlers may retain safe immutable captures/scoped references, not a caller's live `var self` or task-local `var`. Handler code runs under its checked lexical agent context, not the worker's identity. |
+| Call context | Inherit caller handlers, restrictions, budgets, cancellation and trace links, conjoined with receiver restrictions. References grant no authority. |
+| Upward effects | Use ordinary enclosing-handler lookup along the call chain, not the instance creator's environment. Handler code retains its checked lexical agent context. |
+| Handler captures | An agent call alone adds no task boundary. Same-task local-var capture remains valid; explicit child tasks enforce task affinity. A handler cannot bypass a live receiver's access/escape restrictions. |
 | Trace specs | `impl A ~ Guard {... }` applies a trace spec to every callable in that block; type-spec impls still require their declared methods. Operators name actions, not tool names. |
 
 `std.agent.step` and `std.tool.invoke` provide explicit controller code under
-the same instance/request context; see [Single-Step Agent Interaction](19-standard-library.md#4-single-step-agent-interaction).
+the same invocation context; see [Single-Step Agent Interaction](19-standard-library.md#4-single-step-agent-interaction).
 
 ### 1.5 Ownership, Budgets And Supervision
 
-Lifecycle ownership is a tree of managed scopes; communication is a possibly
-cyclic graph; handler/authority routing belongs to individual requests.
+Lifecycle ownership is a scope tree; calls may form a graph. Ownership does not
+require the creator to execute every method: child tasks may borrow use while
+the owner lives, subject to instance-access and capture checks.
 
 | Operation | Contract |
 |---|---|
-| Construction | Create the instance-owned scope before supplied/injected initialization. Fresh agents constructed there are owned children; existing references keep their owners, including those returned by providers. Publish/start Autonomous only after all fields succeed; failure cleans up new children. |
-| Method-local construction | Owned by that request scope. It cannot be stored in longer-lived state or returned beyond that scope. |
-| Scope exit | Stop admission, cancel remaining requests/autonomous work, clean up owned descendants, then release the instance. A parked mailbox worker does not keep its owner scope alive forever. |
-| Sharing | Borrowed references may circulate while their owner lives; aggregates, role erasure and closures cannot hide an escape. Fields alone do not prove ownership. |
-| Limits | Declaration/method annotations apply per invocation. A lexical construction-and-use scope can impose an aggregate lifetime budget; child requests never reset parent accounts. |
-| Shared workers | Usage is charged to the originating request and applicable owner accounts, once per account. One client's approval or cancellation does not authorize or cancel unrelated clients. |
-| Wait cycles | Reject statically proven unavoidable cycles. The runtime detects concrete closed request-wait cycles and fails the affected structured execution with a deadlock diagnostic; it does not invent a resumable success or enable reentrancy. |
+| Construction | Create the instance scope first. Evaluate supplied fields once in source order, then omitted `@inject` fields in declaration order. Fresh children belong here; existing references keep their owners. Publish/start Autonomous only after success; failure cleans up new children. |
+| Method-local construction | Owned by that invocation scope; cannot escape into longer-lived state/results. |
+| Scope exit | Prevent new use, cancel/join owned tasks and active calls, clean up descendants, then release instances. No idle worker to keep alive. |
+| Sharing | References may circulate within owner bounds. Aggregates, injected fields, role erasure and closures preserve aliases; fields alone do not prove ownership or disjointness. |
+| Limits | Declaration/method bounds apply per invocation; construction-and-use scopes can bound aggregate lifetime work. Charge caller and applicable owner accounts once each; no quota reset or transferred approval. |
 | Supervision | Default is structured failure propagation and cleanup, not restart. Explicit supervising flows can construct a replacement and choose retry/state recovery; old references do not silently point to it. |
-| Autonomous entry | Satisfying `Autonomous` starts one automatic `main` request after successful initialization under the owner context. It is cancelled and joined on owner exit. A long-lived updating main occupies its update turn; snapshot queries can still run. |
+| Autonomous entry | Explicit `Autonomous` conformance starts one structured `main` task after initialization under the owner context, cancelled/joined on exit. An updating main excludes other instance access throughout its activation; no waiting clients or implicit snapshot service. |
 | Handoff | Routing a request is not consuming a session. Exclusive handoff uses the checked session-lease API; plain `SessionConfig` and `Message<T>` remain ordinary data. |
 
-Automatic retry must not repeat externally visible work without its recovery
-contract. Persistent state, mailbox durability, restart recovery and remote
-transport are not implied by coroutine-style execution.
+Shared-state services require explicit library protocols. No durable state or
+remote transport is implied; external retries require their recovery contract.
 
 ## 2. Tool
 
@@ -308,7 +301,9 @@ hatches.
 
 ### 3.1 Message as the Agent Communication Value
 
-Multi-agent systems are mostly about typed messages moving between agents, tools, humans, persistent stores, and runtime control points. `Prompt` is only the model-call input package. The semantic communication value is `Message<T>`.
+`Message<T>` carries communication data and provenance between agents, tools,
+humans and stores. It implies no mailbox or delivery mechanism; `Prompt`
+packages model-call input.
 
 `Message<T>`, `SessionConfig`, and `Conversation` are Agent/runtime support types, not keywords. Etas does not add `msg` or `message` declarations.
 
@@ -354,7 +349,7 @@ impl Reviewer {
 | Prompt assembly | Explicit `PromptEncode` use; input is never implicitly trusted or placed in the system channel. |
 | Model response | `Schema<O>` and `ResponseDecode` validate/decode the response, independently of the method's eventual result. Field `@inject` does not make schema fields optional or run providers during derived decoding. |
 | Controller code | `std.agent.step` returns one generation; `std.tool.invoke` checks requested tools. Conversation assembly alone does not persist history. |
-| Message-aware calls | `Message<T>` retains session/provenance metadata; ordinary method requests need no handwritten message enum. |
+| Message-aware calls | `Message<T>` retains session/provenance metadata; ordinary method calls need no message wrapper. |
 
 Agent methods are not restricted to a build/infer/postprocess pipeline.
 Model-inference typing is defined in

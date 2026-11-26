@@ -28,8 +28,8 @@ A | B: I -> O ![E1 + E2]
 
 For an empty-state agent type with an explicitly defined public `run`, stage
 conversion constructs an instance per invocation; a bound instance stage reuses
-its reference and scope. Stateful agents require explicit construction. Neither form hides creation, mailbox,
-receiver-mode or state-dependence metadata.
+its reference and scope. Stateful agents require explicit construction. Neither
+form hides creation, instance-access or state-dependence metadata.
 
 The result is a flow value, not a new nominal `agent`. Composition preserves
 the selected stage methods and their behavior summaries; prompts and model

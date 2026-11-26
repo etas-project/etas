@@ -12,7 +12,7 @@ trace spec, deployment grant, sandbox, approval and resource bound.
 | May-effect summary | Conservatively includes reachable operations, not only the path taken in one run. |
 | Action trace | Ordered attempted/completed events with result, request/resource identity and applicable scope; not a sequence of whole program states. |
 | Handler | Interprets an operation without deleting its attempted-action evidence or widening authority. |
-| Call/delegation | Preserves caller restrictions through flows, tools, agent requests and imported libraries. |
+| Call/delegation | Preserves caller restrictions through flows, tools, agent methods and imported libraries. |
 | Constructor injection | Performed providers remain visible; later stored-field reads do not resolve them again. |
 | Scope exit | Inner restrictions do not mutate the outer scope or callee definition. Completed evidence remains subject to its validity/scope rules. |
 
@@ -70,8 +70,8 @@ pre-action check; this never converts a known violation into an accepted one.
 | Unbounded non-deterministic loop | Waiting until runtime may consume unbounded tokens, context, cost, or time. | An agent refinement loop without `@limits(...)`. |
 | Definite prompt-trust violation | Control-plane prompt injection must be blocked before deployment. | Passing `Untrusted<string>` directly to `Prompt.system(...)`. |
 | Unsound handler type | The handler claims to eliminate an effect but lets it escape. | A handler typed as `![E => []]` raises an unhandled `Error<IOError>` from its arm. |
-| Unsafe delegation or capture | Calls through tools/roles preserve transitive behavior, scopes and authority; no captured mutable caller state crosses requests. | Reject a tool whose delegated agent exceeds its boundary, or a cross-request handler capturing caller-local `var`. |
-| Active ownership/turn violation | Do not erase reference scopes or exclusive updating turns. | Reject an escaped child reference or a proven unavoidable closed wait cycle; uncertain wait cycles retain runtime detection. |
+| Unsafe delegation or capture | Preserve transitive behavior, scopes and authority; mutable captures cannot cross tasks. | Reject overprivileged delegation or a child-task handler capturing caller-local `var`; same-task agent calls are not such a boundary. |
+| Agent access/ownership violation | Preserve instance aliases, owner bounds and read/write use through suspension. | Reject escaped references or known overlapping same-instance calls when either writes; copying a reference does not separate instances. |
 
 ### 4.2 Dynamic Checks
 
@@ -86,6 +86,7 @@ pre-action check; this never converts a known violation into an accepted one.
 | Structured output validation | Concrete model output | Decode and validate the output as `Draft`. |
 | Runtime-provided symbol result | Concrete host adapter result | Validate `Array<Untrusted<Page>>` returned by `BrowserSearch`. |
 | Handler dispatch | Dynamic handler stack | Route `ProjectWorkspace.write` to a scoped dry-run handler if present. |
+| Unknown agent alias | Actual instance identity and active access mode | Atomically reject conflicting access before method entry; no hidden waiting or retry. Strict mode requires static proof. |
 | Trace redaction/export | Concrete secret values and export target | Redact `Secret<T>` before exporting a trace. |
 
 | Mode | Unknown but dynamically checkable fact |

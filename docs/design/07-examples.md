@@ -4,7 +4,7 @@ Sections 1 and 2 share declarations; section 3 is independent.
 
 ## 1. Stateful Team, Roles And Upward Effects
 
-This standalone variant keeps worker state across requests. `Team` owns freshly
+This standalone variant keeps state across calls. `Team` owns freshly
 constructed children; a passive record could also store their references but
 would not own them merely by doing so.
 
@@ -118,14 +118,14 @@ flow BuildWithTeam(goal: string) -> string {
 
 | Behavior | What the example establishes |
 |---|---|
-| State | Successful Coder requests commit a revision; error/cancellation before return discards that request's pending revisions. |
+| State | Successful Coder calls commit a revision; error/cancellation before return discards pending revisions. |
 | Roles | Both concrete reviewers implement an active behavioral spec; the heterogeneous array retains checked dispatch. |
-| Concurrent requests | Mapping starts review tasks; immutable `candidate` avoids capturing the loop's mutable `draft`. |
+| Concurrent calls | Mapping starts tasks over distinct reviewer instances; `candidate` avoids capturing mutable `draft`. Repeated aliases do not gain independent write access. |
 | Upward handler | Coder's action reaches this caller's handler through Team. Another client may supply a different handler without changing Coder. |
 | Model delegation | `team.model_delegation(goal)` under the same handler lets the model request the bound `ask_coder` tool. Its snapshot retains the child reference but cannot modify Team state. |
-| Ownership/budgets | Construction owns fresh field children; scope exit cleans them up. Nested requests share the enclosing token/concurrency accounts. |
+| Ownership/budgets | Construction owns fresh field children; scope exit cleans them up. Calls/tasks share enclosing token/concurrency accounts. |
 
-## 2. Peer Calls And Snapshot Queries
+## 2. Exclusive Use And Explicit Snapshots
 
 Within a managed scope, using the declarations above:
 
@@ -133,20 +133,26 @@ Within a managed scope, using the declarations above:
 let coder = Coder { revisions = [] };
 let same = coder;
 handle {
+    let before = same.count();
     let work = std.task.start(() => coder.implement(goal));
-    let committed = same.count();
+    // same.count(); // rejected: may overlap the writer task
     let patch = std.task.await(work);
-    (committed, patch)
+    (before, same.count(), patch)
 } with {
     AskLead.clarify(question) => { resume question; }
 }
 ```
 
-`same` refers to the same instance, not a copy of its state. The count request
-may see the committed state before or after the update, never pending changes.
-Passing this reference to another agent permits peer calls without reparenting.
-A cyclic communication graph is legal; a closed cycle of requests waiting for
-one another's update turns is not silently made reentrant.
+`before` is ordinary snapshot data. `same` aliases coder; it cannot query old
+state during the update. After awaiting completion, its read is valid again.
+
+| Case in a managed scope | Result |
+|---|---|
+| `join((() => coder.implement(goal), () => same.implement(goal)))` | Reject overlapping writes to a known shared instance; no serialization queue. |
+| Concurrent `coder.count()` and `same.count()` without a writer | Shared reads allowed. |
+| Concurrent updates on independently constructed instances | Instance access is disjoint; still check external effects, handlers, budgets and captures. |
+| Dynamically supplied reviewers alias | Unknown identities require proof or exact guards; conflicting admission fails before body execution. |
+| Peer reentry through an alias to a live writer | Reject, even in one task; not a direct authorized self-helper call. |
 
 ## 3. Scoped Constructor Injection
 
@@ -216,4 +222,4 @@ the reviewer keeps its owner. `Agentic.create/call` remain requested metadata.
 | `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Rejected: uncovered dependency requests cannot escape the closed row. |
 | `handler { label: string => 42; }` | Rejected: provider value does not match its declared type. |
 | Decoder receives no label | Missing required data, not implicit invocation of the label provider. |
-| Store a request-local injected reviewer into longer-lived state | Rejected when its owner scope would be escaped. |
+| Store an invocation-local injected reviewer into longer-lived state | Rejected when its owner scope would be escaped. |
