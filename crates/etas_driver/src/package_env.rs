@@ -731,6 +731,7 @@ fn external_public_metadata_with_graph(
                             .iter()
                             .map(
                                 |instance| etas_frontend::ProjectExternalActionRequestInput {
+                                    injection_name: instance.injection_name.clone(),
                                     signature: instance.signature.as_ref().map(|signature| {
                                         etas_frontend::ProjectExternalActionRequestSignatureInput {
                                             params: signature

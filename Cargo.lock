@@ -398,7 +398,7 @@ dependencies = [
 [[package]]
 name = "etas_builtin"
 version = "0.1.1"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "etas_core",
  "etas_std",
@@ -408,7 +408,7 @@ dependencies = [
 [[package]]
 name = "etas_cache"
 version = "0.1.0"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "blake3",
  "etas_core",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "etas_cli"
-version = "0.22.7"
+version = "0.23.0"
 dependencies = [
  "clap",
  "etas_core",
@@ -443,7 +443,7 @@ dependencies = [
 [[package]]
 name = "etas_code"
 version = "0.5.0"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "blake3",
  "etas_core",
@@ -455,7 +455,7 @@ dependencies = [
 [[package]]
 name = "etas_core"
 version = "0.2.2"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "etas_memory_derive",
  "serde",
@@ -464,7 +464,7 @@ dependencies = [
 
 [[package]]
 name = "etas_driver"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "bincode",
  "blake3",
@@ -490,8 +490,8 @@ dependencies = [
 
 [[package]]
 name = "etas_effects"
-version = "0.7.4"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.8.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "etas_builtin",
  "etas_code",
@@ -508,8 +508,8 @@ dependencies = [
 
 [[package]]
 name = "etas_frontend"
-version = "0.19.5"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.20.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "bincode",
  "blake3",
@@ -533,8 +533,8 @@ dependencies = [
 
 [[package]]
 name = "etas_hir"
-version = "0.6.1"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.7.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "etas_core",
  "etas_package_metadata",
@@ -546,8 +546,8 @@ dependencies = [
 
 [[package]]
 name = "etas_hir_analysis"
-version = "0.2.1"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.3.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "etas_core",
  "etas_hir",
@@ -557,7 +557,7 @@ dependencies = [
 [[package]]
 name = "etas_host"
 version = "0.3.2"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "blake3",
  "cap-fs-ext",
@@ -585,8 +585,8 @@ dependencies = [
 
 [[package]]
 name = "etas_interpreter"
-version = "0.21.3"
-source = "git+https://github.com/etas-project/etas-interpreter.git?rev=fc222d6625591380ca0dde2e8de6a6180e1d7215#fc222d6625591380ca0dde2e8de6a6180e1d7215"
+version = "0.22.0"
+source = "git+https://github.com/etas-project/etas-interpreter.git?rev=d119d79bb9296fa512a87652ad7db80e3f6a8af6#d119d79bb9296fa512a87652ad7db80e3f6a8af6"
 dependencies = [
  "bincode",
  "blake3",
@@ -609,7 +609,7 @@ dependencies = [
 [[package]]
 name = "etas_memory_derive"
 version = "0.1.0"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "quote",
  "syn 2.0.119",
@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "etas_package"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "blake3",
  "etas_code",
@@ -636,8 +636,8 @@ dependencies = [
 
 [[package]]
 name = "etas_package_metadata"
-version = "0.4.2"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+version = "0.5.0"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "blake3",
  "etas_code",
@@ -649,8 +649,8 @@ dependencies = [
 
 [[package]]
 name = "etas_std"
-version = "0.6.1"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+version = "0.7.0"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "blake3",
  "etas_code",
@@ -661,8 +661,8 @@ dependencies = [
 
 [[package]]
 name = "etas_syntax"
-version = "0.6.0"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.7.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "ariadne",
  "etas_core",
@@ -673,7 +673,7 @@ dependencies = [
 [[package]]
 name = "etas_syntax_derive"
 version = "0.1.0"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -699,8 +699,8 @@ dependencies = [
 
 [[package]]
 name = "etas_types"
-version = "0.8.4"
-source = "git+https://github.com/etas-project/etas-frontend.git?rev=6eff20df98583c9f40b2416a04da34580f4da7aa#6eff20df98583c9f40b2416a04da34580f4da7aa"
+version = "0.9.0"
+source = "git+https://github.com/etas-project/etas-frontend.git?rev=61f17bcd20704e55df7d723968bb836275d57908#61f17bcd20704e55df7d723968bb836275d57908"
 dependencies = [
  "blake3",
  "etas_code",
@@ -716,7 +716,7 @@ dependencies = [
 [[package]]
 name = "etas_utils"
 version = "0.1.2"
-source = "git+https://github.com/etas-project/etas-core.git?rev=61d1686274e7015db9ad7cad4b138cabf73a293a#61d1686274e7015db9ad7cad4b138cabf73a293a"
+source = "git+https://github.com/etas-project/etas-core.git?rev=19a2b142edc2f61b97c27d8bd3270d0cc35bcc50#19a2b142edc2f61b97c27d8bd3270d0cc35bcc50"
 dependencies = [
  "etas_core",
  "serde",

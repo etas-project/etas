@@ -10,6 +10,7 @@ pub(super) fn to_metadata(
             .map(|instance| {
                 Ok(etas_package_metadata::ActionRequestTemplate {
                     action: effect_ref_to_metadata(&instance.action)?,
+                    injection_name: instance.injection_name.clone(),
                     signature: instance
                         .signature
                         .as_ref()

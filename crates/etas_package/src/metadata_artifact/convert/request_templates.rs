@@ -10,6 +10,7 @@ pub(super) fn from_metadata(
             .map(|instance| {
                 Ok(crate::PackageActionRequestMetadata {
                     action: effect_ref_from_metadata(instance.action)?,
+                    injection_name: instance.injection_name,
                     signature: instance
                         .signature
                         .map(|signature| {

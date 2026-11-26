@@ -618,6 +618,8 @@ pub struct PackageRequestInstantiationMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageActionRequestMetadata {
     pub action: PackageEffectRefMetadata,
+    #[serde(default)]
+    pub injection_name: Option<String>,
     pub type_bindings: Option<Vec<(String, PackageTypeMetadata)>>,
     pub signature: Option<PackageActionRequestSignatureMetadata>,
 }

@@ -668,6 +668,7 @@ fn external_environment() -> ProjectEnvironmentInput {
             ],
         }],
         external_public_metadata: vec![ProjectExternalPublicMetadataInput {
+            constructor_contracts: Vec::new(),
             package: ExternalPackageId(0),
             types: vec![ProjectExternalNamedSignatureInput {
                 path: vec!["dep".into(), "math".into(), "Number".into()],

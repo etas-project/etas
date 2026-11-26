@@ -118,8 +118,13 @@ impl ArtifactStdProvider {
                 .into_iter()
                 .map(etas_code::CallableId::method),
         );
-        required.extend(consumer.types.value_equality_dependencies(&consumer.type_store)
-            .into_iter().map(etas_code::CallableId::method));
+        required.extend(
+            consumer
+                .types
+                .value_equality_dependencies(&consumer.type_store)
+                .into_iter()
+                .map(etas_code::CallableId::method),
+        );
         required.extend(
             consumer
                 .types

@@ -165,8 +165,13 @@ impl LoadedStdSdk {
                     .into_iter()
                     .map(CallableId::method)
                     .collect::<BTreeSet<_>>();
-                required.extend(types.facts.value_equality_dependencies(&types.store)
-                    .into_iter().map(CallableId::method));
+                required.extend(
+                    types
+                        .facts
+                        .value_equality_dependencies(&types.store)
+                        .into_iter()
+                        .map(CallableId::method),
+                );
                 required.extend(
                     types
                         .facts
