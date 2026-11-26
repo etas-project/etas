@@ -37,6 +37,11 @@ impl Drop for PackageFixture {
 #[test]
 fn default_callable_values_survive_source_binary_driver_metadata_replay() {
     let producer = r#"module defaults;
+public effect Supply { action value<T>() -> T; }
+public flow injected<T>(seed: T, @inject(Supply.value<T>) value: T) -> T ![] { return value; }
+public spec Value<A> { flow read(self, @inject(Supply.value<A>) value: A) -> A ![]; }
+public type ValueBox<B> = { n: B };
+impl ValueBox<B> ~ Value<B> { public flow read(self, value: B) -> B ![] { return value; } }
 public type Codec<T> = { encode: (T) -> T ![] };
 flow make_codec<T>() -> Codec<T> ![] { return Codec { encode= (value: T) => value }; }
 public flow apply<T>(value: T, codec: Codec<T> = make_codec<T>()) -> T ![] {
@@ -46,6 +51,7 @@ public flow seeded<T>(seed: T, callback: () -> T ![] = () => seed) -> T ![] { re
 public type Owner<T> = { value: T };
 impl Owner<T> {
     public flow apply(self, codec: Codec<T> = make_codec<T>()) -> T ![] { return (codec.encode)(self.value); }
+    public flow injected(self, @inject(Supply.value<T>) value: T) -> T ![] { return value; }
 }
 "#;
     let mut input = ProjectInput::single_source(SourceInput::anonymous(producer));
@@ -122,10 +128,13 @@ impl Owner<T> {
     .unwrap();
     let mut input = ProjectInput::single_source(SourceInput::anonymous(
         r#"module consumer;
-import defaults.{apply, seeded, Owner};
+import defaults.{apply, seeded, Owner, injected, Supply, ValueBox, Value};
 flow main() -> i32 ![] {
     let owner: Owner<i32> = Owner { value= 3 };
-    return apply(1) + seeded(2) + owner.apply();
+    let provided = injected(0) with { Supply.value<i32>() => 42; };
+    let method = owner.injected() with { Supply.value<i32>() => 21; };
+    let inherited = ValueBox { n = 0 }.read() with { Supply.value<i32>() => 21; };
+    return apply(1) + seeded(2) + owner.apply() + provided + method + inherited;
 }
 "#,
     ));

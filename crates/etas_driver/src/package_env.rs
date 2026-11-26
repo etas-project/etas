@@ -1178,13 +1178,20 @@ fn dependency_parameter_defaults(
 ) -> Vec<etas_package_metadata::ParameterDefault> {
     defaults
         .iter()
-        .map(|default| etas_package_metadata::ParameterDefault {
-            slot: default.slot,
-            reference: default.reference.clone(),
-            callable_value: default
-                .callable_value
-                .as_ref()
-                .map(|graph| dependency_callable_values(package, packages, graph)),
+        .map(|default| {
+            let mut default = default.clone();
+            default.remap_paths(|kind, path| match kind {
+                etas_package_metadata::CallableValuePathKind::Type => {
+                    dependency_type_path(package, packages, path)
+                }
+                etas_package_metadata::CallableValuePathKind::Effect
+                    if is_standard_effect_path(path) =>
+                {
+                    path.to_vec()
+                }
+                _ => dependency_path_with_graph(package, packages, path),
+            });
+            default
         })
         .collect()
 }
