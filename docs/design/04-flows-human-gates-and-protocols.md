@@ -133,7 +133,7 @@ support values. Resource scopes apply to executable declarations, `for`,
 
 | Scope / Evaluation | Contract |
 |---|---|
-| Declaration | Arguments are compile-time values. Each invocation establishes a child scope enclosing the body and trailing handler, not a global counter shared by every invocation. |
+| Declaration | Static bounds; each invocation covers omitted-parameter resolution, body and trailing handler, not supplied arguments or a global shared counter. |
 | Local loop, retry, or block | Arguments may read parameters/local values and call deterministic, non-suspending, action-free helpers. Evaluate once, left to right, under enclosing budgets before scope entry; freeze the resulting bounds for this activation. |
 | Loop / retry lifetime | The scope encloses iterable/condition evaluation and all iterations or attempts. Neither a back-edge nor `continue` resets its budget. `Iterations` counts entries into the annotated loop body, not nested-loop entries. |
 | Block lifetime | Covers all work in the block, including calls and owned child tasks. Normal completion, `return`, `break`, and error unwinding leave the scope with ordinary structured cleanup. |

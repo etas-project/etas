@@ -96,9 +96,8 @@ passed to annotations such as `@tools([repo.read])`.
 
 Annotations use `@` and do not introduce a new keyword. Item annotations attach
 metadata or compiler-recognized contracts to the following declaration.
-`@inject` or `@inject(Action)` attaches to a stored field of a nominal record
-`type` or `agent`; its construction-only contract is defined in
-[Constructor Injection](#72-constructor-injection):
+`@inject` / `@inject(Action)` marks stored record/agent fields or supported
+named-callable parameters; see [Scoped Injection](#72-scoped-injection).
 
 ```etas
 @model("gpt-5.5-thinking")
@@ -154,7 +153,7 @@ flow Revise(draft: Draft, token_budget: u64) -> Draft {
 
 | Placement | Argument and Scope Rules |
 |---|---|
-| Executable `flow`, `agent`, or `tool` declaration, including methods | Static arguments; each invocation establishes a child budget around the body and trailing handler. |
+| Executable `flow`, `agent`, or `tool` declaration, including methods | Static arguments; each invocation's child budget covers omitted-parameter resolution, body and trailing handler, not supplied-argument evaluation. |
 | `for`, `while`, `retry` | Local arguments are evaluated once before entry, not once per iteration or attempt; the budget covers the whole construct. |
 | Block | Local arguments are evaluated once; the budget covers all computation and owned child tasks in the block. The block retains its result type and ordinary `return` target. |
 | Local argument expressions | Must be deterministic, non-suspending and action-free; an empty escaping effect row alone is insufficient. Evaluation remains subject to enclosing budgets. |
@@ -475,72 +474,43 @@ Invocation retains latent effects, captures and scope bounds.
 Stage composition/application use `|` and `~>`; see
 [Stage Composition](04-flows-human-gates-and-protocols.md#12-stage-composition).
 
-### 4.1 Default Parameters
-
-A named callable may give an ordinary parameter a default expression:
+### 4.1 Default And Injected Parameters
 
 ```etas
 flow decorate(text: string, prefix: string = "[", suffix: string = "]") -> string {
-    return std.text.concat([prefix, text, suffix]);
+    std.text.concat([prefix, text, suffix])
 }
-
 let a = decorate("ready");
 let b = decorate("ready", suffix = "!");
 ```
 
-Defaults are supported by named flows, methods, agent entrypoints, tools,
-effect-action signatures, and behavioral type-spec method signatures. They
-are not supported on `self`/`var self` or anonymous-flow parameters. Required
-ordinary parameters precede defaulted parameters. This does not add function
-overloading, variadic parameters, or keyword-only parameters.
+| Parameter contract | Eligible declarations |
+|---|---|
+| `name: T = expr` | Named flows, methods, tools, effect actions and behavioral spec methods. |
+| `@inject name: T` / `@inject(Action) name: T` | Named flows, methods, tools and behavioral spec methods; not effect actions. |
+| Restrictions | No receivers/lambdas or combined default/injection. Required parameters precede optional ones; bind T, not Option. |
 
-Call binding and evaluation follow these rules:
+| Binding phase | Contract |
+|---|---|
+| Match | Positional order, then names; names may skip optional parameters. Reject duplicates, unknowns, positional-after-named and missing required inputs. |
+| Supplied arguments | Once in source order; explicit values, including None, suppress their default/provider. |
+| Omitted arguments | Once per call in declaration order, interleaving defaults/injection under callee restrictions/budgets and caller handlers. |
+| Default expression | Declaration-site lexical bindings; may use preceding ordinary parameters, generics and permitted immutable values, not later parameters or self. Must fit T and be deterministic, action-free, non-suspending under declared bounds; unknown behavior is rejected. `![]` alone is insufficient. |
+| Injection | Perform the [provider request](#72-scoped-injection); it may act, suspend or fail. No implicit cache or guarantee of freshest data. |
+| Body entry | Bind/validate all parameters before receiver acquisition/body execution. Trailing callable `with` handles only body; call-site `f(...) with h` covers binding too. |
+| Failure | Error, cancellation or finish during binding prevents body entry. Completed external actions are not rolled back. |
+| Scope | Preserve owner/capture bounds; no suspension through an enclosing non-suspending exclusive access. |
 
-1. Bind positional arguments in parameter order, then named arguments by name.
-   Reject positional arguments after a named argument, duplicate bindings,
-   unknown names, and omitted required arguments. A named argument may skip
-   defaulted parameters.
-2. Evaluate supplied argument expressions once, left to right in source order.
-   Then evaluate omitted defaults once, in parameter declaration order. Supplied
-   values never cause their corresponding defaults to execute. Passing `None`
-   is an explicit value, not omission.
-3. Resolve defaults in the defining declaration's lexical environment, not the
-   caller's. A default may refer to preceding ordinary parameters, in-scope
-   generic parameters, and permitted immutable bindings, but not later
-   parameters or either receiver form. For `var self`, argument/default
-   evaluation finishes before exclusive receiver access begins.
-4. Each default must have its declared parameter type, be deterministic,
-   action-free, and proven non-suspending, with no escaping effects. Unknown
-   behavior is rejected. `![]` alone is insufficient; default-handled actions
-   cannot hide model/I/O requests. A generic default must type-check under its
-   declared bounds, not assume a particular type argument.
-5. After all bindings succeed, enter the callable with a complete argument
-   list. If argument/default evaluation fails to complete, do not enter the
-   body; already evaluated supplied-argument effects are not rolled back.
+Full-argument arrows/flow effect bounds describe the body and trailing handler.
+Omitted-provider summaries apply only at omitted-argument calls; tool model
+boundaries cover them too. First-class values require full inputs; wrap with
+`() => f(x)` for omission. No currying, overloads, variadics or new stage arities.
 
-Defaults are evaluated per call, not once at module loading. Immutable
-collection defaults may share storage without sharing mutable state. The
-callee receives the declared `T`, not an implicit `Option<T>`.
-
-Defaults belong to a resolved declaration's call interface, not to its arrow
-type. Imports and re-exports preserve that interface. An ordinary first-class
-flow value still requires its full arrow-type input; defaults do not create
-automatic currying, overloads, or new stage-composition arities. Use an explicit
-wrapper to bind arguments for higher-order use.
-
-A behavioral spec may declare a method default. Its implementations inherit
-that default and cannot add or replace it independently. Dispatch through the
-spec uses the same bound default before entering the implementation. Defaults
-on actions are bound before action dispatch, so handlers receive the complete
-payload and still match full action signatures.
-
-Model tool schemas mark defaulted inputs as optional, not nullable. The checked
-tool invocation entry evaluates any missing defaults and validates the complete
-effective arguments before policy checks, body/host dispatch, or an execution
-event. JSON Schema annotations alone do not execute defaults. Package interfaces
-retain checked defaults, declaration-site bindings, and fingerprints so compiled
-dependencies behave the same as source dependencies. Defaults cannot be silently
-changed by an implementation revision whose public signature is frozen.
+Spec impls inherit defaults, injection labels/providers and parameter names;
+reject additions/replacements or conflicting inherited contracts. Resolve before
+impl entry. Actions retain pure defaults and complete payloads. Imports,
+re-exports and frozen revisions preserve these contracts.
+Tool schema projection and staged checks follow [Tool Rules](03-agents-tools-prompts-memory.md#2-tool).
 
 ## 5. Determinism Inference
 
@@ -850,24 +820,18 @@ preserving the same value semantics. See
 [Iteration And Effectful Consumption](19-standard-library.md#10-iteration-and-effectful-consumption)
 for pure lazy adapters and callbacks whose effects occur during consumption.
 
-### 7.2 Constructor Injection
+### 7.2 Scoped Injection
 
-For an omitted field `name: T`, `@inject` requests `Inject<T>.get("name")`.
+For an omitted field or parameter `name: T`, `@inject` requests `Inject<T>.get("name")`.
 `@inject(Action)` instead uses a declaration-site-resolved, zero-argument action
-returning an assignable value. Neither form executes at declaration time.
+returning an assignable value. Neither executes at declaration time. Infer T
+from ordinary type arguments/context, never by searching installed providers.
 
-```etas
-type Config = {
-    @inject
-    primary: string,
-    @inject
-    replica: string,
-}
-
-flow configured(primary: string, replica: string) -> Config {
-    Config {} with { primary, replica }
-}
-```
+| Consumer | Timing |
+|---|---|
+| Stored record/agent field | Once per construction when omitted; save the value, not its provider. A saved agent reference is not a snapshot of that agent's state. |
+| Named-callable parameter | Once per omitted argument per call under section 4.1; no instance-field update. |
+| Explicit `perform` | Only when execution reaches it; branches/loops may request again. |
 
 | Dependency arm | Expansion |
 |---|---|
@@ -884,13 +848,13 @@ resume like ordinary action tails, never implicitly finish. No arm-level `return
 
 | Rule | Contract |
 |---|---|
-| Target | One annotation per stored field of a nominal record or agent; normal visibility applies. Other targets, non-action explicit arguments and invocations are rejected. |
-| Matching | Match names and normalized types: aliases agree; nominal types remain distinct. No implementation search. Nearest matching handler wins; exact-name Inject arms precede its type-wide arm. Duplicate name/type or type-wide keys, including expanded forms, are rejected. |
-| Field identity | Names are dependency labels, not instance access. Same-name/same-type fields share a provider across constructors; use nested handlers or named actions to distinguish them. Renaming changes this contract. |
+| Target | One annotation per nominal record/agent field or eligible parameter. Reject enum payloads, anonymous-record fields, receivers, lambdas, action parameters and non-action annotation arguments. |
+| Matching | Match names/normalized types; aliases agree, nominal types differ. Nearest handler wins, then exact name before type-wide arm. Reject duplicate keys, including expanded sugar; no implementation search. |
+| Labels | Names identify demands, not owners. Same-name/same-type fields and parameters use the same matching rules; use nested handlers or named actions to distinguish them. Renaming changes the contract. |
 | Construction | Explicit fields/shorthand suppress their providers. Validate missing/duplicate/unknown fields, evaluate supplied values in source order, then omitted providers in declaration order. No implicit cache or cycle resolution. |
-| Effects | Retain requested names, types and provider behavior in summaries. Remove only covered requests; unknown names need a type-wide arm. Inject has no default provider; uncovered demands escape. Ordinary authority, trace, cancellation and budget rules apply. |
+| Effects | Retain demand names/types and provider behavior. Inject has no default provider; uncovered requests escape. Unknown labels need type-wide coverage. Handling never grants authority or certifies an injected identity. |
 | Completion | Publish fully initialized values only. Error, cancellation or `finish` abandons construction and cleans up new agent scopes, not external effects. |
-| Lifetime | Store values, not ambient grants/handlers. Capture and owner bounds remain; existing references are not adopted. Later reads/copies/patterns/equality/serialization use stored values, never providers. |
+| Lifetime | Capture/owner/alias bounds remain; no adoption, extended lifetime or new permission. Later reads/copies/patterns/equality/serialization never rerun providers. |
 | Decoding | Required schema fields stay required; derived decoding never invokes providers. Custom constructors/decoders retain checked effects. |
 
 ## 8. Encapsulation and Methods

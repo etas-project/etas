@@ -132,7 +132,7 @@ host execution is needed only for the specified primitive endpoints.
 | `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
 | `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
-| `Inject<T>` | `get(name: string)` | Named, typed dependency request; no default provider or authority grant |
+| `Inject<T>` | `get(name: string)` | Field/parameter or explicit dependency request; no default provider or authority grant |
 
 `Async` is exported by `std.task`. Default handlers support ordinary managed
 execution; custom handlers can bind `as k` and use checked scheduler transfer.
@@ -593,7 +593,7 @@ Tail expressions retain ordinary effect inference and check against B, never R.
 | `as k` | Implicit/explicit resume consumes the same live continuation. No resumption after transfer or prior consumption. |
 | `return` | Rejected at arm level; nested flows keep their own return target. |
 
-[Dependency arms](02-general-programming-constructs.md#72-constructor-injection)
+[Dependency arms](02-general-programming-constructs.md#72-scoped-injection)
 retain their provider-to-`Inject<T>.get(...)` expansion and implicit resumption.
 
 `resume` is a control keyword, not a function value. Resumption reinstalls the
@@ -740,15 +740,14 @@ local writeback nor captured-var assignment implicitly performs `Memory.write`.
 | Construct | Omitted effect boundary |
 |---|---|
 | Flow, main, lambda or agent method | Infer escaping behavior; explicit rows are checked upper bounds. |
-| Tool | Infer its body, then check the empty model-callable boundary unless an explicit row or applicable positive trace constraint supplies it. |
+| Tool | Body plus model-hidden parameter resolution must fit the empty model boundary unless an explicit row or positive trace constraint supplies it. |
 | External primitive | Requires explicit signature/behavior metadata. |
 | Agent declaration | Declares state/configuration; construction and methods have separate behavior. Model-call authority comes only from checked listed tools. |
 
 Exports preserve inferred or explicit contracts for callers. Default handling
 cannot hide requested actions at a tool or authority boundary.
-Action-free parameter defaults do not request dependencies; field
-[`@inject`](02-general-programming-constructs.md#72-constructor-injection)
-deliberately contributes omitted provider actions at construction.
+Pure defaults request nothing; [`@inject`](02-general-programming-constructs.md#72-scoped-injection)
+adds conditional binding actions, not unconditional full-argument arrow effects.
 
 ## 7. Anonymous Flows And Latent Effects
 
@@ -768,8 +767,8 @@ Effect inference computes an upper bound over effects that may occur during exec
 | Nominal record/agent construction | Supplied initializer effects, then omitted `@inject` actions and their handling behavior; active construction additionally retains `Agentic.create<A>` and startup summaries. |
 | Record-value update `base { fields }` | Base evaluation, then replacement effects in source order; retain requested/trace/capture behavior. No implicit provider, mutation or agent action. |
 | Stored-field access | Receiver-expression effects only; never re-request an injected field. Agent privacy/access rules still apply. |
-| Flow call | Callee effect set |
-| Etas tool call | Tool boundary effects plus inferred body effects |
+| Named flow/method call | Supplied arguments, omitted-parameter resolution, then body; explicit values suppress their providers. Preserve binding/requested/trace summaries separately from the full-argument arrow. |
+| Etas tool call | Same source-call rule; model invocation always resolves hidden parameters and checks the combined model boundary. |
 | Runtime-provided primitive call | Declared effect metadata |
 | Agent call | Callee body/tool effects and requested actions, including inference. Preserve instance identity, read/write use, captures and suspension separately; effect rows alone cannot prove exclusive access. |
 | Typed memory read | Request `Memory.read<R>`; standard handling retains `Error<StorageError>` rather than hiding failure. |
@@ -787,25 +786,20 @@ Effect inference computes an upper bound over effects that may occur during exec
 | `e?` | Effects of `e` minus the captured `Error<E>`, result type becomes `Result<T, E>` |
 | `expr with h` / `handle expr with h` | Expression effects minus fully handled effects, plus handler arm effects |
 
-Constructor injection follows ordinary action handling:
+Binding follows ordinary action handling; for omitted parameters M:
 
 ```text
-initialize(C { supplied }) =
-    supplied expressions in source order
-    ; perform omitted fields' provider requests in declaration order
-    ; publish the completed record/instance
-
-escaping(construction) = effects of that checked sequence after handling
-requested(construction) includes each performed provider action
-trace(construction) preserves initialization and handler execution order
+call(f, supplied, M) = evaluate supplied ; resolve M in declaration order ; body
+escaping(call) = effects of that sequence after scoped handling
+requested(call) includes provider/handler actions
+trace(call) retains their execution order
 ```
 
-Explicit fields suppress only their own provider requests. Provider effects
-are included transitively; resolving a reference never grants authority to use
-it. A missing provider is an ordinary escaping demand, rejected at a closed
-boundary or runnable entry without coverage, not an implicit global lookup.
-Later field reads/copies add no provider action. Handler substitution, rather
-than an unchecked annotation, determines whether construction is deterministic.
+Construction similarly resolves omitted fields before publication. Uncovered
+demands escape and must be handled at closed/runnable boundaries; no global
+fallback. Actual provider behavior contributes effects, determinism, suspension,
+captures and resource use. The body may be deterministic while an omitted-input
+call is not. Later field/parameter reads never resolve again or gain authority.
 
 ## 9. Checking Rules
 

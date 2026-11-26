@@ -511,7 +511,7 @@ run<R, effect E>(
 
 This uses an existing object-safe existential bound, not general subtyping or
 an assumed default generic type parameter. Defaults follow the ordinary
-[default-parameter rules](02-general-programming-constructs.md#41-default-parameters).
+[parameter rules](02-general-programming-constructs.md#41-default-and-injected-parameters).
 Thus `task.run(body)` needs no caller import of `DefaultScheduler`;
 `task.run(body, CustomScheduler)` or
 `task.run(body, implementation = CustomScheduler)` explicitly selects another
@@ -755,34 +755,29 @@ It inherits the active model configuration, tool surface, trace specs, runtime
 policy, limits, cancellation, and trace/replay mode. None is granted by the
 conversation, schema, or transparent output records.
 
-Before `std.tool.invoke` executes anything, it must:
+Checked invocation proceeds in this order:
 
-1. resolve the tool identity and revision against the registered native tools
-   exposed by `C`, rejecting stale or out-of-surface references;
-2. decode arguments against the actual declaration's input schema, not schema
-   claims supplied in the record;
-3. enforce the tool boundary, caller boundary, current trace specs/policy,
-   approval, sandbox, limits, and cancellation across transitive calls;
-4. dispatch the registered Etas body or declared binding, and validate its
-   output before encoding model-facing feedback.
+| Phase | Contract |
+|---|---|
+| Admission | Resolve C's exposed tool/revision and known authority/trace/cancellation conditions before providers; reject stale, forbidden or out-of-surface calls. |
+| Model arguments | Decode the declaration's visible schema, not record-supplied claims. Reject injected parameter keys; hidden inputs are not optional model inputs. |
+| Binding | Under caller handlers and conjoined invocation restrictions/budgets, fill omitted defaults/injected parameters in declaration order. Count provider/handler behavior against the model-tool boundary; hiding it grants no privilege. |
+| Full validation | Check effective types and payload-dependent authority/approval, sandbox and limits. Injected identities are data, not proof. Then acquire any required receiver access. |
+| Execution | Dispatch only after successful binding/validation; validate/encode output. Record provider actions separately from actual tool execution. |
 
-Boundary diagnostics such as malformed arguments or a rejected tool request
-may be returned as `Err(StepDiagnostic)` without executing the rejected tool.
-This is not an implicit handler for every `Error<E>` raised inside a tool.
-Ordinary typed failures remain escaping obligations unless the tool/controller
-explicitly handles and translates them. Likewise, `Stopped` is a model-turn
-outcome, not a catch-all for transport failures, cancellation, budget exhaustion,
-or policy termination. Those retain the normal failure/unwind behavior. The
-postfix `?` still captures exactly one residual `Error<E>` into `Result<T, E>`;
-it is not needed to inspect the already value-level `ToolResult.result`.
+Source calls may override injection under normal visibility/authority rules;
+the model-facing `invoke` cannot. Providers may use non-schema types while
+retaining scope/capture/secret checks. Failures prevent tool-body entry, not
+rollback of completed providers. Boundary diagnostics may become `Err(StepDiagnostic)`;
+this does not catch every `Error<E>` in parameter resolution or the body.
+Typed failures escape unless explicitly handled. `Stopped` is a model-turn outcome,
+not transport failure, cancellation, budget or policy termination. `?` captures
+one Error family; `ToolResult.result` is already a value-level result.
 
-Static analysis of `invoke<C>` includes the conservative union of the exposed
-tools' effect, requested-action, determinism, and temporal summaries. Runtime
-checking narrows the actual selected call. A default handler must not erase tool
-authority behind the handled `Agentic.step`/`infer` action. Receiving a request
-does not itself count as execution of the requested tool for approval ordering
-or trace-spec satisfaction; the checked dispatch and actual actions supply
-those events.
+`invoke<C>` conservatively unions exposed tools' binding/body effects, requested actions,
+determinism, captures and temporal summaries. Selection narrows the actual call,
+not its authority. Default `infer`/`step` handling cannot hide these obligations;
+receiving a model request is not evidence of tool execution or approval.
 
 Invocation and replay records correlate request id, call id, tool revision, and
 current execution context. A repeated record must not silently become permission
@@ -813,10 +808,10 @@ public spec Autonomous ~ Active {
 | `std.task.start/await` | Explicit task concurrency and completion; preserve instance-access summaries. |
 | Member tool dispatch | Bind an immutable state copy at the model/step boundary, not live receiver access. Calls through stored agent references still require access checks. |
 
-Field [`@inject`](02-general-programming-constructs.md#72-constructor-injection)
-uses standard `Inject<T>` (prelude-exported): `get(name: string) -> T`, with no
-default provider. Field/type arms and shorthand expand to ordinary handlers;
-explicit named actions remain supported. No registry, cache or grant is implied.
+[`@inject`](02-general-programming-constructs.md#72-scoped-injection) uses prelude
+`Inject<T>.get(name: string) -> T` or an explicit action. Fields resolve at
+construction, omitted parameters at calls. Name/type arms are ordinary handler
+sugar; no default provider, registry, cache or grant is implied.
 
 A long-running updating `main` excludes other readers/writers, not just updates.
 Instance access, scope bounds, supervision and explicit shared-state services follow

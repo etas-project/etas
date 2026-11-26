@@ -154,10 +154,9 @@ state during the update. After awaiting completion, its read is valid again.
 | Dynamically supplied reviewers alias | Unknown identities require proof or exact guards; conflicting admission fails before body execution. |
 | Peer reentry through an alias to a live writer | Reject, even in one task; not a direct authorized self-helper call. |
 
-## 3. Scoped Constructor Injection
+## 3. Scoped Field And Parameter Injection
 
-This standalone example injects two string fields and an active reviewer
-without requiring a model provider.
+These examples share declarations and need no model provider.
 
 ```etas
 spec ReviewRole ~ std.agent.Active {
@@ -167,7 +166,7 @@ spec ReviewRole ~ std.agent.Active {
 agent EchoReviewer = {};
 impl EchoReviewer ~ ReviewRole {
     public flow review(self, text: string) -> string ![] {
-        return text;
+        text
     }
 }
 
@@ -184,9 +183,21 @@ agent ReviewTeam = {
 }
 
 impl ReviewTeam {
-    public flow run(self, text: string) -> string ![] {
-        return self.reviewer.review(text);
+    public flow run(self, text: string, @inject label: string) -> string ![] {
+        label + self.reviewer.review(text)
     }
+}
+
+flow review_text(
+    text: string, @inject label: string, @inject reviewer: ? ~ ReviewRole
+) -> string ![] {
+    label + reviewer.review(text)
+}
+
+effect Auth { action current_user() -> string; }
+tool format_note(content: string, @inject(Auth.current_user) user: string)
+    -> string ![Auth.current_user] {
+    user + ": " + content
 }
 
 flow ScopedReview(text: string) -> string ![] {
@@ -201,25 +212,32 @@ flow ScopedReview(text: string) -> string ![] {
         let config = ReviewConfig {};
         let decorated = config { footer = " [reviewed]" };
         let team = ReviewTeam {};
-        team.run(decorated.label + text + decorated.footer)
+        team.run(text + decorated.footer, label = decorated.label)
     } with dependencies;
 }
 ```
 
-`label` and `footer` select different string providers. The typed `reviewer`
-binding makes shorthand match the existential field. Reads use stored values;
-the reviewer keeps its owner. `Agentic.create/call` remain requested metadata.
+Team keeps its field reviewer; omitted method labels resolve per call.
+Existential injection preserves owners and Agentic metadata. Auth supplies test
+identity data, not proof; `format_note` includes it in output intentionally.
 
 | Check, using the declarations above | Expected result |
 |---|---|
-| `ReviewConfig { label = "explicit", footer = "" }` | Neither provider runs; module-scope construction still obeys global-initializer rules. |
-| `ReviewTeam { reviewer }` | Explicit shorthand bypasses the provider; ordinary active construction/dispatch checks remain. |
+| `ReviewConfig { label = "explicit", footer = "" }` | No providers; global-initializer rules still apply. |
+| `ReviewTeam { reviewer }` | Explicit shorthand skips injection, not agent checks. |
 | Two `ReviewConfig {}` constructions | Four requests, one per omitted field per construction; no implicit cache. |
-| `config { footer = " [reviewed]" }`, for `config: ReviewConfig` | New record retains label without provider calls; config is unchanged. Agent-instance heads are rejected. |
+| `config { footer = " [reviewed]" }` | Retain label without injection; original unchanged. Agent heads rejected. |
 | `handler { string => "fallback"; label => "review: "; }` | Named label wins within this handler; footer uses the type fallback. |
 | Inner `handler { string => "inner"; }` | Overrides outer string providers; saved fields do not change. |
 | `handler { label => "a"; label => "b"; }` | Rejected: duplicate name/type pair. |
-| `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Rejected: uncovered dependency requests cannot escape the closed row. |
+| `flow Missing() -> ReviewConfig ![] { ReviewConfig {} }` | Reject uncovered requests at the closed row. |
 | `handler { label: string => 42; }` | Rejected: provider value does not match its declared type. |
 | Decoder receives no label | Missing required data, not implicit invocation of the label provider. |
 | Store an invocation-local injected reviewer into longer-lived state | Rejected when its owner scope would be escaped. |
+| `review_text(text) with { label => "review: "; reviewer, }` | Both providers run; body is `![]`. Reviewer is a local `? ~ ReviewRole`. |
+| `review_text(text, label = "hotfix: ") with { reviewer }` | Only the reviewer provider runs. |
+| `review_text(text, label = "test: ", reviewer = reviewer)` | No provider requests. |
+| `let f = review_text; f(text)` | Reject missing full-arrow inputs; `() => review_text(text)` is an explicit injection-preserving wrapper. |
+| `format_note(text) with { Auth.current_user() => "test-user"; }` | Named action supplies user; model schema exposes content only. |
+| Model payload includes `user` | Reject before provider execution; source `format_note(text, user = "test-user")` may override without granting authority. |
+| `@inject label: string = "fallback"` or conflicting inherited providers | Reject, not an implicit precedence rule. |

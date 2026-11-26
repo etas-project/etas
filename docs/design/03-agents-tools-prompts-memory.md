@@ -66,17 +66,15 @@ a method in metadata; execution requires a receiver. Instance, declaration and
 revision identities remain distinct. Metadata cannot forge references; private
 state does not derive structural Eq/Hash.
 
-Stored fields may use [`@inject` or `@inject(Action)`](02-general-programming-constructs.md#72-constructor-injection)
-for construction-time resolution through `with`. A field then retains the
-returned value, not its provider handler or authority. For per-call routing,
-perform the dependency action inside the method; ordinary field reads remain
-reads. Injection does not expose private state or convert dependency edges into
-lifecycle ownership edges.
+[`@inject`](02-general-programming-constructs.md#72-scoped-injection) fields resolve
+at construction and retain values, not handlers/authority. Annotated method
+parameters resolve when omitted at each call; explicit `perform` resolves on
+demand. Field reads never resolve again; dependency edges do not imply ownership.
 
 ### 1.3 Operational Intuition
 
-Resolve the receiver once and evaluate arguments/defaults before acquiring
-instance access. A call then enters the checked agent context in the same task.
+Resolve the receiver once; evaluate arguments/defaults/injection before acquiring
+instance access. Binding already obeys invocation restrictions and budgets.
 Different instance identities isolate local state, not external resources.
 
 | Rule | Contract |
@@ -167,14 +165,16 @@ ordinary Etas logic.
 
 | Form | Contract |
 |---|---|
-| `tool name(args) -> O ![E] { body }` | Source implementation; declared boundary must cover inferred escaping behavior and applicable requested-action restrictions. |
+| `tool name(args) -> O ![E] { body }` | Model boundary covers body and omitted injected parameters, including handler-produced effects and requested behavior. Full-argument body and conditional binding summaries remain distinct. |
 | `tool name(args) -> O;` | Imported package/interface signature with a resolvable implementation and behavior metadata; not an unbound source implementation. |
 | Member tool in `impl A` | Optional snapshot `self` is bound by the runtime, omitted from the model schema. Never an updating receiver. |
 | Omitted tool effect boundary | Empty boundary, unlike flow/agent-method inference; default handling does not hide requested actions from authority checks. |
 
-Arguments/results must support the model schema/encoding contract. Secrets,
-live instance references and receiver state cannot be exposed as tool results.
-A registered tool is an allowed model request target, not an authority grant.
+Model-visible inputs/results require schema encoding. Injected inputs are absent;
+model-supplied hidden keys are rejected. Defaults are optional, not nullable,
+and evaluated by checked invocation, not JSON Schema. Source overrides grant no
+authority. Hidden inputs retain type/owner/secret checks, not certified identity;
+secrets, live references and receiver state cannot be model results.
 
 ### 2.2 Tools, Actions And Flow Wrappers
 
@@ -208,13 +208,9 @@ not the tool wrapper. Substrate and sandbox contracts are centralized in
 
 | Check | Requirement |
 |---|---|
-| Reachability | Model requests only declared tools; direct source calls require normal symbol visibility. |
-| Transitive behavior | Include helper flows, tool calls and delegated agent methods; erasure cannot discard conservative summaries. |
-| Runtime checks | Validate arguments, current authority, trace constraints, sandbox and resource limits before dispatch. |
-| Delegation | A tool may call an agent; recursion must remain within enforceable inherited budgets and cancellation scopes. No fresh budget or implicit grant. |
-| Inference context | Agent-scoped `infer` is not available directly in a tool. A bound member tool may delegate through its snapshot's subagent references. |
-| Effects | Installing a handler never removes requested-action history or deployment requirements. |
-| Failure | Preserve typed errors and cancellation; no implicit retry of externally visible work. |
+| Entry | Check exposed identity and known admission conditions before providers; after binding, validate full arguments and payload-dependent authority. See [checked dispatch](19-standard-library.md#44-effects-execution-checks-and-failures). |
+| Delegation | Helpers/tools/agents preserve transitive effects, scopes, cancellation and budgets. No implicit grant, fresh quota or agent-scoped `infer` directly in a tool. |
+| Evidence / failure | Handlers do not erase requested actions. Preserve typed errors/cancellation; no implicit retry or provider-as-approval shortcut. |
 
 ### 2.4 Standard IO
 

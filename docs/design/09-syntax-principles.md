@@ -186,7 +186,7 @@ EffectActionDecl
               ::= "action" Ident TypeParams? ParamList ReturnType ";"
 ```
 
-Kinds and existential packing follow [Types](05-type-system-and-errors.md). Bare `@inject` requests `Inject<T>.get("field")`; explicit annotations name zero-argument actions. See [Constructor Injection](02-general-programming-constructs.md#72-constructor-injection).
+Kinds and existential packing follow [Types](05-type-system-and-errors.md). `@inject` requests `Inject<T>.get("name")` for a field/parameter; explicit annotations name zero-argument actions. See [Scoped Injection](02-general-programming-constructs.md#72-scoped-injection).
 
 ### 2.3 Top-Level Bindings
 
@@ -212,13 +212,14 @@ ParamList     ::= "(" ParamListInner? ")"
 ParamListInner::= Param ("," Param)* ","?
                 | ReceiverParam ("," Param)* ","?
 Param         ::= Ident ":" TypeExpr DefaultArg?
+                | InjectAnnotation Ident ":" TypeExpr
 DefaultArg    ::= "=" Expr
 ReceiverParam ::= "self" | "var" "self"
 
 FlowClause    ::= DeclarationConformance
 ```
 
-Return/effect inference, default parameters and passive/active receiver modes follow [General Constructs](02-general-programming-constructs.md#4-flows-as-the-ordinary-callable-unit). `requested_actions` and related summaries are not source clauses.
+Parameter eligibility, defaults/injection and receiver modes follow [General Constructs](02-general-programming-constructs.md#41-default-and-injected-parameters); grammar reuse does not permit injected lambda/action parameters. Behavior summaries are not source clauses.
 
 ### 2.5 Tools, Agents, Persistent Resources
 

@@ -369,11 +369,10 @@ arms still escape normally.
 Handler arms must not hide audit evidence: even when a branch action is handled,
 the trace records the attempted action and the handler decision.
 
-Constructor `@inject` requests use these same scoped handlers in each task;
-they are not thread-local/global registry lookups. Concurrent constructions
-request independently and obey normal capture, cancellation and lifetime
-checks. Saved fields retain their values across later calls; injecting a shared
-agent reference neither reparents it nor shares one caller's grants.
+Field/parameter `@inject` uses the executing task's scoped handlers, not a registry.
+Concurrent resolutions remain independent and retain capture/cancellation/owner
+checks. Providers may suspend only where permitted; shared agent references
+retain aliases and owners, never grants or independent update rights.
 
 ### 11.1 Handler-Based Scheduling
 

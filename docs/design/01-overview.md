@@ -21,7 +21,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 | `?` | Convert exactly one residual `Error<E>` family to `Result<T, E>`. |
 | `A \| B`, `x ~> A` | Compose stages into a flow; apply a value to a stage. |
 | `@limits(...)` | Scoped resource bounds; nested and concurrent work share applicable parent accounts. |
-| Field `@inject` / `@inject(Action)` | Resolve omitted fields by name/type or named action; explicit initialization wins. |
+| `@inject` / `@inject(Action)` | Resolve omitted fields at construction, parameters at calls; explicit values win. Tool injected inputs are model-hidden. |
 | `protocol` | Role/message declaration; not a replacement for trace specs. |
 | `^` | Reflection extension over retained definitions; checked compilation preserves the original contract. |
 
@@ -69,7 +69,7 @@ not matching text. In particular:
 | Contract | Required distinction |
 |---|---|
 | `Result<T, E>` / `Error<E>` | `?` is bound to their standard identities; unrelated same-named types do not participate. |
-| `@inject` / `@limits` | Mandatory construction/resource semantics, not optional user metadata. |
+| `@inject` / `@limits` | Checked dependency/resource semantics, not optional metadata. |
 | `Agentic` / `std.agent.Active` | Protected method/instance identity and dispatch; ordinary records cannot forge them. |
 | `std.task` / resource handles | Preserve task ownership, scope, capture and one-use transfer obligations through abstraction. |
 | Reflection descriptors | Runtime signature data is descriptive; it cannot forge a static callable type or bypass checked compilation. |

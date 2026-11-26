@@ -13,7 +13,7 @@ trace spec, deployment grant, sandbox, approval and resource bound.
 | Action trace | Ordered attempted/completed events with result, request/resource identity and applicable scope; not a sequence of whole program states. |
 | Handler | Interprets an operation without deleting its attempted-action evidence or widening authority. |
 | Call/delegation | Preserves caller restrictions through flows, tools, agent methods and imported libraries. |
-| Constructor injection | Performed providers remain visible; later stored-field reads do not resolve them again. |
+| Injection | Field/omitted-parameter providers retain checked behavior; reads do not rerun them. Hidden tool inputs are not authorization evidence. |
 | Scope exit | Inner restrictions do not mutate the outer scope or callee definition. Completed evidence remains subject to its validity/scope rules. |
 
 ## 2. Trace Constraints

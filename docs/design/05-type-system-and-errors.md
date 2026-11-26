@@ -102,8 +102,8 @@ enum type. Variants cannot mix positional and named-field payloads in a single
 declaration. Variant names within an enum and field names within a variant
 must be unique. Named-field construction requires every declared field exactly
 once, rejects unknown fields, and supports ordinary record shorthand. Enum
-payload fields do not support `@inject`; constructor injection is confined to
-named record types and agents.
+payload fields do not support `@inject`; field injection is confined to nominal
+records and agents, independently of parameter injection.
 
 ```etas
 enum Response {
@@ -189,7 +189,7 @@ Fresh construction evaluates supplied fields in source order, then omitted
 then replacements in source order, retaining other stored fields without injection.
 Equality/hash use completed stored values; canonical layout cannot reorder
 observable evaluation. Provider typing and generic bounds follow
-[Constructor Injection](02-general-programming-constructs.md#72-constructor-injection);
+[Scoped Injection](02-general-programming-constructs.md#72-scoped-injection);
 type-preserving update follows [Composite Types](02-general-programming-constructs.md#7-composite-types).
 
 Standard collection abstractions use their specified logical equality, not the
@@ -369,11 +369,10 @@ dispatch kind, preserved by the evidence. See
 [Agent Semantics](03-agents-tools-prompts-memory.md#1-agent) and
 [Passive Receivers](02-general-programming-constructs.md#32-restricted-updating-receivers).
 
-Defaults on behavioral method signatures belong to the spec's call interface.
-Implementations inherit them rather than providing competing defaults. An
-optional argument still binds the declared parameter type; it does not add an
-implicit `Option` or alter the method's arrow-type arity. See
-[Default Parameters](02-general-programming-constructs.md#41-default-parameters).
+Spec methods own default/injection contracts, inherited by impls; conflicting
+providers/labels/defaults are rejected. Full-argument arrow arity/body effects
+remain unchanged; omission adds binding behavior at the call. Existential
+dispatch preserves this metadata. See [Parameter Rules](02-general-programming-constructs.md#41-default-and-injected-parameters).
 
 Generic APIs use `~` bounds:
 

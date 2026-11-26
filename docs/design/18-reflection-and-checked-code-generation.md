@@ -151,17 +151,12 @@ cannot recover a static type or authorize a cast. Descriptor construction cannot
 forge a typed contract. Generic reflection follows ordinary flow typing and
 does not introduce first-class polymorphic schemes.
 
-`SignatureInfo` contains type and effect-parameter binder descriptions,
-`Array<ParameterInfo>`, and a return-type descriptor. `ParameterInfo` records the
-parameter name, its `TypeInfo`, and any method receiver mode (`self` or
-`var self`), plus whether the declaration supplies a default. Default
-descriptions preserve declaration/revision identity and available descriptive
-content; they are not caller-executable expressions or permission to alter a
-frozen default contract. A descriptive mode does not grant access to a caller's binding or
-make a bound updating method escapable. Resolved types must remain
-distinguishable from any original annotation, including when the return type
-was inferred. Checked method/package contracts retain their suspension facts;
-reading reflection data cannot manufacture a non-suspension proof.
+`SignatureInfo` contains generic binders, `Array<ParameterInfo>` and a result
+descriptor. Parameter metadata retains name/type, receiver mode, pure default
+or injection/provider identity, model visibility and binding summaries. It is
+descriptive, not executable permission. Frozen revisions preserve these contracts.
+Resolved types remain distinct from source annotations; reflection cannot forge
+receiver access, escape rights or non-suspension evidence.
 
 `TypeInfo`, `SpecInfo`, and effect-row descriptors are ordinary descriptive data.
 Reading a return-type descriptor does not make it legal to use that runtime
@@ -285,7 +280,7 @@ it or replace it with whatever the new body happens to do.
 
 | Contract Component | Required Compatibility |
 |---|---|
-| Callable interface | Preserve the input/output interface, generic constraints, receiver/dispatch mode, state-field schema, method visibility and promised role/spec conformance. |
+| Callable interface | Preserve inputs/outputs, defaults/injection contracts, model visibility, generic bounds, receiver mode, state schema and role/spec conformance. |
 | Escaping effects | Newly inferred effects must fit the frozen interface's escaping-effect upper bound. |
 | Requested actions | New requests must fit its caller-visible action upper bound, including handled requests and relevant parameter scopes. An escaping row is not that bound. |
 | Temporal behavior | Preserve the trace-state assumptions and guarantees used in caller-side composition, including behavior before and after the call. Merely checking the candidate's own attached specs is insufficient. |
