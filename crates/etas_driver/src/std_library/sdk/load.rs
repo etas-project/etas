@@ -124,6 +124,13 @@ impl LoadedStdSdk {
 /// Load a complete installed std with no handwritten registry construction or
 /// per-symbol fallback. Checked-program publication follows in the frontend.
 pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverError> {
+    load_sdk(sysroot, None)
+}
+
+pub(super) fn load_sdk(
+    sysroot: &Path,
+    built: Option<(&StdSdkManifest, LibraryHirImage)>,
+) -> Result<LoadedStdSdk, DriverError> {
     let root = sysroot.join("std");
     let manifest_path = root.join("manifest.json");
     let manifest: StdSdkManifest = serde_json::from_slice(&read_file(&manifest_path)?)
@@ -171,6 +178,11 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         env!("ETAS_STD_CONTRACT"),
     )?;
     matches(&manifest_path, "package", manifest.package.as_str(), "std")?;
+    if let Some((expected, _)) = &built
+        && *expected != &manifest
+    {
+        return Err(invalid("installed SDK manifest changed during publication"));
+    }
     if let Some(expected) = &manifest.prepared_queries_hash
         && super::super::install_receipt::installed_artifact_is_trusted(&manifest.identity()?)
     {
@@ -278,7 +290,19 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
         object_index: Arc::default(),
         prepared_queries: None,
     };
-    let image = sdk.read_image()?;
+    let image = match built {
+        Some((_, image)) => {
+            let objects = &manifest.checked_objects;
+            for file in [&objects.index, &objects.shared]
+                .into_iter()
+                .chain(objects.modules.values())
+            {
+                sdk.load_bundle_file(file)?;
+            }
+            image
+        }
+        None => sdk.read_image()?,
+    };
     matches(
         &artifact_path,
         "body schema",

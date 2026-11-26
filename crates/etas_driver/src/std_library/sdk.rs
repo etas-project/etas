@@ -164,13 +164,62 @@ fn build_sdk(
     request: StdLibraryBuildRequest,
     capture_effect_analysis: bool,
 ) -> Result<StdLibraryBuildOutput, DriverError> {
-    let output = check_standard_library_source(
+    let source = check_source(options, &request)?;
+    let checked = checked_program(&source)?;
+    emit_sdk(options, request, &source, checked, capture_effect_analysis).map(|(output, _)| output)
+}
+
+/// Prepare independent installed representations from the same checked source.
+pub fn install_standard_library(
+    options: &DriverOptions,
+    request: StdLibraryBuildRequest,
+    prepare_layouts: impl FnOnce(&etas_frontend::CheckedProgram) -> Result<Option<Vec<u8>>, DriverError>
+    + Send,
+) -> Result<StdLibraryBuildOutput, DriverError> {
+    if !cfg!(target_os = "linux") {
+        return build_standard_library(options, request);
+    }
+    let source = check_source(options, &request)?;
+    let checked = checked_program(&source)?;
+    std::thread::scope(|scope| {
+        let layouts = scope.spawn(|| {
+            let _span = options.profile.span("std.prepare_runtime_layouts", "std");
+            prepare_layouts(checked)
+        });
+        let (mut output, image) = emit_sdk(options, request, &source, checked, true)?;
+        {
+            let _span = options.profile.span("std.prepare_queries", "std");
+            let sysroot = output
+                .out_dir
+                .parent()
+                .expect("installed std has a sysroot");
+            let sdk = load::load_sdk(sysroot, Some((&output.manifest, image)))?;
+            let provider = super::provider::StdProvider::from_loaded_sdk(sdk, &options.profile)?;
+            output.publish_queries(&provider)?;
+        }
+        if let Some(payload) = layouts.join().expect("runtime layout worker panicked")? {
+            output.publish_runtime_layouts(&payload)?;
+        }
+        Ok(output)
+    })
+}
+
+fn check_source(
+    options: &DriverOptions,
+    request: &StdLibraryBuildRequest,
+) -> Result<super::StdLibraryCheckOutput, DriverError> {
+    check_standard_library_source(
         options,
         StdLibraryCheckRequest {
-            manifest_path: request.manifest_path,
+            manifest_path: request.manifest_path.clone(),
         },
-    )?;
-    let checked = output.response.output.checked.as_ref().ok_or_else(|| {
+    )
+}
+
+fn checked_program(
+    output: &super::StdLibraryCheckOutput,
+) -> Result<&etas_frontend::CheckedProgram, DriverError> {
+    output.response.output.checked.as_ref().ok_or_else(|| {
         invalid(format!(
             "std source did not pass checking: {}",
             output
@@ -206,7 +255,16 @@ fn build_sdk(
                 .collect::<Vec<_>>()
                 .join("; ")
         ))
-    })?;
+    })
+}
+
+fn emit_sdk(
+    options: &DriverOptions,
+    request: StdLibraryBuildRequest,
+    output: &super::StdLibraryCheckOutput,
+    checked: &etas_frontend::CheckedProgram,
+    capture_effect_analysis: bool,
+) -> Result<(StdLibraryBuildOutput, LibraryHirImage), DriverError> {
     let image =
         LibraryHirImage::from_checked(checked, output.definition_origin, &output.package_root)
             .map_err(invalid)?;
@@ -232,53 +290,53 @@ fn build_sdk(
     );
     let manifest_hash = etas_package::package_manifest_hash(&output.package_root)?;
     let dependency_lock_hash = etas_package::package_dependency_lock_hash(&output.package_root)?;
-    let public = etas_frontend::build_package_metadata_artifact_from_checked(
-        PackageMetadataBuildInput {
-            definition_origin: Some(output.definition_origin),
-            package_id: output.manifest.package.name.clone(),
-            package_version: output.manifest.package.version.clone(),
-            package_edition: output.manifest.package.edition.clone(),
-            compiler_version: image.compiler_version.clone(),
-            source_payload_hash: source_payload_hash.clone(),
-            manifest_hash: manifest_hash.clone(),
-            dependency_lock_hash: dependency_lock_hash.clone(),
-            bins: vec![],
-            dependencies: prepared
-                .environment
-                .dependencies
-                .iter()
-                .map(etas_package::resolved_dependency_metadata)
-                .collect::<Result<Vec<_>, _>>()?,
-            tool_bindings: output
-                .manifest
-                .bindings
-                .tools
-                .iter()
-                .map(
-                    |(tool, binding)| etas_frontend::PackageMetadataToolBindingInput {
-                        tool: tool.clone(),
-                        kind: binding.kind.clone(),
-                        provider: binding.provider_name().unwrap_or_default(),
-                        effect_row: binding.effects.clone(),
-                        action_row: binding.actions.clone(),
-                    },
-                )
-                .collect(),
-        },
-        checked,
-    )
-    .map_err(invalid)?;
-    let decoded =
-        etas_package_metadata::decode_metadata_artifact(Path::new(ARTIFACT_PATH), &public.bytes)
-            .map_err(invalid)?;
-    let sections = decoded
-        .sections
-        .into_iter()
-        .map(|(kind, payload)| EncodedMetadataSection { kind, payload })
-        .collect::<Vec<_>>();
-    let bytes = etas_package_metadata::encode_metadata_artifact(&decoded.header, sections)
-        .map_err(invalid)?;
-    let object_archive = image.checked_objects().map_err(invalid)?;
+    let metadata_input = PackageMetadataBuildInput {
+        definition_origin: Some(output.definition_origin),
+        package_id: output.manifest.package.name.clone(),
+        package_version: output.manifest.package.version.clone(),
+        package_edition: output.manifest.package.edition.clone(),
+        compiler_version: image.compiler_version.clone(),
+        source_payload_hash: source_payload_hash.clone(),
+        manifest_hash: manifest_hash.clone(),
+        dependency_lock_hash: dependency_lock_hash.clone(),
+        bins: vec![],
+        dependencies: prepared
+            .environment
+            .dependencies
+            .iter()
+            .map(etas_package::resolved_dependency_metadata)
+            .collect::<Result<Vec<_>, _>>()?,
+        tool_bindings: output
+            .manifest
+            .bindings
+            .tools
+            .iter()
+            .map(
+                |(tool, binding)| etas_frontend::PackageMetadataToolBindingInput {
+                    tool: tool.clone(),
+                    kind: binding.kind.clone(),
+                    provider: binding.provider_name().unwrap_or_default(),
+                    effect_row: binding.effects.clone(),
+                    action_row: binding.actions.clone(),
+                },
+            )
+            .collect(),
+    };
+    let (public, object_archive) = std::thread::scope(|scope| {
+        let objects = scope.spawn(|| {
+            let _span = options.profile.span("std.encode_checked_objects", "std");
+            image.checked_objects().map_err(invalid)
+        });
+        let public = {
+            let _span = options.profile.span("std.encode_public_metadata", "std");
+            etas_frontend::build_package_metadata_artifact_from_checked(metadata_input, checked)
+                .map_err(invalid)?
+        };
+        Ok::<_, DriverError>((
+            public,
+            objects.join().expect("object encoding worker panicked")?,
+        ))
+    })?;
     let effect_analysis = if capture_effect_analysis {
         let _capture = options
             .profile
@@ -288,7 +346,7 @@ fn build_sdk(
             .map_err(invalid)?;
         Some(
             etas_package_metadata::encode_metadata_artifact(
-                &decoded.header,
+                &public.header,
                 vec![EncodedMetadataSection {
                     kind: MetadataSectionKind::LibraryBodies,
                     payload,
@@ -320,18 +378,18 @@ fn build_sdk(
     let checked_objects = objects::publish(&out_dir, object_archive)?;
     let manifest = StdSdkManifest {
         schema: STD_SDK_SCHEMA,
-        package: output.manifest.package.name,
-        version: output.manifest.package.version,
-        edition: output.manifest.package.edition,
+        package: output.manifest.package.name.clone(),
+        version: output.manifest.package.version.clone(),
+        edition: output.manifest.package.edition.clone(),
         compiler_version: image.compiler_version.clone(),
         body_schema: image.schema,
-        metadata_schema: decoded.header.artifact_schema_version,
+        metadata_schema: public.header.artifact_schema_version,
         native_binding_abi: super::native_abi::fingerprint(),
         std_contract: image.std_contract.clone(),
         target: env!("ETAS_STD_TARGET").into(),
         toolchain_id: STD_TOOLCHAIN_ID.into(),
         artifact: ARTIFACT_PATH.into(),
-        artifact_hash: etas_package_metadata::blake3_hash(&bytes),
+        artifact_hash: public.artifact_hash,
         checked_objects,
         effect_analysis_hash: effect_analysis
             .as_deref()
@@ -376,7 +434,7 @@ fn build_sdk(
             source,
         })?;
     }
-    write_file(&out_dir.join(ARTIFACT_PATH), &bytes)?;
+    write_file(&out_dir.join(ARTIFACT_PATH), &public.bytes)?;
     if let Some(effect_analysis) = effect_analysis {
         write_file(&out_dir.join(EFFECT_ANALYSIS_PATH), &effect_analysis)?;
     }
@@ -384,12 +442,15 @@ fn build_sdk(
         &out_dir.join("manifest.json"),
         &serde_json::to_vec_pretty(&manifest).map_err(invalid)?,
     )?;
-    Ok(StdLibraryBuildOutput {
-        out_dir,
-        manifest,
-        installed_program: capture_effect_analysis.then(|| checked.clone()),
-        bundle_store: delta::BundleStore::default(),
-    })
+    Ok((
+        StdLibraryBuildOutput {
+            out_dir,
+            manifest,
+            installed_program: capture_effect_analysis.then(|| checked.clone()),
+            bundle_store: delta::BundleStore::default(),
+        },
+        image,
+    ))
 }
 
 fn invalid(error: impl std::fmt::Display) -> DriverError {

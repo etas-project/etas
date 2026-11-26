@@ -263,10 +263,17 @@ impl StdProvider {
                 installed_sysroot(prefix)
             }
         };
-        let mut sdk = {
+        let sdk = {
             let _decode = profile.span("std.decode_artifact", "std");
             load_standard_library_sdk(&sysroot)?
         };
+        Self::from_loaded_sdk(sdk, profile).map(Self::Artifact)
+    }
+
+    pub(super) fn from_loaded_sdk(
+        mut sdk: LoadedStdSdk,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Arc<ArtifactStdProvider>, DriverError> {
         let prepared_signatures = {
             let _signatures = profile.span("std.load_imported_signatures", "std");
             sdk.prepared_queries
@@ -292,14 +299,14 @@ impl StdProvider {
             interface.restore_installed_validation(&registry);
             let bootstrap_identity = queries.bootstrap_identity.clone();
             let identity = semantic_identity(&sdk.manifest)?;
-            return Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
+            return Ok(Arc::new(ArtifactStdProvider {
                 sdk,
                 registry,
                 interface,
                 library: OnceLock::new(),
                 identity,
                 bootstrap_identity,
-            })));
+            }));
         }
         let registry = {
             let _query = profile.span("std.build_query_registry", "std");
@@ -383,14 +390,14 @@ impl StdProvider {
         let bootstrap_identity = metadata::blake3_hash(
             &serde_json::to_vec(&sdk.image()?.native_registry).map_err(invalid)?,
         );
-        Ok(Self::Artifact(Arc::new(ArtifactStdProvider {
+        Ok(Arc::new(ArtifactStdProvider {
             sdk,
             registry,
             interface,
             library: OnceLock::new(),
             identity,
             bootstrap_identity,
-        })))
+        }))
     }
 
     pub fn frontend_environment(

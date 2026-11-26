@@ -6,7 +6,7 @@ use std::{
 };
 
 use etas_driver::std_library::{
-    install_receipt::publish_install_receipt, sdk::build_installed_standard_library,
+    install_receipt::publish_install_receipt, sdk::install_standard_library,
 };
 use etas_driver::{StdLibraryBuildRequest, build_standard_library};
 use etas_utils::ProfileHandle;
@@ -45,41 +45,24 @@ pub fn run(
         ),
     };
     let options = super::frontend::base_driver_options(global, profile);
-    let mut output = if executable.is_some() {
-        build_installed_standard_library(&options, request)
+    let output = if executable.is_some() {
+        install_standard_library(&options, request, |program| {
+            #[cfg(feature = "component-runtime")]
+            {
+                etas_interpreter::encode_installed_layouts(program)
+                    .map_err(etas_driver::DriverError::InvalidInput)
+            }
+            #[cfg(not(feature = "component-runtime"))]
+            {
+                let _ = program;
+                Ok(None)
+            }
+        })
     } else {
         build_standard_library(&options, request)
     }
     .map_err(super::frontend::driver_error)?;
     if let Some(executable) = executable {
-        #[cfg(feature = "component-runtime")]
-        if let Some(program) = &output.installed_program {
-            let _layouts = profile.span("std.prepare_runtime_layouts", "std");
-            let payload = etas_interpreter::encode_installed_layouts(program)
-                .map_err(|message| CliError::InvalidUsage(message))?;
-            if let Some(payload) = payload {
-                output
-                    .publish_runtime_layouts(&payload)
-                    .map_err(super::frontend::driver_error)?;
-            }
-        }
-        if output.installed_program.is_some() {
-            let _queries = profile.span("std.prepare_queries", "std");
-            let sysroot = output
-                .out_dir
-                .parent()
-                .expect("installed std has a sysroot");
-            let provider = etas_driver::std_library::provider::StdProvider::artifact_profiled(
-                Some(sysroot),
-                profile,
-            )
-            .map_err(super::frontend::driver_error)?;
-            if let etas_driver::std_library::provider::StdProvider::Artifact(provider) = provider {
-                output
-                    .publish_queries(&provider)
-                    .map_err(super::frontend::driver_error)?;
-            }
-        }
         if output.manifest.effect_analysis_hash.is_some()
             && let Some(temporary) = &executable.temporary
         {
