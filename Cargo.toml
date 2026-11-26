@@ -46,3 +46,7 @@ toml = "1.1.2"
 tracing = "0.1"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 webpki-roots = "1"
+
+# Split frontend codegen into smaller LLVM modules for source SDK builds.
+[profile.release.package.etas_frontend]
+codegen-units = 64
