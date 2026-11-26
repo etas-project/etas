@@ -247,7 +247,7 @@ The API signatures are in section 6.1.
 |---|---|
 | `parse_body(source)` | Pure; accepts body contents without enclosing braces and returns `Result<SyntaxBlock, ParseError>`. Parsing does not establish names, types or spec conformance. |
 | `definition.with_body(syntax)` | Pure; returns a new descriptor of the same family and target type, with `body = Some(syntax)`. Retains identity, signature, frozen contract and dependency environment. Accepts `SyntaxBlock`, not `string`. |
-| `compile(AgentDef<A>)` | Returns a fresh scoped, empty-state, non-Autonomous `A`; records `Agentic.create<A>`. No method execution or live replacement. Fielded agents, including injected fields, are rejected by this overload. |
+| `compile(AgentDef<A>)` | Fresh scoped, empty-state, non-Autonomous `A`; records `Agentic.create<A>`. No method execution/live replacement. Defaulted/injected fields still count as state and are rejected here. |
 | `compile(CallableDef<F>)` | Returns the original ordinary callable type `F`, inferred from the input descriptor. Missing required source is a rejection, not an executable placeholder. |
 
 Fielded and Autonomous agents remain reflectable/checkable. This API supplies
@@ -280,7 +280,7 @@ it or replace it with whatever the new body happens to do.
 
 | Contract Component | Required Compatibility |
 |---|---|
-| Callable interface | Preserve inputs/outputs, defaults/injection contracts, model visibility, generic bounds, receiver mode, state schema and role/spec conformance. |
+| Callable interface | Preserve inputs/outputs, parameter/field defaults and injection contracts, model visibility, generic bounds, receiver mode, state schema and role/spec conformance. |
 | Escaping effects | Newly inferred effects must fit the frozen interface's escaping-effect upper bound. |
 | Requested actions | New requests must fit its caller-visible action upper bound, including handled requests and relevant parameter scopes. An escaping row is not that bound. |
 | Temporal behavior | Preserve the trace-state assumptions and guarantees used in caller-side composition, including behavior before and after the call. Merely checking the candidate's own attached specs is insufficient. |

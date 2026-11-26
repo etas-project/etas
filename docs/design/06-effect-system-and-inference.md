@@ -415,7 +415,7 @@ effect Agentic {
 
 | Boundary | Contract |
 |---|---|
-| `Agentic.create<A>` | Managed construction event; include supplied/injected initializer behavior and Autonomous startup separately. Its default handling does not consume dependency-provider actions. Not user-forgeable. |
+| `Agentic.create<A>` | Protected construction event; include all field-initialization and Autonomous startup behavior separately. Default handling does not consume nested dependency actions. |
 | `Agentic.call<A.method>` | Same-task checked invocation event, not enqueueing; retains instance access, callee/role behavior and caller context. |
 | `Agentic.infer<C, O>` | Full controller: model steps, checked tools and further steps until a validated output or failure/limit outcome. |
 | `Agentic.step<C, O>` | Exactly one generation, returning `Final(O)`, `CallTools(...)` or `Stopped(...)`; no tool execution, retries or hidden format-repair calls. |
@@ -746,7 +746,7 @@ local writeback nor captured-var assignment implicitly performs `Memory.write`.
 
 Exports preserve inferred or explicit contracts for callers. Default handling
 cannot hide requested actions at a tool or authority boundary.
-Pure defaults request nothing; [`@inject`](02-general-programming-constructs.md#72-scoped-injection)
+Declared default expressions request nothing; [`@inject`](02-general-programming-constructs.md#72-scoped-injection)
 adds conditional binding actions, not unconditional full-argument arrow effects.
 
 ## 7. Anonymous Flows And Latent Effects
@@ -764,8 +764,8 @@ Effect inference computes an upper bound over effects that may occur during exec
 | Construct | Inferred effect |
 |---|---|
 | Pure expression | `{}`; constructing a record is pure only when its evaluated initializers are pure. |
-| Nominal record/agent construction | Supplied initializer effects, then omitted `@inject` actions and their handling behavior; active construction additionally retains `Agentic.create<A>` and startup summaries. |
-| Record-value update `base { fields }` | Base evaluation, then replacement effects in source order; retain requested/trace/capture behavior. No implicit provider, mutation or agent action. |
+| Record/agent construction | Supplied values, then omitted fields in declaration order, recursing into nested records. Include nested injection/handler behavior; pure declared defaults add no actions. Active construction also retains `Agentic.create<A>` and startup summaries. |
+| Record-value update `base { fields }` | Base, then replacements in source order; retain requested/trace/capture behavior. No implicit default/provider, mutation or agent action. |
 | Stored-field access | Receiver-expression effects only; never re-request an injected field. Agent privacy/access rules still apply. |
 | Named flow/method call | Supplied arguments, omitted-parameter resolution, then body; explicit values suppress their providers. Preserve binding/requested/trace summaries separately from the full-argument arrow. |
 | Etas tool call | Same source-call rule; model invocation always resolves hidden parameters and checks the combined model boundary. |
@@ -795,11 +795,10 @@ requested(call) includes provider/handler actions
 trace(call) retains their execution order
 ```
 
-Construction similarly resolves omitted fields before publication. Uncovered
-demands escape and must be handled at closed/runnable boundaries; no global
-fallback. Actual provider behavior contributes effects, determinism, suspension,
-captures and resource use. The body may be deterministic while an omitted-input
-call is not. Later field/parameter reads never resolve again or gain authority.
+Construction resolves omitted fields recursively before publication. Uncovered
+demands escape, even for zero-defaultable types: no fallback. Provider effects,
+requested actions, determinism, suspension, captures and resource use propagate;
+a pure body does not imply pure binding. Later reads do not resolve again.
 
 ## 9. Checking Rules
 

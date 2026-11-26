@@ -803,7 +803,7 @@ public spec Autonomous ~ Active {
 |---|---|
 | `Active` | Evidence generated for nominal agent types only; preserved through role entailment and existential erasure. |
 | `Autonomous` | Explicit opt-in to one structured `main` task after initialization; retain its access/effects in startup summaries. Owner exit cancels/joins it; no restart. |
-| `A { fields }` | Managed construction, recorded as `Agentic.create<A>`. No task unless Autonomous; complete supplied/injected fields first. Fresh children belong here; existing references do not. |
+| `A { fields }` | `Agentic.create<A>`; complete supplied/defaulted/injected fields before Autonomous startup. No implicit child defaults. Fresh children belong here; existing references do not. |
 | `a.method(args)` | Same-task checked invocation, recorded as default-handled `Agentic.call<A.method>`; no mailbox, implicit future or conflicting-call queue. |
 | `std.task.start/await` | Explicit task concurrency and completion; preserve instance-access summaries. |
 | Member tool dispatch | Bind an immutable state copy at the model/step boundary, not live receiver access. Calls through stored agent references still require access checks. |
@@ -1102,6 +1102,8 @@ Discarding an update result leaves the original value unchanged.
 
 | Shared Contract | Required Behavior |
 |---|---|
+| Empty field defaults | Array, List, Map, Set, Stack, Queue, Deque, OrderedMap, OrderedSet and PriorityQueue use their standard zero-argument `new()` contracts; Slice uses an empty view. Require the same Hash/Order bounds, never defaults for element/key/value types. Resolved standard identities only, not arbitrary methods named `new`. |
+| Explicit configuration | No guessed capacity, universe or comparator: BoundedDeque/BitSet require initialization; custom-order collections use explicit constructors. Defaults never reconstruct private metadata. |
 | Internal metadata | Cached lengths, capacity, backing storage, tree heights, hash seeds and heap indexes are private. Users cannot assign them or construct an inconsistent container. `len()` and `is_empty()` are observations, not writable fields. |
 | Snapshots | Updating one value preserves all previously retained values, slices and iterators. Physical sharing and copy-on-write are permitted. |
 | Checked access | `I ~ Index` follows the existing conversion rules. `get` returns `None` for an invalid index; `at`, indexed update and checked slicing raise `Error<IndexError>`. |

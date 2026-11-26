@@ -102,9 +102,9 @@ impl Clarifier {
 @limits([Tokens(120_000), Concurrency(4)])
 flow BuildWithTeam(goal: string) -> string {
     let team = Team {
-        coder = Coder { revisions = [] },
+        coder = Coder {},
         reviewers = [
-            ModelReviewer { reviews = 0 },
+            ModelReviewer {},
             MockReviewer {},
         ],
     };
@@ -118,7 +118,7 @@ flow BuildWithTeam(goal: string) -> string {
 
 | Behavior | What the example establishes |
 |---|---|
-| State | Successful Coder calls commit a revision; error/cancellation before return discards pending revisions. |
+| State | Coder revisions default to empty, reviewer count to zero. Success commits; error/cancellation discards pending changes. Team's coder must still be supplied: no automatic child construction. |
 | Roles | Both concrete reviewers implement an active behavioral spec; the heterogeneous array retains checked dispatch. |
 | Concurrent calls | Mapping starts tasks over distinct reviewer instances; `candidate` avoids capturing mutable `draft`. Repeated aliases do not gain independent write access. |
 | Upward handler | Coder's action reaches this caller's handler through Team. Another client may supply a different handler without changing Coder. |
@@ -241,3 +241,6 @@ identity data, not proof; `format_note` includes it in output intentionally.
 | `format_note(text) with { Auth.current_user() => "test-user"; }` | Named action supplies user; model schema exposes content only. |
 | Model payload includes `user` | Reject before provider execution; source `format_note(text, user = "test-user")` may override without granting authority. |
 | `@inject label: string = "fallback"` or conflicting inherited providers | Reject, not an implicit precedence rule. |
+| `ReviewConfig {}` without providers | Requests both strings; their empty type default is not a fallback. |
+| `type Nested = { config: ReviewConfig }; Nested {} with { label => "review: "; footer => ""; }` | Recursively construct config, requesting label then footer. Defaults, nested records and preserving updates are illustrated in [Composite Types](02-general-programming-constructs.md#7-composite-types). |
+| `type Node = { next: Node }; Node {}` | Reject infinite default expansion; the recursive declaration itself remains valid. `next: Option<Node>` would default to None. |

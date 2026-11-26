@@ -57,7 +57,7 @@ or made durable. Session and Store APIs retain their persistence contracts.
 | `let b = a;` | Copy an existing scoped reference, not its state or ownership. |
 | `a.run(x)` / `a.run` | Invoke/extract a bound method; retain instance, access mode and scope. Binding does not acquire access. |
 | `x ~> A` / `A \| B` | Existing stage-operator adapter for empty-state types with explicitly defined public `run`; construct per invocation. No generated method or singleton. |
-| Stateful stage | Construct an instance first, then use it or its bound method; injected fields still count as state. |
+| Stateful stage | Construct first; defaulted/injected fields still count as state. |
 | `^A` | Reflect the declaration without construction; a bare type name is not an instance. |
 
 Type/callable/trace specs constrain the type, methods and behavior respectively.
@@ -143,7 +143,7 @@ the owner lives, subject to instance-access and capture checks.
 
 | Operation | Contract |
 |---|---|
-| Construction | Create the instance scope first. Evaluate supplied fields once in source order, then omitted `@inject` fields in declaration order. Fresh children belong here; existing references keep their owners. Publish/start Autonomous only after success; failure cleans up new children. |
+| Construction | Create the scope, then initialize fields under [section 7](02-general-programming-constructs.md#7-composite-types), including data defaults and nested injection. No automatic child-agent defaults. Fresh children belong here; existing references retain owners. Publish/start Autonomous only after success; failure cleans up new children. |
 | Method-local construction | Owned by that invocation scope; cannot escape into longer-lived state/results. |
 | Scope exit | Prevent new use, cancel/join owned tasks and active calls, clean up descendants, then release instances. No idle worker to keep alive. |
 | Sharing | References may circulate within owner bounds. Aggregates, injected fields, role erasure and closures preserve aliases; fields alone do not prove ownership or disjointness. |
@@ -343,7 +343,7 @@ impl Reviewer {
 | `reviewer.run(draft)` | Calls an existing instance; does not reconstruct it. |
 | `perform infer<O>(prompt)` | Agent-method shorthand for `Agentic.infer<CurrentAgent.method, O>`; `O` can be inferred. |
 | Prompt assembly | Explicit `PromptEncode` use; input is never implicitly trusted or placed in the system channel. |
-| Model response | `Schema<O>` and `ResponseDecode` validate/decode the response, independently of the method's eventual result. Field `@inject` does not make schema fields optional or run providers during derived decoding. |
+| Model response | `Schema<O>`/`ResponseDecode` validate independently of the method result. Field defaults/injection do not make schema fields optional or run during derived decoding. |
 | Controller code | `std.agent.step` returns one generation; `std.tool.invoke` checks requested tools. Conversation assembly alone does not persist history. |
 | Message-aware calls | `Message<T>` retains session/provenance metadata; ordinary method calls need no message wrapper. |
 

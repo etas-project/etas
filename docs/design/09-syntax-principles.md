@@ -139,7 +139,8 @@ PrimitiveType ::= "bool" | "i8" | "i16" | "i32" | "i64" | "i128" | "isize"
                 | "f32" | "f64" | "char" | "string" | "bytes" | "unit" | "never"
 
 RecordType    ::= "{" FieldDecl* "}"
-FieldDecl     ::= InjectAnnotation? Visibility? Ident ":" TypeExpr ","?
+FieldDecl     ::= Visibility? Ident ":" TypeExpr ("=" Expr)? ","?
+                | InjectAnnotation Visibility? Ident ":" TypeExpr ","?
 InjectAnnotation
               ::= "@" "inject" ("(" EffectRef ")")?
 Visibility    ::= "private" | "public"
@@ -186,7 +187,7 @@ EffectActionDecl
               ::= "action" Ident TypeParams? ParamList ReturnType ";"
 ```
 
-Kinds and existential packing follow [Types](05-type-system-and-errors.md). `@inject` requests `Inject<T>.get("name")` for a field/parameter; explicit annotations name zero-argument actions. See [Scoped Injection](02-general-programming-constructs.md#72-scoped-injection).
+Kinds follow [Types](05-type-system-and-errors.md). Field defaults/injection are confined to nominal record/agent declarations, not structural type expressions. Omitted fields use [initialization rules](02-general-programming-constructs.md#7-composite-types); `@inject` uses [dependency requests](02-general-programming-constructs.md#72-scoped-injection).
 
 ### 2.3 Top-Level Bindings
 

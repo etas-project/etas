@@ -283,7 +283,7 @@ The runtime binds and validates the resource when a program is deployed or run.
 
 Top-level initializers must not perform ordinary runtime effects, including
 omitted-field injection even when a local handler consumes its escaping row.
-A fully explicit passive record can still be an action-free initializer:
+A passive record with action-free explicit/default initialization is permitted:
 
 ```etas
 let now = Time.now();             // rejected: runtime observation at module load
@@ -556,12 +556,12 @@ top-level calls. Project entry selection is defined in
 Records are the default structured data form:
 
 ```etas
-type Paper = {
-    title: string,
-    authors: Array<string>,
-    year: u32,
-    venue: string,
-    url: Url
+type RetryConfig = { attempts: u32 = 3, enabled: bool }
+type Config = {
+    name: string,
+    retry: RetryConfig,
+    view: { title: string, compact: bool },
+    next: Option<Config>,
 }
 ```
 
@@ -569,13 +569,15 @@ Resolve a record head by name/kind, not capitalization:
 
 | Form | Meaning |
 |---|---|
-| `{ fields }` / `Paper { fields }` | Construct; supply required fields except omitted nominal `@inject` fields. |
-| `paper { title, year }` | Same record type; replace listed fields, retain others. Shorthand means `title = title, year = year`. |
+| `{ fields }` / `Config { fields }` | Construct; fill omitted fields below. Anonymous literals need an expected record type to fill missing fields; otherwise infer only listed fields. |
+| `config { name }` | Same record type; replace listed fields, retain others. Shorthand means `name = name`. |
 | Agent head | A type constructs an instance; an instance cannot be updated this way. |
 
 ```etas
-flow revise(paper: Paper, title: string, year: u32) -> Paper {
-    return paper { title, year };
+flow configure(name: string) -> Config ![] {
+    let base = Config {}; // name/title="", attempts=3, booleans=false, next=None
+    let custom = Config { retry = RetryConfig { enabled = true } };
+    return custom { name }; // preserve attempts=3 and enabled=true; base unchanged
 }
 ```
 
@@ -585,9 +587,35 @@ flow revise(paper: Paper, title: string, year: u32) -> Paper {
 | Evaluation | Snapshot the base once, then replacements once in source order. Names resolve lexically, not to old/new fields. |
 | Retention | No implicit base mutation or initializer/provider reruns; `base {}` preserves its value. Failure yields no partial result; external effects are not rolled back. |
 | Encapsulation | Full-reconstruction visibility (including retained fields), copy/affine and lifetime checks apply. No resource cloning; immutable backing may be shared. |
-| Syntax | Parenthesize constructions/updates in control heads, e.g. `for author in (paper { title }).authors { ... }`; see [Grammar](09-syntax-principles.md#27-statements). |
+| Syntax | Group record expressions in control heads, e.g. `if (config { name }).retry.enabled { ... }`; see [Grammar](09-syntax-principles.md#27-statements). |
 
 Expand to hygienic temporaries and ordinary reconstruction, not runtime reflection.
+
+Field initialization uses this priority, independently at every nested level:
+
+| Priority | Source | Rule |
+|---|---|---|
+| 1 | Supplied value or shorthand | Suppress that field's default/injection. |
+| 2 | `field: T = expr` or `@inject` | Mutually exclusive on nominal record/agent fields. Run per construction, not declaration; injection failure/missing provider never falls back. |
+| 3 | Type default | Use the table below; if unavailable, reject the omitted field. |
+
+| Field type | Automatic default |
+|---|---|
+| `bool`; integers; floats; `char`; `unit` | `false`; `0`; positive `0.0`; U+0000; `()`, respectively. |
+| `string`, `bytes` | Empty value. |
+| `Option<T>` | `None`; no default needed for T. |
+| Standard empty-default collections | Empty via their public contracts, not private-field reconstruction; see [Collections](19-standard-library.md#91-shared-rules-and-cost-model). |
+| Tuple; ordinary nominal/structural record | Recurse using the same priority; empty records need no members. |
+| Other types | No invented default: arbitrary enums/`Result`, scalar newtypes, agents, callables, handlers, protected resources, or unconstrained type variables. Aliases preserve the underlying rule. |
+
+| Construction rule | Contract |
+|---|---|
+| Declared default | Type-check against T in declaration-site lexical scope; deterministic, action-free and non-suspending, including transitive requested actions. No `self` or sibling-field bindings. Anonymous-record/enum payload declarations cannot carry defaults or injection. |
+| Order | Validate fields first; supplied expressions run once in source order, then omitted fields in declaration order, recursively depth-first. Structural member order comes from the expected type contract. |
+| Recursion | Expansion must be finite. Reject mandatory cycles at construction, not type declaration; `Option<Node>`/empty containers do not construct Node. |
+| Effects | Nested injection preserves effects, requested actions, suspension and scopes; construction need not be pure. Handling cannot make an actionful `= expr` legal. |
+| Boundaries | Respect private constructors and nominal identity. Agent data fields follow these rules, but omitted agent-valued fields never create children. Required call arguments, patterns and derived schema decoding are unchanged. |
+| Values | No shared mutable default object. Publish only complete values; failed construction cleans up fresh agent scopes, not external effects. Record updates retain omitted fields without reinitialization. |
 
 Tuples are useful for small positional values:
 
@@ -628,11 +656,10 @@ enum Plan {
 }
 ```
 
-These are ordinary immutable data values. `Parallel` and `Retry` here are enum
-constructors, not execution primitives; a plan executor must explicitly
-interpret them under normal effect, trace-spec, and limit checks. See
+`Parallel`/`Retry` are data constructors, not execution primitives. A plan
+executor interprets them under ordinary effect, trace-spec and limit checks. See
 [Algebraic Data Types And Recursion](05-type-system-and-errors.md#112-algebraic-data-types-and-recursion)
-for construction, exhaustive matching, recursive storage, and schema rules.
+for ADT construction, matching and schemas.
 
 Common generic container types:
 
@@ -653,40 +680,37 @@ Common generic container types:
 | `Option<T>` | `Some(T)` or `None` | enum constructors |
 | `Result<T, E>` | `Ok(T)` or `Err(E)` | enum constructors |
 
-`Array<T>` is the default sequence type. A non-empty comma-separated bracket literal creates an array:
+Comma-separated literals create the default sequence, `Array<T>`:
 
 ```etas
 let xs = [1, 2, 3];      // Array<i32>
 let ys = xs.push(4);     // returns a new Array<i32>
 ```
 
-`List<T>` is a functional linked list. It is not the default sequence literal:
+Semicolons create a linked `List<T>`:
 
 ```etas
 let xs = [1; 2; 3];      // List<i32>
 let ys = 0:: xs;        // List<i32>
 ```
 
-The empty sequence literal `[]` needs type context because it can be either an empty `Array<T>` or an empty `List<T>`:
+Empty `[]` needs Array/List type context:
 
 ```etas
 let a: Array<i32> = [];
 let l: List<i32> = [];
 ```
 
-Collections are homogeneous at the outer type level. Heterogeneous values should
-be represented explicitly, either with tuples/enums for closed sets or with an
-existential element type for open spec-based sets:
+Collections have one element type; use tuples/enums or existential packing for
+heterogeneity:
 
 ```etas
 let streams: Array<? ~ ByteStream> = [tcp, tls, file];
 ```
 
-Here the array element type is the single type `? ~ ByteStream`. Each element
-packs a concrete stream handle together with evidence that its hidden type
-satisfies `ByteStream`.
+Each `? ~ ByteStream` packs a concrete handle and its ByteStream evidence.
 
-Map and set literals are separated to avoid conflict with record shorthand:
+Map/set syntax differs from record shorthand:
 
 ```etas
 let user = { name, email };              // record shorthand
@@ -702,14 +726,10 @@ let counts: Map<string, i32> = {};
 let seen: Set<string> = #{};
 ```
 
-Sequence-like containers use the compiler-known `Index` spec for checked
-indexing APIs. The authoritative method tables, equality/hash/order bounds,
-iteration order and complexity contracts are in
-[Collections And Key Contracts](19-standard-library.md#9-collections-and-key-contracts).
-Map keys and set elements require `Hash`, which includes the standard `Eq`
-contract. Their literals do not bypass those bounds. Cached lengths and storage
-metadata are private observations; users cannot assign them to forge an
-inconsistent container or slice.
+Sequences use checked `Index`; map keys/set elements require `Hash` (including
+Eq), also for literals/defaults. Private storage metadata cannot be assigned to
+forge containers/views. APIs, bounds, order and costs are in
+[Collections](19-standard-library.md#9-collections-and-key-contracts).
 
 `at` and `[]` are checked operations. On an out-of-bounds index, they raise
 `Error<IndexError>`. Code that wants an explicit value can capture that effect:
@@ -759,7 +779,8 @@ xs[-20, 0);      // rejected
 
 ### 7.1 Value Semantics
 
-Records, tuples, `Array<T>`, `List<T>`, `Map<K, V>`, `Set<T>`, and other collection values have value semantics. Passing one of these values to a flow, agent, or tool does not give the callee authority to mutate the caller's value.
+Records, tuples and collections have value semantics. Passing them to flows,
+agents or tools does not authorize mutation of the caller's value.
 
 ```etas
 flow add_tag(tags: Array<string>) -> Array<string> {
@@ -775,11 +796,8 @@ flow Example() {
 }
 ```
 
-Copies have independent observable value semantics; physical deep copying is
-not required, and storage sharing cannot expose accidental shared mutation.
-
-Collection update APIs on ordinary value collections return updated values. They
-must not be typed as `unit`, because `unit` would imply hidden in-place mutation:
+Copies remain observably independent; immutable sharing need not deep-copy.
+Collection updates return new values, not `unit` or hidden mutation:
 
 ```etas
 var xs = [1, 2, 3];
@@ -788,11 +806,8 @@ xs = xs.push(4);
 let (shorter, last) = xs.pop();
 ```
 
-This rule applies to `Array<T>`, `List<T>`, `Map<K, V>`, `Set<T>`, and related
-value collections. Methods such as `push`, `pop`, `insert`, `remove`, and
-`extend` return a new collection, or a tuple containing the new collection plus
-the removed/found value. An implementation should warn when the result of a
-known value-update method is discarded:
+`push`, `pop`, `insert`, `remove` and `extend` return a collection or a tuple
+with its removed/found value. Warn on discarded update results:
 
 ```etas
 xs.push(4); // likely bug: result is ignored, xs is unchanged
@@ -813,12 +828,10 @@ current = current.push("reviewed");
 Persistent mutation uses explicit `Store<K, V>` APIs. Local updating receivers
 follow their separate writeback rules; neither changes collection value semantics.
 
-Bulk construction uses the specified `from_iter`, `from_entries` and iterator
-consumer APIs rather than an unspecified mutable builder protocol. Their
-implementations may reuse private buffers or immutable structure while
-preserving the same value semantics. See
+Bulk construction uses `from_iter`, `from_entries` and
 [Iteration And Effectful Consumption](19-standard-library.md#10-iteration-and-effectful-consumption)
-for pure lazy adapters and callbacks whose effects occur during consumption.
+APIs, not an implicit mutable builder protocol. Private buffer reuse must preserve
+value semantics; lazy adapters defer callbacks/effects until consumption.
 
 ### 7.2 Scoped Injection
 
@@ -851,11 +864,11 @@ resume like ordinary action tails, never implicitly finish. No arm-level `return
 | Target | One annotation per nominal record/agent field or eligible parameter. Reject enum payloads, anonymous-record fields, receivers, lambdas, action parameters and non-action annotation arguments. |
 | Matching | Match names/normalized types; aliases agree, nominal types differ. Nearest handler wins, then exact name before type-wide arm. Reject duplicate keys, including expanded sugar; no implementation search. |
 | Labels | Names identify demands, not owners. Same-name/same-type fields and parameters use the same matching rules; use nested handlers or named actions to distinguish them. Renaming changes the contract. |
-| Construction | Explicit fields/shorthand suppress their providers. Validate missing/duplicate/unknown fields, evaluate supplied values in source order, then omitted providers in declaration order. No implicit cache or cycle resolution. |
+| Construction | Follow section 7, interleaving omitted defaults/providers in field order. No implicit provider cache or dependency-cycle resolution. |
 | Effects | Retain demand names/types and provider behavior. Inject has no default provider; uncovered requests escape. Unknown labels need type-wide coverage. Handling never grants authority or certifies an injected identity. |
-| Completion | Publish fully initialized values only. Error, cancellation or `finish` abandons construction and cleans up new agent scopes, not external effects. |
+| Completion | Error, cancellation or `finish` abandons construction under section 7. |
 | Lifetime | Capture/owner/alias bounds remain; no adoption, extended lifetime or new permission. Later reads/copies/patterns/equality/serialization never rerun providers. |
-| Decoding | Required schema fields stay required; derived decoding never invokes providers. Custom constructors/decoders retain checked effects. |
+| Decoding | Field defaults/injection do not make schema fields optional. Derived decoding synthesizes neither; custom decoders retain checked behavior. |
 
 ## 8. Encapsulation and Methods
 

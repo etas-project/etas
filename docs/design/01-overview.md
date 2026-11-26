@@ -9,7 +9,7 @@ status. The [index](README.md) identifies each contract's owning chapter.
 
 | Construct | Contract |
 |---|---|
-| `type`, `alias`, `enum` | Nominal values, transparent aliases, products and recursive sums. |
+| `type`, `alias`, `enum` | Nominal/aliased values, products and recursive sums. Record construction supports field defaults and recursive type defaults. |
 | `let`, `var` | Immutable or rebindable bindings; records/collections retain value semantics. Module bindings are read-only. |
 | `flow` | Ordinary callable; return type and effects are inferred unless constrained. |
 | `agent` | Nominal type with isolated state, scoped identity and checked, suspendable methods; no implicit worker or generated `run`. |

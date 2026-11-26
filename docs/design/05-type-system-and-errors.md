@@ -8,16 +8,6 @@ ordinary data, structured-output schemas, trust labels and provenance.
 
 ### 1.1 Ordinary Types
 
-```etas
-type Paper = {
-    title: string,
-    authors: Array<string>,
-    year: i32,
-    venue: string,
-    url: Url
-}
-```
-
 #### 1.1.1 Alias, Nominal, And Empty Types
 
 ```etas
@@ -47,10 +37,9 @@ let project: ProjectId = user;    // rejected
 let raw: string = user;           // rejected without explicit conversion
 ```
 
-`type T;` is exactly `type T = {};`, including generic parameters and bounds.
-Both define an empty nominal record, constructible as `T {}`, with the same
-`impl` methods and spec conformance rules. Distinct declarations retain distinct
-type identities. The short form is neither an abstract type nor a forward declaration.
+`type T;` abbreviates `type T = {};`, preserving generic bounds, construction
+as `T {}`, methods and spec rules. Each declaration has distinct identity;
+neither form is abstract or a forward declaration.
 
 ```etas
 type WorkspaceRoot;
@@ -71,12 +60,9 @@ see [Visibility](02-general-programming-constructs.md#104-visibility).
 
 #### 1.1.2 Algebraic Data Types And Recursion
 
-ETAS supports product types (records and tuples), sum types (`enum`), generic
-ADTs, and direct or mutual recursion through nominal type declarations. No
-additional recursion keyword is required. Type names are registered before
-their fields and variant payloads are checked, so mutually recursive
-declarations in the same module may refer forward to each other. References
-across modules remain subject to the ordinary import and visibility rules.
+ETAS supports records/tuples, enums, generic ADTs and direct/mutual nominal
+recursion. Module type names are in scope before checking payloads; cross-module
+references still require imports and visibility. No recursion keyword is needed.
 
 ```etas
 enum Tree<T> {
@@ -95,15 +81,11 @@ enum Entry {
 }
 ```
 
-An enum variant may be nullary, carry positional payloads, or carry inline
-named fields. Inline fields belong to that variant; they do not declare a
-separate record type. Constructing a variant produces a value of its enclosing
-enum type. Variants cannot mix positional and named-field payloads in a single
-declaration. Variant names within an enum and field names within a variant
-must be unique. Named-field construction requires every declared field exactly
-once, rejects unknown fields, and supports ordinary record shorthand. Enum
-payload fields do not support `@inject`; field injection is confined to nominal
-records and agents, independently of parameter injection.
+Variants are nullary, positional or named-field, never mixed. Inline fields
+belong to the variant, not a separate record; construction returns the enclosing
+enum type. Variant/field names must be unique. Named payloads require every
+field exactly once, reject unknown fields and allow shorthand, but no defaults
+or `@inject`. Unlike records, enums never choose a variant implicitly.
 
 ```etas
 enum Response {
@@ -121,52 +103,28 @@ flow describe(response: Response) -> string {
 }
 ```
 
-Recursive nominal types are checked by declaration identity and type arguments,
-not by repeatedly expanding their definitions. Constructor application introduces
-the enum value and matching eliminates it; users do not write fold/unfold
-operations or manage recursive storage. Transparent alias expansion must
-terminate at a nominal type or a nonrecursive representation. A cycle consisting
-only of aliases and structural type constructors is rejected:
+Nominal recursion uses declaration identity/type arguments, not infinite
+expansion. Constructors/matches need no explicit fold/unfold. Transparent alias
+expansion must terminate at a nominal or nonrecursive type:
 
 ```etas
 alias Bad = Array<Bad>; // rejected: recursive transparent alias
 alias IntTree = Tree<i32>; // accepted: names an existing nominal ADT
 ```
 
-Recursion describes the shape of values, not a facility for creating cyclic
-object references. Ordinary first-order ADT values are finite values; the
-implementation may share immutable subtrees and insert heap indirection as
-needed without exposing mutable aliases. Neither `Box` nor an `indirect`
-modifier is required in ETAS source. Type identity, value semantics, and pattern
-matching must not depend on that storage choice. This feature does not add
-GADT-style constructor-specific result types or arbitrary structural recursive
-type equivalence.
-
-`match` must be exhaustive for its scrutinee type; missing cases are a compile
-error. Coverage includes payload patterns, so a case matching only one literal
-payload does not cover every value of that variant. A wildcard or variable
-pattern can cover the remaining values. Unreachable arms should produce a
-warning. Recursive coverage checking must terminate without infinitely unfolding
-the ADT; an explicit catch-all is required if coverage cannot be established.
-These rules apply to both statement and expression forms of `match`.
-
-Recursive ADTs are valid independently of model schema support. Derivation,
-encoding, decoding, and printing must track recursive type references rather
-than infinitely expand definitions, and enforce documented depth/size limits
-when traversing values. Using such a type as model input/output still requires
-the relevant encoding/schema support; an unsupported provider schema must be
-reported before dispatch, rather than silently flattening or truncating the
-type. Validated decoding cannot create cyclic values.
+| Contract | Rule |
+|---|---|
+| Values | Finite first-order values, not cyclic mutable references. Immutable sharing/indirection cannot change identity, value or match semantics; no `Box`/`indirect` required. No GADTs or general structural recursive equivalence. |
+| Construction | [Field initialization](02-general-programming-constructs.md#7-composite-types) must terminate: a mandatory `next: Node` cannot default recursively; `Option<Node>` defaults to `None`, `Array<Node>` to empty. Generic construction needs known defaults, explicit values or injection, not an assumed default for T. |
+| Matching | Both match forms require exhaustive payload coverage; one literal covers only itself. Missing cases reject, unreachable arms warn; require a catch-all when finite coverage checking cannot prove completeness. |
+| Schemas | Track recursive references; bound value traversal depth/size. Require encoding/schema evidence separately. Reject unsupported provider schemas before dispatch, without silent flattening/truncation. Decoding cannot create cycles or silently fill record defaults/injection. |
 
 #### 1.1.3 Record Equality
 
-For two values of the same instantiated nominal record type, `==` compares all
-fields by name using each field type's equality semantics. The result is `true`
-exactly when every corresponding field comparison is `true`; construction field
-order does not matter. `!=` is the negation of `==`. If any field type does not
-support equality, whole-record comparison is a type error. Distinct nominal
-record types cannot be compared directly merely because their fields match;
-transparent aliases preserve the underlying type identity.
+Same-instantiation nominal records compare fields by name using their equality;
+`==` requires every pair equal, independently of construction order, and `!=`
+negates it. Reject comparison if any field lacks equality or nominal identities
+differ; aliases preserve identity.
 
 ```etas
 type Point = { x: i32, y: i32 }
@@ -176,37 +134,22 @@ let b = Point { y = 2, x = 1 };
 let equal = a == b; // true
 ```
 
-When hashing is supported, equal records must have equal hashes under the same
-hashing scheme, independent of construction field order. Equality support alone
-does not imply hashing support; unequal values may have the same hash.
+Equal records must hash equally under the same scheme regardless of construction
+order. Equality alone does not provide hashing; unequal values may collide.
 
-Active agent references do not derive structural Eq/Hash. Whole-record
-comparison therefore requires separate valid evidence for any agent-valued
-field; matching private state does not make two instances equal.
+Agent-valued fields need explicit Eq/Hash evidence; agents do not derive
+structural equality from private state.
 
-Fresh construction evaluates supplied fields in source order, then omitted
-`@inject` actions in declaration order. Record update evaluates its base once,
-then replacements in source order, retaining other stored fields without injection.
-Equality/hash use completed stored values; canonical layout cannot reorder
-observable evaluation. Provider typing and generic bounds follow
-[Scoped Injection](02-general-programming-constructs.md#72-scoped-injection);
-type-preserving update follows [Composite Types](02-general-programming-constructs.md#7-composite-types).
+Equality/hash use completed stored values; layout cannot reorder observable
+evaluation. Defaults, recursive construction, injection and preserving updates
+follow [Composite Types](02-general-programming-constructs.md#7-composite-types).
 
-Standard collection abstractions use their specified logical equality, not the
-fields of a particular source/runtime representation. Sequence collections
-compare elements in order; maps compare key/value bindings and sets compare
-membership independently of insertion order. Hash seeds, cached lengths,
-backing identity and tree/heap metadata do not participate. This exception
-attaches to the resolved standard contracts; an arbitrary user record cannot
-opt out of field comparison by hiding fields. Equality does not permit the
-compiler to reorder observable iteration.
-
-The standard `Eq` spec witnesses reflexive equality; not every type admitting
-`==` satisfies it. In particular, raw floating-point NaNs prevent automatic
-`Eq`/`Hash` evidence. `Hash` includes `Eq`, and equal values must hash equally
-under the same initial hasher. The exact standard evidence, ordered-container
-comparison semantics and API bounds are specified in
-[Collections And Key Contracts](19-standard-library.md#92-equality-hashing-and-order).
+Standard collections use logical equality: sequences by order, maps by bindings,
+sets by membership, excluding private storage/hash/tree metadata. This recognized
+contract neither lets user records omit private fields nor permits reordering
+observable iteration. `Eq` requires reflexivity (raw NaNs prevent evidence);
+`Hash` includes Eq and equal-input/equal-hash under the same initial hasher. See
+[Collections](19-standard-library.md#92-equality-hashing-and-order) for bounds.
 
 ### 1.2 Structured Output Types
 
