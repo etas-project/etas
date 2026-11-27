@@ -782,6 +782,10 @@ flow main(args: Array<string>) -> i32 {
         &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
         &root,
     );
+    verify_message_json_map(
+        &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
+        &root,
+    );
     verify_source_codec_sdk(&moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)));
     verify_source_compiler_report_sdk(
         &moved.join(format!("bin/etas{}", std::env::consts::EXE_SUFFIX)),
@@ -1082,6 +1086,43 @@ flow main(args: Array<string>) -> i32 {
         output.status.success(),
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["value"]["value"], "0", "{report}");
+}
+
+fn verify_message_json_map(binary: &Path, root: &Path) {
+    let app = root.join("message-json.es");
+    fs::write(&app, r#"module app.main;
+import std.agent.message.Message;
+import std.json.{JsonValue, stringify};
+type Item = { text: string, count: i64 };
+flow main(args: Array<string>) -> i32 {
+    let message = Message.new(Item { text = "sample", count = 7 }).cast<JsonValue>().unwrap();
+    let fields = match message.body { JsonValue.Object(fields) => fields, _ => { return 1; } };
+    let updated = fields.insert("copy", fields.get("text").unwrap()).remove("count");
+    if stringify(JsonValue.Object(updated)) == Ok("{\"copy\":\"sample\",\"text\":\"sample\"}") { return 0; }
+    return 2;
+}
+"#).unwrap();
+    let output = Command::new(binary)
+        .args([
+            "--cache",
+            "off",
+            "run",
+            path(&app),
+            "--std-provider",
+            "artifact",
+            "--format",
+            "json",
+        ])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
