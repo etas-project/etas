@@ -170,6 +170,46 @@ fn cli_process_lock_is_held_by_current_thread() -> bool {
 }
 
 #[test]
+fn infer_data_system_preserves_argument_and_encoding_order() {
+    let file = fixture(
+        "infer-data-system",
+        include_str!("fixtures/infer_data_system.es"),
+    );
+    let mut command = source_cli_command();
+    remove_legacy_runtime_host_env(&mut command);
+    command.env("ETAS_HOST_MEMORY", "memory");
+    let (code, stdout, stderr) = run_process_with_command(
+        command,
+        [
+            "--no-config",
+            "--cache",
+            "off",
+            "run",
+            path(&file),
+            "--allow-effects",
+        ],
+        "",
+    );
+    assert_eq!(code, 0, "{stderr}");
+    assert_eq!(
+        stdout.lines().collect::<Vec<_>>(),
+        [
+            "data",
+            "system",
+            "encode",
+            "infer",
+            "system",
+            "data",
+            "encode",
+            "infer",
+            "review me",
+            "review me",
+            "encoder stopped",
+        ]
+    );
+}
+
+#[test]
 fn check_success_exits_zero() {
     let file = fixture("ok", "flow main() -> unit { return; }");
     let (code, stdout, stderr) = run(["etas", "check", path(&file)]);

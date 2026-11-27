@@ -12,9 +12,8 @@ effect Routing {
 agent Triage = {};
 impl Triage {
     public flow classify(self, text: string) -> never {
-        let department = perform infer<Department>(Prompt.new()
-            .system(Trusted("Route the ticket to Billing or Support."))
-            .data(text));
+        let department = perform infer<Department>(text,
+            system = Trusted("Route the ticket to Billing or Support."));
         perform Routing.handoff(department, text);
     }
 }
