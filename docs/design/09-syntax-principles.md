@@ -396,9 +396,15 @@ MatchExpr     ::= MatchStmt
 
 UnaryOp       ::= "!" | "-"
 BinaryOp      ::= "==" | "!=" | "<" | "<=" | ">" | ">="
-                | "+" | "-" | "*" | "/" | "%"
+                | "+" | "-" | "*" | "/" | "%" | "^"
                 | "&&" | "||"
 ```
+
+Infix `^` computes the bitwise exclusive OR of two integers of the same type.
+It preserves their width and signedness and accepts type parameters bounded by
+`std.math.Integer`. It associates left, below addition and above comparisons,
+so `a ^ b == c` compares the XOR result with `c`. Prefix `^definition` denotes
+reflection.
 
 Arrows associate right; stage operators and consecutive `with` associate left.
 `+` binds tighter than `~>`, both tighter than `with`: `e with h1 + h2 ~> h3`
