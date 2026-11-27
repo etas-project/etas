@@ -313,6 +313,7 @@ fn action_signature(
         generic_params: callable_generic_params(&decl.type_params),
         params: decl.params.iter().map(package_type_from_std_type).collect(),
         effect_args,
+        selects_by_owner: false,
         selector_param_names: decl.selector_param_names.clone(),
         selector_defaults: vec![None; selector_len],
         output: package_type_from_std_type(&decl.output),

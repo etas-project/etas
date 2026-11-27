@@ -664,6 +664,7 @@ fn action_signature_to_metadata(
             .iter()
             .map(action_arg_kind_to_metadata)
             .collect(),
+        selects_by_owner: signature.selects_by_owner,
         selector_param_names: signature.selector_param_names.clone(),
         selector_defaults: signature
             .selector_defaults

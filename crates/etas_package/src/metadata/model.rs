@@ -381,6 +381,8 @@ pub struct PackageToolSignatureMetadata {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PackageEffectActionSignatureMetadata {
     #[serde(default)]
+    pub selects_by_owner: bool,
+    #[serde(default)]
     pub param_names: Vec<String>,
     #[serde(default)]
     pub parameter_defaults: Vec<etas_package_metadata::ParameterDefault>,

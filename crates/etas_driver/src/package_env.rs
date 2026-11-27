@@ -699,6 +699,7 @@ fn external_public_metadata_with_graph(
                     .iter()
                     .map(action_arg_kind_input)
                     .collect(),
+                selects_by_owner: signature.selects_by_owner,
                 selector_param_names: signature.selector_param_names.clone(),
                 selector_defaults: signature
                     .selector_defaults
@@ -2250,6 +2251,7 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        selects_by_owner: false,
                         default_handler_effects: None,
                         param_names: Vec::new(),
                         parameter_defaults: Vec::new(),
@@ -2504,6 +2506,7 @@ mod tests {
                         ty: None,
                     }],
                     actions: vec![etas_package::PackageEffectActionSignatureMetadata {
+                        selects_by_owner: false,
                         default_handler_effects: None,
                         param_names: Vec::new(),
                         parameter_defaults: Vec::new(),
