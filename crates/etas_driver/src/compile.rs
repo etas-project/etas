@@ -185,20 +185,22 @@ fn compile_runnable_with_std_linkage(
     let project = session
         .try_open_project(metadata_loaded.loaded.input.clone())
         .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
+    let mut materialized = RuntimeSourceMaterializedSet::default();
     let mut response = {
         let mut attrs = BTreeMap::new();
         attrs.insert("phase".to_owned(), "metadata".to_owned());
         let _span = options
             .profile
             .span_with_attrs("frontend.check", "frontend", attrs);
-        let mut request = check_request(options)
+        let request = check_request(options)
             .with_snapshot_detail(snapshot_detail)
             .with_scope(CheckScope::EntryReachable);
-        if !writes_cache && metadata_loaded.package_environment.is_none() {
-            request.retention = CheckRetention::OneShot;
-        }
         let response = session
-            .check(project, request)
+            .check_retaining_if(project, request, |output| {
+                writes_cache
+                    || (metadata_loaded.package_environment.is_some()
+                        && materialized.needs_overlay(output))
+            })
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
         record_pipeline_profile(options, &response);
         response
@@ -222,7 +224,6 @@ fn compile_runnable_with_std_linkage(
         });
     };
     let mut runtime_loaded = metadata_loaded.clone();
-    let mut materialized = RuntimeSourceMaterializedSet::default();
     let mut source_materializer = RuntimeSourceMaterializer::new(package_root, package_environment);
     let mut revision = 1;
     let mut iterations = 0_u64;
@@ -336,13 +337,14 @@ fn compile_runnable_with_std_linkage(
                 .profile
                 .span_with_attrs("frontend.check", "frontend", attrs);
             let response = session
-                .check(
+                .check_retaining_if(
                     project,
                     CheckRequest::incremental()
                         .with_scope(CheckScope::EntryReachable)
                         .with_disk_artifact_access(disk_cache_access(options))
                         .with_snapshot_detail(snapshot_detail)
                         .with_pipeline_timing(options.profile.is_enabled()),
+                    |output| writes_cache || materialized.needs_overlay(output),
                 )
                 .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
             record_pipeline_profile(options, &response);
@@ -363,17 +365,41 @@ pub(crate) struct RuntimeSourceMaterializedSet {
 }
 
 impl RuntimeSourceMaterializedSet {
+    fn needs_overlay(&self, output: &etas_frontend::ProjectOutput) -> bool {
+        !has_blocking_diagnostics(&output.diagnostics)
+            && output
+                .runtime_source_requirements
+                .as_ref()
+                .is_some_and(|requirements| {
+                    requirements
+                        .dependencies
+                        .iter()
+                        .any(|(package, requirement)| {
+                            self.missing_modules(package, requirement).next().is_some()
+                        })
+                })
+    }
+
+    fn missing_modules<'a>(
+        &'a self,
+        package: &ExternalPackageId,
+        requirement: &'a RuntimeSourceRequirement,
+    ) -> impl Iterator<Item = &'a ModulePath> {
+        let loaded = self.modules.get(package);
+        requirement
+            .required_modules
+            .iter()
+            .filter(move |module| !loaded.is_some_and(|modules| modules.contains(*module)))
+    }
+
     pub(crate) fn delta(
         &self,
         requirements: &RuntimeSourceRequirements,
     ) -> RuntimeSourceRequirements {
         let mut delta = RuntimeSourceRequirements::default();
         for (package, requirement) in &requirements.dependencies {
-            let materialized = self.modules.get(package);
-            let required_modules = requirement
-                .required_modules
-                .iter()
-                .filter(|module| !materialized.is_some_and(|modules| modules.contains(*module)))
+            let required_modules = self
+                .missing_modules(package, requirement)
                 .cloned()
                 .collect::<BTreeSet<_>>();
             if required_modules.is_empty() {
