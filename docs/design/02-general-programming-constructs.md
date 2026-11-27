@@ -501,10 +501,7 @@ let b = decorate("ready", suffix = "!");
 | Failure | Error, cancellation or finish during binding prevents body entry. Completed external actions are not rolled back. |
 | Scope | Preserve owner/capture bounds; no suspension through an enclosing non-suspending exclusive access. |
 
-Full-argument arrows/flow effect bounds describe the body and trailing handler.
-Omitted-provider summaries apply only at omitted-argument calls; tool model
-boundaries cover them too. First-class values require full inputs; wrap with
-`() => f(x)` for omission. No currying, overloads, variadics or new stage arities.
+Full-argument arrows/effect bounds describe the body and trailing handler. Omitted-provider summaries apply only at omitted-argument calls and tool model boundaries. First-class values require full inputs; wrap with `() => f(x)` for omission. No currying, user-defined overloads, variadics or new stage arities.
 
 Spec impls inherit defaults, injection labels/providers and parameter names;
 reject additions/replacements or conflicting inherited contracts. Resolve before

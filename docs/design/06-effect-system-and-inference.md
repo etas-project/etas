@@ -424,18 +424,16 @@ effect Agentic {
 | Authorization | Current grants, trace specs, sandbox, trust, secrecy and budgets apply even to default-handled actions. |
 | Analysis | Preserve conservative transitive summaries through tool delegation and erased roles. Action sets do not encode temporal order. |
 
-Inside an executing agent method, `perform infer<O>(prompt)` uses that method's
-checked identity/configuration; O can be inferred. It is default-handled but
-remains requested behavior. An ordinary record or metadata value cannot forge
-that context. Whole construction/call expressions additionally record
-`Agentic.create/call`; state dependencies remain even with an empty escaping row.
+Inside an executing agent method, `perform infer<O>(...)` has two overloads; infer `O` when omitted:
 
-`infer` runs the full controller; `step` performs one generation and returns
-tool requests without executing them. Both preserve trust, schema, tool-surface,
-authority, budget and cancellation checks. Model/tool failures still propagate.
-A mock handler may supply an inference result but cannot manufacture approval
-or erase child actions. Full API/result contracts are in
-[Single-Step Interaction](19-standard-library.md#4-single-step-agent-interaction).
+| Inputs | Prompt |
+|---|---|
+| `prompt: Prompt` | `prompt` unchanged. |
+| `data: T, system: Trusted<string>` | `Prompt.new().system(system).data(data)`, requiring `T ~ PromptEncode`. |
+
+Both lower to `Agentic.infer<C, O>(prompt, schema)` using the active method's checked context and derived `Schema<O>`; handler matching is unchanged. Evaluate arguments once in source order, then build the prompt; preserve encoding effects, errors and provenance. No one-argument data overload or implicit string-to-Trusted conversion.
+
+Context cannot be forged; state dependencies survive empty escaping rows. Mocks cannot manufacture approval or erase child actions. See [controller APIs](19-standard-library.md#4-single-step-agent-interaction).
 
 ### 1.3 Parameterized Effects
 

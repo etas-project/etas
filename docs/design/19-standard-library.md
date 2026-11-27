@@ -616,20 +616,9 @@ its original numeric spelling.
 
 ### 4.1 Purpose And Ownership
 
-`Agentic.step<C, O>` performs one model generation and returns control to Etas
-code. It does not execute requested tools, issue a second model request to
-repair output, retry, or continue an agent loop. `Agentic.infer<C, O>` remains
-the complete-loop convenience action; its standard controller can be expressed
-using step, checked tool invocation, and conversation assembly.
+`Agentic.step<C, O>` performs one generation without executing tools, retrying or repairing output. The full `Agentic.infer<C, O>` controller combines step, checked tool invocation and conversation assembly.
 
-The public wrapper is `std.agent.step`. `std.agent` exports the transparent
-protocol types below; `std.tool.reference` and `std.tool.invoke` operate on those
-same types. Bound member-tool references retain their protected receiver
-instance; transparent `ToolRef` fields cannot select or forge that receiver.
-These are std types and APIs, not new language keywords. They do not
-require opaque checked-call wrappers, execution receipts, or a second JSON type.
-The existing `Conversation`, `Prompt`, and compiler-derived `Schema<O>` contracts
-are reused rather than replaced by a new session or schema abstraction.
+`std.agent` exports the wrapper and transparent protocol types below, reusing `Conversation`, `Prompt`, compiler-derived `Schema<O>` and standard JSON. `std.tool.reference/invoke` use the same types. Bound member tools retain protected receivers that `ToolRef` fields cannot forge. These are std APIs, not keywords.
 
 ### 4.2 Transparent Types
 
@@ -719,6 +708,8 @@ summaries as specified in section 4.4.
 
 | API | Return Type | Contract |
 |---|---|---|
+| `perform infer<O>(prompt: Prompt)` | `O` | Agent-method API; compiler supplies checked identity and schema. |
+| `perform infer<O>(data: T, system: Trusted<string>)` | `O` | Infer `T ~ PromptEncode`; build system/data channels and request the same action. Both overloads infer O when omitted; see [inference rules](06-effect-system-and-inference.md#12-agentic-runtime-actions). |
 | `std.agent.step<C, O>(conversation: Conversation, schema: Schema<O>)` | `StepResult<C, O>` | Request one `Agentic.step<C, O>` under the current agent execution context. Use the supplied output schema for this request without invoking tools or adding a repair request. |
 | `std.tool.reference(tool)` | `ToolRef` | Describe a resolved Etas `tool` or imported native tool symbol, including its revision. Pure; a flow or raw name is not a substitute for a tool declaration. |
 | `std.tool.invoke<C>(call: ToolCall<C>)` | `ToolResult<C>` | Resolve and validate the requested native tool, then dispatch its Etas body or declared primitive binding under the current checks. Validate and encode its result; return feedback correlated by `call_id`. |

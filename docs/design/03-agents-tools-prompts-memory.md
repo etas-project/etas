@@ -329,10 +329,7 @@ without making that reference model-serializable.
 agent Reviewer = {};
 impl Reviewer {
     public flow run(self, input: Draft) -> Review {
-        let prompt = Prompt.new()
-.system(Trusted("Review the draft for correctness and risk."))
-.data(input);
-        return perform infer<Review>(prompt);
+        return perform infer(input, system = Trusted("Review the draft for correctness and risk."));
     }
 }
 ```
@@ -341,8 +338,8 @@ impl Reviewer {
 |---|---|
 | `(Reviewer {}).run(draft)` | Explicitly constructs an empty-state instance and invokes its declared method. |
 | `reviewer.run(draft)` | Calls an existing instance; does not reconstruct it. |
-| `perform infer<O>(prompt)` | Agent-method shorthand for `Agentic.infer<CurrentAgent.method, O>`; `O` can be inferred. |
-| Prompt assembly | Explicit `PromptEncode` use; input is never implicitly trusted or placed in the system channel. |
+| `perform infer<O>(prompt)` / `perform infer<O>(data, system = instructions)` | Same `Agentic.infer<CurrentAgent.method, O>` action; `O` can be inferred. |
+| Prompt assembly | Data requires `PromptEncode`; the overload's system input requires `Trusted<string>`. Data never becomes system instructions. |
 | Model response | `Schema<O>`/`ResponseDecode` validate independently of the method result. Field defaults/injection do not make schema fields optional or run during derived decoding. |
 | Controller code | `std.agent.step` returns one generation; `std.tool.invoke` checks requested tools. Conversation assembly alone does not persist history. |
 | Message-aware calls | `Message<T>` retains session/provenance metadata; ordinary method calls need no message wrapper. |
@@ -417,7 +414,7 @@ Agent-instance lifecycle ownership is unchanged. No handoff/message keyword is a
 
 ### 4.1 Prompt as a Typed Agent Support Value
 
-Prompts are not raw strings. They are typed Agent/runtime support values with trust boundaries. `Prompt` is not the primary multi-agent communication construct; it is the model-call input package used by the agent runtime. Etas does not need a dedicated `prompt` declaration ; use deterministic flows that return `Prompt`.
+`Prompt` is a typed model-call input with channel/trust boundaries, not a raw string or inter-agent message. Use builders for multi-part inputs; the `infer(data, system = instructions)` overload covers simple requests.
 
 ```etas
 flow ReviewPrompt(input: { draft: Draft, criteria: ReviewCriteria }) -> Prompt {
@@ -431,7 +428,7 @@ flow ReviewPrompt(input: { draft: Draft, criteria: ReviewCriteria }) -> Prompt {
 
 ### 4.2 Prompt Parts And Prompt Encoding
 
-Etas should not use subclassing or `toString` as the main prompt serialization protocol. The model should be:
+Prompt encoding uses spec evidence, not subclassing or `toString`:
 
 ```text
 Prompt          = complete model-call input package
@@ -439,9 +436,7 @@ PromptPart      = content that can be appended to one prompt channel
 T ~ PromptEncode = evidence that T can be encoded into PromptPart
 ```
 
-`Prompt.new().data(x)` and `Prompt.new().user(x)` require the type of `x` to
-satisfy `PromptEncode`. This is spec polymorphism, not OO subtyping. Etas
-does not need general value subtyping for prompt construction.
+`Prompt.data(x)` and `Prompt.user(x)` require `T ~ PromptEncode`; encoding effects propagate to the caller, including through the `infer` overload.
 
 Default `PromptEncode` instances should be derivable for:
 
