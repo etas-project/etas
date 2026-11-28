@@ -35,6 +35,25 @@ pub struct ArtifactStdProvider {
 }
 
 impl ArtifactStdProvider {
+    pub(crate) fn checking_interface(
+        &self,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Arc<etas_frontend::StandardLibraryInterface>, DriverError> {
+        if self.sdk.prepared_queries.is_none() || self.interface.prepared_external.is_some() {
+            return Ok(self.interface.clone());
+        }
+        let _signatures = profile.span("std.load_imported_signatures", "std");
+        let (imported, fallback) = self.sdk.load_signatures()?;
+        let interface = Arc::new(etas_frontend::StandardLibraryInterface {
+            prepared_external: Some(imported),
+            signature_fallback: Some(fallback),
+            validation: Default::default(),
+            ..self.interface.as_ref().clone()
+        });
+        interface.restore_installed_validation(&self.registry);
+        Ok(interface)
+    }
+
     pub fn executable_library(
         &self,
         profile: &etas_utils::ProfileHandle,
@@ -255,6 +274,22 @@ impl StdProvider {
         sysroot: Option<&Path>,
         profile: &etas_utils::ProfileHandle,
     ) -> Result<Self, DriverError> {
+        Self::open_artifact(sysroot, profile, true)
+    }
+
+    /// Ordinary execution only needs imported type signatures on an entry miss.
+    pub fn artifact_for_run(
+        sysroot: Option<&Path>,
+        profile: &etas_utils::ProfileHandle,
+    ) -> Result<Self, DriverError> {
+        Self::open_artifact(sysroot, profile, false)
+    }
+
+    fn open_artifact(
+        sysroot: Option<&Path>,
+        profile: &etas_utils::ProfileHandle,
+        with_signatures: bool,
+    ) -> Result<Self, DriverError> {
         let _load = profile.span("std.load_artifact", "std");
         let sysroot = match sysroot {
             Some(path) => path.to_owned(),
@@ -274,19 +309,26 @@ impl StdProvider {
             let _decode = profile.span("std.decode_artifact", "std");
             load_standard_library_sdk(&sysroot)?
         };
-        Self::from_loaded_sdk(sdk, profile).map(Self::Artifact)
+        Self::open_queries(sdk, profile, with_signatures).map(Self::Artifact)
     }
 
     pub(super) fn from_loaded_sdk(
-        mut sdk: LoadedStdSdk,
+        sdk: LoadedStdSdk,
         profile: &etas_utils::ProfileHandle,
     ) -> Result<Arc<ArtifactStdProvider>, DriverError> {
-        let prepared_signatures = {
+        Self::open_queries(sdk, profile, true)
+    }
+
+    fn open_queries(
+        mut sdk: LoadedStdSdk,
+        profile: &etas_utils::ProfileHandle,
+        with_signatures: bool,
+    ) -> Result<Arc<ArtifactStdProvider>, DriverError> {
+        let prepared_signatures = if with_signatures && sdk.prepared_queries.is_some() {
             let _signatures = profile.span("std.load_imported_signatures", "std");
-            sdk.prepared_queries
-                .as_ref()
-                .map(|_| sdk.load_signatures())
-                .transpose()?
+            Some(sdk.load_signatures()?)
+        } else {
+            None
         };
         if let Some(queries) = &mut sdk.prepared_queries {
             let registry = Arc::new(
@@ -297,12 +339,12 @@ impl StdProvider {
                     .into_registry()
                     .map_err(invalid)?,
             );
-            let mut interface = queries.interface.as_ref().clone();
             if let Some((imported, fallback)) = prepared_signatures {
+                let interface = Arc::make_mut(&mut queries.interface);
                 interface.prepared_external = Some(imported);
                 interface.signature_fallback = Some(fallback);
             }
-            let interface = Arc::new(interface);
+            let interface = queries.interface.clone();
             interface.restore_installed_validation(&registry);
             let bootstrap_identity = queries.bootstrap_identity.clone();
             let identity = semantic_identity(&sdk.manifest)?;

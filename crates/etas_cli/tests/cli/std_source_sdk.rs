@@ -2083,7 +2083,7 @@ flow main(args: Array<string>) -> i32 ![] {
     let result = invoke(&relocated_binary, &["run", "app.es"]);
     assert!(String::from_utf8_lossy(&result.stdout).contains("\"value\":\"42\""));
     let cache = root.join("consumer-cache");
-    let cached_run = |label: &str, expected: &str| {
+    let cached_run = |label: &str, target: &Path, expected: &str| {
         let profile = root.join(format!("{label}-profile.json"));
         let output = Command::new(&relocated_binary)
             .current_dir(&consumer)
@@ -2099,7 +2099,8 @@ flow main(args: Array<string>) -> i32 ![] {
             .arg(&cache)
             .arg("--profile-out")
             .arg(&profile)
-            .args(["--format", "json", "run", "app.es"])
+            .args(["--format", "json", "run"])
+            .arg(target)
             .output()
             .unwrap();
         assert!(
@@ -2122,27 +2123,46 @@ flow main(args: Array<string>) -> i32 ![] {
                 .as_u64()
                 .unwrap()
         };
-        assert_eq!(counter("frontend.retained_revisions"), 0, "{label}");
+        let checked = profile["spans"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|span| span["name"] == "frontend.check");
         #[cfg(target_os = "linux")]
         if label == "cold" || label == "warm" {
             for name in [
-                "std.consumer.link_cache_hit",
+                "run.entry_cache_hit",
                 "std.runtime.plan_cache_hit",
                 "interpreter.entry_plan_cache_hit",
             ] {
                 assert_eq!(counter(name), u64::from(label == "warm"), "{label}: {name}");
             }
+            assert_eq!(checked, label == "cold");
+            if label == "warm" {
+                assert!(
+                    !profile["spans"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|span| span["name"] == "std.load_module_objects")
+                );
+            }
         }
-        let reused = counter("frontend.reused_parsed_sources");
-        eprintln!(
-            "installed SDK cached {label}: duration_ns={}, reused_parsed_sources={reused}, value={expected}",
-            profile["total_duration_ns"]
-        );
-        reused
+        #[cfg(target_os = "linux")]
+        if label.starts_with("dependency-") {
+            assert_eq!(
+                counter("run.entry_cache_hit"),
+                u64::from(label == "dependency-warm"),
+                "{label}"
+            );
+        }
+        if checked && target == app {
+            assert_eq!(counter("frontend.retained_revisions"), 0, "{label}");
+        }
     };
-    cached_run("cold", "42");
+    cached_run("cold", &app, "42");
     assert!(fs::read_dir(&cache).unwrap().next().is_some());
-    cached_run("warm", "42");
+    cached_run("warm", &app, "42");
 
     let bridge = root.join("bridge");
     fs::create_dir_all(bridge.join("src")).unwrap();
@@ -2200,6 +2220,17 @@ flow main(args: Array<string>) -> i32 ![] {
     let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(report["value"]["value"], "42");
 
+    cached_run("dependency-cold", &package, "42");
+    cached_run("dependency-warm", &package, "42");
+    let dependency_file = bridge.join("src/bridge.es");
+    let original = fs::read_to_string(&dependency_file).unwrap();
+    fs::write(&dependency_file, original.replace("value + 1", "value + 2")).unwrap();
+    invoke(
+        &relocated_binary,
+        &["pkg", "update", package.to_str().unwrap()],
+    );
+    cached_run("dependency-updated", &package, "43");
+
     let moved_std = fs::read_dir(moved.join("lib/etas"))
         .unwrap()
         .next()
@@ -2229,6 +2260,6 @@ flow main(args: Array<string>) -> i32 ![] {
     let result = invoke(&relocated_binary, &["run", "app.es"]);
     assert!(String::from_utf8_lossy(&result.stdout).contains("\"value\":\"43\""));
     // Rebuilding only a std body must invalidate the same application's cache.
-    cached_run("changed-body", "43");
+    cached_run("changed-body", &app, "43");
     fs::remove_dir_all(root).unwrap();
 }

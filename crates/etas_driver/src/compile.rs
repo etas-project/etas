@@ -80,6 +80,9 @@ pub struct CompileRunnableProjectResponse {
     pub response: CheckResponse,
 }
 
+mod entry;
+pub use entry::{RunnableEntry, load_runnable_entry};
+
 #[derive(Clone, Copy)]
 enum StdLinkage {
     Interface,
@@ -178,6 +181,15 @@ fn compile_runnable_with_std_linkage(
 ) -> Result<CompileRunnableProjectResponse, DriverError> {
     request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
     let metadata_loaded = load_project(options, request)?;
+    compile_loaded_run(options, metadata_loaded, snapshot_detail, linkage)
+}
+
+fn compile_loaded_run(
+    options: &DriverOptions,
+    metadata_loaded: LoadedDriverProject,
+    snapshot_detail: SnapshotDetailLevel,
+    linkage: StdLinkage,
+) -> Result<CompileRunnableProjectResponse, DriverError> {
     let session_options = session_options(options)?;
     let writes_cache = matches!(&session_options.cache,
         FrontendCacheConfig::Disk { access, .. } if access.can_write());
@@ -499,7 +511,7 @@ fn frontend_session_with_library(
                 provider.registry.clone(),
             )
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
-            let interface = provider.interface.clone();
+            let interface = provider.checking_interface(&options.profile)?;
             if provider.sdk.prepared_queries.is_some() {
                 let behaviors = provider.clone();
                 let profile = options.profile.clone();

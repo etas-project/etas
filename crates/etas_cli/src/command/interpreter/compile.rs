@@ -24,26 +24,32 @@ pub fn compile_project(
     compiler_config: Option<etas_driver::compiler::NativeCompilerConfig>,
     defer_unused_std: bool,
 ) -> Result<CompiledRunInput, CliError> {
-    let options = super::super::frontend::driver_options_with_optimization(
-        global,
-        profile,
-        Some(optimization_level),
-    )?;
-    let compile = if defer_unused_std && compiler_config.is_none() {
-        etas_driver::compile_runnable_project_with_deferred_std
-    } else {
-        etas_driver::compile_runnable_project_with_loaded
+    let ordinary = defer_unused_std && compiler_config.is_none();
+    let options = super::super::frontend::driver_options_for(global, profile, ordinary)?
+        .with_optimization_level(optimization_level)
+        .map_err(super::super::frontend::driver_error)?;
+    let request = etas_driver::LoadProjectRequest {
+        paths,
+        all,
+        entry_policy: EntryPolicy::Runnable,
+        flow,
+        bin: None,
+        source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
     };
-    let response = compile(
+    if ordinary {
+        let entry = etas_driver::load_runnable_entry(&options, request)
+            .map_err(super::super::frontend::driver_error)?;
+        return Ok(CompiledRunInput {
+            sources: entry.sources,
+            checked: entry.checked,
+            diagnostics: entry.diagnostics,
+            definitions: entry.definitions,
+            compiler: None,
+        });
+    }
+    let response = etas_driver::compile_runnable_project_with_loaded(
         &options,
-        etas_driver::LoadProjectRequest {
-            paths,
-            all,
-            entry_policy: EntryPolicy::Runnable,
-            flow,
-            bin: None,
-            source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
-        },
+        request,
         SnapshotDetailLevel::None,
     )
     .map_err(super::super::frontend::driver_error)?;
