@@ -2093,14 +2093,18 @@ public flow sdk_echo<T>(value: T) -> T ![] {
         assert_eq!(report["value"]["value"], expected, "{label}");
         let profile: serde_json::Value =
             serde_json::from_slice(&fs::read(profile).unwrap()).unwrap();
-        let reused = profile["counters"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|counter| counter["name"] == "frontend.reused_parsed_sources")
-            .unwrap()["value"]
-            .as_u64()
-            .unwrap();
+        let counter = |name: &str| {
+            profile["counters"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|counter| counter["name"] == name)
+                .unwrap()["value"]
+                .as_u64()
+                .unwrap()
+        };
+        assert_eq!(counter("frontend.retained_revisions"), 0, "{label}");
+        let reused = counter("frontend.reused_parsed_sources");
         eprintln!(
             "installed SDK cached {label}: duration_ns={}, reused_parsed_sources={reused}, value={expected}",
             profile["total_duration_ns"]

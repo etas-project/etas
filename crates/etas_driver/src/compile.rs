@@ -181,6 +181,11 @@ fn compile_runnable_with_std_linkage(
     let session_options = session_options(options)?;
     let writes_cache = matches!(&session_options.cache,
         FrontendCacheConfig::Disk { access, .. } if access.can_write());
+    let retention = if writes_cache {
+        CheckRetention::PersistFinalRevision
+    } else {
+        CheckRetention::Incremental
+    };
     let mut session = frontend_session_with_library(options, linkage, session_options)?;
     let project = session
         .try_open_project(metadata_loaded.loaded.input.clone())
@@ -192,14 +197,13 @@ fn compile_runnable_with_std_linkage(
         let _span = options
             .profile
             .span_with_attrs("frontend.check", "frontend", attrs);
-        let request = check_request(options)
+        let mut request = check_request(options)
             .with_snapshot_detail(snapshot_detail)
             .with_scope(CheckScope::EntryReachable);
+        request.retention = retention;
         let response = session
             .check_retaining_if(project, request, |output| {
-                writes_cache
-                    || (metadata_loaded.package_environment.is_some()
-                        && materialized.needs_overlay(output))
+                metadata_loaded.package_environment.is_some() && materialized.needs_overlay(output)
             })
             .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
         record_pipeline_profile(options, &response);
@@ -336,16 +340,16 @@ fn compile_runnable_with_std_linkage(
             let _span = options
                 .profile
                 .span_with_attrs("frontend.check", "frontend", attrs);
+            let mut request = CheckRequest::incremental()
+                .with_scope(CheckScope::EntryReachable)
+                .with_disk_artifact_access(disk_cache_access(options))
+                .with_snapshot_detail(snapshot_detail)
+                .with_pipeline_timing(options.profile.is_enabled());
+            request.retention = retention;
             let response = session
-                .check_retaining_if(
-                    project,
-                    CheckRequest::incremental()
-                        .with_scope(CheckScope::EntryReachable)
-                        .with_disk_artifact_access(disk_cache_access(options))
-                        .with_snapshot_detail(snapshot_detail)
-                        .with_pipeline_timing(options.profile.is_enabled()),
-                    |output| writes_cache || materialized.needs_overlay(output),
-                )
+                .check_retaining_if(project, request, |output| {
+                    materialized.needs_overlay(output)
+                })
                 .map_err(|error| DriverError::FrontendSession(format!("{error:?}")))?;
             record_pipeline_profile(options, &response);
             response
