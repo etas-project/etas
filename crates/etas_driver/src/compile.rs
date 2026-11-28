@@ -503,15 +503,37 @@ fn frontend_session_with_library(
             if provider.sdk.prepared_queries.is_some() {
                 let behaviors = provider.clone();
                 let profile = options.profile.clone();
+                let access = disk_cache_access(options);
+                let run_cache = if matches!(linkage, StdLinkage::Deferred) {
+                    crate::std_library::install_receipt::run_cache_directory(access)
+                } else {
+                    None
+                };
                 let executable = if matches!(linkage, StdLinkage::Executable | StdLinkage::Deferred)
                 {
                     let provider = provider.clone();
                     let profile = profile.clone();
                     Some(
                         std::sync::Arc::new(move |consumer: &etas_frontend::CheckedProgramData| {
-                            provider
+                            let mut library = provider
                                 .executable_library_for(consumer, &profile)
-                                .map_err(|e| e.to_string())
+                                .map_err(|e| e.to_string())?;
+                            if let Some((directory, build)) = &run_cache {
+                                let cache = etas_frontend::RunPreparationCache::new(
+                                    directory.clone(),
+                                    build,
+                                    &provider
+                                        .sdk
+                                        .manifest
+                                        .identity()
+                                        .map_err(|e| e.to_string())?,
+                                    &library,
+                                    consumer,
+                                    access,
+                                );
+                                std::sync::Arc::make_mut(&mut library).run_cache = cache;
+                            }
+                            Ok(library)
                         })
                             as std::sync::Arc<
                                 dyn Fn(

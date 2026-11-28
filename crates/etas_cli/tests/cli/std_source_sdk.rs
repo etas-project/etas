@@ -2053,7 +2053,25 @@ public flow sdk_echo<T>(value: T) -> T ![] {
         fs::read(installed_std.join(artifact)).unwrap(),
         fs::read(repeat.join(artifact)).unwrap()
     );
-    fs::write(&app, "module app; import std.text.{join, sdk_echo}; flow main(args: Array<string>) -> i32 ![] { let text = sdk_echo(join([\"source\", \"sdk\"], \":\")); return if text == \"source:sdk\" { 42 } else { if text == \"source:sdk!\" { 43 } else { 0 } }; }").unwrap();
+    // The SDK calls back into an implementation owned by the application.
+    // The restored method proof must share the live caller's type arena.
+    fs::write(
+        &app,
+        r#"module app;
+import std.text.{join, sdk_echo};
+import std.collections.{Order, lower_bound};
+type Ranked = { key: i32 };
+impl Ranked ~ Order {
+    public flow compare(self, other: Ranked) -> i32 ![] { return other.key.compare(self.key); }
+}
+flow main(args: Array<string>) -> i32 ![] {
+    let values = [Ranked{key= 9}, Ranked{key= 3}];
+    if lower_bound(values, Ranked{key= 3}) != 1 { return 1; }
+    let text = sdk_echo(join(["source", "sdk"], ":"));
+    return if text == "source:sdk" { 42 } else { if text == "source:sdk!" { 43 } else { 0 } };
+}"#,
+    )
+    .unwrap();
     let moved = root.join("moved-prefix");
     fs::rename(&prefix, &moved).unwrap();
     fs::remove_dir_all(source.join("library")).unwrap();
@@ -2069,6 +2087,7 @@ public flow sdk_echo<T>(value: T) -> T ![] {
         let profile = root.join(format!("{label}-profile.json"));
         let output = Command::new(&relocated_binary)
             .current_dir(&consumer)
+            .env("XDG_CACHE_HOME", root.join("xdg"))
             .args([
                 "--no-config",
                 "--std-provider",
@@ -2104,6 +2123,16 @@ public flow sdk_echo<T>(value: T) -> T ![] {
                 .unwrap()
         };
         assert_eq!(counter("frontend.retained_revisions"), 0, "{label}");
+        #[cfg(target_os = "linux")]
+        if label == "cold" || label == "warm" {
+            for name in [
+                "std.consumer.link_cache_hit",
+                "std.runtime.plan_cache_hit",
+                "interpreter.entry_plan_cache_hit",
+            ] {
+                assert_eq!(counter(name), u64::from(label == "warm"), "{label}: {name}");
+            }
+        }
         let reused = counter("frontend.reused_parsed_sources");
         eprintln!(
             "installed SDK cached {label}: duration_ns={}, reused_parsed_sources={reused}, value={expected}",

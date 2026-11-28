@@ -66,6 +66,7 @@ impl ArtifactStdProvider {
                 }
                 .map_err(|error| error.to_string())?;
                 Ok(Arc::new(etas_frontend::StandardLibrary {
+                    run_cache: None,
                     profile: profile.clone(),
                     installed_layouts,
                     program,
@@ -154,6 +155,7 @@ impl ArtifactStdProvider {
             .into_checked_from_installed_analysis(&self.sdk.root, &publication, profile)
             .map_err(invalid)?;
         Ok(Arc::new(etas_frontend::StandardLibrary {
+            run_cache: None,
             profile: profile.clone(),
             installed_layouts,
             program,

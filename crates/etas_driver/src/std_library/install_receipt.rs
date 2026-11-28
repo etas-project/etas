@@ -95,3 +95,47 @@ pub fn publish_install_receipt(
         Ok(())
     }
 }
+
+pub(crate) fn run_cache_directory(
+    access: etas_frontend::DiskCacheAccess,
+) -> Option<(std::path::PathBuf, &'static str)> {
+    #[cfg(target_os = "linux")]
+    {
+        use std::{
+            fs,
+            os::unix::fs::{DirBuilderExt, MetadataExt},
+            path::PathBuf,
+        };
+        let build = *RUNNING_BUILD.get()?;
+        if access == etas_frontend::DiskCacheAccess::Disabled {
+            return None;
+        }
+        let root = std::env::var_os("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|p| PathBuf::from(p).join(".cache")))?;
+        let directory = root.join("etas/checked-runs");
+        if access.can_write() {
+            fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(&directory)
+                .ok()?;
+        }
+        // This directory contains locally produced executable plans, unlike the
+        // workspace cache which can be supplied by a checked-out project.
+        let metadata = fs::symlink_metadata(&directory).ok()?;
+        if !metadata.is_dir()
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.mode() & 0o077 != 0
+        {
+            return None;
+        }
+        Some((directory, build))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = access;
+        None
+    }
+}
