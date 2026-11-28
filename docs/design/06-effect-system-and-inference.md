@@ -128,7 +128,7 @@ host execution is needed only for the specified primitive endpoints.
 | `Memory` | `read<R>`, `write<R>` | Typed memory regions and stores |
 | `Session extends Memory` | `read`, `publish`, `reconcile`, `acquire`, `handoff`, `release` | Session history/context and scoped exclusive routing leases; not agent-instance ownership |
 | `Secret` | `read<K>`, `use<K>` | Host-mediated secret handles and non-revealing secret-backed operations |
-| `Command` | `run<S>` | Sandboxed process execution scoped by sandbox profile |
+| `Command` | `run<S>`, `start<S>`, `start_pty<S>`, `read_pty<S>`, `write_pty<S>`, `resize_pty<S>`, `stop_pty<S>` | Sandboxed execution and managed PTY operations; `S` selects the sandbox profile |
 | `Agentic` | `infer<C, O>`, `step<C, O>` | Full-loop and single-generation model interaction requested actions, where `C` is an agent method identity |
 | `Error<E>` | `raise` | Typed recoverable failure |
 | `Async` | `yield`, `await<T, E>` | Scope-bound task scheduling control, not an external-authority grant |
@@ -151,6 +151,7 @@ in the SPEC does not imply that every backend already implements them:
 | API module | Standard effect/action owner | Intended substrate |
 |---|---|---|
 | `std.task` | `Async` and recognized task-execution contracts | Structured start/wait, scoped scheduler handles, single-shot transfer, cancellation, and cleanup |
+| `std.host.command`, re-exported by `std.command` | `Command` | Sandboxed processes and [managed PTY sessions](19-standard-library.md#145-managed-pty-sessions); no terminal renderer or new effect root |
 | `std.net.tcp` | `Net extends Network` | TCP connect, socket identity, cancellation, timeout metadata |
 | `std.stream` | `Stream` | Bounded byte-stream read, write, flush, close, EOF, timeout, and cancellation over typed stream handles |
 | `std.tls` | `Tls extends Network` | TLS client session setup, server-name binding, certificate validation, TLS errors |
@@ -677,14 +678,7 @@ retain checked structure, requested actions and traces, not just their union.
 
 ## 3. Command Sandboxing
 
-`Command` is authority-amplifying because a process can try to read files, write files, access the network, inspect environment variables, or spawn other processes.
-
-Etas source code cannot declare an unsandboxed command. `Command.run<S>` and
-`Command.spawn<S>` are parameterized by a sandbox profile, and the runtime
-applies `DefaultCommandSandbox` when a wrapper omits the profile. `SandboxProfile`
-and `DefaultCommandSandbox` are support values, not source syntax keywords.
-
-Persistent state is represented by compiler-known standard APIs. Calls such as `Store.get`, `Store.put`, `Store.query`, or top-level resource constructors such as `std.memory.region<...>` contribute or expose region-sensitive effects such as `Memory.read<ProjectMemory.Papers>` and `Memory.write<ProjectMemory.Decisions>`.
+`Command` amplifies filesystem/network/environment/child-process authority. `run`, `start` and `start_pty` require profiles; omitted wrapper profiles use restrictive `DefaultCommandSandbox`. Profiles are std values, not keywords/grants. Unsandboxed execution is administrative, not normal Etas source.
 
 ```text
 SandboxProfile = {
@@ -699,23 +693,14 @@ SandboxProfile = {
 DefaultCommandSandbox : SandboxProfile
 ```
 
-```etas
-flow std.command.run(cmd: Command, sandbox: SandboxProfile) -> CommandResult ![Command.run<_>] {
-    return perform Command.run(cmd, sandbox);
-}
-```
+| Command Boundary | Rule |
+|---|---|
+| Selection | `<S>` identifies a static profile, not a runtime handle. Unknown profiles use `_`; runtime checks concrete payloads. |
+| PTY admission | Pipe `start<S>` and `start_pty<S>` require separate permission. PTY operations retain owner/origin profile plus current restrictions; handles grant nothing. |
+| Handling | Scoped handlers precede defaults. Requested/trace facts survive handling; default facts mark fallback. PTY retains `Error<PtyError>`; handling never bypasses authority, cancellation or budgets. |
+| Tools / containment | Tool boundaries retain requested actions. Sandbox descendants too: denying the PTY entry does not prevent an allowed program allocating its own terminal. |
 
-A project can wrap command execution as a model-callable tool, but the tool must
-make the sandbox-scoped action explicit:
-
-```etas
-tool run_tests(cmd: Command) -> TestResult ![Command.run<DefaultCommandSandbox>]
-{
-    return test.decode(perform Command.run(cmd, DefaultCommandSandbox));
-}
-```
-
-The default sandbox is intentionally restrictive. Projects may provide named `SandboxProfile` values, but command execution remains sandboxed. Unsandboxed command execution is a runtime/admin escape hatch, not normal Etas source.
+API and lifecycle contracts: [Managed PTY Sessions](19-standard-library.md#145-managed-pty-sessions).
 
 ## 4. Flow Type Syntax
 

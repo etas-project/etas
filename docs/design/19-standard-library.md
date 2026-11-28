@@ -44,7 +44,7 @@ their omitted layouts in these tables are not `type T;` declarations.
 | Persistent stores | `std.memory` | [Section 15](#15-persistent-stores-and-session-publication) |
 | Concurrent combinators | `std.task` | [Full signatures and boundary cases](16-concurrency.md#3-standard-combinators) |
 | Checked code generation | `std.compiler` | [Compiler API table](18-reflection-and-checked-code-generation.md#61-standard-library-surface) |
-| Commands and sandbox profiles | `std.command`, `std.host.command`, `std.host.sandbox` | [Command sandboxing](06-effect-system-and-inference.md#3-command-sandboxing) |
+| Commands, PTY sessions and sandbox profiles | `std.command`, `std.host.command`, `std.host.sandbox` | [PTY APIs](#145-managed-pty-sessions), [sandboxing](06-effect-system-and-inference.md#3-command-sandboxing) |
 | Time and randomness | `std.runtime.time`, `std.random` | [Section 13](#13-time-and-randomness) |
 | Resource ownership and cleanup | `std.resource`, stream/transport/filesystem APIs | [Section 14](#14-managed-resource-lifecycles) |
 | Incremental builders | `std.text.TextBuilder`, `std.bytes.BytesBuilder` | [Section 1.13](#113-incremental-text-and-byte-builders) |
@@ -1660,97 +1660,88 @@ sequence position, not a shared mutable source.
 
 ### 14.1 Scope And Cleanup
 
-`std.resource.scope` exposes the cleanup contract already required by managed
-task frames. It is a compiler-recognized std flow, not a `using`/`finally`
-keyword or a general shared-reference feature.
+`std.resource.scope` is a compiler-recognized std flow for managed cleanup, not a new keyword or general shared-reference feature.
 
 | Public Type / API | Result / Definition | Contract |
 |---|---|---|
-| `CleanupFailure` | Record: `resource_kind: string`, `code: string`, `message: string` | Redacted diagnostic, not a live resource or permission token. |
-| `ResourceError` | Enum: `CleanupFailed(Array<CleanupFailure>)` | Failures encountered while releasing a normally completed scope. |
-| `std.resource.scope<R, effect E>(body: () -> R ![E])` | `R ![E, Error<ResourceError>]` | Establish a fresh resource owner, run body, join owned child work and release owned resources before returning. |
+| `CleanupFailure` | Record: `resource_kind: string`, `code: string`, `message: string` | Redacted diagnostic; no resource or authority. |
+| `ResourceError` | Enum: `CleanupFailed(Array<CleanupFailure>)` | Cleanup failures after normal completion. |
+| `std.resource.scope<R, effect E>(body: () -> R ![E])` | `R ![E, Error<ResourceError>]` | Fresh owner; run body, join children, release resources, then return. |
 
 | Lifecycle Boundary | Required Behavior |
 |---|---|
-| Registration | Successful standard resource creation registers with the nearest resource scope, or otherwise the managed task/root owner, before exposing the handle. Failed acquisition cleans up any partial allocation. Ordinary helper returns do not create an owner boundary. |
-| Escape | Newly owned handles cannot escape through R, captured closures, handlers or outer mutable bindings. Compiler summaries preserve owner relationships; unknown external escape is rejected. |
-| Existing handles | Borrowing an outer resource does not transfer ownership or close it at inner-scope exit. Ordinary data/results may escape. |
-| Alias | Handle copies identify one resource; they do not copy a connection/file. Closing invalidates all aliases. Concurrent use obeys the resource's access contract. |
-| Release order | Reverse successful acquisition order, respecting dependencies; children finish/cancel first. Explicit close marks a registration released; it is not closed twice. |
-| Wrapping | Admitted TLS upgrade transfers the TCP registration into the TLS handle atomically. Every raw TCP alias becomes unusable; handshake failure closes the connection. Pre-admission validation/busy failure does not transfer ownership. |
-| Normal return | Release everything; if cleanup fails, raise `ResourceError.CleanupFailed` rather than return a successful value. |
-| Existing failure / finish / cancellation | Preserve the primary control outcome, continue cleanup, and attach cleanup failures to trace diagnostics. No replacement of an original typed error by an unrelated cleanup error. |
-| Authority | Cleanup retains action/provenance/spec checks. Denied remote flushing or protocol operations are not performed; local disposal still prevents leaked handles and the denial is recorded. |
-| Observability | Requested close/flush actions and their possible failures belong to the owning scope summary, including implicit cleanup. Cleanup is not an invisible purity escape. |
-| Limits | Cleanup has a bounded runtime cleanup allowance, not a fresh application budget. Forced process termination cannot guarantee remote cleanup or durable completion. |
-| Extension | Standard bindings register resource release primitives. This API does not allow an arbitrary library to forge ownership/evidence by naming a method `close`. |
+| Registration | Register before exposing a handle with the nearest resource scope, otherwise the task/root owner. Clean partial acquisitions; helper returns do not end ownership. |
+| Escape | No owned handle escapes through R, closures, handlers or outer bindings. Preserve owner summaries; reject unknown external escape. Ordinary data may escape. |
+| Existing handles | Borrowing an outer resource neither transfers ownership nor closes it on inner exit. |
+| Alias | Copies share resource identity and access rules; closure invalidates all aliases. |
+| Release order | Children finish/cancel first; release in reverse acquisition order respecting dependencies. Explicit release is not repeated. |
+| Wrapping | TLS admission atomically transfers TCP ownership and invalidates raw aliases. Handshake failure closes it; pre-admission validation/Busy leaves it unchanged. |
+| Normal return | Release everything; cleanup failure raises `ResourceError.CleanupFailed`. |
+| Failure / finish / cancellation | Preserve the primary outcome, continue cleanup and attach cleanup failures as trace diagnostics. |
+| Authority | Recheck actions/provenance/specs; deny unauthorized remote flush/protocol work but still dispose locally and record denial. |
+| Observability | Scope summaries include requested close/flush actions and failures, including implicit cleanup. |
+| Limits | Bounded cleanup allowance, not renewed application budget; forced termination promises neither remote cleanup nor durability. |
+| Extension | Standard release registration is checked; naming a library method `close` cannot forge ownership/evidence. |
 
 ### 14.2 Stream And Transport Values
 
 | Type / Configuration | Public Contract |
 |---|---|
-| `std.stream.ByteLimit` | Record `{ bytes: usize }`; zero is valid; no signed count or token-to-byte reinterpretation. |
-| `std.stream.Timeout` | Alias of `std.runtime.time.Duration`; APIs use `Option<Timeout>`, with `None` retaining parent deadlines. |
-| `std.net.tcp.Host` | Opaque validated hostname/IP value. `Host.parse(text: string) -> Result<Host, NetworkError> ![]` rejects empty input, schemes, paths and embedded ports; does not resolve DNS. `to_string() -> string ![]` returns its canonical spelling. |
-| `std.net.tcp.Port` | Opaque connect-port value. `Port.new(value: u16) -> Result<Port, NetworkError> ![]` accepts 1..65535; `value() -> u16 ![]` observes it. |
-| `std.tls.Host` | Re-export/alias of `std.net.tcp.Host`, never a second incompatible nominal type. |
-| `std.net.tcp.NetworkError` | Record `{ code: string, message: string }`. Stable codes: invalid_input, resolve_failed, refused, timed_out, unavailable, host. Messages are redacted diagnostics, not machine-readable codes. |
-| `std.tls.TlsError` | Record `{ code: string, message: string }`. Stable codes: invalid_config, busy, certificate, hostname, protocol, timed_out, host. Validation failure never falls back to plaintext. |
+| `std.stream.ByteLimit` | Record `{ bytes: usize }`; zero allowed; counts bytes, not tokens. |
+| `std.stream.Timeout` | Alias of `std.runtime.time.Duration`; `None` preserves parent deadlines. |
+| `std.net.tcp.Host` | Opaque hostname/IP. `Host.parse(text: string) -> Result<Host, NetworkError> ![]` rejects empty input, schemes, paths and embedded ports without DNS. `to_string() -> string ![]` returns canonical spelling. |
+| `std.net.tcp.Port` | Opaque port. `Port.new(value: u16) -> Result<Port, NetworkError> ![]` accepts 1..65535; `value() -> u16 ![]`. |
+| `std.tls.Host` | Re-export of `std.net.tcp.Host`, not a distinct nominal type. |
+| `std.net.tcp.NetworkError` | Record `{ code: string, message: string }`; redacted diagnostic message. Stable codes: invalid_input, resolve_failed, refused, timed_out, unavailable, host. |
+| `std.tls.TlsError` | Same record shape; codes: invalid_config, busy, certificate, hostname, protocol, timed_out, host. Never fall back to plaintext. |
 | `TcpOptions` | Record `{ timeout: Option<Timeout>, nodelay: bool }`; `DefaultTcpOptions` is `{ timeout = None, nodelay = true }`. |
 | `TlsVersion` / `TlsTrust` | Enums `V12, V13` / `Platform, Bundle(bytes)`; bundles contain public trust anchors, not secret client keys. |
 | `TlsConfig` | Record `{ timeout: Option<Timeout>, minimum: TlsVersion, trust: TlsTrust, alpn: Array<string> }`; `DefaultTlsConfig` uses None, V12, Platform and an empty ALPN list. |
-| TLS validation | Always check certificate chain and server identity; no implicit insecure fallback. Empty ALPN makes no application-protocol claim; requested unsupported negotiation fails with `TlsError`. |
+| TLS validation | Check certificate chain/server identity. Empty ALPN promises no protocol; unsupported requested negotiation raises `TlsError`. |
 
-The existing connect/handshake APIs gain ordinary default arguments
-`options = DefaultTcpOptions` and `config = DefaultTlsConfig`. DNS/connect and
-handshake each respect a single local timeout and the inherited parent deadline.
+Connect/handshake default to `DefaultTcpOptions`/`DefaultTlsConfig`; DNS/connect and handshake each share one whole-operation timeout within the parent deadline.
 
 | Additional `std.stream` API | Result | Requested Action / Contract |
 |---|---|---|
-| `read_exact<S ~ ByteStream>(stream: S, count: usize, timeout: Option<Timeout> = None)` | `bytes ![Error<StreamError>]` | `Stream.read<S>`; exactly count bytes or `UnexpectedEof`. Consumed prefixes are not restored. Zero validates an open readable handle, then completes without a read. |
-| `write_all<S ~ ByteStream>(stream: S, body: bytes, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.write<S>`; extends the existing API with an optional whole-write deadline. Partial failure is not rollback. |
-| `flush<S ~ ByteStream>(stream: S, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.flush<S>`; bounded adapter flush, not remote acknowledgment or filesystem durability. |
+| `read_exact<S ~ ByteStream>(stream: S, count: usize, timeout: Option<Timeout> = None)` | `bytes ![Error<StreamError>]` | `Stream.read<S>`; exactly count or `UnexpectedEof`, without restoring consumed bytes. Zero checks open/readable, then skips I/O. |
+| `write_all<S ~ ByteStream>(stream: S, body: bytes, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.write<S>`; whole-write deadline, no rollback on partial failure. |
+| `flush<S ~ ByteStream>(stream: S, timeout: Option<Timeout> = None)` | `unit ![Error<StreamError>]` | `Stream.flush<S>`; bounded adapter flush, not remote acknowledgment/durability. |
 
-`StreamError` additionally includes `UnexpectedEof`, `Busy` and
-`UnsupportedOperation`. File mode violations use the latter. `ByteStream`
-does not statically promise both read and write access; no general subtyping or
-unchecked readable/writable cast is introduced.
+`StreamError` adds `UnexpectedEof`, `Busy`, `UnsupportedOperation` (including file-mode violations). `ByteStream` promises neither both access modes nor unchecked casts/subtyping.
 
 | Same-Resource Operations | Required Admission Rule |
 |---|---|
-| Two reads, or two writes | Reject the later overlapping call with `StreamError.Busy`; do not silently split input or interleave output. Admission is atomic across aliases. |
-| TCP/TLS read plus write | Permit one reader and one writer concurrently. Protocol-level request ordering remains the application's responsibility. |
-| FileStream read plus write | Reject overlap: the stream has one shared file position. Separate opens have distinct cursors but still share file/region authority and conflict checks. |
-| Compound operation | `read_exact`/`read_until_limit` hold the read slot for the whole call; `write_all`/`flush` hold the write slot. Internal chunks do not release it or reacquire as unrelated calls. |
-| Close | Mark closed atomically, wake pending operations and release the resource. Close is idempotent, never Busy; no successful I/O may be fabricated after closure. |
-| TLS upgrade | Require no active I/O before transfer; pre-admission busy/validation failure leaves TCP ownership unchanged. Once handshake begins, failure closes the underlying connection. |
-| Cancellation | Release admission slots on every unwind path. A local typed error cannot clear cancellation of the enclosing scope. |
-| Analysis / ordering | Known conflicting calls must not be parallelized automatically. Explicit overlapping calls retain the dynamic guard; the winning admission/order is trace-visible. Different resources are not serialized globally. |
+| Two reads, or two writes | Atomically reject the later overlapping call with Busy across aliases; no input splitting or write interleaving. |
+| TCP/TLS read plus write | Permit one of each; applications control protocol ordering. |
+| FileStream read plus write | Reject overlap on its shared cursor. Separate opens have separate cursors, not separate region authority/conflict checks. |
+| Compound operation | Hold the read slot throughout `read_exact`/`read_until_limit`, write slot throughout `write_all`/`flush`, including internal chunks. |
+| Close | Atomically close, wake waiters and release. Idempotent, never Busy; no fabricated successful I/O after closure. |
+| TLS upgrade | Require idle I/O; ownership/failure rules follow section 14.1. |
+| Cancellation | Unwind releases slots; local errors cannot clear enclosing cancellation. |
+| Analysis / ordering | Never auto-parallelize known conflicts; explicit overlap keeps runtime guards and trace-visible admission order. No global serialization of separate resources. |
 
 ### 14.3 Filesystem Lifecycle And Bounded Operations
 
-`std.io.IOError` is the shared nominal error enum, re-exported by `std.fs`
-and `std.runtime.error`. Independent same-named error types are not equivalent.
+`std.fs` and `std.runtime.error` re-export the same nominal `std.io.IOError`, not independent same-named enums.
 
 | Supporting Type | Contract |
 |---|---|
 | `IOError` | Existing Eof/Interrupted/PermissionDenied/InvalidUtf8/Host plus `NotFound`, `AlreadyExists`, `InvalidInput`, `NotDirectory`, `IsDirectory`, `DirectoryNotEmpty`, `Closed`, `TimedOut`, `LimitExceeded`, `Unsupported`. |
 | `FileMode` | Enum: `Read`, `WriteTruncate`, `Append`, `ReadWrite`, `CreateNew`. |
-| `FileStream<R>` | Opaque region-indexed handle satisfying `ByteStream`; registration/aliases follow section 14.1. |
-| `FsStat` | Record `{ is_file: bool, is_dir: bool, len: u64 }`; flags describe the resolved target and len is file bytes. Directory length is zero, not a portable entry count. |
+| `FileStream<R>` | Opaque region-indexed handle `~ ByteStream`; section 14.1 governs ownership/aliases. |
+| `FsStat` | Record `{ is_file: bool, is_dir: bool, len: u64 }`; resolved-target flags and byte length; directories report zero, not entry count. |
 
-All following signatures use `R ~ std.fs.Region`, inherit path-escape guards,
-and leave `Error<IOError>` after standard handling.
+Below, `R ~ std.fs.Region`; path guards and residual `Error<IOError>` apply.
 
 | `std.fs` API | Result | Requested Action / Contract |
 |---|---|---|
 | `open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)` | `FileStream<R> ![Error<IOError>]` | Perform one `Fs.open<R>`. Its required filesystem authority depends on the mode as specified below. |
-| `read_bytes_limited<R ~ Region>(path: WorkspacePath<R>, max_bytes: usize)` | `bytes ![Error<IOError>]` | `Fs.read<R>`; inclusive size cap, `LimitExceeded` rather than truncation. Reading/stat races cannot bypass the bound. |
+| `read_bytes_limited<R ~ Region>(path: WorkspacePath<R>, max_bytes: usize)` | `bytes ![Error<IOError>]` | `Fs.read<R>`; inclusive cap despite stat/read races; excess raises LimitExceeded, not truncation. |
 | `list_limited<R ~ Region>(path: WorkspacePath<R>, max_entries: usize, max_bytes: usize)` | `List<WorkspacePath<R>> ![Error<IOError>]` | `Fs.list<R>`; cap entry count and UTF-8 bytes of relative names; no successful partial listing. |
-| `create_dir<R ~ Region>(path: WorkspacePath<R>, recursive: bool = false)` | `unit ![Error<IOError>]` | `Fs.create_dir<R>`; existing directory succeeds; other existing targets fail. Nonrecursive creation requires existing parents. |
-| `rename<R ~ Region>(source: WorkspacePath<R>, destination: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.rename<R>`; same region, no replacement of an existing destination, no cross-device copy fallback. |
-| `remove_file<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_file<R>`; unlink the file/link, not the link's target; missing raises NotFound. |
-| `remove_dir<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_dir<R>`; empty directories only. Recursive deletion remains an explicit checked traversal. |
+| `create_dir<R ~ Region>(path: WorkspacePath<R>, recursive: bool = false)` | `unit ![Error<IOError>]` | `Fs.create_dir<R>`; existing directory succeeds, other targets fail; nonrecursive needs existing parents. |
+| `rename<R ~ Region>(source: WorkspacePath<R>, destination: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.rename<R>`; same region, no destination replacement/cross-device copy fallback. |
+| `remove_file<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_file<R>`; unlink file/link, not its target; missing raises NotFound. |
+| `remove_dir<R ~ Region>(path: WorkspacePath<R>)` | `unit ![Error<IOError>]` | `Fs.remove_dir<R>`; empty directories only; recursive deletion needs explicit checked traversal. |
 | `sync<R ~ Region>(file: FileStream<R>)` | `unit ![Error<IOError>]` | `Fs.sync<R>`; request backend stable-storage synchronization or Unsupported, not merely flush user buffers. |
 
 | Open / Mutation Boundary | Rule |
@@ -1759,9 +1750,9 @@ and leave `Error<IOError>` after standard handling.
 | WriteTruncate / Append | Create if missing; respectively truncate on open / place each accepted write at current end. Append does not imply atomic multi-write records. |
 | ReadWrite | Existing file, no truncation or creation. |
 | CreateNew | Atomically create a missing file for writing; existing target is AlreadyExists. |
-| Close / durability | Close releases ownership; it does not implicitly fsync. `atomic_replace` promises visibility atomicity, not crash durability. |
-| Failure | Observe partial/uncertain effects honestly; no automatic retry of writes, append, rename or deletion. |
-| Region provenance | Stream reads/writes over FileStream remain covered by the originating FileIO region; erasing its concrete type cannot broaden authority. |
+| Close / durability | Close does not fsync; atomic_replace is visibility atomicity, not crash durability. |
+| Failure | Report partial/uncertain effects; no automatic write/append/rename/delete retry. |
+| Provenance | FileStream I/O retains originating FileIO region authority, even after type erasure. |
 
 #### File open action, handler matching and admission
 
@@ -1779,15 +1770,7 @@ public flow open<R ~ Region>(path: WorkspacePath<R>, mode: FileMode)
 }
 ```
 
-`R` is the static region selector. `mode` is an ordinary payload argument.
-Dispatch the checked `Fs.open` action to the nearest matching scoped arm under
-the usual selector rules. For example, `Fs.open<Reports>(path, mode)` handles
-every open mode in `Reports`. An arm may branch on the mode. An arm for
-`Fs.read`, `Fs.write`, or another concrete region cannot intercept this
-request. A matching arm may resume with a valid `FileStream<R>` for the
-requested mode, finish with the enclosing answer type, or propagate a failure.
-Only an unmatched request falls through automatically to the runtime default.
-Explicit forwarding uses the same admission checks as direct default execution.
+`R` selects a static region; `mode` is payload. The nearest matching `Fs.open<R>` arm handles all its modes, may branch on mode, resume an exact-mode handle, finish or fail. Other actions/regions do not intercept it. Only unmatched requests automatically use the default; forwarding retains admission checks.
 
 | Actual mode | Authority required for this region |
 |---|---|
@@ -1795,91 +1778,86 @@ Explicit forwarding uses the same admission checks as direct default execution.
 | `WriteTruncate`, `Append`, `CreateNew` | `Fs.write<R>` |
 | `ReadWrite` | Both `Fs.read<R>` and `Fs.write<R>` |
 
-For a host open, these are the positive filesystem grants to check. An
-existing region-scoped read grant suffices for a read open, subject to the
-ordinary enclosing restrictions. A grant for `Fs.open<R>` alone supplies
-neither access right. An explicit denial of the open or of any required right
-blocks the host operation, including when a broader grant covers `FileIO`.
-Use the same concrete region, resolved target and active policy for all
-required rights. Complete admission before opening, creating, truncating or
-publishing a handle. A missing right on a `ReadWrite` request leaves the
-file untouched and yields no partial or downgraded handle. Boundary and
-policy denials retain their existing diagnostics. Host filesystem failures
-use `Error<std.io.IOError>`.
-
-The checked summary records the one requested action plus its required
-authority. A known mode uses the table. An unknown mode conservatively
-requires both rights for static coverage. Runtime admission uses the actual
-mode even for a direct `perform`. The trace records one open attempt with
-its region, mode, required rights and handling outcome. The rights are
-admission facts on that event and do not emit byte-read or byte-write events
-or satisfy trace requirements for actual byte transfers.
-
-Interpreting a request grants no host access. The default verifies path
-containment at acquisition and registers the new handle under section 15.1
-before exposing it. A handle supplied by a handler retains its checked
-region, access mode, resource identity and ownership. The runtime must
-require the exact requested mode on resumption even when the static return
-type agrees, since `FileStream<R>` does not encode the mode. For example, an
-arm handling `Read` cannot resume with a writable `ReadWrite` handle. Later stream
-operations enforce the handle's mode and provenance under the current
-boundary.
+| Open Boundary | Rule |
+|---|---|
+| Grants | The mode table supplies positive grants; `Fs.open<R>` alone grants neither right. Denial of open/any required right overrides broader grants. Check the same region, target and active policy before any open/create/truncate or publication; failed ReadWrite admission leaves the file untouched, with no partial/downgraded handle. |
+| Summaries / trace | One requested open plus required authority. Unknown modes conservatively need both rights statically; runtime uses actual mode, including direct perform. Record region/mode/rights/outcome; rights are admission facts, not byte-transfer events or evidence of transfers. |
+| Handles / failures | Check containment and section 14.1 registration before exposure. Handler results retain identity, region, owner and exactly the requested mode (Read cannot resume ReadWrite); later I/O rechecks mode/provenance/current boundary. Interpretation grants no authority. Denials retain existing diagnostics; host failures raise `Error<IOError>`. |
 
 ### 14.4 Effectful Pull Sources
 
-`std.stream.Source<T, E>` is a managed, single-cursor resource, not the
-repeatable pure `Iter<T>`. E is its latent effect row, including release work.
-The result schemes below infer G as the union of E and callback row F; G is
-notation for an inferred row, not a new source operator or generic argument.
+`Source<T, E>` is a managed cursor, not repeatable `Iter<T>`. E includes release work; G below denotes the inferred union of E and callback row F, not source syntax.
 
 | Public Type | Definition / Contract |
 |---|---|
-| `Source<T, effect E>` | Opaque managed source with a checked owner, current state, pull/release callbacks and latent action/effect/capture summaries. No ordinary serialization or independent cursor copy. |
+| `Source<T, effect E>` | Opaque owner/state/pull/release resource with latent action/effect/capture summaries; no serialization or cursor cloning. |
 | `SourceError` | Enum: `Busy`, `Closed`, `InvalidChunkSize(usize)`, `InvalidLineLimit(usize)`, `LineTooLong`, `InvalidUtf8`. |
-| Source aliases | Refer to the same cursor. One successful next advances it for all aliases; overlapping next fails Busy rather than fetching two values unpredictably. |
+| Source aliases | Share cursor advancement; overlapping next fails Busy. |
 
 | `std.stream` API / Method | Result Scheme | Contract |
 |---|---|---|
-| `unfold<S, T, effect E>(state: S, step: S -> (S, Option<T>) ![E], release: S -> unit ![E])` | `Source<T, E> ![]` | Register state and callbacks in the active managed owner; do not invoke them on construction. E covers both callbacks. |
-| `from_iter<T>(items: Iter<T>)` | `Source<T, E> ![]`, E empty | Adapt a pure iterator to one managed cursor; does not make the original iterator effectful or consume it yet. |
-| `chunks<S ~ ByteStream>(stream: S, size: usize, timeout: Option<Timeout> = None)` | `Source<bytes, E> ![Error<SourceError>, Error<StreamError>]` | E is the residual `Error<StreamError>` row for stream read/close. Reject zero size; each item has 1..size bytes; EOF ends. |
-| `lines<S ~ ByteStream>(stream: S, max_line_bytes: usize, timeout: Option<Timeout> = None)` | `Source<string, E> ![Error<SourceError>, Error<StreamError>]` | Same stream E; positive line bound, strict UTF-8. Strip LF or CRLF; yield a final unterminated nonempty line once. Empty lines are valid items. |
-| `Source<T, E>.next()` | `Option<T> ![E, Error<SourceError>]` | None means exhausted, never a swallowed transport error. Successful step commits successor state before returning its item. |
-| `Source<T, E>.close()` | `unit ![E, Error<SourceError>]` | Idempotent disposal, not traversal/draining. Release callback runs at most once. |
-| `map<U, effect F>(f: T -> U ![F])` | `Source<U, G> ![Error<SourceError>]` | Validate a non-busy open input, transfer it into a lazy adapter; callback runs once per pulled item, not at construction. |
-| `filter<effect F>(predicate: T -> bool ![F])` | `Source<T, G> ![Error<SourceError>]` | Same transfer checks; pull until one item passes or input ends, with no unbounded prefetch. |
-| `take(count: usize)` | `Source<T, E> ![Error<SourceError>]` | Same transfer checks; bound delivered items and close input at the bound. Zero performs no pull, but disposal still occurs when consumed/closed. |
-| `collect(max_items: usize)` | `Array<T> ![E, Error<SourceError>]` | Consume at most max_items, then close; bounded-prefix result, not proof of EOF. Zero closes without pulling. |
-| `for_each<effect F>(f: T -> unit ![F], max_items: usize)` | `unit ![E, F, Error<SourceError>]` | Sequential callback consumption with the same prefix bound and cleanup. |
-| `fold<A, effect F>(initial: A, f: (A, T) -> A ![F], max_items: usize)` | `A ![E, F, Error<SourceError>]` | Thread an ordinary accumulator in input order, then close; earlier external effects are not rolled back. |
+| `unfold<S, T, effect E>(state: S, step: S -> (S, Option<T>) ![E], release: S -> unit ![E])` | `Source<T, E> ![]` | Register with active owner; E covers both callbacks, neither runs at construction. |
+| `from_iter<T>(items: Iter<T>)` | `Source<T, E> ![]`, E empty | Adapt lazily to one managed cursor; original iterator stays pure. |
+| `chunks<S ~ ByteStream>(stream: S, size: usize, timeout: Option<Timeout> = None)` | `Source<bytes, E> ![Error<SourceError>, Error<StreamError>]` | E is residual read/close `Error<StreamError>`; positive size, items of 1..size bytes, end at EOF. |
+| `lines<S ~ ByteStream>(stream: S, max_line_bytes: usize, timeout: Option<Timeout> = None)` | `Source<string, E> ![Error<SourceError>, Error<StreamError>]` | Same E; positive bound, strict UTF-8. Strip LF/CRLF; permit empty lines and one final nonempty unterminated line. |
+| `Source<T, E>.next()` | `Option<T> ![E, Error<SourceError>]` | None means exhausted, not transport failure. Commit successor state before delivering an item. |
+| `Source<T, E>.close()` | `unit ![E, Error<SourceError>]` | Idempotent disposal; release at most once, without draining. |
+| `map<U, effect F>(f: T -> U ![F])` | `Source<U, G> ![Error<SourceError>]` | Transfer idle open input; one callback per pulled item. |
+| `filter<effect F>(predicate: T -> bool ![F])` | `Source<T, G> ![Error<SourceError>]` | Same transfer; pull until a match/EOF, no unbounded prefetch. |
+| `take(count: usize)` | `Source<T, E> ![Error<SourceError>]` | Same transfer; close at bound. Zero skips pulls but still disposes when consumed/closed. |
+| `collect(max_items: usize)` | `Array<T> ![E, Error<SourceError>]` | Return at most max_items, then close; no EOF proof. Zero closes without pulling. |
+| `for_each<effect F>(f: T -> unit ![F], max_items: usize)` | `unit ![E, F, Error<SourceError>]` | Sequential callbacks; same prefix bound/cleanup. |
+| `fold<A, effect F>(initial: A, f: (A, T) -> A ![F], max_items: usize)` | `A ![E, F, Error<SourceError>]` | Accumulate in input order, then close; no rollback of external effects. |
 
 | Source Boundary | Required Rule |
 |---|---|
-| Creation / latent summaries | Preserve owner, E, requested/default actions and callback dependencies through imports, containers and adapters. Creating an adapter performs no callback/I/O; consuming or closing exposes the relevant summaries. |
-| Local state / optimization | Cursor allocation and view transfers retain resource/ownership dependencies even without external actions. An empty escaping row does not allow duplicating, memoizing or reordering these transitions as pure value computation. |
-| Ownership transfer | chunks/lines take operational ownership of the supplied stream; reject an already-busy/closed stream before transfer. Old raw aliases cannot bypass the wrapper or its buffering. Closing the source closes the underlying stream. |
-| Adapter transfer | map/filter/take invalidate prior input views while the returned adapter owns the cursor. Old aliases fail Closed. This is a checked resource contract, not shared mutable ordinary data. |
-| EOF / explicit close | EOF runs release, records exhaustion and makes subsequent next return None. Explicit close makes next fail Closed. Neither path repeats release. |
-| Admission failure | Busy/Closed before starting work neither advances the cursor nor disposes another active operation/owner. |
-| Step failure | Once a step starts, preserve its original typed failure, dispose the source and retain cleanup failures as diagnostics. No implicit retry of a partial read or callback; later next fails Closed. |
-| Early exit / cancellation | Terminal consumers dispose on success, error, bound exhaustion or unwind. Dropping a source relies on managed-owner cleanup; a collector cannot survive termination of its own scope. |
-| Backpressure | Each next admits only the work needed for its next item; no detached producer. filter may inspect many inputs, but inherited budgets remain active. |
-| Timeout | The optional adapter timeout bounds one complete logical pull, including all chunks of one line, not each underlying read afresh. Parent deadline never resets. |
-| Line framing | max_line_bytes counts bytes excluding the final LF/CRLF; excess raises LineTooLong. Buffering is bounded by this cap plus a bounded transport chunk/lookahead; do not accumulate the entire stream. |
-| Concurrent close | Mark disposed, cancel/wake an in-flight pull, then release its final owned state exactly once. A late completion cannot publish another item or resurrect the source. |
-| Async / var self | Pull/release may suspend under standard handlers. These are resource operations, not updating value receivers; they do not hold a caller's var-self access over suspension. |
-| Pure distinction | Source does not satisfy the pure Iterable contract. Use its explicit consumers; there is no implicit for-loop/Iter conversion hiding I/O. |
+| Summaries / optimization | Preserve owner/E/requested/default/callback facts through imports, containers and adapters. Construction invokes no callbacks/I/O; consumption/close exposes them. Cursor allocation/transfers retain dependencies: empty rows permit no pure duplication, memoization or reordering. |
+| Transfer | chunks/lines require idle open streams and take operational ownership, including close; raw aliases cannot bypass buffering. map/filter/take similarly transfer cursors; prior views fail Closed. |
+| EOF / close | EOF releases once and future next returns None; explicit close makes next fail Closed. Admission Busy/Closed neither advances nor disposes other active work. |
+| Step failure | Preserve typed failure, dispose, attach cleanup diagnostics; no retry of partial reads/callbacks. Later next fails Closed. |
+| Exit / cancellation | Terminal consumers dispose on success/error/bound/unwind; otherwise owner cleanup applies. Collectors cannot outlive their scope. |
+| Backpressure / timeout | next performs only work needed for an item, with no detached producer. filter retains budgets. Timeout covers a whole logical pull/line, not each chunk; parent deadlines never reset. |
+| Line framing | max_line_bytes excludes LF/CRLF; excess raises LineTooLong. Buffer only that cap plus bounded transport lookahead. |
+| Concurrent close | Mark disposed, cancel/wake pull, release its final state once. Late completion cannot publish/resurrect. |
+| Async / iteration | Pull/release may suspend without holding caller var-self access. Source is not pure Iterable: explicit consumers only, no implicit for/Iter conversion hiding I/O. |
 
-```etas
-flow ReadPreview<S ~ ByteStream>(stream: S) -> Array<string> {
-    let lines = std.stream.lines(stream, max_line_bytes = 4096);
-    return lines.collect(max_items = 20);
-}
-```
+### 14.5 Managed PTY Sessions
 
-This transfers and closes the stream, returns a bounded prefix, and infers
-StreamError/SourceError plus requested read/close metadata. It does not turn
-transport failure into EOF or use `?` to unwrap a Result.
+`std.host.command` owns these APIs, re-exported by `std.command`. PTY is a managed terminal resource, not a keyword or pipe-mode flag. Applications handle keyboard encoding/window events/rendering; Etas handles I/O, sandboxing and lifecycle. Unsupported backends cannot substitute pipes.
+
+| Public Type | Definition / Contract |
+|---|---|
+| `Command` | Reuse argv/env/cwd; reject any `with_stdin`, even empty. |
+| `PtySize` | Record `{ cols: usize, rows: usize }`; positive, backend-representable character-cell counts. |
+| `PtyHandle` | Private managed handle; aliases share terminal/cursor/provenance/owner. No raw descriptor, serialization, `close_stdin` or implicit ByteStream conversion. |
+| `ExitStatus` | Enum: `Code(i32)`, `Signal(i32)`; preserve signal termination where supported, never reduce it to `-1`. |
+| `PtyEvent` | Enum: `Output(bytes)`, `Exited(ExitStatus)`, `Stopped`; separate from CommandEvent. Stopped means explicit job termination, not job-control suspension. |
+| `PtyError` | Record `{ code: string, message: string }`; redacted message; codes: invalid_input, busy, closed, unsupported, io, output_incomplete, cleanup_failed. |
+
+All results retain `![Error<PtyError>]` under default handling. Corresponding `std.effects.Command` actions have identical arguments/results, with method receiver first as `handle: PtyHandle`. `<S>` selects the originating sandbox, `_` when statically unknown; handles are payloads. [Command Sandboxing](06-effect-system-and-inference.md#3-command-sandboxing) defines authority and retained requested-action facts.
+
+| Public API / Method | Result | Requested Action | Contract |
+|---|---|---|---|
+| `start_pty(command: Command, sandbox: SandboxProfile, size: PtySize)` | `PtyHandle` | `Command.start_pty<S>` | Validate and initialize terminal/size before child execution (Unix: controlling terminal, all three standard descriptors attached). Section 14.1 governs registration/partial-failure cleanup. |
+| `PtyHandle.read(max_bytes: usize)` | `PtyEvent` | `Command.read_pty<S>` | Positive bound; await 1..max_bytes bytes, terminal state or failure. Stdout/stderr merge with echo/terminal transformations; no source-write boundaries. |
+| `PtyHandle.write(data: bytes)` | `unit` | `Command.write_pty<S>` | Accept all bytes, without newline; no child-processing acknowledgment. Partial failure is possible, never auto-resend. |
+| `PtyHandle.resize(size: PtySize)` | `unit` | `Command.resize_pty<S>` | Update dimensions/notify the foreground job as the platform requires, not promise redraw; distinguish invalid_input/closed/unsupported. |
+| `PtyHandle.stop()` | `unit` | `Command.stop_pty<S>` | Idempotent; success confirms job termination/reclamation, without consuming output or waiting for its reader. |
+
+| Boundary | Required Behavior |
+|---|---|
+| Initial mode / environment | Unix starts with canonical input, echo and signals; children may change modes. Other backends document equivalent behavior. Use Command env/TERM, not invented renderer capabilities or inherited secrets. |
+| Terminal bytes | Ctrl-C interrupts only when enabled/mapped, otherwise may be data; never translate it into stop. No synthetic EOF/half-close. Chunks need not align with UTF-8, lines or escape sequences. |
+| Concurrent access | One reader and one writer across aliases; second same-direction call fails busy. They may overlap each other and resize/stop. Stop must progress despite blocked writes/backend waits; pending reads still receive output/outcome. |
+| Buffering | Finite host-configured output buffer; backpressure when full. Cleanup drains within byte/time bounds without waiting for a consumer; truncation reports output_incomplete. |
+| Completion | Deliver buffered/drained output before terminal events. Root exit cleans up owned descendants before Exited. Fix one outcome; later stop cannot rewrite it. Repeated reads return it without duplicate bytes or blocking. |
+| Failures | Retained output precedes terminal I/O/drain errors, not a false complete Exited/Stopped. Killing cannot recover unflushed child buffers. Failed cleanup raises cleanup_failed. |
+| Ownership / cancellation | Section 14.1 cleans all owned job groups even without a reader. After stop, bounded output/status remains readable until owner exit; live write/resize fails closed. Local cancellation releases I/O slots without discarding undelivered buffered output; handlers cannot clear enclosing cancellation/budget termination. |
+| Privacy / replay | Trace identity/action/size/byte counts/outcome. Raw input AND output capture is protected opt-in: echo can reveal secrets. Metadata alone cannot replay contents; missing recordings never silently trigger re-execution. |
+| Reconnection | Not specified: future reconnect/detach must preserve lifetime, original/current authority intersection, single-consumer rules, bounded retention and explicit gaps. IDs grant no authority. |
+| Conformance | Check initial terminal attachment/size, pending-read plus input/resize, mode-dependent Ctrl-C, final unterminated output, abnormal exit, Busy/Closed/Unsupported, full-buffer stop and descendant cleanup. |
+
+Platform references: [Unix PTYs](https://man7.org/linux/man-pages/man7/pty.7.html), [terminal modes](https://man7.org/linux/man-pages/man3/termios.3.html), [ConPTY](https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session). These contracts do not claim backend availability.
 
 ## 15. Persistent Stores And Session Publication
 
@@ -2061,7 +2039,7 @@ implicitly include further operations.
 | Specialized data | Graphs, tensors, caches, big integers, decimals and complex numbers. |
 | Text and encoding | Additional charsets, hex/base64, endian codecs, JSON schema conversion/exact numbers and JSON size/depth controls. |
 | I/O | Bounded console input/explicit flushing, server sockets, stream seek/shared duplex adapters, file watching/link metadata, and a complete HTTP upgrade/framing-state API. |
-| External lifecycle | Streaming child processes, secret rotation and complete browser event deadlines/cancellation. |
+| External lifecycle | Pipe-process APIs beyond PTY, reconnect/detach, secret rotation and complete browser event deadlines/cancellation. |
 | Synchronization | Locks, channels, semaphores and atomics. |
 | Persistence | Multi-store transactions, session creation/append/retention administration, and public checkpoint/query/export durability APIs. |
 | Domain libraries | HTTP clients, databases, vector search, email and browser automation belong to packages over public std primitives. |
