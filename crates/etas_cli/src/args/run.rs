@@ -45,6 +45,10 @@ pub struct RunArgs {
     #[arg(long, value_name = "PATH")]
     pub trace_out: Option<PathBuf>,
 
+    /// Record raw PTY input and output in a new private file for replay.
+    #[arg(long, value_name = "PATH")]
+    pub pty_recording: Option<PathBuf>,
+
     #[arg(long, value_name = "PATH")]
     pub checkpoint_dir: Option<PathBuf>,
 

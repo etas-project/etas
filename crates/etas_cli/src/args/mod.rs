@@ -124,6 +124,10 @@ pub struct ReplayArgs {
     #[arg(value_name = "TRACE")]
     pub trace: std::path::PathBuf,
 
+    /// Read PTY bytes from the matching private recording.
+    #[arg(long, value_name = "PATH")]
+    pub pty_recording: Option<std::path::PathBuf>,
+
     #[arg(long)]
     pub until: Option<String>,
 }

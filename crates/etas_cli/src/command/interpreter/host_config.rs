@@ -38,6 +38,7 @@ pub(crate) struct CliHostConfig {
     pub(super) compiler: Option<CliCompilerConfig>,
     pub(super) model: Option<CliModelConfig>,
     pub(super) command_allowed_programs: Vec<String>,
+    pub(super) command_pty: bool,
     pub(super) command_isolation: etas_host::CommandIsolation,
     pub(super) workspace_root: Option<WorkspaceRoot>,
     pub(super) filesystem_mode: FilesystemMode,
@@ -235,6 +236,7 @@ impl CliHostConfig {
             compiler: None,
             model: None,
             command_allowed_programs: Vec::new(),
+            command_pty: false,
             command_isolation: etas_host::CommandIsolation::Denied,
             workspace_root: None,
             filesystem_mode: FilesystemMode::None,
@@ -343,6 +345,7 @@ impl CliHostConfig {
             compiler: None,
             model,
             command_allowed_programs,
+            command_pty: false,
             command_isolation: etas_host::CommandIsolation::Denied,
             workspace_root,
             filesystem_mode,
@@ -589,6 +592,9 @@ impl CliHostConfig {
     }
 
     fn apply_command_profile(&mut self, profile: &RuntimeCommandProfile) -> Result<(), CliError> {
+        if let Some(pty) = profile.pty {
+            self.command_pty = pty;
+        }
         use etas_host::{CommandIsolation, IsolationRequirements, PlatformSandboxHook};
         if let Some(mode) = &profile.isolation {
             self.command_isolation = match mode.as_str() {
@@ -896,6 +902,9 @@ impl CliHostConfig {
                 "max_tool_rounds": self.max_tool_rounds,
             },
         });
+        if self.command_pty {
+            profile["command_pty"] = true.into();
+        }
         let fingerprint = runtime_profile_fingerprint(&profile);
         profile["profile_fingerprint"] = serde_json::Value::String(fingerprint);
         profile
@@ -918,6 +927,21 @@ impl CliHostConfig {
         if !self.command_allowed_programs.is_empty() {
             for action in ["run", "start", "reconnect", "read", "write", "stop"] {
                 grants.push(etas_host::HostActionGrant::allow("Command", action));
+            }
+            if self.command_pty {
+                for action in [
+                    "start_pty",
+                    "read_pty",
+                    "write_pty",
+                    "resize_pty",
+                    "stop_pty",
+                ] {
+                    grants.push(etas_host::HostActionGrant::allow_with_args(
+                        "Command",
+                        action,
+                        vec![ActionArgPattern::Exact(HostValue::String("default".into()))],
+                    ));
+                }
             }
         }
         if self.filesystem_mode != FilesystemMode::None {

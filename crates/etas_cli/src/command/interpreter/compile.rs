@@ -25,9 +25,18 @@ pub fn compile_project(
     defer_unused_std: bool,
 ) -> Result<CompiledRunInput, CliError> {
     let ordinary = defer_unused_std && compiler_config.is_none();
-    let options = super::super::frontend::driver_options_for(global, profile, ordinary)?
-        .with_optimization_level(optimization_level)
-        .map_err(super::super::frontend::driver_error)?;
+    let installed = ordinary
+        && matches!(
+            global.std_provider,
+            crate::args::global::StdProviderChoice::Artifact
+        );
+    let options = if installed {
+        super::super::frontend::base_driver_options(global, profile)
+    } else {
+        super::super::frontend::driver_options(global, profile)?
+    }
+    .with_optimization_level(optimization_level)
+    .map_err(super::super::frontend::driver_error)?;
     let request = etas_driver::LoadProjectRequest {
         paths,
         all,
@@ -37,8 +46,12 @@ pub fn compile_project(
         source_dependency_mode: etas_driver::SourceDependencyMode::MetadataOnly,
     };
     if ordinary {
-        let entry = etas_driver::load_runnable_entry(&options, request)
-            .map_err(super::super::frontend::driver_error)?;
+        let entry = if installed {
+            etas_driver::load_installed_runnable_entry(options, request, global.sysroot.as_deref())
+        } else {
+            etas_driver::load_runnable_entry(&options, request)
+        }
+        .map_err(super::super::frontend::driver_error)?;
         return Ok(CompiledRunInput {
             sources: entry.sources,
             checked: entry.checked,

@@ -1,5 +1,132 @@
 use super::*;
 
+#[cfg(target_os = "linux")]
+#[test]
+fn installed_sdk_managed_pty_streams_through_std_command() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = package_fixture(
+        "sdk-managed-pty",
+        &[
+            (
+                "etas.toml",
+                include_str!("../../../../examples/managed_pty/etas.toml"),
+            ),
+            (
+                "src/app.es",
+                include_str!("../../../../examples/managed_pty/src/app.es"),
+            ),
+        ],
+    );
+    let invoke = |args: &[&str]| {
+        let mut command = crate::source_cli_command();
+        remove_legacy_runtime_host_env(&mut command);
+        command
+            .current_dir(&root)
+            .args(["--no-config", "--format", "json"])
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let success = |output: std::process::Output| {
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output.stdout
+    };
+    success(invoke(&["pkg", "lock", "."]));
+    let raw = success(invoke(&[
+        "run",
+        ".",
+        "--trace-out",
+        "trace.json",
+        "--pty-recording",
+        "terminal.jsonl",
+        "--budget-time",
+        "8s",
+    ]));
+    let run: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    assert_eq!(run["value"]["value"], "0");
+    let trace = fs::read_to_string(root.join("trace.json")).unwrap();
+    assert!(trace.contains("Command.resize_pty"));
+    assert!(!trace.contains("hello"));
+    assert!(!trace.contains("recorded_bytes"));
+    assert_eq!(
+        fs::metadata(root.join("terminal.jsonl"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o077,
+        0
+    );
+    let missing = invoke(&["replay", "trace.json"]);
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("PTY replay unavailable"));
+    let raw = success(invoke(&[
+        "replay",
+        "trace.json",
+        "--pty-recording",
+        "terminal.jsonl",
+    ]));
+    let replay: serde_json::Value = serde_json::from_slice(&raw).unwrap();
+    let events = replay["report"]["events"].as_array().unwrap();
+    let output: Vec<u8> = events
+        .iter()
+        .filter(|e| e["pty"]["result"] == "output")
+        .flat_map(|e| serde_json::from_value::<Vec<u8>>(e["recorded_bytes"].clone()).unwrap())
+        .collect();
+    assert_eq!(output, "24 80\r\nhello\r\n40 120\r\n尾:hello".as_bytes());
+
+    // The default rejects even empty piped stdin. The explicit reader handles
+    // the next session through an alias, without touching the host cursor.
+    fs::write(root.join("src/app.es"), r#"module app;
+import std.command.{Command, DefaultCommandSandbox, PtyError, PtyEvent, PtyHandle, PtySize, start_pty};
+import std.bytes.empty;
+flow main(args: Array<string>) -> i32 {
+    let size = PtySize { cols= 80, rows= 24 };
+    let input = Command.new("/bin/sh", ["-c", "exit 1"]).with_stdin(empty());
+    let rejected: Result<PtyHandle, PtyError> = start_pty(input, DefaultCommandSandbox, size)?;
+    match rejected {
+        Err(err) => { if err.code != "invalid_input" { return 1; } },
+        Ok(_) => { return 2; },
+    };
+    let original = start_pty(Command.new("/bin/sh", ["-c", "printf tail"]), DefaultCommandSandbox, size);
+    let alias = original;
+    let handled = alias.read(4) with {
+        std.effects.Command.read_pty<DefaultCommandSandbox>(_, _) => resume PtyEvent.Stopped;
+    };
+    return match handled { PtyEvent.Stopped => 0, _ => 3 };
+}"#).unwrap();
+    let handled: serde_json::Value =
+        serde_json::from_slice(&success(invoke(&["run", ".", "--budget-time", "8s"]))).unwrap();
+    assert_eq!(handled["value"]["value"], "0");
+    assert!(
+        !handled["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["qualified_action"] == "Command.read_pty")
+    );
+    let manifest = root.join("etas.toml");
+    let pipe_only = fs::read_to_string(&manifest)
+        .unwrap()
+        .replace("pty = true", "pty = false");
+    fs::write(manifest, pipe_only).unwrap();
+    let denied = invoke(&["run", ".", "--budget-time", "8s"]);
+    assert!(!denied.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&denied.stdout).unwrap();
+    assert!(
+        report["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["outcome"]["code"] == "AuthorityDenied")
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn rewrite_join_result(assembly: &Path, rewrite: impl FnOnce(&str) -> String) {
     let mut source = fs::read_to_string(assembly).unwrap();
     let start = source.find("public flow join(").unwrap();
@@ -2144,7 +2271,14 @@ flow main(args: Array<string>) -> i32 ![] {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .any(|span| span["name"] == "std.load_module_objects")
+                        .any(|span| matches!(
+                            span["name"].as_str(),
+                            Some(
+                                "std.load_module_objects"
+                                    | "std.load_artifact"
+                                    | "driver.frontend_environment_build"
+                            )
+                        ))
                 );
             }
         }

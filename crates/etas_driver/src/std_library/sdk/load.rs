@@ -127,11 +127,7 @@ pub fn load_standard_library_sdk(sysroot: &Path) -> Result<LoadedStdSdk, DriverE
     load_sdk(sysroot, None)
 }
 
-pub(super) fn load_sdk(
-    sysroot: &Path,
-    built: Option<(&StdSdkManifest, LibraryHirImage)>,
-) -> Result<LoadedStdSdk, DriverError> {
-    let root = sysroot.join("std");
+pub(crate) fn compatible_manifest(root: &Path) -> Result<StdSdkManifest, DriverError> {
     let manifest_path = root.join("manifest.json");
     let manifest: StdSdkManifest = serde_json::from_slice(&read_file(&manifest_path)?)
         .map_err(|error| invalid(format!("{}: {error}", manifest_path.display())))?;
@@ -178,6 +174,16 @@ pub(super) fn load_sdk(
         env!("ETAS_STD_CONTRACT"),
     )?;
     matches(&manifest_path, "package", manifest.package.as_str(), "std")?;
+    Ok(manifest)
+}
+
+pub(super) fn load_sdk(
+    sysroot: &Path,
+    built: Option<(&StdSdkManifest, LibraryHirImage)>,
+) -> Result<LoadedStdSdk, DriverError> {
+    let root = sysroot.join("std");
+    let manifest = compatible_manifest(&root)?;
+    let manifest_path = root.join("manifest.json");
     if let Some((expected, _)) = &built
         && *expected != &manifest
     {

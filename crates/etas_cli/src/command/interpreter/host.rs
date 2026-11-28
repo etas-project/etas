@@ -975,6 +975,7 @@ fn unavailable(id: etas_host::HostRequestId, message: &'static str) -> HostError
 
 pub(crate) struct RunRequest {
     pub replay_key_provider: std::sync::Arc<dyn etas_host::replay::ReplayKeyProvider>,
+    pub pty_recording: Option<std::path::PathBuf>,
     pub dry_run: bool,
     pub allow_effects: bool,
     pub budget_overrides: RunBudgetOverrides,
@@ -992,6 +993,7 @@ pub(crate) fn run_checked(
 ) -> Result<super::lifecycle::ControlledRun, CliError> {
     let RunRequest {
         replay_key_provider,
+        pty_recording,
         dry_run,
         allow_effects,
         budget_overrides,
@@ -1036,6 +1038,12 @@ pub(crate) fn run_checked(
     let entry = EntryPoint { item };
     let entry_args = entry_args_from_strings(checked, program_args);
     let mut options = config.run_options();
+    options.pty_recording = pty_recording
+        .map(|path| {
+            etas_interpreter::api::PtyRecording::create(&path)
+                .map_err(|source| CliError::Io { path, source })
+        })
+        .transpose()?;
     options.replay_key_provider = replay_key_provider;
     options.code_definitions = definitions.map(|definitions| {
         std::sync::Arc::new(etas_interpreter::api::code::PreparedCodeDefinitions::new(

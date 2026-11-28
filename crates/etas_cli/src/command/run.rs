@@ -99,6 +99,7 @@ pub(crate) fn run(
         checked,
         super::interpreter::RunRequest {
             replay_key_provider: replay_keys.clone(),
+            pty_recording: args.pty_recording.clone(),
             dry_run: args.dry_run,
             allow_effects: args.allow_effects,
             budget_overrides: run_budget_overrides(&args)?,
@@ -155,6 +156,11 @@ pub(crate) fn run(
 }
 
 fn validate_run_args(args: &RunArgs) -> Result<(), CliError> {
+    if args.pty_recording.is_some() && args.pty_recording == args.trace_out {
+        return Err(CliError::InvalidUsage(
+            "the private PTY recording and public trace require separate files".into(),
+        ));
+    }
     if args.dry_run && args.allow_effects {
         return Err(CliError::InvalidUsage(
             "`etas run --dry-run` cannot be combined with `--allow-effects`".to_owned(),

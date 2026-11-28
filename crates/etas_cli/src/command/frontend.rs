@@ -39,14 +39,6 @@ pub(crate) fn driver_options(
     global: &GlobalOptions,
     profile: &ProfileHandle,
 ) -> Result<DriverOptions, CliError> {
-    driver_options_for(global, profile, false)
-}
-
-pub(crate) fn driver_options_for(
-    global: &GlobalOptions,
-    profile: &ProfileHandle,
-    run_entry: bool,
-) -> Result<DriverOptions, CliError> {
     let mut options = base_driver_options(global, profile);
     options.std_provider = match global.std_provider {
         crate::args::global::StdProviderChoice::Legacy => {
@@ -54,12 +46,8 @@ pub(crate) fn driver_options_for(
         }
         crate::args::global::StdProviderChoice::Artifact => {
             use etas_driver::std_library::provider::StdProvider;
-            let open = if run_entry {
-                StdProvider::artifact_for_run
-            } else {
-                StdProvider::artifact_profiled
-            };
-            open(global.sysroot.as_deref(), profile).map_err(driver_error)?
+            StdProvider::artifact_profiled(global.sysroot.as_deref(), profile)
+                .map_err(driver_error)?
         }
     };
     Ok(options)

@@ -285,13 +285,8 @@ impl StdProvider {
         Self::open_artifact(sysroot, profile, false)
     }
 
-    fn open_artifact(
-        sysroot: Option<&Path>,
-        profile: &etas_utils::ProfileHandle,
-        with_signatures: bool,
-    ) -> Result<Self, DriverError> {
-        let _load = profile.span("std.load_artifact", "std");
-        let sysroot = match sysroot {
+    pub(crate) fn sysroot(sysroot: Option<&Path>) -> Result<std::path::PathBuf, DriverError> {
+        Ok(match sysroot {
             Some(path) => path.to_owned(),
             None => {
                 let binary = std::env::current_exe().map_err(|source| DriverError::Io {
@@ -304,7 +299,16 @@ impl StdProvider {
                     .ok_or_else(|| invalid("toolchain executable has no installation prefix"))?;
                 installed_sysroot(prefix)
             }
-        };
+        })
+    }
+
+    fn open_artifact(
+        sysroot: Option<&Path>,
+        profile: &etas_utils::ProfileHandle,
+        with_signatures: bool,
+    ) -> Result<Self, DriverError> {
+        let _load = profile.span("std.load_artifact", "std");
+        let sysroot = Self::sysroot(sysroot)?;
         let sdk = {
             let _decode = profile.span("std.decode_artifact", "std");
             load_standard_library_sdk(&sysroot)?

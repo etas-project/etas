@@ -81,7 +81,7 @@ pub struct CompileRunnableProjectResponse {
 }
 
 mod entry;
-pub use entry::{RunnableEntry, load_runnable_entry};
+pub use entry::{RunnableEntry, load_installed_runnable_entry, load_runnable_entry};
 
 #[derive(Clone, Copy)]
 enum StdLinkage {

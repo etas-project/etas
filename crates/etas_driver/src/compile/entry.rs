@@ -1,12 +1,16 @@
 use super::{StdLinkage, compile_loaded_run, disk_cache_access};
 use crate::{
-    DriverError, DriverOptions, LoadProjectRequest, LoadedDriverProject, SourceDependencyMode,
-    load_project,
+    DriverError, DriverOptions, LoadProjectRequest, SourceDependencyMode,
     runtime_source::RuntimeSourceMaterializer,
+    source::{DiscoveredProject, discover_project},
     std_library::{install_receipt, provider::StdProvider},
 };
 use etas_frontend::{CheckedProgram, ExternalPackageId, RunEntryCache, SnapshotDetailLevel};
-use std::{collections::BTreeSet, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub struct RunnableEntry {
     pub checked: Option<CheckedProgram>,
@@ -22,32 +26,82 @@ pub fn load_runnable_entry(
     mut request: LoadProjectRequest,
 ) -> Result<RunnableEntry, DriverError> {
     request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
-    let loaded = load_project(options, request)?;
-    let cache = entry_cache(options, &loaded);
-    if let Some((cache, provider)) = &cache
-        && let Some(entry) = cache.load(
-            provider.registry.clone(),
-            provider.interface.clone(),
-            &options.profile,
-        )
-        && dependencies_match(&loaded, &entry.dependencies)
-    {
-        options.profile.counter("run.entry_cache_hit", 1);
-        let sources = entry
-            .program
-            .sources
-            .sources
-            .iter()
-            .filter_map(|s| Some((s.path.clone()?, s.clone())))
-            .collect();
-        return Ok(RunnableEntry {
-            checked: Some(entry.program),
-            diagnostics: entry.diagnostics,
-            sources,
-            definitions: None,
-        });
+    let project = discover_project(options, &request)?;
+    let cache = match &options.std_provider {
+        StdProvider::Artifact(provider) if provider.sdk.prepared_queries.is_some() => entry_cache(
+            options,
+            &project,
+            &provider.sdk.root,
+            &provider.sdk.manifest,
+        ),
+        _ => None,
+    };
+    if let Some(hit) = restore(options, &project, cache.as_ref()) {
+        return Ok(hit);
     }
+    compile_entry(options, project, cache)
+}
+
+/// Authenticate the SDK identity and check the source snapshot before opening
+/// the installed query tables or building a frontend package environment.
+pub fn load_installed_runnable_entry(
+    mut options: DriverOptions,
+    mut request: LoadProjectRequest,
+    sysroot: Option<&Path>,
+) -> Result<RunnableEntry, DriverError> {
+    request.source_dependency_mode = SourceDependencyMode::MetadataOnly;
+    let sysroot = StdProvider::sysroot(sysroot)?;
+    let root = sysroot.join("std");
+    let manifest = crate::std_library::sdk::compatible_manifest(&root)?;
+    let project = discover_project(&options, &request)?;
+    let cache = if manifest.prepared_queries_hash.is_some()
+        && install_receipt::installed_artifact_is_trusted(&manifest.identity()?)
+    {
+        entry_cache(&options, &project, &root, &manifest)
+    } else {
+        None
+    };
+    if let Some(hit) = restore(&options, &project, cache.as_ref()) {
+        return Ok(hit);
+    }
+    options.std_provider = StdProvider::artifact_for_run(Some(&sysroot), &options.profile)?;
+    let cache = cache.filter(|_| matches!(&options.std_provider,
+        StdProvider::Artifact(provider) if provider.sdk.manifest == manifest && provider.sdk.prepared_queries.is_some()));
+    compile_entry(&options, project, cache)
+}
+
+fn restore(
+    options: &DriverOptions,
+    project: &DiscoveredProject,
+    cache: Option<&RunEntryCache>,
+) -> Option<RunnableEntry> {
+    let entry = cache?.load(&options.profile)?;
+    if !dependencies_match(project, &entry.dependencies) {
+        return None;
+    }
+    options.profile.counter("run.entry_cache_hit", 1);
+    let sources = entry
+        .program
+        .sources
+        .sources
+        .iter()
+        .filter_map(|s| Some((s.path.clone()?, s.clone())))
+        .collect();
+    Some(RunnableEntry {
+        checked: Some(entry.program),
+        diagnostics: entry.diagnostics,
+        sources,
+        definitions: None,
+    })
+}
+
+fn compile_entry(
+    options: &DriverOptions,
+    project: DiscoveredProject,
+    cache: Option<RunEntryCache>,
+) -> Result<RunnableEntry, DriverError> {
     options.profile.counter("run.entry_cache_hit", 0);
+    let loaded = project.load(options)?;
     let result = compile_loaded_run(
         options,
         loaded,
@@ -61,10 +115,16 @@ pub fn load_runnable_entry(
         .filter(|p| p.requires_definition_catalog())
         .map(|p| crate::compiler::prepare_native_definitions(&result.loaded, p, Default::default()))
         .transpose()?;
-    if let Some((cache, _)) = cache
+    if let Some(cache) = cache
+        && let StdProvider::Artifact(provider) = &options.std_provider
         && let Some(program) = &mut checked
     {
-        cache.stage(program, &output.diagnostics, &options.profile);
+        cache.stage(
+            program,
+            &provider.interface,
+            &output.diagnostics,
+            &options.profile,
+        );
     }
     Ok(RunnableEntry {
         checked,
@@ -74,14 +134,14 @@ pub fn load_runnable_entry(
     })
 }
 
-fn dependencies_match(
-    loaded: &LoadedDriverProject,
-    packages: &BTreeSet<ExternalPackageId>,
-) -> bool {
+fn dependencies_match(project: &DiscoveredProject, packages: &BTreeSet<ExternalPackageId>) -> bool {
     if packages.is_empty() {
         return true;
     }
-    let (Some(root), Some(env)) = (&loaded.package_root, &loaded.package_environment) else {
+    let (Some(root), Some(env)) = (
+        &project.package.package_root,
+        &project.package.package_environment,
+    ) else {
         return false;
     };
     let mut materializer = RuntimeSourceMaterializer::new(root, env);
@@ -92,29 +152,28 @@ fn dependencies_match(
     })
 }
 
-fn entry_cache<'a>(
-    options: &'a DriverOptions,
-    loaded: &LoadedDriverProject,
-) -> Option<(
-    RunEntryCache,
-    &'a crate::std_library::provider::ArtifactStdProvider,
-)> {
-    let StdProvider::Artifact(provider) = &options.std_provider else {
-        return None;
-    };
-    provider.sdk.prepared_queries.as_ref()?;
+fn entry_cache(
+    options: &DriverOptions,
+    project: &DiscoveredProject,
+    root: &Path,
+    manifest: &crate::std_library::sdk::StdSdkManifest,
+) -> Option<RunEntryCache> {
     let access = disk_cache_access(options);
     let (directory, build) = install_receipt::run_cache_directory(access)?;
-    // Resolver locations are part of the identity even when package metadata is identical.
-    let lock = serde_json::to_vec(&loaded.package_environment).ok()?;
-    let cache = RunEntryCache::new(
+    // Package environment conversion is deterministic for this toolchain. Its
+    // locked input includes resolver locations, metadata and source digests.
+    let inputs = serde_json::to_vec(&(
+        &project.package.package_environment,
+        project.package.mode as u8,
+    ))
+    .ok()?;
+    RunEntryCache::new(
         directory,
         build,
-        &provider.sdk.manifest.identity().ok()?,
-        &provider.sdk.root.canonicalize().ok()?,
-        &loaded.loaded.input,
-        &lock,
+        &manifest.identity().ok()?,
+        &root.canonicalize().ok()?,
+        &project.loaded.input,
+        &inputs,
         access,
-    )?;
-    Some((cache, provider))
+    )
 }

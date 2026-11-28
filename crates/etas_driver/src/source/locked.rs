@@ -41,7 +41,7 @@ pub(crate) fn load_locked_source_project(
     )
     .map_err(|error| invalid(error.to_string()))?;
     let loader = SnapshotSourceLoader::new(snapshot, checkpoint)?;
-    let loaded = ProjectSourceLoader::new(loader)
+    let mut loaded = ProjectSourceLoader::new(loader)
         .load(ProjectSourceLoadOptions {
             project_root: root.clone(),
             roots: vec![source_root.clone()],
@@ -62,17 +62,18 @@ pub(crate) fn load_locked_source_project(
         package_root: Some(root),
         roots: vec![source_root],
         entry,
-        environment: frontend_environment,
         package_environment: Some(environment),
         mode: DriverProjectMode::Package,
         source_dependencies: Vec::new(),
-        reflection,
+        reflection: reflection.clone(),
     };
     let options = DriverOptions {
         cache_mode: crate::DriverCacheMode::Off,
         ..Default::default()
     };
-    let mut loaded = finish_loaded_project(&options, loaded, local, EntryPolicy::Optional)
+    loaded.input.options.entry_policy = EntryPolicy::Optional;
+    loaded.input.options.reflection = reflection;
+    let mut loaded = finish_loaded_project(&options, loaded, local, frontend_environment)
         .map_err(|error| invalid(error.to_string()))?;
     loaded.loaded.input.options.standard_library_mode = compile_options.standard_library_mode;
     loaded.loaded.input.options.standard_library_artifact =

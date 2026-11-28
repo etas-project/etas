@@ -1,5 +1,7 @@
 use std::io::Write;
 
+mod pty;
+
 use crate::{
     args::{ReplayArgs, global::GlobalOptions},
     error::CliError,
@@ -21,7 +23,7 @@ pub fn run(
         path: args.trace.clone(),
         source,
     })?;
-    let report: serde_json::Value = serde_json::from_slice(&bytes)
+    let mut report: serde_json::Value = serde_json::from_slice(&bytes)
         .map_err(|_| CliError::InvalidUsage("replay trace is not valid JSON".to_owned()))?;
     if report.get("schema").and_then(serde_json::Value::as_str)
         != Some(etas_interpreter::api::codec::INTERPRETER_REPORT_SCHEMA)
@@ -31,6 +33,7 @@ pub fn run(
         ));
     }
 
+    pty::restore(&mut report, args.pty_recording.as_deref())?;
     match global.format {
         crate::args::global::OutputFormat::Json => {
             writeln!(

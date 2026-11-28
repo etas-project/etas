@@ -61,22 +61,51 @@ pub fn load_project(
     options: &DriverOptions,
     request: LoadProjectRequest,
 ) -> Result<LoadedDriverProject, DriverError> {
+    discover_project(options, &request)?.load(options)
+}
+
+/// Files and locked package metadata shared by entry lookup and compilation.
+pub(crate) struct DiscoveredProject {
+    pub(crate) loaded: LoadedProjectInput,
+    pub(crate) package: LocalSourceProject,
+}
+
+impl DiscoveredProject {
+    pub(crate) fn load(self, options: &DriverOptions) -> Result<LoadedDriverProject, DriverError> {
+        let environment = if let Some(metadata) = &self.package.package_environment {
+            let _span = options
+                .profile
+                .span("driver.frontend_environment_build", "driver");
+            options
+                .std_provider
+                .frontend_environment(metadata.clone())?
+        } else {
+            Default::default()
+        };
+        finish_loaded_project(options, self.loaded, self.package, environment)
+    }
+}
+
+pub(crate) fn discover_project(
+    options: &DriverOptions,
+    request: &LoadProjectRequest,
+) -> Result<DiscoveredProject, DriverError> {
     let _span = options.profile.span("driver.load_project", "driver");
-    let local_project = resolve_project_inputs(options, &request)?;
+    let local_project = resolve_project_inputs(options, request)?;
     let import_search_roots =
         import_search_roots(&local_project.project_root, &local_project.roots);
     let source_kind = source_kind(&local_project.roots, request.all);
     let scope = if local_project.reflection.retain_bodies.is_empty()
         && local_project.reflection.export_bodies.is_empty()
     {
-        project_source_load_scope(&request, &local_project.entry)
+        project_source_load_scope(request, &local_project.entry)
     } else {
         // Retention names are package-wide metadata roots, not entry call edges.
         // Dependency loading remains metadata-only until frontend requirements.
         ProjectSourceLoadScope::FullSourceTree
     };
     let source_load_span = options.profile.span("driver.source_load", "driver");
-    let loaded = ProjectSourceLoader::default()
+    let mut loaded = ProjectSourceLoader::default()
         .load(ProjectSourceLoadOptions {
             project_root: local_project.project_root.clone(),
             roots: local_project.roots.clone(),
@@ -94,29 +123,32 @@ pub fn load_project(
     options
         .profile
         .counter("frontend.loaded_source_files", loaded.sources.len() as u64);
-    finish_loaded_project(options, loaded, local_project, request.entry_policy)
-}
-
-fn finish_loaded_project(
-    options: &DriverOptions,
-    mut loaded: LoadedProjectInput,
-    local_project: LocalSourceProject,
-    entry_policy: EntryPolicy,
-) -> Result<LoadedDriverProject, DriverError> {
-    let environment_span = options
-        .profile
-        .span("driver.frontend_environment", "driver");
-    loaded.input.environment = local_project.environment;
-    options.std_provider.configure(&mut loaded.input);
-    drop(environment_span);
-    loaded.input.options.entry_policy = entry_policy;
-    loaded.input.options.reflection = local_project.reflection;
+    loaded.input.options.entry_policy = request.entry_policy;
+    loaded.input.options.reflection = local_project.reflection.clone();
     if let Some(level) = options.optimization_level {
         loaded.input.options.optimization_level = level;
     }
     if let Some(target) = &options.residual_target {
         loaded.input.options.residual_target = target.clone();
     }
+    Ok(DiscoveredProject {
+        loaded,
+        package: local_project,
+    })
+}
+
+fn finish_loaded_project(
+    options: &DriverOptions,
+    mut loaded: LoadedProjectInput,
+    local_project: LocalSourceProject,
+    environment: etas_frontend::ProjectEnvironmentInput,
+) -> Result<LoadedDriverProject, DriverError> {
+    let environment_span = options
+        .profile
+        .span("driver.frontend_environment", "driver");
+    loaded.input.environment = environment;
+    options.std_provider.configure(&mut loaded.input);
+    drop(environment_span);
     append_source_dependency_sources(&mut loaded, &local_project.source_dependencies)?;
     options
         .profile
@@ -274,14 +306,13 @@ pub fn compile_loaded_project(
 }
 
 #[derive(Clone, Debug)]
-struct LocalSourceProject {
+pub(crate) struct LocalSourceProject {
     project_root: PathBuf,
-    package_root: Option<PathBuf>,
+    pub(crate) package_root: Option<PathBuf>,
     roots: Vec<PathBuf>,
     entry: ProjectEntry,
-    environment: etas_frontend::ProjectEnvironmentInput,
-    package_environment: Option<etas_package::PackageEnvironmentMetadata>,
-    mode: DriverProjectMode,
+    pub(crate) package_environment: Option<etas_package::PackageEnvironmentMetadata>,
+    pub(crate) mode: DriverProjectMode,
     source_dependencies: Vec<SourceDependencyOverlay>,
     reflection: etas_frontend::code::definition::ReflectionOptions,
 }
@@ -350,20 +381,12 @@ fn resolve_directory_project(
             &request.source_dependency_mode,
         )?;
         drop(overlay_span);
-        let frontend_environment_span = options
-            .profile
-            .span("driver.frontend_environment_build", "driver");
-        let frontend_environment = options
-            .std_provider
-            .frontend_environment(prepared.environment.clone())?;
-        drop(frontend_environment_span);
         let package_environment = Some(prepared.environment.clone());
         return Ok(LocalSourceProject {
             project_root: prepared.package_root.clone(),
             package_root: Some(prepared.package_root),
             roots: vec![prepared.source_root],
             entry,
-            environment: frontend_environment,
             package_environment,
             mode: DriverProjectMode::Package,
             source_dependencies,
@@ -381,7 +404,6 @@ fn resolve_directory_project(
         package_root: None,
         roots: vec![source_root],
         entry: fallback_entry(request.flow.clone()),
-        environment: Default::default(),
         package_environment: None,
         mode: DriverProjectMode::SourceProject,
         source_dependencies: Vec::new(),
@@ -434,9 +456,6 @@ fn resolve_single_file_project(
                 vec![prepared.source_root.clone()]
             },
             entry: entry_from_package(&prepared, request.flow.clone(), request.entry_policy)?,
-            environment: options
-                .std_provider
-                .frontend_environment(prepared.environment.clone())?,
             package_environment,
             mode: DriverProjectMode::Package,
             source_dependencies,
@@ -454,7 +473,6 @@ fn resolve_single_file_project(
         package_root: None,
         roots: paths,
         entry: fallback_entry(request.flow.clone()),
-        environment: Default::default(),
         package_environment: None,
         mode,
         source_dependencies: Vec::new(),

@@ -18,6 +18,7 @@ mod behaviors;
 mod delta;
 mod load;
 pub mod objects;
+pub(crate) use load::compatible_manifest;
 pub use load::{LoadedStdSdk, load_standard_library_sdk};
 
 pub const STD_SDK_SCHEMA: u32 = 3;
