@@ -304,6 +304,8 @@ data, not an implicit host request or an `Error` action.
 | `std.http.codec.decode_response_head_incremental(input: bytes, end_of_stream: bool)` | `HttpDecodeStep<HttpWireResponseHead>` | Return a complete head and consumed offset, need more input, or a malformed-input diagnostic. |
 | `std.http.codec.decode_response(input: bytes)` | `Result<HttpWireResponse, HttpCodecError>` | Decode one complete ordinary response; reject trailing unconsumed data. |
 | `std.http.codec.decode_response_incremental(input: bytes, end_of_stream: bool)` | `HttpDecodeStep<HttpWireResponse>` | Complete according to framing, not merely socket EOF; retain trailing bytes using the consumed offset. |
+| `std.http.codec.HttpResponseHeadDecoder.new()` and `decoder.decode(input, end_of_stream)` | `HttpDecodeStep<HttpWireResponseHead>` from `decode` | Retain the header scan position between reads. |
+| `std.http.codec.HttpResponseDecoder.new()` and `decoder.decode(input, end_of_stream)` | `HttpDecodeStep<HttpWireResponse>` from `decode` | Retain framing, chunk and trailer progress. Pass the accumulated byte prefix on each retry after `NeedMore`. Use a fresh decoder for the next response. |
 | `std.codec.text.utf8_encode(text: string)` | `bytes` | Exact UTF-8 bytes. |
 | `std.codec.text.utf8_decode(body: bytes, malformed: MalformedInput)` | `Result<string, TextCodecError>` | `Strict` rejects malformed UTF-8; `Replace` explicitly permits replacement. |
 | `std.crypto.sha256(body: bytes)` | `Digest` | Deterministic hashing of public bytes. |

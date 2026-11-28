@@ -1101,6 +1101,7 @@ type Item = { text: string, count: i64 };
 flow main(args: Array<string>) -> i32 {
     let message = Message.new(Item { text = "sample", count = 7 }).cast<JsonValue>().unwrap();
     let fields = match message.body { JsonValue.Object(fields) => fields, _ => { return 1; } };
+    if fields.get("text") != Some(JsonValue.String("sample")) || !fields.contains_key("count") { return 3; }
     let updated = fields.insert("copy", fields.get("text").unwrap()).remove("count");
     if stringify(JsonValue.Object(updated)) == Ok("{\"copy\":\"sample\",\"text\":\"sample\"}") { return 0; }
     return 2;
